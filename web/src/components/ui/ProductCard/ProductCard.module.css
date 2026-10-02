@@ -1,0 +1,147 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  overflow: hidden;
+  border: 1px solid var(--surface-card-soft);
+  border-radius: var(--radius-lg);
+  background: var(--surface-card-soft);
+  transition: box-shadow var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out);
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-card);
+}
+
+.media {
+  position: relative;
+  aspect-ratio: 424 / 528;
+  overflow: hidden;
+  background: var(--color-neutral-100);
+}
+
+.image {
+  object-fit: cover;
+  transition: transform var(--duration-slow) var(--ease-out);
+}
+
+.card:hover .image {
+  transform: scale(1.04);
+}
+
+.bag {
+  position: absolute;
+  right: var(--space-16);
+  bottom: var(--space-16);
+  display: inline-flex;
+  padding: var(--space-8);
+  border-radius: var(--radius-md);
+  background: var(--gradient-lime-neon);
+  color: var(--color-navy-900);
+}
+
+/* Kartu kecil (2 kolom mobile): badge tas lebih ringkas */
+@media (max-width: 767px) {
+  .bag {
+    right: var(--space-10);
+    bottom: var(--space-10);
+    padding: var(--space-4);
+  }
+
+  .bag > span {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 0 var(--space-24) var(--space-16);
+}
+
+.name {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: clamp(20px, 0.6vw + 15px, 24px);
+  line-height: 1;
+  letter-spacing: var(--tracking-tighter);
+  color: var(--color-navy-900);
+}
+
+.prices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-4);
+  font-family: var(--font-body);
+  font-weight: var(--weight-bold);
+  line-height: 1.6;
+  color: var(--color-navy-800);
+}
+
+.price {
+  font-size: 18px;
+  letter-spacing: var(--tracking-tighter);
+}
+
+.compare {
+  font-size: 16px;
+}
+
+/* ── Label stok ──────────────────────────────────────────── */
+.stock {
+  position: absolute;
+  top: var(--space-12);
+  left: var(--space-12);
+  padding: var(--space-4) var(--space-12);
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.low {
+  background: var(--color-lime-100);
+  color: var(--color-navy-900);
+}
+
+.sold-out {
+  background: var(--color-navy-900);
+  color: var(--color-white);
+}
+
+.soldOut .image {
+  filter: grayscale(0.6);
+  opacity: 0.7;
+}
+
+/* ── Ukuran sm: kartu katalog (Figma catalog/card 246×369) ── */
+.sm {
+  gap: var(--space-16);
+  padding-bottom: var(--space-16);
+  border: 0;
+  border-radius: var(--radius-xl);
+}
+
+.sm .media {
+  aspect-ratio: 246 / 280;
+  border-radius: var(--radius-xl);
+}
+
+.sm .info {
+  gap: var(--space-8);
+  padding: 0 var(--space-16);
+}
+
+.sm .name {
+  font-size: clamp(16px, 0.8vw + 10px, 20px);
+  letter-spacing: 0;
+}
+
+.sm .price {
+  letter-spacing: 0;
+}

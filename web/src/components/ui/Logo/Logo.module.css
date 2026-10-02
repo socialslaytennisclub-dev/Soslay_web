@@ -1,0 +1,17 @@
+.logo {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.logo img {
+  width: 100%;
+  height: auto;
+}
+
+.md {
+  width: clamp(116px, 8vw + 40px, 151px);
+}
+
+.lg {
+  width: clamp(160px, 10vw + 60px, 202px);
+}

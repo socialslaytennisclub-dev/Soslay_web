@@ -1,0 +1,26 @@
+/* Kursor custom — hanya untuk pointer halus; disembunyikan sampai GSAP mengaktifkannya */
+.cursor {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: var(--z-overlay);
+  display: grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-500);
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.cursorLabel {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 14px;
+  letter-spacing: var(--tracking-snug);
+  color: var(--color-navy-900);
+  white-space: nowrap;
+  visibility: hidden;
+}

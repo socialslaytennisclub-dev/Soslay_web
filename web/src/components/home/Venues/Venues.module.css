@@ -1,0 +1,116 @@
+.section {
+  background: var(--gradient-navy);
+  padding-block: var(--space-80);
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-48);
+}
+
+/* ── Header ──────────────────────────────────────────────── */
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  width: 100%;
+}
+
+.title {
+  max-width: 624px;
+}
+
+.description {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  max-width: 535px;
+}
+
+.locations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.location {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+  color: var(--color-lime-50);
+}
+
+.location > :first-child {
+  margin-top: 2px;
+}
+
+/* ── Grid venue ──────────────────────────────────────────── */
+.grid {
+  display: grid;
+  gap: var(--space-24);
+  width: 100%;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+.cta {
+  margin-top: var(--space-8);
+}
+
+/* ── Tablet ──────────────────────────────────────────────── */
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .column:nth-child(2) {
+    padding-top: var(--space-80);
+  }
+}
+
+/* ── Desktop: layout Figma ───────────────────────────────── */
+@media (min-width: 1200px) {
+  .section {
+    padding-block: var(--space-128);
+  }
+
+  .inner {
+    gap: var(--space-80);
+  }
+
+  .header {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .description {
+    gap: var(--space-32);
+  }
+
+  .description > p {
+    max-width: 465px;
+  }
+
+  .grid {
+    gap: var(--space-48);
+  }
+
+  .column {
+    gap: var(--space-128);
+  }
+
+  .column:nth-child(2) {
+    padding-top: var(--space-200);
+  }
+
+  .cta {
+    margin-top: 0;
+  }
+}

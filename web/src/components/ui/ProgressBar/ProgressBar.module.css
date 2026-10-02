@@ -1,0 +1,38 @@
+.track {
+  position: relative;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+}
+
+.fill {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  transform-origin: left center;
+  transform: scaleX(var(--progress));
+  animation: progress-in 1.2s var(--ease-out) both;
+}
+
+.indigo {
+  background: var(--color-indigo-100);
+}
+
+.indigo .fill {
+  background: var(--color-indigo-600);
+}
+
+.navy {
+  background: var(--color-lime-700);
+}
+
+.navy .fill {
+  background: var(--color-navy-900);
+}
+
+@keyframes progress-in {
+  from {
+    transform: scaleX(0);
+  }
+}

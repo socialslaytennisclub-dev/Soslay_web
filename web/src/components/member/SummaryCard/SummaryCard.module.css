@@ -1,0 +1,88 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-16);
+  min-height: 280px;
+  padding: var(--space-24);
+  border: 1px solid;
+  border-radius: var(--radius-xl);
+  color: var(--color-navy-900);
+}
+
+.white {
+  border-color: var(--color-indigo-border);
+  background: var(--color-white);
+}
+
+.lime {
+  border-color: var(--color-lime-600);
+  background: var(--color-lime-500);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+/* Figma: Subtitle/20 Poppins Bold, lh 1 */
+.title {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.headline {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+/* Figma: Heading/48 Poppins ExtraBold */
+.value {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(40px, 2vw + 24px, 48px);
+  line-height: 1.1;
+  letter-spacing: var(--tracking-tight);
+}
+
+.unit {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.white .unit {
+  color: var(--color-indigo-muted);
+}
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.progressLabel {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-8);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.white .progressLabel {
+  color: var(--color-indigo-muted);
+}
+
+.progressValue {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  color: var(--color-navy-900);
+}

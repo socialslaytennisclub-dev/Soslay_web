@@ -1,0 +1,346 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-20);
+  align-items: start;
+}
+
+.order,
+.summary,
+.emptyCard {
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+}
+
+.order {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  min-width: 0;
+  padding: var(--space-20);
+}
+
+.orderHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+}
+
+/* Figma: Title/24 Poppins Bold */
+.orderTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: var(--tracking-tighter);
+  color: var(--color-navy-900);
+}
+
+.muted {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--color-indigo-muted);
+}
+
+.selectAll {
+  padding-bottom: var(--space-16);
+  border-bottom: 1px solid var(--color-indigo-border);
+}
+
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+/* Mobile: checkbox | foto | info, harga & kontrol turun ke bawah */
+.item {
+  display: grid;
+  grid-template-columns: 20px 96px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-12) var(--space-16);
+}
+
+.item + .item {
+  padding-top: var(--space-24);
+  border-top: 1px solid var(--color-indigo-border);
+}
+
+.photo {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-neutral-100);
+}
+
+.image {
+  object-fit: cover;
+  transition: transform var(--duration-slow) var(--ease-out);
+}
+
+.photo:hover .image {
+  transform: scale(1.05);
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+.name {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 20px;
+  line-height: 1.1;
+  color: var(--color-navy-900);
+}
+
+.name a:hover {
+  color: var(--color-indigo-600);
+}
+
+.variant {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--color-navy-900);
+}
+
+/* Figma: swatch 34px (lingkaran + ring tipis) */
+.swatch {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--color-neutral-300);
+  border-radius: var(--radius-full);
+}
+
+.variantChip {
+  padding: var(--space-4) var(--space-12);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.availability {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-indigo-muted);
+}
+
+.actions {
+  grid-column: 2 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-12) var(--space-16);
+}
+
+.price {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 20px;
+  line-height: 1;
+  white-space: nowrap;
+  color: var(--color-navy-900);
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+}
+
+.remove {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  color: var(--color-indigo-muted);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.remove:hover {
+  background: var(--color-pink-100);
+  color: var(--color-pink-500);
+}
+
+/* ── Ringkasan ───────────────────────────────────────────── */
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-24);
+}
+
+.summaryTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--color-navy-900);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.row,
+.total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.row dt {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--color-indigo-muted);
+}
+
+.row dd {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 16px;
+  line-height: 1.4;
+  text-align: end;
+  color: var(--color-navy-900);
+}
+
+/* Figma: divider putus-putus sebelum Total */
+.total {
+  padding-top: var(--space-16);
+  border-top: 1px dashed var(--color-indigo-200);
+  color: var(--color-navy-900);
+}
+
+.total dt {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.total dd {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: 24px;
+  line-height: 1.4;
+}
+
+/* Figma: lime-100, radius 12, padding 12/16 */
+.points {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-16);
+  border-radius: var(--radius-lg);
+  background: var(--color-lime-100);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-navy-900);
+}
+
+.points strong {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  line-height: 1.4;
+  letter-spacing: var(--tracking-snug);
+}
+
+.checkout {
+  width: 100%;
+}
+
+.checkout:disabled {
+  filter: grayscale(0.6);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.continue {
+  align-self: center;
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-indigo-600);
+}
+
+.continue:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ── Kosong ──────────────────────────────────────────────── */
+.emptyCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-16);
+  padding: var(--space-64) var(--space-24);
+  text-align: center;
+}
+
+.emptyIcon {
+  color: var(--color-indigo-600);
+}
+
+.emptyTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 24px;
+  line-height: 1.2;
+  letter-spacing: var(--tracking-snug);
+  color: var(--color-navy-900);
+}
+
+@media (min-width: 768px) {
+  .order {
+    padding: var(--space-24);
+  }
+
+  .item {
+    grid-template-columns: 20px 160px minmax(0, 1fr) auto;
+    gap: var(--space-24);
+  }
+
+  .actions {
+    grid-column: auto;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--space-16);
+  }
+}
+
+/* Figma: order mengisi sisa · ringkasan 424 */
+@media (min-width: 1200px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 424px;
+  }
+}

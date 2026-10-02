@@ -1,0 +1,78 @@
+.section {
+  background: var(--surface-page);
+  padding-block: var(--space-48);
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-32);
+}
+
+.title {
+  max-width: 644px;
+}
+
+/* Figma: trust/card — bg indigo-150, radius 16, padding 32 */
+.card {
+  display: grid;
+  gap: var(--space-24);
+  width: 100%;
+  padding: var(--space-24);
+  border-radius: var(--radius-xl);
+  background: var(--surface-card);
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+.item + .item {
+  padding-top: var(--space-24);
+  border-top: 2px dashed var(--color-indigo-200);
+}
+
+.badge {
+  display: inline-flex;
+  align-self: flex-start;
+  padding: var(--space-16);
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-200);
+  color: var(--color-navy-900);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+/* Desktop: 3 kolom, pemisah putus-putus vertikal, gap 38 */
+@media (min-width: 900px) {
+  .card {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 38px;
+    padding: var(--space-32);
+  }
+
+  .item + .item {
+    padding-top: 0;
+    padding-left: 38px;
+    margin-left: -19px;
+    border-top: 0;
+    border-left: 2px dashed var(--color-indigo-200);
+  }
+}
+
+@media (min-width: 1200px) {
+  .section {
+    padding-block: var(--space-64);
+  }
+
+  .inner {
+    gap: var(--space-64);
+  }
+}

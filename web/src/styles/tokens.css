@@ -1,0 +1,159 @@
+/*
+ * Soslay design tokens
+ * Sumber: Figma "Soslay - Development" (variables library). Nama token mengikuti
+ * nama variable Figma: `color/navy/900` → `--color-navy-900`.
+ * Jangan pakai hex langsung di komponen — selalu lewat token di file ini.
+ */
+
+:root {
+  /* ── Color · Navy ─────────────────────────────────────────── */
+  --color-navy-950: #060628;
+  --color-navy-900: #0a084a;
+  --color-navy-850: #0d0d5d;
+  --color-navy-800: #100e54;
+  --color-navy-700: #1e1e6a;
+
+  /* ── Color · Indigo ───────────────────────────────────────── */
+  --color-indigo-700: #221b9d;
+  --color-indigo-600: #291fc0;
+  --color-indigo-500: #4035de;
+  --color-indigo-muted: #3a3582;
+  --color-indigo-200: #d6d9ff;
+  --color-indigo-150: #e5e8ff;
+  --color-indigo-140: #e5ebff;
+  --color-indigo-100: #ebecff;
+  --color-indigo-border: #eaecff;
+  --color-indigo-50: #f4f5ff;
+  --color-blue-600: #2941ff;
+
+  /* ── Color · Lime ─────────────────────────────────────────── */
+  --color-lime-neon: #d7ff00;
+  --color-lime-400: #caf100;
+  --color-lime-500: #d4ef1f;
+  --color-lime-550: #c5eb00;
+  --color-lime-600: #c0e500;
+  --color-lime-700: #a4c400;
+  --color-lime-750: #9ab800;
+  --color-lime-800: #8ea800;
+  --color-lime-100: #f4ffb8;
+  --color-lime-50: #faffe3;
+
+  /* ── Color · Pink ─────────────────────────────────────────── */
+  --color-pink-500: #ec6abc;
+  --color-pink-400: #ef83c7;
+  --color-pink-100: #fce7f4;
+
+  /* ── Color · Neutral ──────────────────────────────────────── */
+  --color-white: #ffffff;
+  --color-neutral-100: #f3f3f3;
+  --color-neutral-150: #f4f4f4;
+  --color-neutral-200: #e3e3e3;
+  --color-neutral-300: #d9d9d9;
+  --color-neutral-400: #cecece;
+  --color-neutral-500: #b7b7b7;
+  --color-neutral-600: #7b7b7b;
+  --color-neutral-700: #5f5f5f;
+  --color-neutral-900: #252525;
+  --color-black: #000000;
+
+  /* ── Gradients ────────────────────────────────────────────── */
+  --gradient-lime: linear-gradient(180deg, var(--color-lime-500) 0%, #c0d438 100%);
+  --gradient-lime-neon: linear-gradient(180deg, var(--color-lime-neon) 14%, #c1e500 82.5%);
+  --gradient-navy: linear-gradient(180deg, var(--color-navy-800) 0%, var(--color-navy-900) 100%);
+  --gradient-indigo: linear-gradient(180deg, var(--color-indigo-500) 0%, var(--color-indigo-600) 100%);
+  --overlay-hero: linear-gradient(180deg, rgb(0 0 0 / 0.5) 0%, rgb(0 0 0 / 0) 50.5%, rgb(0 0 0 / 0.75) 100%);
+  --overlay-photo-25: linear-gradient(180deg, rgb(0 0 0 / 0) 0%, rgb(0 0 0 / 0.25) 100%);
+  --overlay-photo-45: linear-gradient(180deg, rgb(0 0 0 / 0) 0%, rgb(0 0 0 / 0.45) 100%);
+  --overlay-photo-50: linear-gradient(180deg, rgb(0 0 0 / 0) 0%, rgb(0 0 0 / 0.5) 100%);
+
+  /* ── Semantic aliases ─────────────────────────────────────── */
+  --surface-page: var(--color-indigo-50);
+  --surface-card: var(--color-indigo-150);
+  --surface-card-soft: var(--color-indigo-100);
+  --surface-inverse: var(--color-navy-900);
+  --text-primary: var(--color-navy-900);
+  --text-secondary: var(--color-indigo-muted);
+  --text-on-inverse: var(--color-lime-50);
+  --text-accent: var(--color-lime-500);
+  --border-subtle: var(--color-indigo-border);
+  --focus-ring: var(--color-indigo-500);
+
+  /* ── Typography · families ────────────────────────────────── */
+  /* --font-poppins, --font-inter, --font-chillax di-inject oleh next/font (layout.tsx) */
+  --font-display: var(--font-poppins), system-ui, sans-serif;
+  --font-wordmark: var(--font-chillax), var(--font-display);
+  --font-body: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-ui: var(--font-inter), var(--font-body);
+
+  /* ── Typography · weights ─────────────────────────────────── */
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+  --weight-extrabold: 800;
+
+  /* ── Typography · tracking (Figma: angka = persen) ────────── */
+  --tracking-tighter: -0.04em;
+  --tracking-tight: -0.03em;
+  --tracking-snug: -0.02em;
+  --tracking-normal: 0;
+  --tracking-overline: 0.14em;
+  --tracking-wordmark: -0.03em;
+
+  /* ── Spacing (space/*) ────────────────────────────────────── */
+  --space-2: 2px;
+  --space-4: 4px;
+  --space-8: 8px;
+  --space-10: 10px;
+  --space-12: 12px;
+  --space-14: 14px;
+  --space-16: 16px;
+  --space-20: 20px;
+  --space-24: 24px;
+  --space-32: 32px;
+  --space-42: 42px;
+  --space-48: 48px;
+  --space-64: 64px;
+  --space-80: 80px;
+  --space-128: 128px;
+  --space-200: 200px;
+
+  /* ── Radius ───────────────────────────────────────────────── */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 999px;
+
+  /* ── Elevation ────────────────────────────────────────────── */
+  --shadow-card: 0 4px 32px rgb(0 0 0 / 0.05);
+  --shadow-button: 0 4px 16px rgb(0 0 0 / 0.05);
+
+  /* ── Layout ───────────────────────────────────────────────── */
+  --container-max: 1440px;
+  --gutter: var(--space-20);
+  --nav-height: 72px;
+
+  /* ── Motion ───────────────────────────────────────────────── */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 150ms;
+  --duration-base: 250ms;
+  --duration-slow: 600ms;
+
+  /* ── Z-index ──────────────────────────────────────────────── */
+  --z-nav: 50;
+  --z-overlay: 100;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --gutter: var(--space-32);
+  }
+}
+
+@media (min-width: 1200px) {
+  :root {
+    --gutter: var(--space-64);
+    --nav-height: 89px;
+  }
+}

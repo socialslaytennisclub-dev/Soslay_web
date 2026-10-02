@@ -1,0 +1,15 @@
+.intro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.start {
+  align-items: flex-start;
+}
+
+.center {
+  align-items: center;
+  max-width: 646px;
+  margin-inline: auto;
+}

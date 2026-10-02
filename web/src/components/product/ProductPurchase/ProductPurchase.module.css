@@ -1,0 +1,86 @@
+.purchase {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+}
+
+.options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+/* Figma: ikon ruler + "Panduan Ukuran" Caption/14 Poppins SemiBold */
+.sizeGuide {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-navy-850);
+  text-underline-offset: 3px;
+}
+
+.sizeGuide:hover {
+  text-decoration: underline;
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.full {
+  width: 100%;
+}
+
+.full:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.status {
+  min-height: 1.4em;
+  font-family: var(--font-body);
+  font-weight: var(--weight-bold);
+  font-size: 14px;
+  color: var(--color-lime-800);
+}
+
+/* ── Tabel panduan ukuran ────────────────────────────────── */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-body);
+  font-size: 15px;
+}
+
+.table th,
+.table td {
+  padding: var(--space-10) var(--space-12);
+  border-bottom: 1px solid var(--border-subtle);
+  text-align: left;
+}
+
+.table thead th {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--color-indigo-50);
+}
+
+.table tbody th {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+}
+
+.tableNote {
+  margin-top: var(--space-16);
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: var(--text-secondary);
+}

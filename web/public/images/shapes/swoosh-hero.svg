@@ -1,0 +1,15 @@
+<svg preserveAspectRatio="none" overflow="visible" style="display: block;" width="1440" height="634" viewBox="0 0 1440 634" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="hero/bg-shape" clip-path="url(#clip0_0_4)">
+<rect width="1440" height="634" fill="url(#paint0_linear_0_4)"/>
+<path id="Vector 5" d="M-130.5 435.845C143.528 371.508 504.518 663.333 531.575 482.611C554.88 326.948 242.336 67.5472 157.825 217.22C58.9369 392.357 479.511 510.904 864.937 550" stroke="#221B9D" stroke-width="38.1257"/>
+</g>
+<defs>
+<linearGradient id="paint0_linear_0_4" x1="720" y1="0" x2="720" y2="634" gradientUnits="userSpaceOnUse">
+<stop stop-color="#100E54"/>
+<stop offset="1" stop-color="#0A084A"/>
+</linearGradient>
+<clipPath id="clip0_0_4">
+<rect width="1440" height="634" fill="white"/>
+</clipPath>
+</defs>
+</svg>

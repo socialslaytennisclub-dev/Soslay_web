@@ -1,0 +1,74 @@
+.chips {
+  overflow-x: auto;
+  scrollbar-width: none;
+  margin-inline: calc(var(--gutter) * -1);
+  padding-inline: var(--gutter);
+}
+
+.chips::-webkit-scrollbar {
+  display: none;
+}
+
+.list {
+  display: flex;
+  gap: var(--space-8);
+  width: max-content;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: var(--space-10) var(--space-24);
+  border: 1px solid var(--color-indigo-200);
+  border-radius: var(--radius-full);
+  background: var(--color-white);
+  /* Figma "Chip": Helvetica Bold 16 / -2% */
+  font-family: var(--font-body);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  line-height: 1.4;
+  letter-spacing: var(--tracking-snug);
+  color: var(--color-navy-900);
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.chip:hover {
+  border-color: var(--color-indigo-500);
+}
+
+.active,
+.active:hover {
+  border-color: var(--color-navy-900);
+  background: var(--color-navy-900);
+  color: var(--color-lime-500);
+}
+
+/* Varian di atas latar navy — Figma: border putih, teks putih 80% */
+.dark .chip {
+  border-color: var(--color-white);
+  background: transparent;
+  color: rgb(255 255 255 / 0.8);
+}
+
+.dark .chip:hover {
+  border-color: var(--color-lime-500);
+}
+
+.dark .active,
+.dark .active:hover {
+  border-color: var(--color-lime-500);
+  background: var(--color-lime-500);
+  color: var(--color-navy-900);
+}
+
+@media (min-width: 768px) {
+  .chips {
+    margin-inline: 0;
+    padding-inline: 0;
+  }
+}

@@ -1,0 +1,152 @@
+.header {
+  padding-top: var(--nav-height);
+  background: var(--surface-page);
+}
+
+/* Figma: cover 1312×300, radius bawah 16, overlay/hero */
+.cover {
+  position: relative;
+  height: 180px;
+  overflow: hidden;
+  border-radius: 0 0 var(--radius-xl) var(--radius-xl);
+  background: var(--color-navy-900);
+}
+
+.cover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: var(--overlay-hero);
+}
+
+.image {
+  object-fit: cover;
+  object-position: center 40%;
+}
+
+.profile {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-16) var(--space-32);
+  margin-top: -48px;
+  padding-inline: var(--space-8);
+}
+
+.avatar {
+  --avatar-size: 96px !important;
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+/* Figma: Heading/42 Poppins ExtraBold */
+.name {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(28px, 2.4vw + 10px, 42px);
+  line-height: 1.05;
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-navy-900);
+}
+
+.meta,
+.membership {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4) var(--space-12);
+  min-width: 0;
+}
+
+.username {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  line-height: 1.4;
+  letter-spacing: var(--tracking-snug);
+  color: var(--color-navy-900);
+}
+
+.dot {
+  width: 4px;
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--color-navy-900);
+}
+
+.email,
+.membership > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--color-indigo-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+@media (min-width: 768px) {
+  .cover {
+    height: 240px;
+  }
+
+  .profile {
+    flex-wrap: nowrap;
+    margin-top: -42px;
+    padding-left: var(--space-48);
+    padding-right: 0;
+  }
+
+  .avatar {
+    --avatar-size: 128px !important;
+  }
+
+  /* Figma: info & aksi mulai 64px dari atas baris profil (cover menimpa 42px) */
+  .info,
+  .actions {
+    padding-top: var(--space-64);
+  }
+
+  .info {
+    flex: 1 1 auto;
+  }
+
+  .actions {
+    flex-wrap: nowrap;
+  }
+}
+
+/* Tablet: aksi turun ke bawah info supaya nama tidak terhimpit */
+@media (min-width: 768px) and (max-width: 1099px) {
+  .profile {
+    flex-wrap: wrap;
+  }
+
+  .info {
+    flex-basis: calc(100% - 128px - var(--space-32));
+  }
+
+  .actions {
+    padding-top: 0;
+    margin-left: calc(128px + var(--space-32));
+  }
+}
+
+@media (min-width: 1200px) {
+  .cover {
+    height: 300px;
+  }
+}

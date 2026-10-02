@@ -1,0 +1,105 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+/* Figma: label Inter Medium 14 */
+.label {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-black);
+}
+
+.control {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 47px;
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.control:hover {
+  border-color: var(--color-indigo-200);
+}
+
+.control:focus-within {
+  border-color: var(--color-indigo-500);
+  box-shadow: 0 0 0 3px rgb(64 53 222 / 0.12);
+}
+
+.invalid,
+.invalid:hover {
+  border-color: var(--color-pink-500);
+}
+
+.prefix {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-indigo-muted);
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-navy-950);
+}
+
+.input:focus {
+  outline: none;
+}
+
+.input::placeholder {
+  color: var(--color-neutral-500);
+}
+
+/* Select: caret Figma menggantikan panah bawaan; klik di mana pun pada kotak membuka pilihan */
+.select {
+  appearance: none;
+  padding-right: 28px;
+  margin-right: -28px; /* lebar ikon 20 + gap 8 → area klik select menutupi caret */
+  cursor: pointer;
+}
+
+.empty {
+  color: var(--color-neutral-500);
+}
+
+.icon {
+  flex-shrink: 0;
+  color: var(--color-indigo-muted);
+  pointer-events: none;
+}
+
+/* Input tanggal: ikon picker bawaan dibuat transparan & ditumpuk di atas ikon kalender Figma */
+.input::-webkit-calendar-picker-indicator {
+  position: absolute;
+  right: var(--space-16);
+  width: 20px;
+  height: 20px;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.error {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--color-pink-500);
+}

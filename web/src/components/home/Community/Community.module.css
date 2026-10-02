@@ -1,0 +1,98 @@
+.section {
+  background: var(--surface-page);
+  padding-block: var(--space-80);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-20);
+}
+
+.introColumn,
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+}
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-24);
+  padding-bottom: var(--space-24);
+}
+
+.titleLine {
+  display: block;
+}
+
+.photoShort {
+  aspect-ratio: 424 / 299;
+}
+
+.photoTall {
+  aspect-ratio: 4 / 5;
+}
+
+.photoFlex {
+  aspect-ratio: 424 / 299;
+}
+
+/* ── Tablet: 2 kolom ─────────────────────────────────────── */
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .introColumn {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: center;
+  }
+
+  .photoTall {
+    aspect-ratio: auto;
+    min-height: 100%;
+  }
+}
+
+/* ── Desktop: 3 kolom 424px seperti Figma ────────────────── */
+@media (min-width: 1200px) {
+  .section {
+    padding-block: var(--space-128);
+  }
+
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: stretch;
+  }
+
+  .introColumn {
+    grid-column: auto;
+    display: flex;
+    justify-content: space-between;
+    gap: 57px;
+  }
+
+  .intro {
+    padding-bottom: 0;
+  }
+
+  .photoShort {
+    aspect-ratio: auto;
+    height: 299px;
+  }
+
+  .photoTall {
+    height: 100%;
+  }
+
+  .photoFlex {
+    flex: 1;
+    aspect-ratio: auto;
+    min-height: 200px;
+  }
+}

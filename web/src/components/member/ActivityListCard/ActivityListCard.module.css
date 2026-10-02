@@ -1,0 +1,105 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  height: 100%;
+  padding: var(--space-24);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--color-navy-900);
+}
+
+.more {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-indigo-600);
+}
+
+.more:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  padding-block: var(--space-12);
+}
+
+.item + .item {
+  border-top: 1px solid var(--color-indigo-border);
+}
+
+/* Figma: kotak tanggal 56px, indigo-50, radius 12 */
+.date {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-lg);
+  background: var(--color-indigo-50);
+}
+
+.day {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--color-navy-900);
+}
+
+.month {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-indigo-muted);
+}
+
+.text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.name {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  line-height: 1.4;
+  letter-spacing: var(--tracking-snug);
+  color: var(--color-navy-900);
+}
+
+.detail {
+  overflow: hidden;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--color-indigo-muted);
+}

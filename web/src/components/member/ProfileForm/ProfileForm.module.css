@@ -1,0 +1,313 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-20);
+  align-items: start;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+  min-width: 0;
+}
+
+/* Figma: card putih, border indigo-border, radius 16, padding 32 */
+.card,
+.summary,
+.actionsBar {
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  padding: var(--space-20);
+  scroll-margin-top: 96px;
+}
+
+.cardHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Figma: Title/24 Poppins ExtraBold, navy-800 */
+.cardTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: 24px;
+  line-height: 1.4;
+  color: var(--color-navy-800);
+}
+
+.label {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-black);
+}
+
+.hint {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-indigo-muted);
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.grid {
+  display: grid;
+  gap: var(--space-16);
+}
+
+/* ── Foto profil ─────────────────────────────────────────── */
+.photoField {
+  display: flex;
+  align-items: center;
+  gap: var(--space-20);
+  padding-bottom: var(--space-16);
+  border-bottom: 1px solid var(--color-indigo-border);
+}
+
+.photoInfo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.photoActions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+}
+
+/* Figma: Button/Outline kecil — padding 8/16, Poppins SemiBold 14 */
+.outlineSmall {
+  padding: var(--space-8) var(--space-16);
+  border: 1px solid var(--color-navy-900);
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-navy-900);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.outlineSmall:hover {
+  background: var(--color-navy-900);
+  color: var(--color-white);
+}
+
+.textButton,
+.inlineAction {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.textButton {
+  color: var(--color-indigo-muted);
+}
+
+.textButton:hover {
+  color: var(--color-pink-500);
+}
+
+.inlineAction {
+  flex-shrink: 0;
+  color: var(--color-indigo-600);
+}
+
+.inlineAction:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ── Checklist ───────────────────────────────────────────── */
+.checklist {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  min-width: 0;
+  border: 0;
+}
+
+.checklist + .checklist {
+  margin-top: var(--space-8);
+}
+
+.checklist legend {
+  margin-bottom: var(--space-4);
+}
+
+.tiles {
+  display: grid;
+  gap: var(--space-12);
+}
+
+/* ── Bar aksi ────────────────────────────────────────────── */
+.actionsBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+  padding: var(--space-20) var(--space-24);
+}
+
+.actionButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-16);
+}
+
+.actionButtons button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Panel ringkasan ─────────────────────────────────────── */
+.aside {
+  min-width: 0;
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  padding: var(--space-24);
+}
+
+.summaryTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--color-navy-900);
+}
+
+.completion {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.completionLabel {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-indigo-muted);
+}
+
+.completionValue {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  color: var(--color-navy-900);
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-12);
+  border-radius: var(--radius-lg);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.step:hover,
+.stepActive {
+  background: var(--color-indigo-50);
+}
+
+.stepNumber {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-100);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-navy-900);
+}
+
+.stepDone {
+  background: var(--color-lime-500);
+}
+
+.stepText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.stepTitle {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-navy-950);
+}
+
+.stepActive .stepTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  color: var(--color-navy-900);
+}
+
+@media (min-width: 768px) {
+  .card {
+    padding: var(--space-32);
+    gap: var(--space-32);
+  }
+
+  .grid,
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tiles {
+    column-gap: var(--space-12);
+  }
+}
+
+/* Figma: form 979 + panel 313; panel menempel saat scroll (pinWithin, lihat ProfileForm) */
+@media (min-width: 1200px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 313px;
+  }
+}
+
+/* Mobile/tablet: ringkasan tampil di atas form */
+@media (max-width: 1199px) {
+  .aside {
+    order: -1;
+  }
+}

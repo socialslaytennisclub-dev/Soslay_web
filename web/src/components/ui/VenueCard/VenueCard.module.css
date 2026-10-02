@@ -1,0 +1,22 @@
+.link {
+  display: block;
+  border-radius: var(--radius-md);
+}
+
+.card {
+  aspect-ratio: 633 / 371;
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.name {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: clamp(18px, 0.4vw + 15px, 20px);
+  line-height: 1;
+  color: var(--color-lime-500);
+}

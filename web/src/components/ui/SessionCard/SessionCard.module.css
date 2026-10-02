@@ -1,0 +1,98 @@
+.link {
+  display: block;
+  border-radius: var(--radius-lg);
+}
+
+.card {
+  aspect-ratio: 633 / 371;
+}
+
+.badge {
+  padding: var(--space-4) var(--space-12);
+  border-radius: var(--radius-full);
+  background: rgb(10 8 74 / 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--color-lime-500);
+}
+
+.body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.name {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: clamp(18px, 0.4vw + 15px, 20px);
+  line-height: 1;
+  color: var(--color-lime-500);
+}
+
+.date {
+  margin-top: var(--space-4);
+  font-family: var(--font-body);
+  font-weight: var(--weight-bold);
+  font-size: clamp(16px, 0.3vw + 14px, 18px);
+  line-height: 1.4;
+  color: var(--color-white);
+}
+
+.time {
+  font-family: var(--font-body);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  line-height: 1.6;
+  letter-spacing: var(--tracking-tight);
+  color: rgb(255 255 255 / 0.8);
+}
+
+.cta {
+  display: inline-flex;
+}
+
+/* Perangkat dengan hover (mouse): tombol muncul saat kartu di-hover / fokus keyboard */
+@media (hover: hover) and (pointer: fine) {
+  .cta {
+    opacity: 0;
+    transform: translateY(12px);
+    transition:
+      opacity var(--duration-base) var(--ease-out),
+      transform var(--duration-base) var(--ease-out);
+  }
+
+  .link:hover .cta,
+  .link:focus-visible .cta {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Mobile: kartu lebih tinggi (info + tombol penuh perlu ruang), tombol selebar kartu */
+@media (max-width: 479px) {
+  .card {
+    aspect-ratio: 4 / 3.8;
+  }
+
+  .cta {
+    width: 100%;
+  }
+
+  .cta > span {
+    width: 100%;
+  }
+}

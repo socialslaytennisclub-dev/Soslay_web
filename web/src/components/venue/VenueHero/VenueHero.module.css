@@ -1,0 +1,161 @@
+.hero {
+  --photo-ratio: 0.8168; /* 544 / 666 (Figma) */
+
+  --pad-top: var(--space-48);
+  --gap: var(--space-48);
+
+  position: relative;
+  isolation: isolate;
+  overflow-x: clip;
+  padding-top: calc(var(--nav-height) + var(--pad-top));
+  padding-bottom: var(--space-48);
+}
+
+/*
+ * Backdrop navy menempel ke blok judul, full-bleed selebar layar.
+ * Mobile: dari atas halaman sampai setengah foto (foto langsung di bawah judul).
+ */
+.hero .backdrop {
+  top: calc(-1 * (var(--nav-height) + var(--pad-top)));
+  bottom: calc(-1 * (var(--gap) + (100vw - 2 * var(--gutter)) * var(--photo-ratio) / 2));
+  left: 50%;
+  width: 100vw;
+  height: auto;
+  transform: translateX(-50%);
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+.heading {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-16);
+  max-width: 665px;
+  margin-inline: auto;
+}
+
+.title {
+  line-height: 1;
+}
+
+.tagline {
+  max-width: 560px;
+}
+
+/* Mobile: foto → info → deskripsi */
+.body {
+  display: grid;
+  grid-template-areas:
+    "photo"
+    "info"
+    "description";
+  gap: var(--space-32);
+}
+
+.description {
+  grid-area: description;
+}
+
+.photo {
+  grid-area: photo;
+  position: relative;
+  aspect-ratio: 666 / 544;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  background: var(--color-neutral-100);
+}
+
+.image {
+  object-fit: cover;
+}
+
+.info {
+  grid-area: info;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-24);
+}
+
+.details {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.eyebrow {
+  margin-bottom: var(--space-4);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+  letter-spacing: var(--tracking-overline);
+  text-transform: uppercase;
+  color: var(--color-indigo-600);
+}
+
+.venueName {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--color-navy-900);
+}
+
+.date {
+  margin-top: var(--space-4);
+  font-family: var(--font-body);
+  font-weight: var(--weight-bold);
+  font-size: 18px;
+  line-height: 1.4;
+  color: var(--color-navy-700);
+}
+
+.time {
+  font-family: var(--font-body);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  line-height: 1.6;
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-navy-700);
+  opacity: 0.8;
+}
+
+.time a {
+  color: var(--color-indigo-600);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ── Desktop: layout Figma — deskripsi 262 | foto 666 | info 279, rata bawah, gap 30 ── */
+@media (min-width: 1200px) {
+  .hero {
+    --pad-top: var(--space-64);
+    --gap: var(--space-80);
+
+    padding-bottom: var(--space-64);
+  }
+
+  /* navy setinggi 634px dari atas halaman, persis Figma */
+  .hero .backdrop {
+    bottom: auto;
+    height: 634px;
+  }
+
+  .body {
+    grid-template-columns: 262px 666px 279px;
+    grid-template-areas: "description photo info";
+    align-items: end;
+    justify-content: center;
+    column-gap: 30px;
+  }
+
+  .info {
+    gap: var(--space-64);
+  }
+}

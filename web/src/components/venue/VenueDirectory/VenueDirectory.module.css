@@ -1,0 +1,76 @@
+.section {
+  background: var(--gradient-navy);
+  padding-block: var(--space-80);
+  scroll-margin-top: var(--nav-height);
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  max-width: 556px;
+}
+
+.grid {
+  display: grid;
+  gap: var(--space-24);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+/* Tablet: 2 kolom, kolom kiri sedikit turun */
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .column:first-child {
+    padding-top: var(--space-80);
+  }
+}
+
+/* Desktop: layout Figma — padding 128/184, gap kolom 48, gap kartu 128, kolom kiri turun 200 */
+@media (min-width: 1200px) {
+  .section {
+    padding-block: var(--space-128) 184px;
+  }
+
+  .header {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-32);
+  }
+
+  .grid {
+    gap: var(--space-48);
+  }
+
+  .column {
+    gap: var(--space-128);
+  }
+
+  .column:first-child {
+    padding-top: var(--space-200);
+  }
+}
+
+.filter {
+  flex-shrink: 0;
+}

@@ -1,0 +1,46 @@
+.link {
+  display: block;
+  border-radius: var(--radius-md);
+  -webkit-user-drag: none;
+}
+
+.card {
+  width: 100%;
+  aspect-ratio: 313 / 391;
+}
+
+.card img {
+  pointer-events: none;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+/* kartu Threads: teks di tengah kartu, handle di bawah */
+.centered {
+  position: absolute;
+  inset: 0;
+  justify-content: center;
+  padding: var(--space-16);
+}
+
+.text,
+.handle {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--color-white);
+}
+
+.handle {
+  position: relative;
+  margin-top: var(--space-8);
+  font-weight: var(--weight-bold);
+}
+
+.handleAccent {
+  color: var(--color-lime-500);
+}

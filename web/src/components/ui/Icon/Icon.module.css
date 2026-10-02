@@ -1,0 +1,10 @@
+/* SVG dipakai sebagai mask supaya warnanya bisa diatur lewat token (currentColor). */
+.icon {
+  display: inline-block;
+  flex-shrink: 0;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  background-color: currentColor;
+  -webkit-mask: var(--icon-src) center / contain no-repeat;
+  mask: var(--icon-src) center / contain no-repeat;
+}

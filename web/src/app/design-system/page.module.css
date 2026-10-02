@@ -1,0 +1,217 @@
+.page {
+  background: var(--surface-page);
+  padding-bottom: var(--space-128);
+}
+
+.hero {
+  background: var(--gradient-navy);
+  padding-block: var(--space-64);
+}
+
+.heroInner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-16);
+}
+
+.heroInner code,
+.content code {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.85em;
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-80);
+  padding-top: var(--space-64);
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+}
+
+.blockHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding-bottom: var(--space-16);
+  border-bottom: 1px solid var(--color-indigo-200);
+}
+
+/* ── Warna ───────────────────────────────────────────────── */
+.colorGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.swatches,
+.gradients {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: var(--space-16);
+}
+
+.gradients {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.swatch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.chip,
+.gradientChip {
+  height: 72px;
+  border: 1px solid rgb(10 8 74 / 0.08);
+  border-radius: var(--radius-lg);
+}
+
+.swatchToken {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  color: var(--text-primary);
+}
+
+.swatchHex {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* ── Tipografi ───────────────────────────────────────────── */
+.typeList {
+  display: flex;
+  flex-direction: column;
+}
+
+.typeRow {
+  display: grid;
+  gap: var(--space-8);
+  padding-block: var(--space-20);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.typeMeta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.typeMeta code {
+  color: var(--color-indigo-600);
+}
+
+.typeWordmark {
+  font-size: clamp(64px, 10vw, 140px);
+}
+
+@media (min-width: 900px) {
+  .typeRow {
+    grid-template-columns: 240px 1fr;
+    align-items: center;
+  }
+}
+
+/* ── Spacing & radius ────────────────────────────────────── */
+.spacing {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.spacingRow {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: center;
+  font-size: 12px;
+}
+
+.spacingBar {
+  height: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--color-indigo-500);
+}
+
+.radii {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-24);
+}
+
+.radius {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  font-size: 12px;
+}
+
+.radiusBox {
+  width: 88px;
+  height: 88px;
+  border: 2px solid var(--color-indigo-500);
+  background: var(--color-indigo-100);
+}
+
+/* ── Ikon ────────────────────────────────────────────────── */
+.icons {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-12);
+}
+
+.iconCell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-12);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  color: var(--color-navy-900);
+  font-size: 12px;
+}
+
+/* ── Button ──────────────────────────────────────────────── */
+.row,
+.darkRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-16);
+}
+
+.darkRow {
+  padding: var(--space-24);
+  border-radius: var(--radius-xl);
+  background: var(--gradient-navy);
+}
+
+/* ── Kartu ───────────────────────────────────────────────── */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-20);
+  align-items: start;
+}
+
+.mediaDemo {
+  aspect-ratio: 4 / 5;
+}
+
+.cardCol {
+  min-width: 0;
+}
+
+.statRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-8);
+}

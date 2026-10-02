@@ -1,0 +1,160 @@
+.footer {
+  background: var(--gradient-lime);
+  color: var(--color-navy-900);
+}
+
+.inner {
+  display: grid;
+  gap: var(--space-48);
+  padding-block: var(--space-64);
+}
+
+.top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-48);
+}
+
+/* ── Brand & kontak ──────────────────────────────────────── */
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  max-width: 425px;
+}
+
+.brandIntro {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.tagline {
+  max-width: 312px;
+  line-height: 1.5;
+}
+
+.contact {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.contactRow {
+  display: flex;
+  gap: var(--space-20);
+  opacity: 0.8;
+}
+
+.contactRow dt {
+  width: 91px;
+  flex-shrink: 0;
+  font-weight: var(--weight-bold);
+}
+
+.contactRow a:hover {
+  text-decoration: underline;
+}
+
+/* ── Kolom link ──────────────────────────────────────────── */
+.columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-32) var(--space-20);
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+.links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.link {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 18px;
+  line-height: 1.2;
+  opacity: 0.8;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.link:hover {
+  opacity: 1;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.socials {
+  display: flex;
+  gap: var(--space-8);
+}
+
+.copyright {
+  margin-top: var(--space-24);
+}
+
+/* ── Wordmark ────────────────────────────────────────────── */
+.wordmarkWrap {
+  overflow: hidden;
+  text-align: center;
+}
+
+.wordmark {
+  display: block;
+}
+
+.rule {
+  margin-top: calc(var(--space-48) * -1 + var(--space-16));
+  border: 0;
+  border-top: 4px dashed var(--color-lime-700);
+  opacity: 0.7;
+}
+
+/* ── ≥ 768px ─────────────────────────────────────────────── */
+@media (min-width: 768px) {
+  .columns {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .link {
+    font-size: 20px;
+  }
+}
+
+/* ── ≥ 1200px: layout Figma ──────────────────────────────── */
+@media (min-width: 1200px) {
+  .inner {
+    gap: var(--space-80);
+  }
+
+  .top {
+    position: relative;
+    flex-direction: row;
+    justify-content: space-between;
+  }
+
+  .brand {
+    gap: var(--space-24);
+    width: 425px;
+  }
+
+  .columns {
+    grid-template-columns: 204px 202px 199px;
+    gap: var(--space-20);
+  }
+
+  /* copyright menempel di dasar kolom brand, seperti di Figma */
+  .copyright {
+    margin-top: auto;
+    padding-top: var(--space-80);
+  }
+}

@@ -1,0 +1,149 @@
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  line-height: 1.4;
+  letter-spacing: var(--tracking-snug);
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out),
+    background-color var(--duration-base) var(--ease-out),
+    color var(--duration-base) var(--ease-out),
+    border-color var(--duration-base) var(--ease-out),
+    filter var(--duration-base) var(--ease-out);
+}
+
+.button:active {
+  transform: translateY(1px);
+}
+
+.label {
+  display: inline-block;
+}
+
+/* ── Sizes ───────────────────────────────────────────────── */
+.md {
+  min-height: 52px;
+  padding: var(--space-14) var(--space-24);
+}
+
+.sm {
+  min-height: 42px;
+  padding: var(--space-10) var(--space-24);
+}
+
+/* ── Variant · arrow (Button/Arrow) ──────────────────────── */
+.arrow {
+  background: var(--gradient-lime);
+  border-color: var(--color-lime-600);
+  color: var(--color-navy-900);
+  box-shadow: var(--shadow-button);
+}
+
+.md.arrow {
+  padding: var(--space-8) var(--space-10) var(--space-8) var(--space-24);
+}
+
+.sm.arrow {
+  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-20);
+}
+
+.arrowBadge {
+  /* bulatan navy berisi panah */
+  display: inline-flex;
+  padding: var(--space-4);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--gradient-navy);
+  color: var(--color-white);
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.arrow:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 8px 24px rgb(192 229 0 / 0.35);
+}
+
+.arrow:hover .arrowBadge {
+  transform: rotate(45deg);
+}
+
+/* ── Variant · primary (Button/Pill lime) ────────────────── */
+.primary {
+  background: var(--gradient-lime);
+  color: var(--color-navy-900);
+}
+
+.primary:hover {
+  filter: brightness(1.05);
+  box-shadow: 0 8px 24px rgb(192 229 0 / 0.35);
+}
+
+/* ── Variant · indigo (Button/Pill indigo) ───────────────── */
+.indigo {
+  background: var(--gradient-indigo);
+  color: var(--color-lime-neon);
+}
+
+.indigo:hover {
+  filter: brightness(1.12);
+  box-shadow: 0 8px 24px rgb(64 53 222 / 0.35);
+}
+
+/* ── Variant · outline ───────────────────────────────────── */
+.outline {
+  border-color: var(--color-navy-900);
+  background: var(--color-white);
+  color: var(--color-navy-900);
+}
+
+.outline:hover {
+  background: var(--color-navy-900);
+  color: var(--color-white);
+}
+
+/* ── Variant · secondary (Button/Absensi) ────────────────── */
+.secondary {
+  border-color: var(--color-neutral-400);
+  background: var(--color-white);
+  color: var(--color-navy-700);
+  box-shadow: var(--shadow-card);
+}
+
+.secondary:hover {
+  border-color: var(--color-navy-900);
+  color: var(--color-navy-900);
+}
+
+/* ── Variant · outline-light (di atas foto) ──────────────── */
+.outline-light {
+  border-color: var(--color-white);
+  color: rgb(255 255 255 / 0.8);
+}
+
+.outline-light:hover {
+  background: var(--color-white);
+  color: var(--color-navy-900);
+}
+
+/* ── Variant · social (Button/Social) ────────────────────── */
+.social {
+  min-height: 0;
+  padding: var(--space-8);
+  background: var(--color-white);
+  color: var(--color-navy-900);
+}
+
+.social:hover {
+  background: var(--color-navy-900);
+  color: var(--color-lime-500);
+}

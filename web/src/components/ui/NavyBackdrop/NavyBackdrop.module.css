@@ -1,0 +1,16 @@
+.backdrop {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: -1;
+  height: min(var(--backdrop-h), 100%);
+  overflow: hidden;
+  background: var(--gradient-navy);
+}
+
+.swoosh {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--color-indigo-700);
+}

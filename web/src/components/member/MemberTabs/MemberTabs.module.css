@@ -1,0 +1,62 @@
+.tabs {
+  position: relative; /* acuan offsetLeft tab */
+  display: flex;
+  margin-top: var(--space-32);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--color-indigo-border);
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+/* Figma: Tab — padding 12/10/16, Inter Medium 16 indigo-muted */
+.tab {
+  position: relative;
+  flex: 1 0 auto;
+  padding: var(--space-12) var(--space-16) var(--space-16);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 16px;
+  line-height: 1.4;
+  text-align: center;
+  white-space: nowrap;
+  color: var(--color-indigo-muted);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.tab::after {
+  content: "";
+  position: absolute;
+  inset: auto 0 0;
+  height: 3px;
+  background: var(--color-indigo-600);
+  transform: scaleX(0);
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.tab:hover {
+  color: var(--color-navy-900);
+}
+
+.active {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-snug);
+  color: var(--color-navy-900);
+}
+
+.active::after {
+  transform: scaleX(1);
+}
+
+@media (min-width: 768px) {
+  .tabs {
+    margin-top: var(--space-48);
+  }
+
+  .tab {
+    flex: 1 1 0;
+  }
+}

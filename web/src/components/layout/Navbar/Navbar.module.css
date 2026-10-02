@@ -1,0 +1,307 @@
+.header {
+  position: fixed;
+  inset: 0 0 auto;
+  z-index: var(--z-nav);
+  color: var(--color-white);
+  transition:
+    background-color var(--duration-base) var(--ease-out),
+    backdrop-filter var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out);
+}
+
+.solid {
+  background-color: rgb(10 8 74 / 0.92);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.06);
+}
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--nav-height);
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-20);
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+}
+
+/* ── Desktop nav ─────────────────────────────────────────── */
+.desktopNav {
+  display: none;
+}
+
+.navList {
+  display: flex;
+  align-items: center;
+  gap: var(--space-32);
+}
+
+.navItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding-block: var(--space-8);
+  font-family: var(--font-body);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  line-height: 1;
+  color: var(--color-white);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.navItem:hover {
+  color: var(--color-lime-500);
+}
+
+.caret {
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.caretOpen {
+  transform: rotate(180deg);
+}
+
+/* ── Activity dropdown ───────────────────────────────────── */
+.dropdown {
+  position: relative;
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: calc(100% + var(--space-8));
+  left: calc(var(--space-16) * -1);
+  min-width: 248px;
+  padding: var(--space-8);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  box-shadow: 0 16px 40px rgb(10 8 74 / 0.18);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-6px);
+  transition:
+    opacity var(--duration-base) var(--ease-out),
+    transform var(--duration-base) var(--ease-out),
+    visibility var(--duration-base);
+}
+
+/* jembatan hover supaya menu tidak tertutup saat kursor turun */
+.dropdownMenu::before {
+  content: "";
+  position: absolute;
+  inset: calc(var(--space-8) * -1 - 1px) 0 auto;
+  height: var(--space-8);
+}
+
+.dropdownOpen {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.dropdownLink {
+  display: block;
+  padding: var(--space-10) var(--space-12);
+  border-radius: var(--radius-md);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 15px;
+  color: var(--color-navy-900);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.dropdownLink:hover {
+  background: var(--color-indigo-50);
+}
+
+.dropdownAll {
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  color: var(--color-indigo-600);
+}
+
+/* ── Right side ──────────────────────────────────────────── */
+.cart {
+  display: inline-flex;
+  color: var(--color-white);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.cart:hover {
+  color: var(--color-lime-500);
+}
+
+.cart {
+  position: relative;
+}
+
+/* Jumlah item di tas — "pop" setiap kali bertambah (key berubah → animasi ulang) */
+.cartBadge {
+  position: absolute;
+  top: -6px;
+  right: -8px;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding-inline: 4px;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-500);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--color-navy-900);
+  animation: badge-pop var(--duration-slow) var(--ease-out);
+}
+
+@keyframes badge-pop {
+  0% {
+    transform: scale(0.4);
+  }
+  50% {
+    transform: scale(1.25);
+  }
+}
+
+.divider {
+  display: none;
+  width: 1px;
+  height: 18px;
+  background: rgb(255 255 255 / 0.4);
+}
+
+.login {
+  display: none;
+}
+
+/* ── Burger (mobile) ─────────────────────────────────────── */
+.burger {
+  display: inline-flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 40px;
+  height: 40px;
+  padding: 10px 8px;
+}
+
+.burger span {
+  display: block;
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: var(--color-white);
+  transition: transform var(--duration-base) var(--ease-out), opacity var(--duration-fast);
+}
+
+.burgerOpen span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+
+.burgerOpen span:nth-child(2) {
+  opacity: 0;
+}
+
+.burgerOpen span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
+}
+
+/* ── Mobile menu ─────────────────────────────────────────── */
+/* absolute (bukan fixed): backdrop-filter di header membuat containing block baru */
+.mobileMenu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: calc(100dvh - var(--nav-height));
+  overflow-y: auto;
+  background: var(--color-navy-900);
+}
+
+.mobileMenu[hidden] {
+  display: none;
+}
+
+.mobileMenuOpen {
+  animation: menu-in var(--duration-base) var(--ease-out);
+}
+
+.mobileInner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  padding-block: var(--space-24) var(--space-48);
+}
+
+.mobileGroupLabel {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+  letter-spacing: var(--tracking-overline);
+  text-transform: uppercase;
+  color: var(--color-lime-500);
+}
+
+.mobileList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding-bottom: var(--space-24);
+  border-bottom: 1px solid rgb(255 255 255 / 0.12);
+}
+
+.mobileLink {
+  display: block;
+  padding-block: var(--space-8);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 18px;
+  color: var(--color-white);
+}
+
+.mobileLinkLarge {
+  font-weight: var(--weight-extrabold);
+  font-size: 28px;
+  letter-spacing: var(--tracking-tight);
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+/* ── ≥ 768px: navigasi inline ────────────────────────────── */
+@media (min-width: 768px) {
+  .desktopNav,
+  .login {
+    display: inline-flex;
+  }
+
+  .divider {
+    display: block;
+  }
+
+  .burger,
+  .mobileMenu {
+    display: none;
+  }
+}
+
+@media (min-width: 1200px) {
+  .login {
+    padding-inline: var(--space-32);
+  }
+}

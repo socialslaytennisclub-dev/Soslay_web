@@ -1,0 +1,42 @@
+.section {
+  background: var(--surface-page);
+  padding-block: var(--space-48) var(--space-80);
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+}
+
+/* Mobile: 2 kolom */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-12);
+}
+
+.empty {
+  padding: var(--space-48) var(--space-24);
+  border: 1px dashed var(--color-indigo-200);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-16) var(--space-20);
+  }
+}
+
+/* Desktop: Figma — kolom 424, gap 20 horizontal / 16 vertikal, padding 64 */
+@media (min-width: 1200px) {
+  .section {
+    padding-block: var(--space-64);
+  }
+
+  .inner {
+    gap: var(--space-48);
+  }
+}

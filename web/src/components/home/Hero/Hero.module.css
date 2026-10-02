@@ -1,0 +1,103 @@
+.hero {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  /* Tepat satu layar. 100vh = fallback; 100svh = tidak "lompat" saat address bar HP muncul/hilang */
+  height: 100vh;
+  height: 100svh;
+  min-height: 560px;
+  overflow: hidden;
+  background: var(--color-navy-900);
+}
+
+/* Wrapper foto: dianimasikan GSAP (zoom-out intro + parallax), img di dalamnya tetap bebas */
+.media {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  will-change: transform;
+}
+
+/* Zoom ringan supaya watermark foto di bagian bawah terpotong (sama seperti crop Figma) */
+.image {
+  object-fit: cover;
+  object-position: 50% 62%;
+  transform: scale(1.2);
+  transform-origin: 50% 30%;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--overlay-hero);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: var(--space-48);
+  padding-top: calc(var(--nav-height) + var(--space-48));
+  padding-bottom: var(--space-48);
+}
+
+/* Ikut lebar (seperti Figma) tapi juga dibatasi tinggi layar, supaya muat di layar pendek.
+   Selector 2 kelas supaya menang dari ukuran default variant "wordmark" di Text.module.css */
+.hero .wordmark {
+  font-size: clamp(88px, min(22.2vw, 36svh), 320px);
+}
+
+.wordmark {
+  background: var(--gradient-lime-neon);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Setelah SplitText memecah huruf: gradien dipasang per huruf (background-clip tidak ikut ke child ber-transform) */
+.wordmark[data-split] {
+  background: none;
+}
+
+.wordmark[data-split] :global(.char) {
+  background: var(--gradient-lime-neon);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.intro {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-24);
+  max-width: 646px;
+}
+
+.description {
+  letter-spacing: 0;
+  line-height: 1.5;
+}
+
+.line {
+  display: block;
+}
+
+@media (min-width: 1200px) {
+  /* Figma men-zoom foto ±1.24× (bg 1791×1194 dalam frame 1440×900) sehingga watermark terpotong */
+  .image {
+    object-position: 50% 40%;
+    transform: scale(1.24);
+    transform-origin: 48% 22%;
+  }
+
+  .content {
+    padding-top: calc(var(--nav-height) + var(--space-64));
+    padding-bottom: var(--space-64);
+  }
+
+  .intro {
+    gap: var(--space-42);
+  }
+}

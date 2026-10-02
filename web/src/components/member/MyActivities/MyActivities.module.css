@@ -1,0 +1,86 @@
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+}
+
+/* + gap panel 20 → jarak antar grup 32 (mobile) / 48 (desktop) */
+.group + .group {
+  margin-top: var(--space-12);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Figma: Title/24 Poppins Bold */
+.title {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-navy-900);
+}
+
+.subtitle,
+.empty {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--color-indigo-muted);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-20);
+}
+
+/* Figma: kartu 424×278, radius 16 */
+.card {
+  aspect-ratio: 424 / 278;
+  border-radius: var(--radius-xl);
+}
+
+.venue {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--color-lime-500);
+}
+
+.date {
+  margin-top: var(--space-4);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+  font-size: 18px;
+  line-height: 1.6;
+  color: var(--color-white);
+}
+
+.time {
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.6;
+  color: var(--color-white);
+}
+
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .group + .group {
+    margin-top: 28px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

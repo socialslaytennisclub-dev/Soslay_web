@@ -1,0 +1,113 @@
+.section {
+  background: var(--surface-page);
+  padding-top: calc(var(--nav-height) + var(--space-32));
+  padding-bottom: var(--space-48);
+}
+
+.layout {
+  display: grid;
+  gap: var(--space-32);
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-48);
+  min-width: 0;
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-8);
+  line-height: 1.1;
+}
+
+.current {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 20px;
+  color: var(--color-navy-900);
+}
+
+.currency {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-bold);
+  font-size: 18px;
+}
+
+.compare {
+  font-weight: var(--weight-medium);
+  color: var(--color-neutral-600);
+  opacity: 0.8;
+}
+
+.compare .currency {
+  font-family: var(--font-display);
+  font-weight: var(--weight-medium);
+}
+
+/* Figma: info/login-banner — bg indigo-150, radius 12 */
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-16);
+  border-radius: var(--radius-lg);
+  background: var(--color-indigo-150);
+  color: var(--color-navy-700);
+}
+
+.bannerText {
+  flex: 1;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--color-navy-900);
+}
+
+.description {
+  line-height: 1.5;
+}
+
+/* Desktop: Figma — galeri 710 kiri, info 535 kanan, padding 64 */
+@media (min-width: 1200px) {
+  .section {
+    padding-top: calc(var(--nav-height) + var(--space-64));
+    padding-bottom: var(--space-64);
+  }
+
+  .layout {
+    grid-template-columns: 710px 535px;
+    justify-content: space-between;
+    align-items: start;
+  }
+
+  .info {
+    gap: var(--space-64);
+  }
+
+  .main {
+    gap: var(--space-42);
+  }
+
+  .heading {
+    gap: var(--space-24);
+  }
+}

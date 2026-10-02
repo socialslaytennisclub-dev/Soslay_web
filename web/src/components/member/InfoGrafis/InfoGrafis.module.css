@@ -1,0 +1,382 @@
+/* Figma: card/info-grafis — putih, border indigo-border, radius 16, padding 24 */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  min-width: 0;
+  padding: var(--space-24);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+}
+
+.titles {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--color-navy-900);
+}
+
+.subtitle,
+.panelSubtitle {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-indigo-muted);
+}
+
+.panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-20);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+  min-width: 0;
+  padding: var(--space-20);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+}
+
+.panelHead {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+/* Figma: Body/16 Poppins SemiBold */
+.panelTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--color-navy-900);
+}
+
+/* ── Ring chart ──────────────────────────────────────────── */
+.ringsBody {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-20);
+}
+
+.rings {
+  width: 150px;
+  height: 150px;
+  flex-shrink: 0;
+  transform: rotate(-90deg); /* progres mulai dari jam 12 */
+}
+
+.ringTrack {
+  fill: none;
+  stroke: var(--color-indigo-100);
+}
+
+.ringProgress {
+  fill: none;
+  stroke-linecap: round;
+  stroke-dashoffset: var(--ring-offset);
+  animation: ring-in 1.4s var(--ease-out) both;
+}
+
+g:nth-of-type(2) .ringProgress {
+  animation-delay: 120ms;
+}
+
+g:nth-of-type(3) .ringProgress {
+  animation-delay: 240ms;
+}
+
+@keyframes ring-in {
+  from {
+    stroke-dashoffset: var(--ring-length);
+  }
+}
+
+.ringProgress.navy {
+  stroke: var(--color-navy-900);
+}
+
+.ringProgress.indigo {
+  stroke: var(--color-indigo-500);
+}
+
+.ringProgress.pink {
+  stroke: var(--color-pink-500);
+}
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.legendItem {
+  display: grid;
+  grid-template-columns: 10px auto;
+  column-gap: var(--space-8);
+  align-items: center;
+}
+
+.swatch {
+  grid-row: 1;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+}
+
+.swatch.navy {
+  background: var(--color-navy-900);
+}
+
+.swatch.indigo {
+  background: var(--color-indigo-500);
+}
+
+.swatch.pink {
+  background: var(--color-pink-500);
+}
+
+.legendLabel {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-indigo-muted);
+}
+
+.legendValue {
+  grid-column: 2;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-indigo-muted);
+}
+
+.legendValue strong {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 20px;
+  line-height: 1;
+  color: var(--color-navy-900);
+}
+
+/* ── Heatmap ─────────────────────────────────────────────── */
+.heatmapPanel {
+  gap: var(--space-16);
+}
+
+.heatmap {
+  display: flex;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.dayLabels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  flex-shrink: 0;
+  width: 28px;
+  padding-top: 22px;
+}
+
+.dayLabels span,
+.months span {
+  height: 20px;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 20px;
+  white-space: nowrap;
+  color: var(--color-indigo-muted);
+}
+
+.heatmapScroll {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.months {
+  display: grid;
+  grid-auto-columns: 20px;
+  grid-auto-flow: column;
+  column-gap: var(--space-4);
+  height: 18px;
+  margin-bottom: var(--space-4);
+}
+
+.months span {
+  height: 18px;
+  line-height: 18px;
+}
+
+.weeks {
+  display: flex;
+  gap: var(--space-4);
+  width: max-content;
+}
+
+.week {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.cell,
+.swatchSquare {
+  border-radius: var(--radius-sm);
+}
+
+.cell {
+  width: 20px;
+  height: 20px;
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.cell:hover {
+  transform: scale(1.15);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .cell {
+    animation: cell-in var(--duration-slow) var(--ease-out) both;
+  }
+}
+
+@keyframes cell-in {
+  from {
+    opacity: 0;
+    transform: scale(0.4);
+  }
+}
+
+.level0 {
+  background: var(--color-indigo-100);
+}
+
+.level1 {
+  background: var(--color-indigo-200);
+}
+
+.level2 {
+  background: var(--color-indigo-500);
+}
+
+.level3 {
+  background: var(--color-navy-900);
+}
+
+.next {
+  background: var(--color-lime-500);
+  box-shadow: 0 0 0 2px rgb(212 239 31 / 0.35);
+}
+
+.heatmapLegend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--space-8) var(--space-16);
+  margin-top: auto;
+}
+
+.scale {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-indigo-muted);
+}
+
+.swatchSquare {
+  width: 12px;
+  height: 12px;
+}
+
+/* ── Insights ────────────────────────────────────────────── */
+.insights {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.insight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-16);
+  border-radius: var(--radius-lg);
+  background: var(--color-indigo-50);
+}
+
+.badge {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: var(--color-white);
+  color: var(--color-indigo-600);
+}
+
+.insightText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.insightLabel {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-indigo-muted);
+}
+
+.insightValue {
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  line-height: 1.4;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--color-navy-900);
+}
+
+@media (min-width: 640px) {
+  .insights {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Figma: panel ring 360 + heatmap mengisi sisa */
+@media (min-width: 900px) {
+  .panels {
+    grid-template-columns: 360px minmax(0, 1fr);
+  }
+
+  .ringsBody {
+    flex-wrap: nowrap;
+    flex: 1;
+  }
+}

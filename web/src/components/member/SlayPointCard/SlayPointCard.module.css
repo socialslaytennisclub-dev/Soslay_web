@@ -1,0 +1,34 @@
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.copy {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* Figma: Button/Small — navy pill 8/16, Poppins SemiBold 14 putih */
+.redeem {
+  flex-shrink: 0;
+  padding: var(--space-8) var(--space-16);
+  border-radius: var(--radius-full);
+  background: var(--color-navy-900);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-white);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.redeem:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.redeem:disabled {
+  cursor: not-allowed;
+}

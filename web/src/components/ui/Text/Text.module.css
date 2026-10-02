@@ -1,0 +1,151 @@
+/* Ukuran desktop = nilai Figma (1440). clamp() menurunkannya secara proporsional di layar kecil. */
+
+/* ── Display ─────────────────────────────────────────────── */
+.wordmark {
+  font-family: var(--font-wordmark);
+  font-weight: var(--weight-bold);
+  font-size: clamp(88px, 22.2vw, 320px);
+  line-height: 1;
+  letter-spacing: var(--tracking-wordmark);
+}
+
+.heading-52 {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(32px, 3.6vw + 10px, 52px);
+  line-height: 1.1;
+  letter-spacing: var(--tracking-tight);
+}
+
+.heading-48 {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(28px, 3.3vw + 4px, 48px);
+  line-height: 1.1;
+  letter-spacing: var(--tracking-tight);
+}
+
+.heading-42 {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(30px, 2.9vw + 4px, 42px);
+  line-height: 1;
+  letter-spacing: var(--tracking-tight);
+}
+
+.title-28 {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(22px, 1.4vw + 10px, 28px);
+  line-height: 1;
+  letter-spacing: var(--tracking-tighter);
+}
+
+.title-24 {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: clamp(20px, 0.6vw + 15px, 24px);
+  line-height: 1;
+  letter-spacing: var(--tracking-tighter);
+}
+
+.subtitle-20 {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.subtitle-20-semibold {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+/* ── Body ────────────────────────────────────────────────── */
+.body-18 {
+  font-family: var(--font-body);
+  font-weight: var(--weight-regular);
+  font-size: clamp(16px, 0.3vw + 14px, 18px);
+  line-height: 1.6;
+  letter-spacing: var(--tracking-snug);
+}
+
+.body-18-ui {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+  font-size: clamp(14px, 0.5vw + 11px, 18px);
+  line-height: 1.6;
+}
+
+.body-16 {
+  font-family: var(--font-body);
+  font-weight: var(--weight-regular);
+  font-size: 16px;
+  line-height: 1.6;
+  letter-spacing: var(--tracking-tight);
+}
+
+.body-16-bold {
+  font-family: var(--font-body);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.body-14 {
+  font-family: var(--font-body);
+  font-weight: var(--weight-regular);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.body-14-bold {
+  font-family: var(--font-body);
+  font-weight: var(--weight-bold);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+/* ── Tone ────────────────────────────────────────────────── */
+.tone-primary {
+  color: var(--text-primary);
+}
+
+.tone-secondary {
+  color: var(--text-secondary);
+}
+
+.tone-accent {
+  color: var(--text-accent);
+}
+
+.tone-on-inverse {
+  color: var(--text-on-inverse);
+}
+
+.tone-white {
+  color: var(--color-white);
+}
+
+.tone-inherit {
+  color: inherit;
+}
+
+/* ── Modifiers ───────────────────────────────────────────── */
+.muted {
+  opacity: 0.8;
+}
+
+.align-start {
+  text-align: start;
+}
+
+.align-center {
+  text-align: center;
+}
+
+.align-end {
+  text-align: end;
+}

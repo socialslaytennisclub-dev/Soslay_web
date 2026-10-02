@@ -1,0 +1,54 @@
+.stack {
+  display: flex;
+  align-items: center;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+
+/* Figma: avatar menumpuk -9px */
+.avatar + .avatar {
+  margin-left: -9px;
+}
+
+.md .avatar {
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+}
+
+.sm .avatar {
+  width: 24px;
+  height: 24px;
+  font-size: 12px;
+}
+
+.sm .avatar + .avatar {
+  margin-left: -6px;
+}
+
+.lime {
+  border-color: var(--color-lime-750);
+  background: var(--color-lime-550);
+  color: var(--color-navy-850);
+}
+
+.pink {
+  border-color: var(--color-pink-500);
+  background: var(--color-pink-400);
+  color: var(--color-lime-550);
+}
+
+.indigo {
+  border-color: var(--color-indigo-600);
+  background: var(--gradient-indigo);
+  color: var(--color-lime-550);
+}

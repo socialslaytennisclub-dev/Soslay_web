@@ -1,0 +1,82 @@
+.root {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-12);
+  cursor: pointer;
+}
+
+.box {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--color-neutral-300);
+  border-radius: var(--radius-sm);
+  background: var(--color-white);
+  color: var(--color-white);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.boxOn {
+  border-color: var(--color-indigo-600);
+  background: var(--color-indigo-600);
+}
+
+.dash {
+  width: 10px;
+  height: 2px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+}
+
+.root:has(:focus-visible) .box {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.root:hover .box:not(.boxOn) {
+  border-color: var(--color-indigo-500);
+}
+
+.label {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--color-navy-900);
+}
+
+/* ── Tile (Figma: tile 12/16, radius 12, border neutral-200) ── */
+.tile {
+  width: 100%;
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+.tile:hover {
+  border-color: var(--color-indigo-200);
+}
+
+.tile .label {
+  font-weight: var(--weight-regular);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-navy-950);
+}
+
+.tile.checked {
+  border-color: var(--color-indigo-600);
+  background: var(--color-indigo-50);
+}
+
+.tile.checked .label {
+  font-weight: var(--weight-medium);
+}

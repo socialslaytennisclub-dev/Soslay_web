@@ -1,0 +1,166 @@
+/* Figma: card/member 424×280, navy-900, padding 20/24, radius 16 */
+.card {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+  min-height: 280px;
+  padding: var(--space-20) var(--space-24);
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  background: var(--color-navy-900);
+  color: var(--color-white);
+}
+
+/* Kilau holografik melintas saat hover (desktop) */
+.card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: linear-gradient(115deg, transparent 35%, rgb(255 255 255 / 0.14) 50%, transparent 65%);
+  transform: translateX(-100%);
+  pointer-events: none;
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .card:hover::after {
+    transform: translateX(100%);
+    transition: transform 900ms var(--ease-out);
+  }
+}
+
+.blob {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: -1;
+  width: 139px;
+  height: 180px;
+}
+
+.court {
+  position: absolute;
+  inset: var(--space-16);
+  z-index: -1;
+  width: calc(100% - 32px);
+  height: calc(100% - 32px);
+  fill: none;
+  stroke: var(--color-white);
+  stroke-width: 1.5;
+  stroke-opacity: 0.2;
+}
+
+.court * {
+  vector-effect: non-scaling-stroke;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Figma: Overline/9 Poppins SemiBold caps, tracking 14% */
+.overline,
+.idLabel,
+.meta {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 9px;
+  line-height: 1.2;
+  letter-spacing: var(--tracking-overline);
+  text-transform: uppercase;
+}
+
+.emblem {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  flex-shrink: 0;
+}
+
+.flower {
+  position: absolute;
+  top: -1px;
+  left: -1px;
+  width: 94px;
+  height: 98px;
+}
+
+.ball {
+  position: absolute;
+  top: 29px;
+  left: 29px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-full);
+  background: var(--color-navy-950);
+  color: var(--color-lime-500);
+}
+
+/* Figma: seal 34px, gradient/holo, border putih 1.5, Overline/8 Poppins Bold */
+.seal {
+  position: absolute;
+  top: 60px;
+  left: 66px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1.5px solid var(--color-white);
+  border-radius: var(--radius-full);
+  background: linear-gradient(135deg, #e8e0ff 14%, #a894fa 46%, #d9f2ff 64%, #9e85f2 86%);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 8px;
+  line-height: 1.2;
+  letter-spacing: var(--tracking-overline);
+  text-transform: uppercase;
+  color: var(--color-navy-900);
+}
+
+.footer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-10);
+  width: 100%;
+}
+
+.memberId {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 6px var(--space-16);
+  border: 1.5px solid var(--color-white);
+  border-radius: var(--radius-full);
+  background: var(--color-navy-900);
+}
+
+.idLabel {
+  color: var(--color-lime-500);
+}
+
+/* Figma: Overline/12 Poppins SemiBold caps */
+.idValue {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+  line-height: 1.2;
+  letter-spacing: var(--tracking-overline);
+  white-space: nowrap;
+}
+
+.meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-12);
+  width: 100%;
+}

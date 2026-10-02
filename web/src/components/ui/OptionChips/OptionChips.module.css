@@ -1,0 +1,113 @@
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  min-width: 0;
+  border: 0;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+}
+
+/* Figma: Body/16 Poppins Bold, navy-850 */
+.legend {
+  float: left; /* legend dalam flex tidak ikut flex tanpa ini */
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--color-navy-850);
+}
+
+.selected {
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.option {
+  position: relative;
+  cursor: pointer;
+}
+
+/* ── Chip teks: pill border neutral-400 (Figma) ──────────── */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 48px;
+  padding: var(--space-4) var(--space-12);
+  border: 1px solid var(--color-neutral-400);
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  line-height: 1.5;
+  color: rgb(10 8 74 / 0.8);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.chip:hover {
+  border-color: var(--color-navy-900);
+}
+
+.chip:has(input:checked) {
+  border-color: var(--color-navy-900);
+  background: var(--color-navy-900);
+  color: var(--color-lime-500);
+}
+
+/* ── Swatch warna 44px ───────────────────────────────────── */
+.swatch {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 2px solid var(--color-neutral-300);
+  border-radius: var(--radius-full);
+  transition: border-color var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
+}
+
+.swatch:hover {
+  transform: scale(1.06);
+}
+
+.swatch:has(input:checked) {
+  border-color: var(--color-indigo-500);
+}
+
+.color {
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgb(10 8 74 / 0.12);
+  border-radius: var(--radius-full);
+}
+
+/* Fokus keyboard pada input tersembunyi → ring di label */
+.option:has(input:focus-visible) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+.error {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--color-pink-500);
+}
+
+.group[aria-invalid="true"] .chip,
+.group[aria-invalid="true"] .swatch {
+  border-color: var(--color-pink-500);
+}

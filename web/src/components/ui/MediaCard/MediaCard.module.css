@@ -1,0 +1,70 @@
+.card {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--color-neutral-100);
+}
+
+.solid {
+  background: var(--gradient-navy);
+}
+
+.radius-md {
+  border-radius: var(--radius-md);
+}
+
+.radius-lg {
+  border-radius: var(--radius-lg);
+}
+
+.image {
+  object-fit: cover;
+  transition: transform var(--duration-slow) var(--ease-out);
+}
+
+.card:hover .image {
+  transform: scale(1.04);
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.overlay-25 {
+  background: var(--overlay-photo-25);
+}
+
+.overlay-45 {
+  background: var(--overlay-photo-45);
+}
+
+.overlay-50 {
+  background: var(--overlay-photo-50);
+}
+
+.content {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: var(--space-16);
+}
+
+.corner {
+  display: flex;
+  justify-content: flex-end;
+  color: var(--color-white);
+}
+
+.cornerStart {
+  justify-content: flex-start;
+  gap: var(--space-8);
+}
+
+.body {
+  margin-top: auto;
+}

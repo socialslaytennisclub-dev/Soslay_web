@@ -1,0 +1,41 @@
+.section {
+  padding-block: var(--space-32) var(--space-80);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+}
+
+/* Anak langsung panel muncul bergantian */
+@media (prefers-reduced-motion: no-preference) {
+  .panel > * {
+    animation: panel-in var(--duration-slow) var(--ease-out) both;
+  }
+
+  .panel > :nth-child(2) {
+    animation-delay: 80ms;
+  }
+
+  .panel > :nth-child(3) {
+    animation-delay: 160ms;
+  }
+
+  .panel > :nth-child(n + 4) {
+    animation-delay: 240ms;
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+@media (min-width: 768px) {
+  .section {
+    padding-block: var(--space-48) var(--space-128);
+  }
+}

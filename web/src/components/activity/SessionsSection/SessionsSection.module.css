@@ -1,0 +1,32 @@
+.section {
+  background: var(--surface-page);
+  padding-block: var(--space-48) var(--space-80);
+  scroll-margin-top: var(--nav-height);
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-48);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-48) var(--space-24);
+  border: 1px dashed var(--color-indigo-200);
+  border-radius: var(--radius-lg);
+  text-align: center;
+}
+
+/* Desktop: padding & jarak antar grup mengikuti Figma (128 / 80) */
+@media (min-width: 1200px) {
+  .section {
+    padding-block: var(--space-64) var(--space-128);
+  }
+
+  .inner {
+    gap: var(--space-128);
+  }
+}

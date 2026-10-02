@@ -1,0 +1,47 @@
+.section {
+  --feed-inset: max(var(--gutter), calc((100vw - var(--container-max)) / 2 + var(--gutter)));
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-48);
+  background: var(--surface-page);
+  padding-block: var(--space-48) var(--space-80);
+}
+
+/* Feed sejajar dengan container di kiri, tapi meluber sampai tepi kanan layar */
+.feed {
+  display: flex;
+  gap: var(--space-20);
+  overflow-x: auto;
+  padding-inline: var(--feed-inset);
+  scroll-padding-inline: var(--feed-inset);
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+  cursor: grab;
+}
+
+.feed::-webkit-scrollbar {
+  display: none;
+}
+
+.feed[data-dragging="true"] {
+  cursor: grabbing;
+  scroll-snap-type: none;
+}
+
+.item {
+  flex: 0 0 clamp(240px, 70vw, 313px);
+  scroll-snap-align: start;
+}
+
+.footer {
+  display: flex;
+  justify-content: center;
+}
+
+@media (min-width: 1200px) {
+  .section {
+    gap: var(--space-64);
+    padding-block: var(--space-64) var(--space-128);
+  }
+}

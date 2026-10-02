@@ -1,0 +1,30 @@
+/* Gerak marquee dikendalikan GSAP (src/animations/marquee.ts) — gap dibaca dari column-gap */
+.marquee {
+  --marquee-gap: 26px;
+
+  display: flex;
+  gap: var(--marquee-gap);
+  overflow: hidden;
+  padding-block: clamp(var(--space-24), 3vw, var(--space-42));
+  background: var(--gradient-lime);
+  color: var(--color-navy-800);
+  user-select: none;
+}
+
+.track {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--marquee-gap);
+  min-width: 100%;
+  will-change: transform;
+}
+
+.item {
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(28px, 3.3vw + 4px, 48px);
+  line-height: 1.1;
+  letter-spacing: var(--tracking-tight);
+  white-space: nowrap;
+}
