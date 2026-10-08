@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { isSupabaseConfigured, supabaseAnonKey, supabaseUrl } from "@/lib/supabase/env";
 
 /**
- * Refresh sesi Supabase di setiap request + cek optimistis untuk /admin dan /akun.
+ * Refresh sesi Supabase di setiap request + cek optimistis untuk /admin.
  * Otorisasi sebenarnya (role & izin modul) tetap di server: layout admin + RLS.
  * Tanpa env Supabase, proxy tidak melakukan apa-apa (mode demo).
  */
@@ -28,7 +28,8 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname, search } = request.nextUrl;
-  if (!user && (pathname.startsWith("/admin") || pathname.startsWith("/akun"))) {
+  // /akun (member area) masih data demo → belum dikunci; dikunci saat sudah membaca Supabase.
+  if (!user && pathname.startsWith("/admin")) {
     const login = request.nextUrl.clone();
     login.pathname = "/masuk";
     login.search = `?next=${encodeURIComponent(pathname + search)}`;
