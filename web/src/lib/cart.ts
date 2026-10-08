@@ -20,7 +20,9 @@ export function readCart(): CartItem[] {
   if (typeof window === "undefined") return [];
   try {
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as CartItem[]) : [];
+    const items = raw ? (JSON.parse(raw) as CartItem[]) : [];
+    // Keranjang lama menyimpan path .jpg/.png — gambar sudah dikonversi ke WebP.
+    return items.map((item) => ({ ...item, image: item.image.replace(/\.(jpe?g|png)$/i, ".webp") }));
   } catch {
     return [];
   }

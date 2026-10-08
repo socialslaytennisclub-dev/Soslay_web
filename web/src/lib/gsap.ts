@@ -10,7 +10,9 @@ import { SplitText } from "gsap/SplitText";
 // Registrasi plugin sekali saja, di sisi client.
 if (typeof window !== "undefined") {
   gsap.registerPlugin(useGSAP, ScrollTrigger, ScrollSmoother, SplitText, DrawSVGPlugin);
-  gsap.defaults({ ease: "expo.out", duration: 1.2 });
+  gsap.defaults({ ease: "expo.out", duration: 0.9 });
+  // HP: address bar yang muncul/hilang tidak memicu refresh ulang semua trigger (sumber "loncat" saat scroll).
+  ScrollTrigger.config({ ignoreMobileResize: true });
 
   // Debug di DevTools (development saja): window.gsap, window.ScrollTrigger, window.ScrollSmoother
   if (process.env.NODE_ENV === "development") {

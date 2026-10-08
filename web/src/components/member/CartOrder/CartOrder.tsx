@@ -10,6 +10,7 @@ import { useCart } from "@/hooks/useCart";
 import { cartItemKey, type CartItem } from "@/lib/cart";
 import { formatRupiah } from "@/lib/format";
 import styles from "./CartOrder.module.css";
+import { blurProps } from "@/lib/image";
 
 /**
  * Figma 25:2112 — keranjang (dari localStorage via useCart) + ringkasan.
@@ -151,7 +152,7 @@ function CartRow({ item, checked, onCheck, onQuantity, onRemove }: CartRowProps)
     <li className={styles.item}>
       <Checkbox checked={checked} onChange={onCheck} label={`Pilih ${item.name}`} />
       <Link href={product ? productHref(product) : "/shop"} className={styles.photo} tabIndex={-1} aria-hidden>
-        <Image src={item.image} alt="" fill sizes="160px" className={styles.image} />
+        <Image src={item.image} {...blurProps(item.image)} alt="" fill sizes="160px" className={styles.image} />
       </Link>
 
       <div className={styles.info}>

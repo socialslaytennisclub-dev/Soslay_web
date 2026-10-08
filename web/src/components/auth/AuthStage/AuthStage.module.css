@@ -1,0 +1,117 @@
+/* Figma: stage — foto penuh, kartu di tengah, padding atas = tinggi navbar */
+.stage {
+  position: relative;
+  isolation: isolate;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  min-height: 100svh;
+  padding: calc(var(--nav-height) + var(--space-24)) var(--gutter) var(--space-48);
+  overflow: hidden;
+  background: var(--color-navy-900);
+}
+
+/* Zoom ringan dari atas → watermark "Social Slay" di bawah foto terpotong di HP */
+.photo {
+  z-index: -2;
+  object-fit: cover;
+  object-position: 50% 40%;
+  transform: scale(1.2);
+  transform-origin: 50% 20%;
+}
+
+/* Figma: overlay/login — gelap di atas (navbar terbaca) & bawah */
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, rgb(0 0 0 / 0.75) 0%, rgb(0 0 0 / 0) 50.5%, rgb(0 0 0 / 0.5) 100%);
+}
+
+/* Figma: form/card — putih, radius 16, padding 32, shadow 0 4 16 / 10% */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+  width: 100%;
+  max-width: 555px;
+  padding: var(--space-24) var(--space-20);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .card {
+    animation: card-in 0.7s var(--ease-out) 0.1s both;
+  }
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.98);
+  }
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  color: var(--color-navy-800);
+}
+
+/* Figma: Title/36 Poppins ExtraBold, tracking -3% */
+.title {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(28px, 1.6vw + 18px, 36px);
+  line-height: 1.2;
+  letter-spacing: var(--tracking-tight);
+  text-wrap: balance;
+}
+
+.description {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  opacity: 0.8;
+}
+
+.switch {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  text-align: center;
+  color: rgb(6 6 40 / 0.8);
+}
+
+.switchLink {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  color: var(--color-indigo-600);
+}
+
+.switchLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+@media (min-width: 768px) {
+  .stage {
+    padding-top: calc(var(--nav-height) + var(--space-32));
+  }
+
+  .card {
+    padding: var(--space-32);
+  }
+}
+
+/* Figma: foto 2680px di frame 1440 → di-zoom ±1.86× ke grup member di tengah lapangan */
+@media (min-width: 1200px) {
+  .photo {
+    transform: scale(1.86);
+    transform-origin: 49.5% 52%;
+  }
+}

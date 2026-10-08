@@ -1,5 +1,6 @@
 import type { IconName } from "@/components/ui";
 import { activityTypes } from "./activity";
+import { guidePrompt } from "./guides";
 
 /** Konten global (navbar & footer). Nanti diganti data dari CMS. */
 
@@ -45,6 +46,7 @@ export const footerColumns: { title: string; links: NavLink[] }[] = [
   {
     title: "Bantuan",
     links: [
+      { label: "Panduan Peserta", href: guidePrompt.href },
       { label: "Kontak", href: "/kontak" },
       { label: "Info", href: "/info" },
       { label: "Kolaborasi", href: "/kolaborasi" },

@@ -23,7 +23,7 @@ export function MemberCard() {
       </svg>
 
       <header className={styles.header}>
-        <Image src="/images/brand/logo-lime.png" alt="Slay Club" width={80} height={23} />
+        <Image src="/images/brand/logo-lime.webp" alt="Slay Club" width={80} height={23} />
         <p className={styles.overline}>Official Member Card</p>
       </header>
 

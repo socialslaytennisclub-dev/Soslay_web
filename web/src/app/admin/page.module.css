@@ -1,0 +1,51 @@
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+  padding: var(--space-20) var(--space-16) var(--space-48);
+}
+
+.greeting {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-16);
+}
+
+.hello {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 22px;
+  color: var(--color-navy-900);
+}
+
+.summary {
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--color-indigo-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+}
+
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-20);
+  align-items: start;
+}
+
+/* Figma: kolom kiri lebar (±720) · kanan 424 */
+@media (min-width: 1280px) {
+  .content {
+    padding: var(--space-24) var(--space-32) var(--space-48);
+  }
+
+  .row {
+    grid-template-columns: minmax(0, 1fr) 400px;
+  }
+}

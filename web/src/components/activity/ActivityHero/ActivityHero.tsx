@@ -3,6 +3,7 @@ import { Button, Container, NavyBackdrop, Text } from "@/components/ui";
 import { activityPage, sessionStart, sessionTimeZone, type Session } from "@/content/activity";
 import { formatJamRange, formatTanggal } from "@/lib/format";
 import styles from "./ActivityHero.module.css";
+import { blurProps } from "@/lib/image";
 
 type ActivityHeroProps = {
   session: Session;
@@ -54,7 +55,7 @@ export function ActivityHero({ session }: ActivityHeroProps) {
         <div className={styles.photo} data-anim="reveal">
           <Image
             className={styles.image}
-            src={session.image}
+            src={session.image} {...blurProps(session.image)}
             alt={`Sesi ${session.title} di ${session.venue.name}`}
             fill
             preload

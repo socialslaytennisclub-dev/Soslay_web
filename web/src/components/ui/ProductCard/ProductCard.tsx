@@ -4,6 +4,7 @@ import { cx } from "@/lib/cx";
 import { formatRupiah } from "@/lib/format";
 import { Icon } from "../Icon/Icon";
 import styles from "./ProductCard.module.css";
+import { blurProps } from "@/lib/image";
 
 export type ProductCardProps = {
   name: string;
@@ -38,7 +39,7 @@ export function ProductCard({
       <div className={styles.media}>
         <Image
           className={styles.image}
-          src={image}
+          src={image} {...blurProps(image)}
           alt={name}
           fill
           sizes={size === "lg" ? "(min-width: 1200px) 424px, (min-width: 768px) 45vw, 90vw" : "(min-width: 1200px) 246px, (min-width: 768px) 30vw, 45vw"}

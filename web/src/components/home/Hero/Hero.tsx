@@ -2,6 +2,7 @@ import Image from "next/image";
 import { Button, Container, Text } from "@/components/ui";
 import { hero } from "@/content/home";
 import styles from "./Hero.module.css";
+import { blurProps } from "@/lib/image";
 
 /** Animasi intro & parallax: src/animations/heroIntro.ts (dipicu oleh data-anim="hero"). */
 export function Hero() {
@@ -10,7 +11,7 @@ export function Hero() {
       <div className={styles.media} data-hero-media>
         <Image
           className={styles.image}
-          src={hero.image.src}
+          src={hero.image.src} {...blurProps(hero.image.src)}
           alt={hero.image.alt}
           fill
           preload

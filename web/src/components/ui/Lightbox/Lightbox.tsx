@@ -5,6 +5,7 @@ import type { MouseEvent, RefObject } from "react";
 import { AvatarStack, type AvatarStackItem } from "../AvatarStack/AvatarStack";
 import { Icon } from "../Icon/Icon";
 import styles from "./Lightbox.module.css";
+import { blurProps } from "@/lib/image";
 
 export type LightboxItem = {
   src: string;
@@ -35,7 +36,7 @@ export function Lightbox({ dialogRef, item, position, onClose, onNext, onPrev, o
           </button>
 
           <article key={item.src} className={styles.card}>
-            <Image className={styles.image} src={item.src} alt={item.alt} fill sizes="(min-width: 768px) 681px, 100vw" />
+            <Image className={styles.image} src={item.src} {...blurProps(item.src)} alt={item.alt} fill sizes="(min-width: 768px) 681px, 100vw" />
             <span className={styles.overlay} aria-hidden />
 
             <button type="button" className={styles.close} onClick={onClose} aria-label="Tutup">

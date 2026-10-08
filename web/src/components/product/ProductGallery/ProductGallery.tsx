@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { cx } from "@/lib/cx";
 import styles from "./ProductGallery.module.css";
+import { blurProps } from "@/lib/image";
 
 type ProductGalleryProps = {
   images: { src: string; alt: string; position?: string }[];
@@ -28,7 +29,7 @@ export function ProductGallery({ images }: ProductGalleryProps) {
                 aria-label={`Lihat foto ${i + 1}: ${image.alt}`}
                 aria-current={i === active}
               >
-                <Image src={image.src} alt="" fill sizes="96px" style={{ objectPosition: image.position }} />
+                <Image src={image.src} {...blurProps(image.src)} alt="" fill sizes="96px" style={{ objectPosition: image.position }} />
               </button>
             </li>
           ))}
@@ -39,7 +40,7 @@ export function ProductGallery({ images }: ProductGalleryProps) {
         <Image
           key={current.src}
           className={styles.mainImage}
-          src={current.src}
+          src={current.src} {...blurProps(current.src)}
           alt={current.alt}
           fill
           preload

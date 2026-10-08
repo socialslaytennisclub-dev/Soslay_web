@@ -1,0 +1,315 @@
+/* Figma 25:3187 (sidebar) & 25:3254 (topbar) */
+
+/* ── Sidebar ── */
+.sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  width: 248px;
+  padding: var(--space-24) var(--space-16);
+  overflow-y: auto;
+  background: var(--color-navy-900);
+  transform: translateX(-100%);
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.sidebarOpen {
+  transform: none;
+  box-shadow: 0 0 0 100vmax rgb(6 6 40 / 0.5);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding-inline: var(--space-8);
+}
+
+.adminChip {
+  padding: 2px var(--space-8);
+  border-radius: var(--radius-full);
+  background: var(--color-lime-500);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--color-navy-900);
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.navGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.navGroupLabel {
+  padding: 0 var(--space-12) var(--space-4);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 12px;
+  line-height: 1.4;
+  text-transform: uppercase;
+  color: var(--color-indigo-200);
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-10) var(--space-12);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-white);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+a.navItem:hover {
+  background: var(--color-navy-800);
+}
+
+.navActive,
+a.navActive:hover {
+  background: var(--color-lime-500);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  color: var(--color-navy-900);
+}
+
+.navDisabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.navLabel {
+  flex: 1;
+}
+
+.navBadge {
+  padding: 2px var(--space-8);
+  border-radius: var(--radius-full);
+  background: var(--color-navy-700);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-indigo-200);
+}
+
+.navActive .navBadge {
+  background: var(--color-navy-900);
+  color: var(--color-lime-500);
+}
+
+
+.navBottom {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: auto;
+}
+
+.profile {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-12);
+  border-radius: var(--radius-lg);
+  background: var(--color-navy-800);
+}
+
+.profileAvatar {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-500);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.profileText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.profileName {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-white);
+}
+
+.profileRole {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-indigo-200);
+}
+
+.signOut {
+  color: var(--color-white);
+}
+
+.signOut:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Bar atas HP ── */
+.mobileBar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-12) var(--space-16);
+  background: var(--color-navy-900);
+}
+
+.menuButton {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  color: var(--color-white);
+}
+
+/* ── Topbar ── */
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-12) var(--space-16);
+  padding: var(--space-16);
+  border-bottom: 1px solid var(--color-indigo-border);
+  background: var(--color-white);
+}
+
+.titles {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.breadcrumb {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-indigo-muted);
+}
+
+.pageTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: var(--tracking-tighter);
+  color: var(--color-navy-900);
+}
+
+.search {
+  display: none;
+  align-items: center;
+  gap: var(--space-8);
+  width: 320px;
+  padding: var(--space-10) var(--space-12) var(--space-10) var(--space-16);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  color: var(--color-indigo-muted);
+}
+
+.search:focus-within {
+  border-color: var(--color-indigo-500);
+}
+
+.searchInput {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.searchInput:focus {
+  outline: none;
+}
+
+.searchInput::placeholder {
+  color: var(--color-neutral-500);
+}
+
+.kbd {
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  background: var(--color-indigo-50);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.iconButton {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-navy-900);
+}
+
+.notifDot {
+  position: absolute;
+  top: 9px;
+  right: 10px;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--color-white);
+  border-radius: var(--radius-full);
+  background: var(--color-pink-500);
+}
+
+
+@media (min-width: 1024px) {
+  .sidebar {
+    transform: none;
+  }
+
+  .mobileBar {
+    display: none;
+  }
+
+  .topbar {
+    flex-wrap: nowrap;
+    padding: var(--space-16) var(--space-32);
+  }
+
+  .search {
+    display: flex;
+  }
+}

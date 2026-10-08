@@ -1,0 +1,460 @@
+/* Admin / 09 Settings & Roles — Figma 25:6834 */
+
+.tabs {
+  display: flex;
+  gap: var(--space-4);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--color-indigo-border);
+  scrollbar-width: none;
+}
+
+.tab {
+  flex-shrink: 0;
+  padding: var(--space-10) var(--space-10) var(--space-12);
+  border-bottom: 2px solid transparent;
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.tab:hover {
+  color: var(--color-indigo-600);
+}
+
+.tabActive {
+  border-bottom-color: var(--color-indigo-600);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+}
+
+.layout {
+  display: grid;
+  gap: var(--space-16);
+  align-items: start;
+}
+
+.mainCol,
+.sideCol,
+.formStack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  min-width: 0;
+}
+
+.formStack {
+  max-width: 760px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  min-width: 0;
+  padding: var(--space-16);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+}
+
+.cardHeader {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.cardTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  color: var(--color-navy-900);
+}
+
+.muted {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.strong {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.notice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-10) var(--space-12);
+  border-radius: var(--radius-md);
+  background: var(--color-indigo-50);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.reset {
+  margin-left: auto;
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  color: var(--color-indigo-600);
+}
+
+/* ── Tabel ── */
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+}
+
+.table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.table th {
+  padding: var(--space-10) var(--space-12);
+  background: var(--color-indigo-50);
+  font-weight: var(--weight-medium);
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--color-indigo-muted);
+}
+
+.table td {
+  padding: var(--space-10) var(--space-12);
+  border-top: 1px solid var(--color-indigo-border);
+  vertical-align: middle;
+}
+
+.matrix th:not(:first-child),
+.matrix td:not(:first-child) {
+  text-align: center;
+}
+
+.matrix td:first-child {
+  font-weight: var(--weight-medium);
+  white-space: nowrap;
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  min-width: 0;
+}
+
+.personText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.roleSelect {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-navy-900);
+}
+
+.roleSelect select {
+  appearance: none;
+  max-width: 100%;
+  padding: 6px 28px 6px var(--space-10);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  background: var(--color-white);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-navy-900);
+  cursor: pointer;
+}
+
+.roleSelect select:disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.roleSelect > span:last-child {
+  position: absolute;
+  right: var(--space-10);
+  pointer-events: none;
+}
+
+.iconButton {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  color: var(--color-navy-900);
+}
+
+.iconButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Sel izin */
+.access {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px var(--space-8);
+  border-radius: var(--radius-full);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 12px;
+  white-space: nowrap;
+  transition: box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.access:hover:not(:disabled) {
+  box-shadow: 0 0 0 2px var(--color-indigo-200);
+}
+
+.access:disabled {
+  cursor: default;
+}
+
+.access-edit {
+  background: var(--color-lime-100);
+  color: var(--color-navy-900);
+}
+
+.access-view {
+  background: var(--color-indigo-50);
+  color: var(--color-indigo-600);
+}
+
+.access-none {
+  min-width: 32px;
+  justify-content: center;
+  color: var(--color-indigo-muted);
+}
+
+/* Kartu role di HP */
+.roleCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+  padding: var(--space-14);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+}
+
+.roleModules {
+  display: grid;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.roleModules div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+/* ── Integrasi & log ── */
+.integrations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  list-style: none;
+}
+
+.integration {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  padding: var(--space-10) var(--space-12);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+}
+
+.integration .strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.integration .muted {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.integrationIcon {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--radius-md);
+  background: var(--color-indigo-50);
+  color: var(--color-indigo-600);
+}
+
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  list-style: none;
+}
+
+.log li {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: var(--space-16);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.log li::before {
+  content: "";
+  position: absolute;
+  top: 6px;
+  left: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-600);
+}
+
+.log strong {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+}
+
+/* ── Form ── */
+.cols2 {
+  display: grid;
+  gap: var(--space-16);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.label {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 14px;
+  color: var(--color-black);
+}
+
+.input,
+.affix {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-10) var(--space-14);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--color-navy-950);
+}
+
+.input[readonly] {
+  background: var(--color-indigo-50);
+}
+
+.input:focus,
+.affix:focus-within {
+  border-color: var(--color-indigo-500);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(64 53 222 / 0.12);
+}
+
+.affix {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.affix input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--color-navy-950);
+}
+
+.affix input:focus {
+  outline: none;
+}
+
+.affix input:disabled {
+  color: var(--color-indigo-muted);
+}
+
+.affix .muted {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.tiers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+  list-style: none;
+}
+
+.tiers li {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.formFooter {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+}
+
+.formActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-8);
+}
+
+@media (min-width: 640px) {
+  .card {
+    padding: var(--space-20);
+  }
+
+  .cols2 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 340px;
+  }
+}

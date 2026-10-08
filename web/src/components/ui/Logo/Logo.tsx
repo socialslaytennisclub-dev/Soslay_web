@@ -14,7 +14,7 @@ type LogoProps = {
 export function Logo({ tone = "lime", size = "md", className }: LogoProps) {
   return (
     <Link href="/" className={cx(styles.logo, styles[size], className)} aria-label="Soslay — beranda">
-      <Image src={`/images/brand/logo-${tone}.png`} alt="" width={301} height={87} preload={size === "md"} />
+      <Image src={`/images/brand/logo-${tone}.webp`} alt="" width={301} height={87} preload={size === "md"} />
     </Link>
   );
 }

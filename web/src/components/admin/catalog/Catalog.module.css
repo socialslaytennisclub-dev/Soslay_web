@@ -1,0 +1,478 @@
+/* Admin / 07 Venues (Figma 25:5882) & 08 Products (Figma 25:6156) */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-10);
+}
+
+.pillTabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--color-white);
+}
+
+.pillTab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-14);
+  border-radius: var(--radius-full);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.pillTab:hover {
+  background: var(--color-indigo-50);
+}
+
+.pillTabActive,
+.pillTabActive:hover {
+  background: var(--color-navy-900);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  color: var(--color-white);
+}
+
+.tabCount {
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-100);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 11px;
+  color: var(--color-navy-900);
+}
+
+.pillTabActive .tabCount {
+  background: var(--color-lime-500);
+}
+
+.select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-navy-900);
+}
+
+.select > span:first-child {
+  position: absolute;
+  left: var(--space-12);
+  pointer-events: none;
+}
+
+.select > span:last-child {
+  position: absolute;
+  right: var(--space-12);
+  pointer-events: none;
+}
+
+.select select {
+  appearance: none;
+  min-height: 42px;
+  padding: var(--space-8) 34px var(--space-8) 36px;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 13px;
+  color: var(--color-navy-900);
+  cursor: pointer;
+}
+
+.select select:focus-visible {
+  border-color: var(--color-indigo-500);
+}
+
+.muted {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.strong {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.notice {
+  padding: var(--space-10) var(--space-14);
+  border-radius: var(--radius-md);
+  background: var(--color-indigo-50);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.switch {
+  position: relative;
+  flex-shrink: 0;
+  width: 40px;
+  height: 22px;
+  border-radius: var(--radius-full);
+  background: var(--color-neutral-300);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.switch span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--radius-full);
+  background: var(--color-white);
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.switchOn {
+  background: var(--color-indigo-600);
+}
+
+.switchOn span {
+  transform: translateX(18px);
+}
+
+/* ── Venues ── */
+.venueGrid {
+  display: grid;
+  gap: var(--space-16);
+  list-style: none;
+}
+
+.venueCard {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+}
+
+.venueImage {
+  position: relative;
+  aspect-ratio: 2 / 1;
+  background: var(--color-indigo-100);
+}
+
+.venueImage img {
+  object-fit: cover;
+}
+
+.venueBadge {
+  position: absolute;
+  top: var(--space-10);
+  left: var(--space-10);
+}
+
+.venueOpen {
+  position: absolute;
+  top: var(--space-10);
+  right: var(--space-10);
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-full);
+  background: var(--color-white);
+  color: var(--color-navy-900);
+}
+
+.venueOpen:hover {
+  color: var(--color-indigo-600);
+}
+
+.venueBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-14) var(--space-16) var(--space-16);
+}
+
+.venueName {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 15px;
+  color: var(--color-navy-900);
+}
+
+.venueStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-8);
+}
+
+.venueStats div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-8) var(--space-10);
+  border-radius: var(--radius-md);
+  background: var(--color-indigo-50);
+}
+
+.venueStats dt {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--color-indigo-muted);
+}
+
+.venueStats dd {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  color: var(--color-navy-900);
+}
+
+.toggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.addCard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6, 6px);
+  min-height: 160px;
+  padding: var(--space-20);
+  border: 1.5px dashed var(--color-indigo-200);
+  border-radius: var(--radius-xl);
+  font-family: var(--font-display);
+  font-size: 14px;
+  text-align: center;
+  color: var(--color-navy-900);
+  cursor: not-allowed;
+}
+
+/* ── Products ── */
+.alert {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-10);
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid rgb(236 72 153 / 0.2);
+  border-radius: var(--radius-lg);
+  background: rgb(253 236 245);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.alert > span:first-child {
+  color: var(--color-pink-500);
+}
+
+.alert > span:nth-child(2) {
+  flex: 1 1 240px;
+}
+
+.alertLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  color: var(--color-indigo-600);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  min-width: 0;
+  padding: var(--space-12);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-10);
+}
+
+.search {
+  display: flex;
+  flex: 1 1 260px;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-10) var(--space-12);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+  color: var(--color-indigo-muted);
+}
+
+.search:focus-within {
+  border-color: var(--color-indigo-500);
+}
+
+.search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.search input:focus {
+  outline: none;
+}
+
+.tableWrap {
+  margin: 0 calc(var(--space-12) * -1) calc(var(--space-12) * -1);
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.table th {
+  padding: var(--space-10) var(--space-16);
+  background: var(--color-indigo-50);
+  font-weight: var(--weight-medium);
+  font-size: 12px;
+  text-align: left;
+  color: var(--color-indigo-muted);
+}
+
+.table td {
+  padding: var(--space-10) var(--space-16);
+  border-top: 1px solid var(--color-indigo-border);
+  vertical-align: middle;
+}
+
+.rowMuted .product,
+.rowMuted .price {
+  opacity: 0.55;
+}
+
+.product {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  min-width: 0;
+}
+
+.productThumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--color-indigo-100);
+}
+
+.productThumb img {
+  object-fit: cover;
+}
+
+.productText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.chip {
+  padding: 2px 6px;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.price {
+  display: flex;
+  flex-direction: column;
+  white-space: nowrap;
+}
+
+.price strong {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+}
+
+.price s {
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.stockValue {
+  font-weight: var(--weight-medium);
+}
+
+.iconLink {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-md);
+  color: var(--color-indigo-600);
+}
+
+.iconLink:hover {
+  background: var(--color-indigo-50);
+}
+
+.empty {
+  padding: 40px var(--space-16);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  text-align: center;
+  color: var(--color-indigo-muted);
+}
+
+@media (min-width: 640px) {
+  .venueGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .venueGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

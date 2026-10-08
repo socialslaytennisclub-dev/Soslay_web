@@ -2,6 +2,7 @@ import Image from "next/image";
 import type { ElementType, HTMLAttributes, ReactNode } from "react";
 import { cx } from "@/lib/cx";
 import styles from "./MediaCard.module.css";
+import { blurProps } from "@/lib/image";
 
 export type MediaOverlay = "none" | "25" | "45" | "50";
 
@@ -46,7 +47,7 @@ export function MediaCard({
       {src && (
         <Image
           className={styles.image}
-          src={src}
+          src={src} {...blurProps(src)}
           alt={alt}
           fill
           sizes={sizes}

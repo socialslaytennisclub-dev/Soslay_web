@@ -17,14 +17,14 @@ export function heroIntro(scope: HTMLElement) {
   const tl = gsap.timeline({ defaults: { ease: "expo.out" } });
   tl.set(hero, { autoAlpha: 1 }, 0);
 
-  if (media) tl.fromTo(media, { scale: 1.25 }, { scale: 1, duration: 2.4 }, 0);
+  if (media) tl.fromTo(media, { scale: 1.2 }, { scale: 1, duration: 1.8 }, 0);
 
   if (wordmark) {
     const split = SplitText.create(wordmark, { type: "chars", mask: "chars", charsClass: "char" });
     wordmark.dataset.split = "true";
     tl.set(wordmark, { autoAlpha: 1 }, 0).from(
       split.chars,
-      { yPercent: 110, rotate: 8, duration: 1.5, stagger: 0.06 },
+      { yPercent: 110, rotate: 8, duration: 1.1, stagger: 0.05 },
       0.15,
     );
   }
@@ -37,12 +37,12 @@ export function heroIntro(scope: HTMLElement) {
       autoSplit: true,
       // Jangan return tween di sini: autoSplit akan me-revert timeline intro saat resize.
       onSplit: (self) => {
-        tl.from(self.lines, { yPercent: 100, duration: 1.1, stagger: 0.08 }, 0.7);
+        tl.from(self.lines, { yPercent: 100, duration: 0.9, stagger: 0.07 }, 0.5);
       },
     });
   }
 
-  if (cta) tl.fromTo(cta, { autoAlpha: 0, y: 24 }, { autoAlpha: 1, y: 0, duration: 1 }, 1.05);
+  if (cta) tl.fromTo(cta, { autoAlpha: 0, y: 24 }, { autoAlpha: 1, y: 0, duration: 0.8 }, 0.8);
 
   // Parallax saat scroll keluar dari hero
   const scrollOut = { trigger: hero, start: "top top", end: "bottom top", scrub: true };

@@ -6,21 +6,34 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "images": "node scripts/optimize-images.mjs",
+    "db:check": "node scripts/check-migrations.mjs",
+    "db:seed:generate": "node --conditions=react-server --import tsx scripts/generate-seed.ts",
+    "db:seed:check": "node scripts/check-seed.mjs",
+    "db:setup": "node scripts/db-setup.mjs",
+    "icons:admin": "node scripts/sync-admin-icons.mjs"
   },
   "dependencies": {
     "@gsap/react": "^2.1.2",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.117.3",
     "gsap": "^3.15.0",
     "next": "16.3.8",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@phosphor-icons/core": "^2.1.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.8",
+    "postgres": "^3.4.9",
+    "tsx": "^4.23.15",
     "typescript": "^5"
   }
 }

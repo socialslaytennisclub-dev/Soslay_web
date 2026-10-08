@@ -27,6 +27,6 @@
   }
 
   .inner {
-    gap: var(--space-128);
+    gap: var(--space-80); /* Figma: jarak antar blok section/venues = 80 */
   }
 }

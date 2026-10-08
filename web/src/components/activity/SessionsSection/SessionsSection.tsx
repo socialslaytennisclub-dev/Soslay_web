@@ -1,16 +1,17 @@
 import { Container, FilterChips, Text, type FilterChip } from "@/components/ui";
 import { activityPage, activityTypes, type ActivityTypeSlug, type Session } from "@/content/activity";
+import { GuidePrompt } from "../GuidePrompt/GuidePrompt";
 import { SessionGrid } from "../SessionGrid/SessionGrid";
 import styles from "./SessionsSection.module.css";
 
 type SessionsSectionProps = {
-  thisWeek: Session[];
-  later: Session[];
+  upcoming: Session[];
+  past: Session[];
   activeType?: ActivityTypeSlug;
 };
 
-/** Daftar sesi: filter jenis aktivitas + grup "minggu ini" & "mendatang". */
-export function SessionsSection({ thisWeek, later, activeType }: SessionsSectionProps) {
+/** Daftar sesi: filter jenis aktivitas + grup "mendatang" (bisa booking) & "lama" (lihat venue). */
+export function SessionsSection({ upcoming, past, activeType }: SessionsSectionProps) {
   const chips: FilterChip[] = [
     { label: "Semua", href: "/activity", active: !activeType },
     ...activityTypes.map((type) => ({
@@ -19,7 +20,7 @@ export function SessionsSection({ thisWeek, later, activeType }: SessionsSection
       active: type.slug === activeType,
     })),
   ];
-  const isEmpty = thisWeek.length === 0 && later.length === 0;
+  const isEmpty = upcoming.length === 0 && past.length === 0;
 
   return (
     <section className={styles.section} aria-label="Jadwal sesi" id="jadwal">
@@ -37,8 +38,8 @@ export function SessionsSection({ thisWeek, later, activeType }: SessionsSection
           </div>
         ) : (
           <>
-            <SessionGrid id="sessions-this-week" {...activityPage.thisWeek} sessions={thisWeek} />
-            <SessionGrid id="sessions-upcoming" {...activityPage.upcoming} sessions={later} />
+            <SessionGrid id="sessions-upcoming" {...activityPage.upcoming} sessions={upcoming} aside={<GuidePrompt />} />
+            <SessionGrid id="sessions-past" {...activityPage.past} sessions={past} variant="past" />
           </>
         )}
       </Container>

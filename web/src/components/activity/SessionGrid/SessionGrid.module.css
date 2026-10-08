@@ -4,7 +4,10 @@
   gap: var(--space-32);
 }
 
-.intro {
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
   max-width: 633px;
 }
 

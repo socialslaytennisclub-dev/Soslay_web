@@ -44,7 +44,7 @@ export function MotionProvider({ children }: MotionProviderProps) {
         const smoother = ScrollSmoother.create({
           wrapper: wrapperRef.current!,
           content: scope,
-          smooth: 1.1,
+          smooth: 0.7, // lebih responsif — 1.1 terasa "berat" mengikuti scroll
           effects: false,
         });
         const stopMagnetic = magneticButtons(document.body);

@@ -5,9 +5,9 @@ import { Footer } from "@/components/layout/Footer/Footer";
 import { Navbar } from "@/components/layout/Navbar/Navbar";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 import { InstagramFeed } from "@/components/sections/InstagramFeed/InstagramFeed";
-import { isActivityType, sessions } from "@/content/activity";
+import { activityPage, isActivityType, sessions } from "@/content/activity";
 import { instagram } from "@/content/home";
-import { filterByType, groupByWeek, pickFeatured, upcomingSessions } from "@/lib/sessions";
+import { filterByType, pastSessions, pickFeatured, upcomingSessions } from "@/lib/sessions";
 
 export const metadata: Metadata = {
   title: "Activity — SOSLAY",
@@ -24,7 +24,7 @@ export default async function ActivityPage({ searchParams }: PageProps<"/activit
   const featured = pickFeatured(upcoming);
   // Sesi unggulan sudah tampil di hero → tidak diulang di grid.
   const listed = filterByType(upcoming, activeType).filter((session) => session !== featured);
-  const { thisWeek, later } = groupByWeek(listed, now);
+  const past = filterByType(pastSessions(sessions, now), activeType).slice(0, activityPage.past.limit);
 
   return (
     <>
@@ -32,7 +32,7 @@ export default async function ActivityPage({ searchParams }: PageProps<"/activit
       <MotionProvider>
         <main>
           {featured && <ActivityHero session={featured} />}
-          <SessionsSection thisWeek={thisWeek} later={later} activeType={activeType} />
+          <SessionsSection upcoming={listed} past={past} activeType={activeType} />
           <InstagramFeed {...instagram} />
         </main>
         <Footer />

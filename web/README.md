@@ -9,6 +9,8 @@ npm run dev        # http://localhost:3000
 
 - `/` — Homepage
 - `/design-system` — styleguide: semua token & komponen UI dirender dari kode produksi
+- `/admin` · `/admin/members` · `/admin/members/[id]` — Admin CMS & CRM tahap 1 (Overview, Members, Member Detail). Data demo sampai Supabase tersambung — lihat `docs/04-DATABASE.md`
+- `/masuk` · `/daftar` — login & registrasi member (validasi di client; belum ada backend)
 - `/akun` · `/akun/profil` · `/akun/aktivitas` · `/akun/order` — member area (Dashboard, Profile, My Activities, Order/keranjang). `/keranjang` → redirect ke `/akun/order`.
 
 ## Struktur
@@ -63,5 +65,5 @@ Semua animasi ada di `src/animations/` dan dijalankan oleh `<MotionProvider>` (`
 2. **Import komponen UI dari `@/components/ui`** (barrel), jangan bikin varian baru di luar folder `ui/`.
 3. **Teks pakai `<Text variant="…">`** — nama variant = nama text style Figma (`heading-42`, `title-28`, `body-16`, …).
 4. **Ikon pakai `<Icon name="…">`** — SVG dari Figma di `public/icons`, warnanya ikut `currentColor`.
-5. Gambar dari Figma sudah dikompres ke `public/images` (JPEG, maks 1600px; hero 2560px).
+5. Gambar di `public/images` berformat **WebP**. Gambar baru (JPG/PNG) cukup ditaruh di sana lalu jalankan `npm run images` — otomatis dikonversi ke WebP + dibuatkan blur placeholder (`src/lib/image-placeholders.json`). Di komponen: `<Image src={src} {...blurProps(src)} sizes="…" />`.
 6. Responsif mobile-first: breakpoint `768px` (tablet) dan `1200px` (desktop = layout Figma 1440).

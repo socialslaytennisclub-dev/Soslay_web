@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { AvatarStack, type AvatarStackItem } from "../AvatarStack/AvatarStack";
 import styles from "./PhotoCard.module.css";
+import { blurProps } from "@/lib/image";
 
 export type PhotoCardProps = {
   src: string;
@@ -19,7 +20,7 @@ export function PhotoCard({ src, alt, position, dateLabel, people, onOpen }: Pho
       <button type="button" className={styles.photo} onClick={onOpen} data-cursor="Lihat" aria-label={`Lihat foto: ${alt}`}>
         <Image
           className={styles.image}
-          src={src}
+          src={src} {...blurProps(src)}
           alt={alt}
           fill
           sizes="(min-width: 1200px) 424px, (min-width: 768px) 33vw, 50vw"

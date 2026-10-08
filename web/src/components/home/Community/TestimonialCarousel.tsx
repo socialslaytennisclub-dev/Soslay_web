@@ -7,6 +7,7 @@ import { useAutoRotate } from "@/hooks/useAutoRotate";
 import { cx } from "@/lib/cx";
 import { initials } from "@/lib/text";
 import styles from "./TestimonialCarousel.module.css";
+import { blurProps } from "@/lib/image";
 
 type TestimonialCarouselProps = {
   items: Testimonial[];
@@ -41,7 +42,7 @@ export function TestimonialCarousel({ items }: TestimonialCarouselProps) {
         <span className={styles.author}>
           <span className={styles.avatar}>
             {active.avatar ? (
-              <Image src={active.avatar} alt="" width={32} height={32} />
+              <Image src={active.avatar} {...blurProps(active.avatar)} alt="" width={32} height={32} />
             ) : (
               <span className={styles.initials}>{initials(active.name)}</span>
             )}

@@ -1,0 +1,344 @@
+/* Primitif UI admin — Figma 25:3056 */
+
+.icon {
+  display: inline-block;
+  flex-shrink: 0;
+  width: var(--icon-size);
+  height: var(--icon-size);
+  background-color: currentColor;
+  -webkit-mask: var(--icon-src) center / contain no-repeat;
+  mask: var(--icon-src) center / contain no-repeat;
+}
+
+/* ── Kartu: putih, border indigo-border, radius 16, padding 24 ── */
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+  min-width: 0;
+  padding: var(--space-24);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+}
+
+.cardHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-16);
+}
+
+.cardTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 18px;
+  line-height: 1.3;
+  color: var(--color-navy-900);
+}
+
+.cardSubtitle {
+  margin-top: var(--space-2);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-indigo-muted);
+}
+
+.cardLink {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  flex-shrink: 0;
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  color: var(--color-indigo-600);
+}
+
+.cardLink:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ── Badge ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+
+.badgeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: currentColor;
+}
+
+.badge-lime {
+  background: var(--color-lime-500);
+  color: var(--color-navy-900);
+}
+
+.badge-lime .badgeDot {
+  background: var(--color-navy-900);
+}
+
+.badge-indigo {
+  background: var(--color-indigo-100);
+  color: var(--color-indigo-600);
+}
+
+.badge-neutral {
+  background: var(--color-neutral-100);
+  color: var(--color-indigo-muted);
+}
+
+.badge-pink {
+  background: var(--color-pink-100);
+  color: #b0336f;
+}
+
+.badge-navy {
+  background: var(--color-navy-900);
+  color: var(--color-lime-500);
+}
+
+.badge-blue {
+  background: var(--color-indigo-150);
+  color: var(--color-navy-700);
+}
+
+/* ── Avatar ── */
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  line-height: 1;
+}
+
+.avatar-indigo {
+  background: var(--color-indigo-100);
+  color: var(--color-indigo-600);
+}
+
+.avatar-lime {
+  background: var(--color-lime-100);
+  color: var(--color-navy-900);
+}
+
+.avatar-pink {
+  background: var(--color-pink-100);
+  color: #b0336f;
+}
+
+/* ── Tombol ── */
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  flex-shrink: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out),
+    box-shadow var(--duration-fast) var(--ease-out);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.button-md {
+  padding: var(--space-10) var(--space-16);
+}
+
+.button-sm {
+  padding: 6px var(--space-12);
+  font-size: 13px;
+}
+
+.button-primary {
+  border-color: var(--color-lime-600);
+  background: var(--color-lime-400);
+  color: var(--color-navy-900);
+}
+
+.button-primary:hover:not(:disabled) {
+  box-shadow: 0 6px 18px rgb(192 229 0 / 0.35);
+}
+
+.button-outline {
+  border-color: var(--color-navy-900);
+  background: var(--color-white);
+  color: var(--color-navy-900);
+}
+
+.button-outline:hover:not(:disabled) {
+  background: var(--color-indigo-50);
+}
+
+.button-ghost {
+  color: var(--color-navy-900);
+}
+
+.button-ghost:hover:not(:disabled) {
+  background: var(--color-indigo-50);
+}
+
+/* ── Kotak tanggal ── */
+.dateBox {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 48px;
+  border-radius: var(--radius-md);
+  background: var(--color-indigo-50);
+}
+
+.dateDay {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  line-height: 1.1;
+  color: var(--color-navy-900);
+}
+
+.dateMonth {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 11px;
+  color: var(--color-indigo-muted);
+}
+
+/* ── Delta KPI ── */
+.delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.deltaUp {
+  background: var(--color-lime-100);
+  color: var(--color-navy-900);
+}
+
+.deltaDown {
+  background: var(--color-pink-100);
+  color: #b0336f;
+}
+
+/* ── Tabel → kartu di HP (<768px) ── */
+.mobileCards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+}
+
+.mobileCard {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-12);
+  padding: var(--space-14);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+.mobileCard:has(a:hover) {
+  border-color: var(--color-indigo-500);
+}
+
+.mobileCardSelected {
+  border-color: var(--color-indigo-600);
+  background: var(--color-indigo-50);
+}
+
+.mobileCardLeading {
+  display: flex;
+  padding-top: 2px;
+}
+
+.mobileCardBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+.mobileCardTop {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-10);
+}
+
+.mobileCardTitle {
+  flex: 1;
+  min-width: 0;
+}
+
+.mobileCardMeta {
+  display: grid;
+  gap: var(--space-10);
+  padding-top: var(--space-12);
+  border-top: 1px dashed var(--color-indigo-border);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.mobileMetaLabel {
+  display: block;
+  margin-bottom: 2px;
+  font-weight: var(--weight-regular);
+  font-size: 11px;
+  color: var(--color-indigo-muted);
+}
+
+.desktopOnly {
+  display: none !important;
+}
+
+@media (min-width: 768px) {
+  .desktopOnly {
+    display: block !important;
+  }
+
+  .mobileCards {
+    display: none;
+  }
+}

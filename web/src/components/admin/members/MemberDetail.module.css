@@ -1,0 +1,429 @@
+/* Admin / 03 Member Detail — Figma 25:4301 */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+}
+
+.topActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-4);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  color: var(--color-indigo-600);
+}
+
+.back:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-10);
+}
+
+/* ── Header ── */
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  padding: var(--space-24);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+}
+
+.identity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-20);
+}
+
+.identityText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-width: 240px;
+}
+
+.nameRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8) var(--space-12);
+}
+
+.name {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: 26px;
+  line-height: 1.15;
+  letter-spacing: var(--tracking-snug);
+  color: var(--color-navy-900);
+}
+
+.contacts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4) var(--space-20);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.contacts li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.contacts li > span {
+  color: var(--color-indigo-muted);
+}
+
+.since {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: var(--space-10);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-12) var(--space-14);
+  border-radius: var(--radius-lg);
+  background: var(--color-indigo-50);
+}
+
+.stat dt {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.stat dd {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: 20px;
+  line-height: 1.2;
+  color: var(--color-navy-900);
+}
+
+/* ── Tab ── */
+.tabs {
+  display: flex;
+  gap: var(--space-24);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--color-indigo-border);
+}
+
+.tabs a {
+  padding: var(--space-8) 0 var(--space-12);
+  border-bottom: 2px solid transparent;
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 14px;
+  white-space: nowrap;
+  color: var(--color-indigo-muted);
+}
+
+.tabs a:hover {
+  color: var(--color-navy-900);
+}
+
+.tabs .tabActive {
+  border-bottom-color: var(--color-indigo-600);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  color: var(--color-navy-900);
+}
+
+/* ── Kolom ── */
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-20);
+  align-items: start;
+  scroll-margin-top: var(--space-20);
+}
+
+.main,
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+  min-width: 0;
+}
+
+/* Timeline */
+.timeline {
+  display: flex;
+  flex-direction: column;
+  scroll-margin-top: var(--space-20);
+}
+
+.timelineItem {
+  position: relative;
+  display: flex;
+  gap: var(--space-14);
+  padding-bottom: var(--space-20);
+}
+
+.timelineItem:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 34px;
+  bottom: 4px;
+  left: 15px;
+  width: 1px;
+  background: var(--color-indigo-border);
+}
+
+.timelineIcon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-50);
+  color: var(--color-indigo-600);
+}
+
+.timelineBody {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.timelineHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.timelineTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.timelineDetail,
+.timelineDate {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.timelineDate {
+  color: var(--color-neutral-600);
+}
+
+.emptyNote {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-indigo-muted);
+}
+
+/* Tabel booking */
+.tableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+  scroll-margin-top: var(--space-20);
+}
+
+.table {
+  width: 100%;
+  min-width: 480px;
+  border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.table th {
+  padding: var(--space-10) var(--space-14);
+  background: var(--color-indigo-50);
+  font-weight: var(--weight-medium);
+  font-size: 12px;
+  text-align: left;
+  color: var(--color-indigo-muted);
+}
+
+.table td {
+  padding: var(--space-10) var(--space-14);
+  border-top: 1px solid var(--color-indigo-border);
+}
+
+.cellTitle {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+}
+
+.cellMeta {
+  display: block;
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+/* Kartu samping */
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+}
+
+.facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-12);
+  font-family: var(--font-ui);
+  font-size: 13px;
+}
+
+.facts dt {
+  color: var(--color-indigo-muted);
+}
+
+.facts dd {
+  font-weight: var(--weight-medium);
+  text-align: right;
+  color: var(--color-navy-900);
+}
+
+.prefGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.prefLabel {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pills li {
+  padding: 4px var(--space-10);
+  border: 1px solid var(--color-indigo-600);
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+  color: var(--color-navy-900);
+}
+
+.pills .pillEmpty {
+  border-style: dashed;
+  border-color: var(--color-indigo-200);
+  font-weight: var(--weight-regular);
+  color: var(--color-indigo-muted);
+}
+
+/* Catatan internal */
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+  scroll-margin-top: var(--space-20);
+}
+
+.note {
+  padding: var(--space-12) var(--space-14);
+  border-radius: var(--radius-lg);
+  background: var(--color-lime-50);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-navy-900);
+}
+
+.noteMeta {
+  margin-top: var(--space-4);
+  font-size: 11px;
+  color: var(--color-indigo-muted);
+}
+
+.noteForm {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-8) var(--space-8) var(--space-14);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+}
+
+.noteForm:focus-within {
+  border-color: var(--color-indigo-500);
+}
+
+.noteForm input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.noteForm input:focus {
+  outline: none;
+}
+
+.noteForm button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  color: var(--color-indigo-600);
+}
+
+.noteForm button:disabled {
+  color: var(--color-neutral-400);
+}
+
+@media (min-width: 1200px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
+}
+
+.anchor {
+  display: block;
+  scroll-margin-top: var(--space-20);
+}

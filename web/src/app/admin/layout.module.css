@@ -1,0 +1,56 @@
+.shell {
+  min-height: 100vh;
+  background: var(--color-indigo-50);
+}
+
+.main {
+  min-width: 0;
+}
+
+/* Sidebar fixed 248px di desktop */
+@media (min-width: 1024px) {
+  .main {
+    margin-left: 248px;
+  }
+}
+
+/* Halaman "akses ditolak" (login tapi bukan staf aktif). */
+.denied {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--space-16);
+  max-width: 520px;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: var(--space-24) var(--space-16);
+  font-family: var(--font-body);
+  color: var(--color-navy-900);
+}
+
+.denied h1 {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: 28px;
+}
+
+.denied p {
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.deniedActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-16);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+}
+
+.deniedActions a,
+.deniedActions button {
+  color: var(--color-indigo-600);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

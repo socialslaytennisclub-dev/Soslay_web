@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { Button, Container, NavyBackdrop, ScrollLink } from "@/components/ui";
 import styles from "./PageHero.module.css";
+import { blurProps } from "@/lib/image";
 
 export type PageHeroContent = {
   /** Kata raksasa Chillax lime di atas (gaya wordmark "SOSLAY" di homepage), mis. "Shop". */
@@ -63,7 +64,7 @@ export function PageHero({ id, wordmark, eyebrow, title, highlight, description,
         <div className={styles.photo} data-anim="reveal">
           <Image
             className={styles.image}
-            src={image.src}
+            src={image.src} {...blurProps(image.src)}
             alt={image.alt}
             fill
             preload

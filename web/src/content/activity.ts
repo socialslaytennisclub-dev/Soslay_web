@@ -47,7 +47,7 @@ export const sessions: Session[] = [
     date: "2026-10-04",
     start: "07:00",
     end: "11:00",
-    image: "/images/activity/featured-altitude.jpg",
+    image: "/images/activity/featured-altitude.webp",
     imagePosition: "40% 55%",
     bookingUrl: `${KUY}/mabar-di-bali`,
     featured: true,
@@ -60,7 +60,7 @@ export const sessions: Session[] = [
     date: "2026-10-04",
     start: "07:00",
     end: "11:00",
-    image: `${VENUE_IMG}/venue-ayana.jpg`,
+    image: `${VENUE_IMG}/venue-ayana.webp`,
     imagePosition: "50% 45%",
     bookingUrl: `${KUY}/weekly-mabar-ayana`,
   },
@@ -72,7 +72,7 @@ export const sessions: Session[] = [
     date: "2026-10-05",
     start: "08:00",
     end: "12:00",
-    image: `${VENUE_IMG}/venue-maison.jpg`,
+    image: `${VENUE_IMG}/venue-maison.webp`,
     bookingUrl: `${KUY}/match-day-maison`,
   },
   {
@@ -83,7 +83,7 @@ export const sessions: Session[] = [
     date: "2026-10-06",
     start: "16:00",
     end: "18:00",
-    image: `${VENUE_IMG}/venue-raffles.jpg`,
+    image: `${VENUE_IMG}/venue-raffles.webp`,
     bookingUrl: `${KUY}/beginner-coaching-raffles`,
   },
   {
@@ -94,7 +94,7 @@ export const sessions: Session[] = [
     date: "2026-10-10",
     start: "07:00",
     end: "11:00",
-    image: `${VENUE_IMG}/venue-common-grounds.jpg`,
+    image: `${VENUE_IMG}/venue-common-grounds.webp`,
     bookingUrl: `${KUY}/mabar-common-grounds`,
   },
   {
@@ -105,7 +105,7 @@ export const sessions: Session[] = [
     date: "2026-10-11",
     start: "07:00",
     end: "10:00",
-    image: `${VENUE_IMG}/venue-ayana.jpg`,
+    image: `${VENUE_IMG}/venue-ayana.webp`,
     imagePosition: "50% 45%",
     bookingUrl: `${KUY}/weekly-mabar-ayana`,
   },
@@ -117,7 +117,7 @@ export const sessions: Session[] = [
     date: "2026-10-17",
     start: "16:00",
     end: "19:00",
-    image: `${VENUE_IMG}/venue-kula-mani.jpg`,
+    image: `${VENUE_IMG}/venue-kula-mani.webp`,
     bookingUrl: `${KUY}/sunset-rally-kula-mani`,
   },
   {
@@ -128,7 +128,7 @@ export const sessions: Session[] = [
     date: "2026-10-18",
     start: "07:00",
     end: "11:00",
-    image: `${VENUE_IMG}/venue-swan-paradise.jpg`,
+    image: `${VENUE_IMG}/venue-swan-paradise.webp`,
     bookingUrl: `${KUY}/tennis-brunch-swan-paradise`,
   },
 ];
@@ -156,14 +156,17 @@ export const activityPage = {
   eyebrow: "Aktivitas mendatang",
   absensi: { label: "Absensi Kehadiran", href: "/absensi" },
   booking: { label: "Booking Session di Kuyy" },
-  thisWeek: {
-    title: "Lebih dari Sekadar Pertandingan!",
-    description:
-      "Dari mabar santai sampai match day, selalu ada cara untuk ikut bermain, bertemu orang baru, dan menikmati serunya tenis bersama komunitas.",
-  },
   upcoming: {
-    title: "Jadwal Sesi Mendatang",
-    description: "Amankan slot kamu lebih awal — sesi favorit biasanya cepat penuh.",
+    title: "Court Sudah Menunggu. Kamu Kapan?",
+    description:
+      "Mabar santai, match day, sampai tennis escape — pilih jadwal yang pas, booking di Kuyy, dan sampai jumpa di court. Slot favorit biasanya cepat penuh.",
+  },
+  past: {
+    title: "Rally Kemarin, Cerita Hari Ini.",
+    description:
+      "Sesi-sesi yang sudah lewat — buka kartunya untuk lihat venue dan foto-fotonya. Siapa tahu jadi inspirasi sesi kamu berikutnya.",
+    /** Jumlah sesi lama yang ditampilkan. */
+    limit: 6,
   },
   empty: {
     title: "Belum ada sesi untuk kategori ini.",

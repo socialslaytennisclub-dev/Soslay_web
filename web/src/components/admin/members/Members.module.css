@@ -1,0 +1,455 @@
+/* Admin / 02 Members — Figma 25:3767 */
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+}
+
+.tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-full);
+  background: var(--color-white);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-14);
+  border-radius: var(--radius-full);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.tab:hover {
+  background: var(--color-indigo-50);
+}
+
+.tabActive,
+.tabActive:hover {
+  background: var(--color-navy-900);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  color: var(--color-white);
+}
+
+.tabCount {
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-100);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 11px;
+  color: var(--color-navy-900);
+}
+
+.tabActive .tabCount {
+  background: var(--color-lime-500);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+}
+
+.segments {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8) var(--space-10);
+}
+
+.segmentsLabel {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-indigo-muted);
+}
+
+.segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px var(--space-12);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-full);
+  background: var(--color-white);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 12px;
+  color: var(--color-navy-900);
+}
+
+.segment:hover {
+  border-color: var(--color-indigo-500);
+}
+
+.segmentCount {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  color: var(--color-indigo-600);
+}
+
+.saveSegment {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+  color: var(--color-indigo-600);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ── Kartu tabel ── */
+.panel {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+}
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-10);
+  padding: var(--space-16);
+}
+
+.filters[aria-busy="true"] {
+  opacity: 0.7;
+}
+
+.searchField {
+  display: flex;
+  flex: 1 1 260px;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-10) var(--space-12);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  color: var(--color-indigo-muted);
+}
+
+.searchField:focus-within {
+  border-color: var(--color-indigo-500);
+}
+
+.searchField input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.searchField input:focus {
+  outline: none;
+}
+
+.select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-navy-900);
+}
+
+.select select {
+  appearance: none;
+  max-width: 190px;
+  padding: var(--space-10) 34px var(--space-10) var(--space-12);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 13px;
+  color: var(--color-navy-900);
+  cursor: pointer;
+}
+
+.select select:focus-visible {
+  border-color: var(--color-indigo-500);
+}
+
+.select > span:last-child {
+  position: absolute;
+  right: var(--space-12);
+  pointer-events: none;
+}
+
+/* Bar aksi massal navy */
+.bulkBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-10) var(--space-16);
+  background: var(--color-navy-900);
+}
+
+.bulkCount {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-10);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  color: var(--color-white);
+}
+
+.bulkActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.bulkButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px var(--space-12);
+  border: 1px solid rgb(255 255 255 / 0.5);
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+  color: var(--color-white);
+}
+
+.bulkButton:hover:not(:disabled) {
+  border-color: var(--color-lime-500);
+  color: var(--color-lime-500);
+}
+
+.bulkButton:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Tabel ── */
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 960px;
+  border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.table th {
+  padding: var(--space-10) var(--space-12);
+  border-top: 1px solid var(--color-indigo-border);
+  background: var(--color-indigo-50);
+  font-weight: var(--weight-medium);
+  font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
+  color: var(--color-indigo-muted);
+}
+
+.table td {
+  padding: var(--space-10) var(--space-12);
+  border-top: 1px solid var(--color-indigo-border);
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.table tbody tr:hover {
+  background: rgb(244 245 255 / 0.6);
+}
+
+.rowSelected,
+.table tbody .rowSelected:hover {
+  background: var(--color-indigo-50);
+}
+
+.checkCol {
+  width: 44px;
+  padding-left: var(--space-16) !important;
+}
+
+.table input[type="checkbox"],
+.bulkCount input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-indigo-600);
+  cursor: pointer;
+}
+
+.num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.sortLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sortLink:hover,
+.sortActive {
+  color: var(--color-navy-900);
+}
+
+.person {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+}
+
+.person:hover .personName {
+  color: var(--color-indigo-600);
+}
+
+.personName {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.personMeta {
+  display: block;
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.kebab {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  color: var(--color-indigo-muted);
+}
+
+.kebab:hover {
+  background: var(--color-indigo-50);
+  color: var(--color-navy-900);
+}
+
+.empty {
+  padding: var(--space-48) !important;
+  text-align: center;
+  color: var(--color-indigo-muted);
+}
+
+/* ── Paginasi ── */
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-14) var(--space-16);
+  border-top: 1px solid var(--color-indigo-border);
+}
+
+.pageInfo {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-indigo-muted);
+}
+
+.pages {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.pageLink {
+  display: grid;
+  place-items: center;
+  min-width: 32px;
+  height: 32px;
+  padding-inline: var(--space-8);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-md);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.pageLink:hover {
+  border-color: var(--color-indigo-500);
+}
+
+.pageActive,
+.pageActive:hover {
+  border-color: var(--color-navy-900);
+  background: var(--color-navy-900);
+  color: var(--color-white);
+}
+
+.pageDisabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.ellipsis {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  color: var(--color-indigo-muted);
+}
+
+/* ── HP: daftar kartu ── */
+.mobileList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+  padding: 0 var(--space-16) var(--space-16);
+}
+
+.mobileSelectAll {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-10);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 13px;
+  color: var(--color-indigo-muted);
+}
+
+.mobileList input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--color-indigo-600);
+}
+
+.personText {
+  min-width: 0;
+}
+
+.personText .personMeta {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+@media (min-width: 768px) {
+  .mobileList {
+    display: none;
+  }
+}

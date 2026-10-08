@@ -1,0 +1,423 @@
+/* Admin / 07 Orders — Figma 25:5560 */
+
+.layout {
+  display: grid;
+  gap: var(--space-16);
+  align-items: start;
+}
+
+.listCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  min-width: 0;
+  padding: var(--space-16);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+}
+
+/* ── Tab garis bawah ── */
+.tabs {
+  display: flex;
+  gap: var(--space-4);
+  margin: calc(var(--space-16) * -1) calc(var(--space-16) * -1) 0;
+  padding: 0 var(--space-8);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--color-indigo-border);
+  scrollbar-width: none;
+}
+
+.tab {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-14) var(--space-10) var(--space-12);
+  border-bottom: 2px solid transparent;
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.tab:hover {
+  color: var(--color-indigo-600);
+}
+
+.tabActive {
+  border-bottom-color: var(--color-indigo-600);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+}
+
+.tabCount {
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-50);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 11px;
+  color: var(--color-navy-900);
+}
+
+.tabActive .tabCount {
+  background: var(--color-lime-500);
+}
+
+/* ── Tabel ── */
+.tableWrap {
+  margin: 0 calc(var(--space-16) * -1) calc(var(--space-16) * -1);
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.table th {
+  padding: var(--space-10) var(--space-16);
+  background: var(--color-indigo-50);
+  font-weight: var(--weight-medium);
+  font-size: 12px;
+  text-align: left;
+  color: var(--color-indigo-muted);
+}
+
+.table td {
+  padding: var(--space-12) var(--space-16);
+  border-top: 1px solid var(--color-indigo-border);
+  vertical-align: middle;
+}
+
+.table tbody tr {
+  position: relative;
+}
+
+.table tbody tr:hover {
+  background: rgb(244 245 255 / 0.6);
+}
+
+.table .rowSelected,
+.table .rowSelected:hover {
+  background: var(--color-indigo-50);
+}
+
+.rowLink {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Seluruh baris bisa diklik. */
+.rowLink::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.rowLink:focus-visible {
+  outline: none;
+}
+
+.rowLink:focus-visible::after {
+  outline: 2px solid var(--color-indigo-500);
+  outline-offset: -2px;
+}
+
+.code {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 13px;
+  white-space: nowrap;
+  color: var(--color-navy-900);
+}
+
+.strong,
+.strongLink {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+td.strong {
+  white-space: nowrap;
+}
+
+.strongLink:hover {
+  color: var(--color-indigo-600);
+}
+
+.muted {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.customer {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  min-width: 0;
+}
+
+.customerText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.thumb,
+.productThumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--color-indigo-100);
+}
+
+.productThumb {
+  width: 48px;
+  height: 48px;
+}
+
+.thumb img,
+.productThumb img {
+  object-fit: cover;
+}
+
+.empty {
+  padding: 40px var(--space-16);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  text-align: center;
+  color: var(--color-indigo-muted);
+}
+
+.mobileList {
+  display: contents;
+}
+
+/* ── Panel detail ── */
+.panel {
+  scroll-margin-top: 96px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  min-width: 0;
+  padding: var(--space-20);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+}
+
+.panelHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.panelTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: 20px;
+  color: var(--color-navy-900);
+}
+
+.close,
+.iconLink {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  color: var(--color-navy-900);
+}
+
+.close:hover,
+.iconLink:hover {
+  background: var(--color-indigo-50);
+}
+
+.iconLink {
+  color: var(--color-indigo-600);
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding-top: var(--space-16);
+  border-top: 1px solid var(--color-indigo-border);
+}
+
+.sectionTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.product {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.totals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-indigo-muted);
+}
+
+.totals div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.totals dd {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  color: var(--color-navy-900);
+}
+
+.totals .grandTotal {
+  color: var(--color-navy-900);
+}
+
+.grandTotal dd {
+  font-weight: var(--weight-extrabold);
+  font-size: 15px;
+}
+
+.address {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-navy-900);
+}
+
+.shipRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-8);
+}
+
+.shipSelect {
+  position: relative;
+  display: flex;
+  align-items: center;
+  color: var(--color-navy-900);
+}
+
+.shipSelect > span:last-child {
+  position: absolute;
+  right: var(--space-12);
+  pointer-events: none;
+}
+
+.shipSelect select,
+.shipInput input {
+  width: 100%;
+  min-height: 42px;
+  padding: var(--space-10) var(--space-12);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-950);
+}
+
+.shipSelect select {
+  appearance: none;
+  padding-right: 32px;
+  cursor: pointer;
+}
+
+.shipSelect select:focus,
+.shipInput input:focus {
+  border-color: var(--color-indigo-500);
+  outline: none;
+}
+
+.shipActions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-8);
+}
+
+.shipActions > * {
+  justify-content: center;
+}
+
+.notice {
+  padding: var(--space-10) var(--space-12);
+  border-radius: var(--radius-md);
+  background: var(--color-indigo-50);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-navy-900);
+}
+
+.tracking {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+/* Panel otomatis (tanpa ?order=) hanya untuk desktop; di HP panel muncul di atas daftar saat dipilih. */
+.panelAuto {
+  display: none;
+}
+
+@media (min-width: 1200px) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 360px;
+  }
+
+  .layout > .panelSlot {
+    position: sticky;
+    top: var(--space-16);
+    order: 2;
+  }
+
+  .panelAuto {
+    display: block;
+  }
+
+  .table .rowAuto,
+  .table .rowAuto:hover {
+    background: var(--color-indigo-50);
+  }
+}
+
+@media (max-width: 1199px) {
+  .layout > .panelSlot {
+    order: -1;
+  }
+}

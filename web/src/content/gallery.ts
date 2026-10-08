@@ -63,7 +63,7 @@ export const galleryPhotos: GalleryPhoto[] = photos.map(([position, tagged, capt
   return {
     id: `${VENUE}-${n}`,
     venueSlug: VENUE,
-    src: `${IMG}/photo-${n}.jpg`,
+    src: `${IMG}/photo-${n}.webp`,
     position,
     alt: `Foto sesi Soslay di Common Grounds Menteng (${tagged.map((m) => m.handle).join(", ")})`,
     date: DATE,

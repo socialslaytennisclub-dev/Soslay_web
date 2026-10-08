@@ -1,0 +1,47 @@
+.prompt {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8) var(--space-12);
+}
+
+.question {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: rgb(10 8 74 / 0.65);
+}
+
+/* Pill putih tipis — level visual di bawah filter chip aktif */
+.link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px var(--space-12) 6px var(--space-14);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-full);
+  background: var(--color-white);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
+  color: var(--color-indigo-600);
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.link:hover {
+  border-color: var(--color-navy-900);
+  background: var(--color-navy-900);
+  color: var(--color-lime-500);
+}
+
+.arrow {
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.link:hover .arrow {
+  transform: translate(2px, -2px);
+}

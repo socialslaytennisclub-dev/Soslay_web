@@ -22,7 +22,7 @@ export const member = {
   memberSince: "Juli 2025",
   memberId: "SOS 0067 2507",
   validThru: "07/26",
-  cover: "/images/home/hero.jpg",
+  cover: "/images/home/hero.webp",
   bookingUrl: "https://kuy.id/soslay",
 };
 
@@ -140,7 +140,7 @@ export const memberSessions: MemberSession[] = [
     date: "2026-10-03",
     start: "07:00",
     end: "11:00",
-    image: `${HOME}/venue-ayana.jpg`,
+    image: `${HOME}/venue-ayana.webp`,
     status: "upcoming",
   },
   {
@@ -151,7 +151,7 @@ export const memberSessions: MemberSession[] = [
     date: "2026-10-04",
     start: "07:00",
     end: "11:00",
-    image: "/images/activity/featured-altitude.jpg",
+    image: "/images/activity/featured-altitude.webp",
     status: "registered",
   },
   {
@@ -162,7 +162,7 @@ export const memberSessions: MemberSession[] = [
     date: "2026-09-20",
     start: "07:00",
     end: "11:00",
-    image: `${HOME}/venue-maison.jpg`,
+    image: `${HOME}/venue-maison.webp`,
     status: "done",
     points: 50,
   },
@@ -174,7 +174,7 @@ export const memberSessions: MemberSession[] = [
     date: "2026-09-13",
     start: "16:00",
     end: "18:00",
-    image: `${HOME}/venue-common-grounds.jpg`,
+    image: `${HOME}/venue-common-grounds.webp`,
     status: "done",
     points: 50,
   },
@@ -186,7 +186,7 @@ export const memberSessions: MemberSession[] = [
     date: "2026-09-06",
     start: "07:00",
     end: "10:00",
-    image: `${HOME}/venue-raffles.jpg`,
+    image: `${HOME}/venue-raffles.webp`,
     status: "done",
     points: 50,
   },

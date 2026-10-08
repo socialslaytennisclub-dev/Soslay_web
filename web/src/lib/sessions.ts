@@ -22,6 +22,13 @@ export function groupByWeek(sessions: Session[], now: Date): { thisWeek: Session
   };
 }
 
+/** Sesi yang sudah lewat, terbaru dulu. */
+export function pastSessions(sessions: Session[], now: Date): Session[] {
+  return sessions
+    .filter((session) => sessionStart(session).getTime() < now.getTime())
+    .sort((a, b) => sessionStart(b).getTime() - sessionStart(a).getTime());
+}
+
 /** Sesi unggulan untuk hero: featured terdekat, atau sesi terdekat apa pun. */
 export function pickFeatured(sessions: Session[]): Session | undefined {
   return sessions.find((session) => session.featured) ?? sessions[0];

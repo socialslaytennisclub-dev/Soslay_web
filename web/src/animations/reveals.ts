@@ -15,7 +15,8 @@ import { gsap, SplitText } from "@/lib/gsap";
  * gate CSS tidak aktif dan fungsi-fungsi ini tidak dipanggil — konten tampil statis.
  */
 
-const IN_VIEW = "top 85%";
+// Mulai sedikit lebih awal supaya konten sudah muncul saat terlihat, tidak "menunggu".
+const IN_VIEW = "top 90%";
 
 function byAnim(scope: HTMLElement, name: string) {
   return gsap.utils.toArray<HTMLElement>(scope.querySelectorAll(`[data-anim='${name}']`));
@@ -31,8 +32,8 @@ export function splitReveal(scope: HTMLElement) {
       onSplit: (self) =>
         gsap.from(self.lines, {
           yPercent: 105,
-          duration: 1.3,
-          stagger: 0.1,
+          duration: 0.9,
+          stagger: 0.07,
           scrollTrigger: { trigger: el, start: IN_VIEW },
         }),
     });
@@ -42,7 +43,7 @@ export function splitReveal(scope: HTMLElement) {
 export function fadeUp(scope: HTMLElement) {
   byAnim(scope, "fade-up").forEach((el) => {
     // `from` (bukan fromTo) → nilai akhir = opacity dari CSS (mis. teks muted 0.8).
-    gsap.from(el, { autoAlpha: 0, y: 40, duration: 1.2, scrollTrigger: { trigger: el, start: IN_VIEW } });
+    gsap.from(el, { autoAlpha: 0, y: 28, duration: 0.8, scrollTrigger: { trigger: el, start: IN_VIEW } });
   });
 }
 
@@ -55,12 +56,12 @@ export function mediaReveal(scope: HTMLElement) {
     tl.fromTo(
       el,
       { autoAlpha: 1, clipPath: "inset(100% 0% 0% 0% round 12px)" },
-      { clipPath: "inset(0% 0% 0% 0% round 12px)", duration: 1.4, ease: "expo.inOut", clearProps: "clipPath" },
+      { clipPath: "inset(0% 0% 0% 0% round 12px)", duration: 1, ease: "expo.inOut", clearProps: "clipPath" },
     );
     if (img) {
       // Berakhir di skala CSS foto (mis. foto yang di-zoom untuk crop) supaya tidak "melompat".
       const base = Number(gsap.getProperty(img, "scale")) || 1;
-      tl.fromTo(img, { scale: base * 1.35 }, { scale: base, duration: 1.8, clearProps: "transform" }, 0);
+      tl.fromTo(img, { scale: base * 1.2 }, { scale: base, duration: 1.3, clearProps: "transform" }, 0);
     }
   });
 }
@@ -72,9 +73,9 @@ export function staggerChildren(scope: HTMLElement) {
     gsap.from(el.children, {
       autoAlpha: 0,
       x: fromRight ? 120 : 0,
-      y: fromRight ? 0 : 48,
-      duration: 1.2,
-      stagger: 0.09,
+      y: fromRight ? 0 : 32,
+      duration: 0.8,
+      stagger: 0.06,
       scrollTrigger: { trigger: el, start: IN_VIEW },
     });
   });
@@ -101,7 +102,7 @@ export function footerWordmark(scope: HTMLElement) {
     yPercent: 100,
     ease: "none",
     stagger: 0.08,
-    scrollTrigger: { trigger: el, start: "top 98%", end: "bottom 92%", scrub: 1 },
+    scrollTrigger: { trigger: el, start: "top 98%", end: "bottom 92%", scrub: 0.5 },
   });
 }
 

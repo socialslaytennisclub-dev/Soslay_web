@@ -2,6 +2,7 @@ import Image from "next/image";
 import { Avatar, Button, Chip, Container } from "@/components/ui";
 import { member } from "@/content/member";
 import styles from "./MemberHeader.module.css";
+import { blurProps } from "@/lib/image";
 
 /** Figma 25:2602 — cover foto, avatar menimpa cover, nama + meta, tier, aksi. Dipakai semua tab member. */
 export function MemberHeader() {
@@ -9,7 +10,7 @@ export function MemberHeader() {
     <header className={styles.header}>
       <Container>
         <div className={styles.cover}>
-          <Image src={member.cover} alt="" fill preload sizes="(min-width: 1440px) 1312px, 100vw" className={styles.image} />
+          <Image src={member.cover} {...blurProps(member.cover)} alt="" fill preload sizes="(min-width: 1440px) 1312px, 100vw" className={styles.image} />
         </div>
 
         <div className={styles.profile}>

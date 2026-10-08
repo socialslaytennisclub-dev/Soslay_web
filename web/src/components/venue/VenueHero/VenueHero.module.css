@@ -159,3 +159,19 @@
     gap: var(--space-64);
   }
 }
+
+/* Link ke Participant Guide (hanya venue yang punya panduan) */
+.guideLink {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 15px;
+  color: var(--color-indigo-600);
+  text-decoration: underline;
+  text-decoration-color: var(--color-lime-500);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+.guideLink:hover {
+  color: var(--color-navy-900);
+}

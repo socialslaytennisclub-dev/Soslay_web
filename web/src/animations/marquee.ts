@@ -35,6 +35,9 @@ export function velocityMarquee(scope: HTMLElement) {
       trigger: marquee,
       start: "top bottom",
       end: "bottom top",
+      // Di luar layar loop dihentikan — tidak ada kerja tiap frame untuk elemen yang tak terlihat.
+      onToggle: (self) => loop.paused(!self.isActive),
+      onRefresh: (self) => loop.paused(!self.isActive),
       onUpdate(self) {
         if (hovering) return;
         direction = self.direction;

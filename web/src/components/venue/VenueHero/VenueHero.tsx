@@ -2,9 +2,11 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button, Container, NavyBackdrop, Text } from "@/components/ui";
 import { sessionStart, sessionTimeZone, type Session } from "@/content/activity";
+import { findGuide, guideHref } from "@/content/guides";
 import { venuePage, type Venue } from "@/content/venues";
 import { formatJamRange, formatTanggal } from "@/lib/format";
 import styles from "./VenueHero.module.css";
+import { blurProps } from "@/lib/image";
 
 type VenueHeroProps = {
   venue: Venue;
@@ -37,7 +39,7 @@ export function VenueHero({ venue, nextSession }: VenueHeroProps) {
           <div className={styles.photo} data-anim="reveal">
             <Image
               className={styles.image}
-              src={venue.heroImage ?? venue.image}
+              src={venue.heroImage ?? venue.image} {...blurProps(venue.heroImage ?? venue.image)}
               alt={`Lapangan ${venue.name}`}
               fill
               preload
@@ -65,6 +67,11 @@ export function VenueHero({ venue, nextSession }: VenueHeroProps) {
               <Button href={nextSession.bookingUrl} variant="arrow" target="_blank" rel="noopener noreferrer">
                 {detail.booking}
               </Button>
+            )}
+            {findGuide(venue.slug) && (
+              <Link href={guideHref(venue.slug)} className={styles.guideLink}>
+                Baca Participant Guide →
+              </Link>
             )}
           </aside>
         </div>

@@ -1,0 +1,885 @@
+/* Participant Guide (Figma 151:52). Arimo di Figma = font body (Helvetica) di kode. */
+
+/* ── Primitif ────────────────────────────────────────────── */
+.label {
+  align-self: flex-start;
+  padding: var(--space-8) var(--space-16);
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 13px;
+  line-height: 1.2;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.label-navy {
+  background: var(--color-navy-900);
+  color: var(--color-lime-550);
+}
+
+.label-lime {
+  background: var(--color-lime-550);
+  color: var(--color-navy-900);
+}
+
+.sectionTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(32px, 2.4vw + 14px, 44px);
+  line-height: 1.1;
+  letter-spacing: var(--tracking-snug);
+  color: var(--color-navy-900);
+}
+
+.titleLime {
+  font-size: clamp(34px, 2.6vw + 14px, 48px);
+  color: var(--color-lime-550);
+}
+
+.titleWhite {
+  color: var(--color-white);
+}
+
+.line {
+  display: block;
+}
+
+.body {
+  font-family: var(--font-body);
+  font-size: clamp(16px, 0.2vw + 14px, 17px);
+  line-height: 1.55;
+  color: var(--color-navy-900);
+}
+
+.bodyInverse {
+  color: rgb(255 255 255 / 0.85);
+}
+
+.bodyOnPanel {
+  font-size: clamp(16px, 0.3vw + 14px, 18px);
+  line-height: 1.6;
+  color: rgb(255 255 255 / 0.92);
+}
+
+/* Figma: Caveat Bold — catatan tulisan tangan */
+.handwritten {
+  font-family: var(--font-caveat), cursive;
+  font-weight: var(--weight-bold);
+  font-size: 26px;
+  line-height: 1.1;
+}
+
+.handwrittenLarge {
+  font-size: clamp(26px, 1vw + 18px, 30px);
+  color: var(--color-lime-550);
+}
+
+.photo {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  background: var(--color-indigo-100);
+}
+
+.cover {
+  object-fit: cover;
+  transition: transform var(--duration-slow) var(--ease-out);
+}
+
+.photo:hover .cover {
+  transform: scale(1.04);
+}
+
+.section {
+  padding-block: var(--space-64);
+}
+
+.sectionTight {
+  padding-top: 0;
+}
+
+.sectionLast {
+  padding-bottom: var(--space-80);
+}
+
+.stack,
+.stackWide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+}
+
+.headingGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.splitHeading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+/* ── Hero ────────────────────────────────────────────────── */
+.hero {
+  position: relative;
+  isolation: isolate;
+  padding-top: calc(var(--nav-height) + 40px);
+  padding-bottom: var(--space-64);
+}
+
+/* Navy menutupi judul + anchor + setengah foto */
+.hero .heroBackdrop {
+  height: auto;
+  bottom: 45%;
+}
+
+.heroInner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-32);
+}
+
+.heroHeading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  text-align: center;
+}
+
+.heroHeading .label {
+  align-self: center;
+}
+
+.breadcrumb ol {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-8);
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: rgb(255 255 255 / 0.65);
+}
+
+.breadcrumb li + li::before {
+  content: "/";
+  margin-right: var(--space-8);
+  color: rgb(255 255 255 / 0.4);
+}
+
+.breadcrumb a:hover {
+  color: var(--color-lime-550);
+}
+
+.breadcrumb [aria-current] {
+  color: var(--color-white);
+}
+
+.heroTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(38px, 3.6vw + 12px, 56px);
+  line-height: 1.1;
+  letter-spacing: var(--tracking-snug);
+  color: var(--color-white);
+}
+
+.heroIntro {
+  max-width: 560px;
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--color-white);
+}
+
+.anchors {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--space-12);
+}
+
+.anchor {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-10) 18px;
+  border: 1px solid rgb(255 255 255 / 0.25);
+  border-radius: var(--radius-full);
+  background: rgb(255 255 255 / 0.08);
+  font-family: var(--font-body);
+  font-weight: var(--weight-bold);
+  font-size: 15px;
+  color: var(--color-white);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.anchor:hover {
+  border-color: var(--color-lime-550);
+  background: rgb(255 255 255 / 0.14);
+}
+
+.anchorNumber {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--color-lime-550);
+}
+
+.heroMedia {
+  position: relative;
+  width: 100%;
+}
+
+.heroPhoto {
+  position: relative;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+  border-radius: var(--radius-xl);
+  background: var(--color-navy-850);
+}
+
+.heroFooter {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-16);
+  margin-top: var(--space-16);
+}
+
+/* Figma: hero/info-card — putih, radius 16, padding 24/28 */
+.infoCard {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  padding: var(--space-20) var(--space-24);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+  box-shadow: var(--shadow-card);
+}
+
+.infoName {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 20px;
+  color: var(--color-navy-900);
+}
+
+.infoFacts {
+  font-family: var(--font-body);
+  font-size: 15px;
+  white-space: pre-wrap;
+  color: rgb(10 8 74 / 0.75);
+}
+
+/* ── 01 Outfit ───────────────────────────────────────────── */
+.outfit {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-48);
+}
+
+.outfitText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+}
+
+.palette {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-20);
+}
+
+.swatchItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.swatch {
+  width: 76px;
+  height: 76px;
+  border: 1.5px solid rgb(10 8 74 / 0.12);
+  border-radius: var(--radius-full);
+}
+
+.swatchName {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.swatchRole {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: rgb(10 8 74 / 0.6);
+}
+
+.avoid {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8) 14px;
+  align-self: flex-start;
+  padding: var(--space-12) var(--space-20) var(--space-12) var(--space-16);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+}
+
+.avoidLabel {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.avoidList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8) 14px;
+}
+
+.avoidList li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: rgb(10 8 74 / 0.75);
+}
+
+.avoidDot {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+}
+
+.footnote {
+  font-family: var(--font-body);
+  font-style: italic;
+  font-size: 14px;
+  line-height: 1.4;
+  color: rgb(10 8 74 / 0.6);
+}
+
+.looks {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-24) var(--space-16);
+}
+
+.look {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+/* Figma: foto 167×300 */
+.lookPhoto {
+  aspect-ratio: 167 / 300;
+}
+
+.lookTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 17px;
+  color: var(--color-navy-900);
+}
+
+.lookCaption {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.4;
+  color: rgb(10 8 74 / 0.7);
+}
+
+/* ── 02 Barang bawaan ────────────────────────────────────── */
+.bringGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-16);
+}
+
+.bringItem {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  padding: 22px;
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+  transition:
+    transform var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out);
+}
+
+.bringItem:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-card);
+}
+
+.bringIcon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-550);
+  color: var(--color-navy-900);
+}
+
+.bringIconOptional {
+  background: var(--color-indigo-100);
+}
+
+.bringText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.bringName {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 18px;
+  color: var(--color-navy-900);
+}
+
+.optional {
+  padding: var(--space-2) var(--space-8);
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-100);
+  font-family: var(--font-body);
+  font-weight: var(--weight-bold);
+  font-size: 11px;
+  color: rgb(10 8 74 / 0.7);
+}
+
+.bringNote {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: rgb(10 8 74 / 0.65);
+}
+
+/* ── 03 Photo reference ──────────────────────────────────── */
+.photoRef {
+  padding-block: var(--space-80);
+  background: var(--color-navy-900);
+}
+
+.stackWide {
+  gap: var(--space-48);
+}
+
+/* HP/tablet: kolom "dibuka" → foto mengalir di grid 2 kolom */
+.masonry {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-12);
+}
+
+.masonryColumn {
+  display: contents;
+}
+
+.refCard {
+  position: relative;
+}
+
+.refPhoto {
+  height: 100%;
+  aspect-ratio: 4 / 5;
+}
+
+.refLabel {
+  position: absolute;
+  left: var(--space-12);
+  bottom: var(--space-12);
+  z-index: 1;
+  max-width: calc(100% - 2 * var(--space-12));
+  padding: 5px var(--space-10);
+  border-radius: var(--radius-full);
+  background: var(--color-lime-550);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  text-transform: uppercase;
+  color: var(--color-navy-900);
+}
+
+/* ── 04 Court vibe ───────────────────────────────────────── */
+.courtSection {
+  padding-top: var(--space-80);
+  padding-bottom: var(--space-48);
+}
+
+.courtPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  padding: var(--space-32) var(--space-20);
+  border-radius: 24px;
+  background: var(--panel);
+}
+
+.courtTop {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+}
+
+.courtText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+}
+
+.courtPalette {
+  display: flex;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+}
+
+.courtPalette li {
+  flex: 1;
+  min-width: 0;
+  padding: 40px 6px 10px 10px;
+  font-family: var(--font-body);
+  font-weight: var(--weight-bold);
+  font-size: 11px;
+  color: var(--color-navy-900);
+}
+
+.courtPalette .onDark {
+  color: var(--color-white);
+}
+
+.courtPhotos {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-16);
+}
+
+.courtFeature {
+  aspect-ratio: 4 / 5;
+}
+
+.courtSide {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-16);
+}
+
+.courtSmall {
+  aspect-ratio: 4 / 3;
+}
+
+.courtStrip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-16);
+}
+
+/* ── 05 Quick tips + CTA ─────────────────────────────────── */
+.tips {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-16);
+}
+
+.tip {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: 28px var(--space-24);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+}
+
+.tipNumber {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-550);
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: 16px;
+  color: var(--color-navy-900);
+}
+
+.tipTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 18px;
+  line-height: 1.25;
+  color: var(--color-navy-900);
+}
+
+.tipBody {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgb(10 8 74 / 0.7);
+}
+
+.cta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-24);
+  padding: var(--space-32) var(--space-24);
+  border-radius: 24px;
+  background: var(--color-navy-900);
+}
+
+.ctaText {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+}
+
+.ctaTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(26px, 1.6vw + 14px, 34px);
+  line-height: 1.15;
+  color: var(--color-white);
+}
+
+.ctaBody {
+  font-family: var(--font-body);
+  font-size: 17px;
+  line-height: 1.5;
+  color: rgb(255 255 255 / 0.8);
+}
+
+/* ── ≥ 768px ─────────────────────────────────────────────── */
+@media (min-width: 768px) {
+  .section {
+    padding-block: var(--space-80);
+  }
+
+  .sectionTight {
+    padding-top: 0;
+  }
+
+  .heroPhoto {
+    aspect-ratio: 1312 / 620;
+  }
+
+  /* Kartu info & tombol menimpa sudut bawah foto */
+  .heroFooter {
+    position: absolute;
+    inset: auto var(--space-24) var(--space-24);
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: space-between;
+    margin-top: 0;
+  }
+
+  .infoCard {
+    width: auto;
+    padding: var(--space-24) 28px;
+  }
+
+  .looks {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .bringGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .masonry {
+    gap: var(--space-20);
+  }
+
+  .refLabel {
+    left: var(--space-16);
+    bottom: var(--space-16);
+    padding: 6px var(--space-12);
+    font-size: 12px;
+  }
+
+  .courtPanel {
+    padding: var(--space-48) var(--space-32);
+  }
+
+  .courtStrip {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .tips {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .cta {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-48) 56px;
+  }
+}
+
+/* ── ≥ 1200px: layout Figma 1440 ─────────────────────────── */
+@media (min-width: 1200px) {
+  .hero {
+    padding-top: calc(var(--nav-height) + 56px);
+    padding-bottom: 96px;
+  }
+
+  .heroInner {
+    gap: 40px;
+  }
+
+  .heroFooter {
+    inset: auto var(--space-32) var(--space-32);
+  }
+
+  .section {
+    padding-block: 96px;
+  }
+
+  .sectionTight {
+    padding-top: 0;
+  }
+
+  .sectionLast {
+    padding-top: var(--space-64);
+    padding-bottom: 112px;
+  }
+
+  /* Figma: teks 520 | 4 contoh look */
+  .outfit {
+    flex-direction: row;
+    gap: var(--space-64);
+  }
+
+  .outfitText {
+    flex-shrink: 0;
+    width: 520px;
+  }
+
+  .looks {
+    flex: 1;
+    align-self: center;
+    gap: var(--space-20);
+  }
+
+  .splitHeading {
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 40px;
+  }
+
+  .splitHeading .body {
+    flex: 1;
+  }
+
+  .stack {
+    gap: 40px;
+  }
+
+  .bringGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .photoRef {
+    padding-block: 112px;
+  }
+
+  /* Masonry 3 kolom: tinggi 560 / pendek 300 */
+  .masonry {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .masonryColumn {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-20);
+  }
+
+  .refPhoto {
+    aspect-ratio: auto;
+  }
+
+  .refTall {
+    height: 560px;
+  }
+
+  .refShort {
+    height: 300px;
+  }
+
+  .courtSection {
+    padding-top: 112px;
+  }
+
+  .courtPanel {
+    padding: 56px var(--space-48);
+  }
+
+  /* Figma: teks 420 | foto utama 540 tinggi + 2 foto 260 */
+  .courtTop {
+    flex-direction: row;
+    gap: 40px;
+  }
+
+  .courtText {
+    flex-shrink: 0;
+    width: 420px;
+  }
+
+  .courtPhotos {
+    flex: 1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-20);
+  }
+
+  .courtFeature {
+    aspect-ratio: auto;
+    height: 540px;
+  }
+
+  .courtSide {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-20);
+  }
+
+  .courtSide .courtSmall {
+    aspect-ratio: auto;
+    height: 260px;
+  }
+
+  .courtStrip {
+    gap: var(--space-20);
+  }
+
+  .courtStrip .courtSmall {
+    aspect-ratio: auto;
+    height: 260px;
+  }
+
+  .tips {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
