@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { cx } from "@/lib/cx";
+import { setVenueVisible } from "@/server/admin/actions/catalog";
 import type { AdminVenue } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge } from "../ui/AdminUI";
@@ -16,12 +17,24 @@ const SORTS = [
 ] as const;
 type Sort = (typeof SORTS)[number]["value"];
 
-/** Admin / 07 Venues (Figma 25:5882). Tampil/sembunyi masih demo sampai Supabase tersambung. */
+/** Admin / 07 Venues (Figma 25:5882). Tampil/sembunyi & edit tersimpan ke Supabase. */
 export function VenueGrid({ initial, monthLabel }: { initial: AdminVenue[]; monthLabel: string }) {
   const [venues, setVenues] = useState(initial);
   const [city, setCity] = useState<string>("all");
   const [sort, setSort] = useState<Sort>("popular");
-  const changed = venues.some((v, i) => v.visible !== initial[i].visible);
+  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  const [pending, startToggle] = useTransition();
+
+  const toggleVisible = (v: AdminVenue) => {
+    const next = !v.visible;
+    const apply = (visible: boolean) => setVenues((list) => list.map((x) => (x.slug === v.slug ? { ...x, visible } : x)));
+    apply(next);
+    startToggle(async () => {
+      const result = await setVenueVisible(v.slug, next);
+      if (!result.ok) apply(!next);
+      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+    });
+  };
 
   const cities = ["Jakarta", "Bali"];
   const shown = venues
@@ -54,15 +67,15 @@ export function VenueGrid({ initial, monthLabel }: { initial: AdminVenue[]; mont
             </select>
             <AdminIcon name="caret-down" size={14} />
           </label>
-          <AdminButton variant="primary" icon="plus-bold" disabled title="Butuh database">
+          <AdminButton href="/admin/venues/new" variant="primary" icon="plus-bold">
             Tambah venue
           </AdminButton>
         </div>
       </div>
 
-      {changed && (
-        <p className={styles.notice} role="status">
-          Mode demo: perubahan tampil/sembunyi belum tersimpan karena database (Supabase) belum tersambung.
+      {notice && (
+        <p className={cx(styles.notice, notice.error && styles.noticeError)} role={notice.error ? "alert" : "status"}>
+          {notice.text}
         </p>
       )}
 
@@ -82,7 +95,12 @@ export function VenueGrid({ initial, monthLabel }: { initial: AdminVenue[]; mont
             </div>
             <div className={styles.venueBody}>
               <div>
-                <h2 className={styles.venueName}>{v.name}</h2>
+                <h2 className={styles.venueName}>
+                  <Link href={`/admin/venues/${v.slug}`} className={styles.venueEdit}>
+                    {v.name}
+                    <AdminIcon name="pencil-simple" size={14} />
+                  </Link>
+                </h2>
                 <p className={styles.muted}>
                   {v.city} · {v.type}
                   {v.note && ` · ${v.note}`}
@@ -110,7 +128,8 @@ export function VenueGrid({ initial, monthLabel }: { initial: AdminVenue[]; mont
                   aria-checked={v.visible}
                   aria-label={`Tampilkan ${v.name} di halaman Venue`}
                   className={cx(styles.switch, v.visible && styles.switchOn)}
-                  onClick={() => setVenues((list) => list.map((x) => (x.slug === v.slug ? { ...x, visible: !x.visible } : x)))}
+                  disabled={pending}
+                  onClick={() => toggleVisible(v)}
                 >
                   <span />
                 </button>
@@ -118,10 +137,12 @@ export function VenueGrid({ initial, monthLabel }: { initial: AdminVenue[]; mont
             </div>
           </li>
         ))}
-        <li className={styles.addCard} title="Butuh database">
-          <AdminIcon name="plus-bold" size={22} />
-          <strong>Tambah venue baru</strong>
-          <span className={styles.muted}>Foto, lokasi, tipe lapangan & fasilitas</span>
+        <li>
+          <Link href="/admin/venues/new" className={styles.addCard}>
+            <AdminIcon name="plus-bold" size={22} />
+            <strong>Tambah venue baru</strong>
+            <span className={styles.muted}>Foto, lokasi, tipe lapangan & fasilitas</span>
+          </Link>
         </li>
       </ul>
     </>

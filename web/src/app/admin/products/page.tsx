@@ -8,14 +8,15 @@ import pageStyles from "../page.module.css";
 export const metadata: Metadata = { title: "Products" };
 
 /** Admin / 08 Products (Figma 25:6156). */
-export default async function AdminProductsPage() {
+export default async function AdminProductsPage({ searchParams }: PageProps<"/admin/products">) {
   const products = await listProducts();
+  const { deleted } = await searchParams;
 
   return (
     <>
       <AdminTopbar breadcrumb="CMS / Shop / Products" title="Products" />
       <div className={pageStyles.content}>
-        <ProductsTable initial={products} categories={productCategoryOptions()} lowStock={LOW_STOCK} />
+        <ProductsTable initial={products} categories={productCategoryOptions()} lowStock={LOW_STOCK} initialNotice={deleted ? "Produk dihapus dari Shop." : undefined} />
       </div>
     </>
   );

@@ -1,8 +1,8 @@
 import { Button, Container, ProductCard, SectionIntro } from "@/components/ui";
-import { shop } from "@/content/home";
+import { shop as defaultShop } from "@/content/home";
 import styles from "./Shop.module.css";
 
-export function Shop() {
+export function Shop({ shop = defaultShop }: { shop?: typeof defaultShop }) {
   return (
     <section className={styles.section} aria-labelledby="shop-title">
       <Container className={styles.layout}>

@@ -4,7 +4,8 @@ import { Navbar } from "@/components/layout/Navbar/Navbar";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 import { PageHero } from "@/components/sections/PageHero/PageHero";
 import { VenueDirectory } from "@/components/venue/VenueDirectory/VenueDirectory";
-import { isCitySlug, venueCities, venueList, venuePage } from "@/content/venues";
+import { isCitySlug, venueCities, venuePage } from "@/content/venues";
+import { getWebsiteVenues } from "@/server/public/venues";
 
 export const metadata: Metadata = {
   title: "Venue — SOSLAY",
@@ -16,6 +17,7 @@ export default async function VenuePage({ searchParams }: PageProps<"/venue">) {
   const { city } = await searchParams;
   const activeCity = isCitySlug(city) ? city : undefined;
   const cityName = venueCities.find((item) => item.slug === activeCity)?.city;
+  const venueList = await getWebsiteVenues();
   const venues = cityName ? venueList.filter((venue) => venue.city === cityName) : venueList;
 
   return (

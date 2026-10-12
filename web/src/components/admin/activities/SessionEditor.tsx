@@ -15,7 +15,7 @@ import styles from "./SessionEditor.module.css";
 type SessionEditorProps = {
   session: SessionDetail;
   types: { slug: string; label: string }[];
-  venues: { name: string; city: string; image: string }[];
+  venues: { name: string; city: string; image: string; courts: string[] }[];
   /** "new" = form Buat sesi (termasuk hasil Duplikat). */
   mode: "edit" | "new";
   /** Pesan setelah redirect (mis. sesi baru tersimpan). */
@@ -332,7 +332,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice }: S
                 <span className={styles.label}>Lapangan</span>
                 <span className={styles.selectWrap}>
                   <select className={cx(styles.input, styles.select)} value={court} onChange={(e) => setCourt(e.target.value)}>
-                    {session.courts.map((c) => (
+                    {(venueInfo?.courts.length ? [...new Set([court, ...venueInfo.courts].filter(Boolean))] : session.courts).map((c) => (
                       <option key={c}>{c}</option>
                     ))}
                   </select>

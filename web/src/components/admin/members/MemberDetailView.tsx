@@ -4,6 +4,7 @@ import { LEVEL_LABEL, MEMBER_STATUS_LABEL, formatRupiahShort, formatShortDate } 
 import type { MemberDetail, MemberTimelineItem } from "@/server/admin/types";
 import { AdminIcon, type AdminIconName } from "../ui/AdminIcon";
 import { AdminButton, Badge, BookingBadge, Card, desktopOnlyClass, MobileCard, MobileCardList, PaymentBadge, TierBadge } from "../ui/AdminUI";
+import { BookSessionForm } from "./BookSessionForm";
 import { MemberNotes } from "./MemberNotes";
 import styles from "./MemberDetail.module.css";
 
@@ -21,7 +22,7 @@ const monthYear = new Intl.DateTimeFormat("id-ID", { month: "long", year: "numer
 const longDate = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
 
 /** Admin / 03 Member Detail (Figma 25:4301). */
-export function MemberDetailView({ member }: { member: MemberDetail }) {
+export function MemberDetailView({ member, bookable }: { member: MemberDetail; bookable: { id: string; label: string }[] }) {
   const stats: { label: string; value: string }[] = [
     { label: "Sesi diikuti", value: String(member.sessionsAttended) },
     { label: "Jam bermain", value: `${member.hoursPlayed}j` },
@@ -46,7 +47,7 @@ export function MemberDetailView({ member }: { member: MemberDetail }) {
           <AdminButton href={`mailto:${member.email}`} icon="envelope-simple">
             Email
           </AdminButton>
-          <AdminButton variant="primary" icon="pencil-simple" disabled title="Aktif setelah database Supabase tersambung">
+          <AdminButton variant="primary" icon="pencil-simple" href={`/admin/members/${member.id}/edit`}>
             Edit member
           </AdminButton>
         </div>
@@ -136,9 +137,7 @@ export function MemberDetailView({ member }: { member: MemberDetail }) {
             title="Riwayat booking"
             subtitle={`${member.sessionsAttended} sesi · kehadiran ${member.attendanceRate}%`}
             action={
-              <AdminButton icon="calendar-plus" size="sm" disabled title="Aktif setelah database Supabase tersambung">
-                Booking-kan sesi
-              </AdminButton>
+              <BookSessionForm memberId={member.id} sessions={bookable} />
             }
           >
             <span id="booking" className={styles.anchor} />
@@ -261,7 +260,7 @@ export function MemberDetailView({ member }: { member: MemberDetail }) {
 
           <Card title="Catatan internal" subtitle="Hanya terlihat oleh tim">
             <div id="catatan">
-              <MemberNotes initial={member.notes} />
+              <MemberNotes memberId={member.id} initial={member.notes} />
             </div>
           </Card>
         </aside>

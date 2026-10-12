@@ -2,8 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { formatRupiahPlain, TIER_LABEL } from "@/lib/admin-labels";
+import { cx } from "@/lib/cx";
+import { updateOrder, type OrderUpdate } from "@/server/admin/actions/orders";
 import type { OrderDetail } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, MemberAvatar, OrderStatusBadge, PaymentBadge } from "../ui/AdminUI";
@@ -14,9 +16,10 @@ const placedFmt = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "sho
 
 /** Panel detail order (kanan di desktop, di atas daftar di HP). */
 export function OrderPanel({ order, closeHref }: { order: OrderDetail; closeHref?: string }) {
-  const [courier, setCourier] = useState(order.courier);
+  const [courier, setCourier] = useState(order.courier || COURIERS[0]);
   const [tracking, setTracking] = useState(order.trackingNumber ?? "");
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  const [saving, start] = useTransition();
   const ref = useRef<HTMLElement>(null);
 
   // Di HP/tablet panel ada di atas daftar: bawa ke layar saat order dipilih.
@@ -26,12 +29,19 @@ export function OrderPanel({ order, closeHref }: { order: OrderDetail; closeHref
   const canShip = order.status === "processing" || (order.status === "pending" && order.payment === "paid");
   const waPhone = order.customerPhone.replace(/\D/g, "").replace(/^0/, "62");
 
+  const run = (update: OrderUpdate, confirmText?: string) => {
+    if (confirmText && !window.confirm(confirmText)) return;
+    start(async () => {
+      const result = await updateOrder(order.code, update);
+      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+    });
+  };
   const markShipped = () => {
     if (!tracking.trim()) {
-      setNotice("Isi nomor resi dulu sebelum menandai dikirim.");
+      setNotice({ text: "Isi nomor resi dulu sebelum menandai dikirim.", error: true });
       return;
     }
-    setNotice("Mode demo: status belum disimpan karena database (Supabase) belum tersambung.");
+    run({ action: "ship", courier, tracking });
   };
 
   return (
@@ -131,27 +141,37 @@ export function OrderPanel({ order, closeHref }: { order: OrderDetail; closeHref
                 <input value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder="No. resi…" />
               </label>
             </div>
-            {notice && (
-              <p className={styles.notice} role="status">
-                {notice}
-              </p>
-            )}
             <div className={styles.shipActions}>
-              <AdminButton icon="download-simple" disabled title="Butuh database">
+              <AdminButton href={`/admin/orders/${order.code}/label`} target="_blank" icon="download-simple">
                 Cetak label
               </AdminButton>
-              <AdminButton variant="primary" icon="truck" onClick={markShipped}>
-                Tandai dikirim
+              <AdminButton variant="primary" icon="truck" onClick={markShipped} disabled={saving}>
+                {saving ? "Menyimpan…" : "Tandai dikirim"}
               </AdminButton>
             </div>
+            <button type="button" className={styles.textAction} disabled={saving} onClick={() => run({ action: "cancel" }, `Batalkan order #${order.code}?`)}>
+              Batalkan order
+            </button>
           </>
         ) : order.trackingNumber ? (
-          <p className={styles.tracking}>
-            <AdminIcon name="truck" size={16} />
-            {order.courier} · <span className={styles.code}>{order.trackingNumber}</span>
-          </p>
+          <>
+            <p className={styles.tracking}>
+              <AdminIcon name="truck" size={16} />
+              {order.courier} · <span className={styles.code}>{order.trackingNumber}</span>
+            </p>
+            {order.status === "shipped" && (
+              <AdminButton icon="check-circle" onClick={() => run({ action: "complete" })} disabled={saving}>
+                Tandai selesai (sudah diterima)
+              </AdminButton>
+            )}
+          </>
         ) : (
           <p className={styles.muted}>{order.status === "cancelled" ? "Order dibatalkan — tidak dikirim." : "Menunggu pembayaran."}</p>
+        )}
+        {notice && (
+          <p className={cx(styles.notice, notice.error && styles.noticeError)} role={notice.error ? "alert" : "status"}>
+            {notice.text}
+          </p>
         )}
       </section>
     </aside>

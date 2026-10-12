@@ -1,10 +1,10 @@
 import { Button, Container, Icon, Text, VenueCard } from "@/components/ui";
-import { venues } from "@/content/home";
+import { venues as defaultVenues } from "@/content/home";
 import { venueHref } from "@/content/venues";
 import { splitInHalf } from "@/lib/array";
 import styles from "./Venues.module.css";
 
-export function Venues() {
+export function Venues({ venues = defaultVenues }: { venues?: typeof defaultVenues }) {
   // Kolom kanan diberi offset vertikal (staggered) seperti di Figma.
   const [left, right] = splitInHalf(venues.items);
 

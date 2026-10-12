@@ -54,10 +54,6 @@ export type Dataset = {
   bookingsOfSession: (sessionId: string) => DataBooking[];
   ordersOf: (memberId: string) => DataOrder[];
   stats: (memberId: string) => MemberStats;
-  /** Stok per produk (slug) — live dari product_variants; demo dari src/content/products. */
-  productStock?: Map<string, number>;
-  /** Venue live: jumlah lapangan & tampil/tidak. */
-  venueMeta?: Map<string, { courts: number; active: boolean }>;
 };
 
 function groupBy<T>(rows: T[], key: (row: T) => string) {
@@ -153,7 +149,7 @@ async function loadLive(): Promise<Dataset> {
   const client = await createSupabaseServerClient();
   const now = new Date();
 
-  const [profiles, statsRows, sessionRows, bookingRows, orderRows, productRows, venueRows] = await Promise.all([
+  const [profiles, statsRows, sessionRows, bookingRows, orderRows] = await Promise.all([
     fetchAll<ProfileRow>(client, "profiles", "*", "joined_at"),
     fetchAll<StatsRow>(client, "member_stats", "member_id, points_balance, points_earned, total_spent", "member_id"),
     fetchAll<SessionRow>(
@@ -169,8 +165,6 @@ async function loadLive(): Promise<Dataset> {
       "code, member_id, status, payment_status, payment_method, channel, subtotal, shipping_fee, discount, total, shipping_address, courier, tracking_number, placed_at, order_items(product_name, options, unit_price, quantity)",
       "placed_at",
     ),
-    fetchAll<{ slug: string; status: string; product_variants: { stock: number }[] }>(client, "products", "slug, status, product_variants(stock)", "sort_order"),
-    fetchAll<{ name: string; courts: string[]; is_active: boolean }>(client, "venues", "name, courts, is_active", "sort_order"),
   ]);
 
   const members: DataMember[] = profiles.map((p, i) => ({
@@ -322,8 +316,6 @@ async function loadLive(): Promise<Dataset> {
     bookingsOfSession,
     ordersOf,
     stats,
-    productStock: new Map(productRows.map((p) => [p.slug, p.product_variants.reduce((sum, v) => sum + v.stock, 0)])),
-    venueMeta: new Map(venueRows.map((v) => [v.name, { courts: v.courts.length, active: v.is_active }])),
   };
 }
 

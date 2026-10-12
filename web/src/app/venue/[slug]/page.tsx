@@ -6,24 +6,22 @@ import { MotionProvider } from "@/components/motion/MotionProvider";
 import { VenueGallery } from "@/components/venue/VenueGallery/VenueGallery";
 import { VenueHero } from "@/components/venue/VenueHero/VenueHero";
 import { photosForVenue } from "@/content/gallery";
-import { findVenue, venueList } from "@/content/venues";
 import { formatTanggalISO } from "@/lib/format";
 import { upcomingSessions } from "@/lib/sessions";
 import { getWebsiteSessions } from "@/server/public/sessions";
+import { findWebsiteVenue, getWebsiteVenues } from "@/server/public/venues";
 
-/** Semua venue di-prerender saat build. Slug lain → 404. */
-export function generateStaticParams() {
-  return venueList.map((venue) => ({ slug: venue.slug }));
+/** Venue aktif di-prerender saat build; venue baru dari admin dirender saat pertama dibuka. */
+export async function generateStaticParams() {
+  return (await getWebsiteVenues()).map((venue) => ({ slug: venue.slug }));
 }
-
-export const dynamicParams = false;
 
 /** "Sesi berikutnya" dihitung dari tanggal hari ini → render ulang tiap jam (dan saat admin menyimpan sesi). */
 export const revalidate = 3600;
 
 export async function generateMetadata({ params }: PageProps<"/venue/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const venue = findVenue(slug);
+  const venue = await findWebsiteVenue(slug);
   if (!venue) return {};
   return {
     title: `${venue.name} — SOSLAY`,
@@ -34,7 +32,7 @@ export async function generateMetadata({ params }: PageProps<"/venue/[slug]">): 
 /** Venue detail (Figma 25:894 + lightbox 25:1145). */
 export default async function VenueDetailPage({ params }: PageProps<"/venue/[slug]">) {
   const { slug } = await params;
-  const venue = findVenue(slug);
+  const venue = await findWebsiteVenue(slug);
   if (!venue) notFound();
 
   const nextSession = upcomingSessions(await getWebsiteSessions(), new Date()).find((session) => session.venue.name === venue.name);

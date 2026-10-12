@@ -453,3 +453,26 @@
     display: none;
   }
 }
+
+.segmentWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.segmentDelete {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  background: var(--color-navy-900);
+  color: var(--color-white);
+}
+
+button.saveSegment:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

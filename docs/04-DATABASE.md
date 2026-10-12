@@ -109,8 +109,17 @@ Perintah terkait: `npm run db:check` (uji migration di PGlite), `npm run db:seed
 ### Status integrasi kode
 | Bagian | Status |
 |---|---|
-| Klien Supabase (server/browser), refresh sesi di `src/proxy.ts` | ✅ |
-| Login `/masuk` (server action `signIn`), tombol Keluar admin | ✅ |
-| Admin hanya untuk staf aktif; menu mengikuti izin role (`my_admin_access()`) | ✅ |
-| Seed data contoh (540 member, 354 sesi, 5.404 booking, 340 order) | ✅ |
-| Repo admin (`src/server/admin/*-repo.ts`) membaca Supabase | ⏳ masih data demo — diganti per modul setelah project tersambung |
+| Klien Supabase (server/browser/anon publik), refresh sesi di `src/proxy.ts` | ✅ |
+| Login `/masuk`, Keluar, admin hanya staf aktif, menu ikut izin role | ✅ |
+| Admin membaca Supabase (`getDataset`, repo per modul) | ✅ |
+| CRUD admin → website: Activities, Products, Venues, Konten homepage, Orders, Members, Settings & Roles (`src/server/admin/actions/*`) | ✅ |
+| Website membaca Supabase: `/`, `/activity`, `/venue`, `/shop` (+ detail) — fallback ke konten statis bila DB tak terjangkau | ✅ |
+| Undang anggota tim (email) | ⚙️ butuh `SUPABASE_SERVICE_ROLE_KEY` + URL redirect di Supabase Auth |
+| Upload foto (cover sesi, produk, venue, galeri) | ⏳ butuh bucket Supabase Storage |
+
+### Migration baru
+Jalankan `npm run db:migrate` setiap ada file baru di `supabase/migrations` (tercatat di tabel `schema_migrations`).
+
+### Undang anggota tim (sekali setup)
+1. *Project Settings → API Keys* → salin **secret / service_role** key → isi `SUPABASE_SERVICE_ROLE_KEY` di `web/.env.local` **dan** Vercel (*Settings → Environment Variables*), lalu redeploy.
+2. *Authentication → URL Configuration*: **Site URL** = URL Vercel; tambahkan **Redirect URLs** `https://<domain>/auth/undangan` dan `http://localhost:3000/auth/undangan`.

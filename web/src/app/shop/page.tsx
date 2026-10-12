@@ -8,7 +8,8 @@ import { PageHero } from "@/components/sections/PageHero/PageHero";
 import { ShopCatalog } from "@/components/shop/ShopCatalog/ShopCatalog";
 import { ShopFeatured } from "@/components/shop/ShopFeatured/ShopFeatured";
 import { instagram } from "@/content/home";
-import { isProductCategory, products, shopPage } from "@/content/products";
+import { isProductCategory, shopPage } from "@/content/products";
+import { getShopCatalog } from "@/server/public/products";
 
 export const metadata: Metadata = {
   title: "Shop — SOSLAY",
@@ -19,6 +20,7 @@ export const metadata: Metadata = {
 export default async function ShopPage({ searchParams }: PageProps<"/shop">) {
   const { category } = await searchParams;
   const activeCategory = isProductCategory(category) ? category : undefined;
+  const { products } = await getShopCatalog();
   const catalog = activeCategory ? products.filter((product) => product.category === activeCategory) : products;
 
   return (
@@ -27,7 +29,7 @@ export default async function ShopPage({ searchParams }: PageProps<"/shop">) {
       <MotionProvider>
         <main>
           <PageHero id="shop-hero-title" {...shopPage.hero} />
-          <ShopFeatured />
+          <ShopFeatured products={products.filter((product) => product.featured)} />
           <Marquee />
           <ShopCatalog products={catalog} activeCategory={activeCategory} />
           <InstagramFeed {...instagram} />

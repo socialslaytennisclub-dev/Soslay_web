@@ -421,3 +421,20 @@ td.strong {
     order: -1;
   }
 }
+
+.noticeError {
+  background: rgb(253 236 245);
+}
+
+.textAction {
+  align-self: flex-start;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-pink-500);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.textAction:disabled {
+  opacity: 0.5;
+}

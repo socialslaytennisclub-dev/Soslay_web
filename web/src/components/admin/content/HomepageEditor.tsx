@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState, type DragEvent, type ReactNode } from "react";
+import { useState, useTransition, type DragEvent, type ReactNode } from "react";
 import { cx } from "@/lib/cx";
+import { publishHomepage } from "@/server/admin/actions/content";
 import type { ContentSection } from "@/server/admin/types";
 import { TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon, type AdminIconName } from "../ui/AdminIcon";
@@ -14,17 +15,26 @@ const clock = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-dig
 
 /**
  * Tab Homepage (Figma 25:5873): urutan section (seret atau tombol naik/turun), aktif/nonaktif,
- * dan panel edit. Publikasikan masih demo sampai content_sections tersambung ke Supabase.
+ * dan panel edit. Publikasikan → content_sections (Supabase) → homepage website.
  */
 export function HomepageEditor({ initial, tabs }: { initial: ContentSection[]; tabs: ReactNode }) {
   const [sections, setSections] = useState(initial);
   const [selectedKey, setSelectedKey] = useState<string | null>(initial[0]?.key ?? null);
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  const [publishing, startPublish] = useTransition();
+  const pendingFromDb = initial.some((s) => s.unpublished);
 
   const selected = sections.find((s) => s.key === selectedKey) ?? null;
-  const dirty = savedAt !== null;
+  const dirty = savedAt !== null || pendingFromDb;
+
+  const publish = () =>
+    startPublish(async () => {
+      const result = await publishHomepage(sections);
+      if (result.ok) setSavedAt(null);
+      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+    });
 
   // Di HP panel ada di bawah daftar: bawa ke layar saat section dipilih.
   const select = (key: string) => {
@@ -64,25 +74,25 @@ export function HomepageEditor({ initial, tabs }: { initial: ContentSection[]; t
       <div className={styles.toolbar}>
         {tabs}
         <div className={styles.toolbarActions}>
-          <span className={styles.muted}>{dirty ? `Draft diubah · ${clock.format(savedAt)}` : "Sesuai versi live"}</span>
+          <span className={styles.muted}>{savedAt ? `Draft diubah · ${clock.format(savedAt)}` : pendingFromDb ? "Ada draft belum dipublikasikan" : "Sesuai versi live"}</span>
           <AdminButton href="/" target="_blank" icon="eye">
             Preview
           </AdminButton>
           <AdminButton
             variant="primary"
             icon="globe-simple"
-            disabled={!dirty}
-            onClick={() => setNotice("Mode demo: homepage belum dipublikasikan karena database (Supabase) belum tersambung.")}
+            disabled={!dirty || publishing}
+            onClick={publish}
           >
-            Publikasikan
+            {publishing ? "Memublikasikan…" : "Publikasikan"}
           </AdminButton>
         </div>
       </div>
 
       {notice && (
-        <p className={styles.notice} role="status">
-          <AdminIcon name="warning-circle" size={18} />
-          {notice}
+        <p className={cx(styles.notice, notice.error && styles.noticeError)} role={notice.error ? "alert" : "status"}>
+          <AdminIcon name={notice.error ? "warning-circle" : "check-circle"} size={18} />
+          {notice.text}
           <button type="button" className={styles.noticeClose} aria-label="Tutup" onClick={() => setNotice(null)}>
             <AdminIcon name="x" size={14} />
           </button>
@@ -96,7 +106,7 @@ export function HomepageEditor({ initial, tabs }: { initial: ContentSection[]; t
               <h2 className={styles.cardTitle}>Section homepage</h2>
               <p className={styles.muted}>Seret untuk mengatur urutan · {sections.length} section</p>
             </div>
-            <AdminButton size="sm" icon="plus-bold" disabled title="Butuh database">
+            <AdminButton size="sm" icon="plus-bold" disabled title="Jenis section baru dibuat oleh developer, lalu muncul di sini">
               Tambah section
             </AdminButton>
           </header>

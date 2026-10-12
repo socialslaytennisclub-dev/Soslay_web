@@ -1,5 +1,6 @@
 import "server-only";
 import { venueList } from "@/content/venues";
+import { venueChoices } from "./catalog-repo";
 import { getDataset, type DataSession, type Dataset } from "./dataset";
 import { activityTypeLabels } from "./demo-data";
 import { DAY } from "./time";
@@ -155,9 +156,9 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
   };
 }
 
-/** Untuk form "Buat sesi": daftar venue + lapangan. */
+/** Untuk form "Buat sesi": daftar venue + lapangan (tabel venues saat live). */
 export async function venueOptions() {
-  return [...venueList.map((v) => ({ name: v.name, city: v.city, image: v.image })), { name: "Altitude Kintamani", city: ALTITUDE.city, image: ALTITUDE.image }];
+  return venueChoices();
 }
 
 /**

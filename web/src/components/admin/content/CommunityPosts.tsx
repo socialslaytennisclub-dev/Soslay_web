@@ -1,8 +1,9 @@
 "use client";
 
 import Image from "next/image";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { cx } from "@/lib/cx";
+import { setInstagramPostVisible, setTestimonialVisible } from "@/server/admin/actions/content";
 import type { CommunityPost } from "@/server/admin/types";
 import { AdminIcon, type AdminIconName } from "../ui/AdminIcon";
 import { Badge, type BadgeTone } from "../ui/AdminUI";
@@ -18,6 +19,19 @@ const KIND: Record<CommunityPost["kind"], { label: string; icon: AdminIconName; 
 export function CommunityPosts({ initial }: { initial: CommunityPost[] }) {
   const [posts, setPosts] = useState(initial);
   const [filter, setFilter] = useState<"all" | "visible" | "hidden">("all");
+  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  const [pending, startToggle] = useTransition();
+
+  const toggle = (p: CommunityPost) => {
+    const next = !p.visible;
+    const apply = (visible: boolean) => setPosts((list) => list.map((x) => (x.id === p.id ? { ...x, visible } : x)));
+    apply(next);
+    startToggle(async () => {
+      const result = p.kind === "testimonial" ? await setTestimonialVisible(p.id, next) : await setInstagramPostVisible(p.handle, next);
+      if (!result.ok) apply(!next);
+      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+    });
+  };
   const shown = posts.filter((p) => filter === "all" || (filter === "visible") === p.visible);
 
   return (
@@ -26,7 +40,7 @@ export function CommunityPosts({ initial }: { initial: CommunityPost[] }) {
         <div>
           <h2 className={styles.cardTitle}>Testimoni & post komunitas</h2>
           <p className={styles.muted}>
-            {posts.filter((p) => p.visible).length} tampil di homepage · perubahan masih demo (belum tersimpan)
+            {posts.filter((p) => p.visible).length} tampil di homepage · langsung tersimpan
           </p>
         </div>
         <div className={styles.filterPills} role="group" aria-label="Filter">
@@ -43,6 +57,11 @@ export function CommunityPosts({ initial }: { initial: CommunityPost[] }) {
           ))}
         </div>
       </header>
+      {notice && (
+        <p className={cx(styles.notice, notice.error && styles.noticeError)} role={notice.error ? "alert" : "status"}>
+          {notice.text}
+        </p>
+      )}
       <ul className={styles.posts}>
         {shown.map((p) => {
           const kind = KIND[p.kind];
@@ -70,7 +89,8 @@ export function CommunityPosts({ initial }: { initial: CommunityPost[] }) {
                 aria-checked={p.visible}
                 aria-label={`Tampilkan post ${p.handle}`}
                 className={cx(styles.switch, p.visible && styles.switchOn)}
-                onClick={() => setPosts((list) => list.map((x) => (x.id === p.id ? { ...x, visible: !x.visible } : x)))}
+                disabled={pending}
+                onClick={() => toggle(p)}
               >
                 <span />
               </button>

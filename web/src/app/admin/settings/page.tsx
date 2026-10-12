@@ -7,6 +7,7 @@ import { RolesMatrix, TeamTable } from "@/components/admin/settings/TeamAccess";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { cx } from "@/lib/cx";
 import { adminNow } from "@/server/admin/dataset";
+import { getAdminSession } from "@/server/admin/session";
 import { ADMIN_MODULES, getSettings, listAuditLog, listIntegrations, listRoles, listStaff } from "@/server/admin/settings-repo";
 import pageStyles from "../page.module.css";
 
@@ -25,7 +26,7 @@ const TABS = [
 export default async function AdminSettingsPage({ searchParams }: PageProps<"/admin/settings">) {
   const raw = (await searchParams).tab;
   const tab = TABS.find((t) => t.value === (Array.isArray(raw) ? raw[0] : raw))?.value ?? "team";
-  const [staff, roles, integrations, log, settings] = await Promise.all([listStaff(), listRoles(), listIntegrations(), listAuditLog(), getSettings()]);
+  const [staff, roles, integrations, log, settings, session] = await Promise.all([listStaff(), listRoles(), listIntegrations(), listAuditLog(), getSettings(), getAdminSession()]);
 
   return (
     <>
@@ -47,8 +48,9 @@ export default async function AdminSettingsPage({ searchParams }: PageProps<"/ad
         {tab === "team" && (
           <div className={styles.layout}>
             <div className={styles.mainCol}>
-              <TeamTable staff={staff} roles={roles.map((r) => r.name)} now={adminNow().toISOString()} />
-              <RolesMatrix roles={roles} modules={ADMIN_MODULES} />
+              <TeamTable staff={staff} roles={roles.map((r) => r.name)} now={adminNow().toISOString()} currentUserId={session.mode === "live" ? session.userId : undefined} />
+              {/* key: matriks di-reset setelah izin tersimpan / role baru dibuat */}
+              <RolesMatrix key={JSON.stringify(roles)} roles={roles} modules={ADMIN_MODULES} />
             </div>
             <div className={styles.sideCol}>
               <IntegrationsCard items={integrations} />

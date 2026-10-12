@@ -1,6 +1,8 @@
 import "server-only";
 import { galleryPhotos } from "@/content/gallery";
 import { activities, community, hero, instagram, marquee, shop, stats, venues } from "@/content/home";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDataset } from "./dataset";
 import { DAY } from "./time";
 import { activityTypeLabels, DEMO_NOW } from "./demo-data";
@@ -12,7 +14,39 @@ import type { CommunityPost, ContentSection, PhotoAlbum, SitePage } from "./type
  */
 
 
+type SectionRow = { key: string; label: string; draft: Partial<ContentSection> & { hiddenPosts?: string[] }; published: unknown; is_enabled: boolean; sort_order: number; published_at: string | null };
+
+/** Section homepage untuk editor: default + draft dari tabel content_sections (urutan & aktif dari tabel). */
 export async function listHomepageSections(): Promise<ContentSection[]> {
+  const defaults = defaultHomepageSections();
+  if (!isSupabaseConfigured) return defaults;
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase.from("content_sections").select("key, label, draft, published, is_enabled, sort_order, published_at").eq("page", "home").order("sort_order");
+  const rows = (data ?? []) as SectionRow[];
+  if (!rows.length) return defaults;
+  const known = rows.flatMap((r) => {
+    const base = defaults.find((d) => d.key === r.key);
+    if (!base) return [];
+    const d = r.draft ?? {};
+    return [
+      {
+        ...base,
+        name: r.label || base.name,
+        enabled: r.is_enabled,
+        title: d.title ?? base.title,
+        description: d.description ?? base.description,
+        cta: d.cta ?? base.cta,
+        image: d.image ?? base.image,
+        overlay: d.overlay ?? base.overlay,
+        unpublished: JSON.stringify(r.draft) !== JSON.stringify(r.published),
+      } satisfies ContentSection,
+    ];
+  });
+  // Section baru di kode yang belum ada di tabel → tampil di akhir.
+  return [...known, ...defaults.filter((d) => !rows.some((r) => r.key === d.key))];
+}
+
+function defaultHomepageSections(): ContentSection[] {
   return [
     {
       key: "hero",
@@ -162,6 +196,25 @@ export async function listAlbums(limit?: number): Promise<{ albums: PhotoAlbum[]
 }
 
 export async function listCommunityPosts(): Promise<CommunityPost[]> {
+  if (isSupabaseConfigured) {
+    const supabase = await createSupabaseServerClient();
+    const [{ data: testimonials }, { data: ig }] = await Promise.all([
+      supabase.from("testimonials").select("id, author_name, author_handle, quote, avatar_path, is_published").order("sort_order"),
+      supabase.from("content_sections").select("published").eq("page", "home").eq("key", "instagram").maybeSingle(),
+    ]);
+    const hidden = new Set(((ig?.published as { hiddenPosts?: string[] } | null)?.hiddenPosts) ?? []);
+    return [
+      ...(testimonials ?? []).map((t): CommunityPost => ({
+        id: t.id as string,
+        kind: "testimonial",
+        text: t.quote as string,
+        handle: (t.author_handle as string | null) ?? (t.author_name as string),
+        image: (t.avatar_path as string | null) ?? undefined,
+        visible: t.is_published as boolean,
+      })),
+      ...instagram.posts.map((p): CommunityPost => ({ id: `ig:${p.handle}`, kind: p.platform, text: p.text.join(" "), handle: p.handle, image: p.image, visible: !hidden.has(p.handle) })),
+    ];
+  }
   return [
     ...community.testimonials.map((t, i): CommunityPost => ({ id: `t${i}`, kind: "testimonial", text: t.quote, handle: t.name, image: t.avatar, visible: true })),
     ...instagram.posts.map((p, i): CommunityPost => ({ id: `ig${i}`, kind: p.platform, text: p.text.join(" "), handle: p.handle, image: p.image, visible: true })),

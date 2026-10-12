@@ -1,10 +1,10 @@
 import Link from "next/link";
 import { Button, Container, MediaCard, SectionIntro, StatCard, Text } from "@/components/ui";
-import { activities, stats } from "@/content/home";
+import { activities as defaultActivities, stats as defaultStats } from "@/content/home";
 import { cx } from "@/lib/cx";
 import styles from "./Activities.module.css";
 
-export function Activities() {
+export function Activities({ activities = defaultActivities, stats = defaultStats }: { activities?: typeof defaultActivities; stats?: typeof defaultStats }) {
   return (
     <section className={styles.section} aria-labelledby="activities-title">
       <Container className={styles.inner}>
@@ -53,13 +53,15 @@ export function Activities() {
           </div>
         </div>
 
-        <ul className={styles.stats} aria-label="Soslay dalam angka" data-anim="stagger">
-          {stats.map((stat) => (
-            <li key={stat.label}>
-              <StatCard {...stat} />
-            </li>
-          ))}
-        </ul>
+        {stats.length > 0 && (
+          <ul className={styles.stats} aria-label="Soslay dalam angka" data-anim="stagger">
+            {stats.map((stat) => (
+              <li key={stat.label}>
+                <StatCard {...stat} />
+              </li>
+            ))}
+          </ul>
+        )}
       </Container>
     </section>
   );

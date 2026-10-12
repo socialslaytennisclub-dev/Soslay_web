@@ -142,6 +142,10 @@ export async function getSettings(): Promise<AppSettings> {
     rupiahPerPoint: Number(value.get("rupiah_per_point") ?? base.rupiahPerPoint),
     annualTargets: (value.get("annual_targets") as AppSettings["annualTargets"]) ?? base.annualTargets,
     tiers: tiers?.length ? tiers.map((t) => ({ tier: t.tier as AppSettings["tiers"][number]["tier"], label: t.label as string, minPoints: t.min_points as number })) : base.tiers,
+    // Disimpan dari tab Umum / Pembayaran / Notifikasi (app_settings, JSON).
+    ...((value.get("club_profile") as Partial<AppSettings> | undefined) ?? {}),
+    ...((value.get("payment") as Partial<AppSettings> | undefined) ?? {}),
+    ...(value.get("notifications") ? { notifications: value.get("notifications") as AppSettings["notifications"] } : {}),
   };
 }
 

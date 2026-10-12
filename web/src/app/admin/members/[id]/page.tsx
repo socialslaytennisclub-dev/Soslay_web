@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { MemberDetailView } from "@/components/admin/members/MemberDetailView";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
-import { getMember } from "@/server/admin/repo";
+import { bookableSessions, getMember } from "@/server/admin/repo";
 import pageStyles from "../../page.module.css";
 
 export async function generateMetadata({ params }: PageProps<"/admin/members/[id]">): Promise<Metadata> {
@@ -14,12 +14,13 @@ export async function generateMetadata({ params }: PageProps<"/admin/members/[id
 export default async function AdminMemberPage({ params }: PageProps<"/admin/members/[id]">) {
   const member = await getMember((await params).id);
   if (!member) notFound();
+  const bookable = await bookableSessions(member.id);
 
   return (
     <>
       <AdminTopbar breadcrumb={`CRM / Members / ${member.fullName}`} title="Detail member" />
       <div className={pageStyles.content}>
-        <MemberDetailView member={member} />
+        <MemberDetailView member={member} bookable={bookable} />
       </div>
     </>
   );

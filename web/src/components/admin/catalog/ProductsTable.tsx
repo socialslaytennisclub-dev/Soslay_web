@@ -2,24 +2,37 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
+import { setProductVisible } from "@/server/admin/actions/catalog";
 import type { AdminProduct } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge, desktopOnlyClass, MobileCard, MobileCardList } from "../ui/AdminUI";
 import styles from "./Catalog.module.css";
 
-type Props = { initial: AdminProduct[]; categories: { value: string; label: string }[]; lowStock: number };
+type Props = { initial: AdminProduct[]; categories: { value: string; label: string }[]; lowStock: number; initialNotice?: string };
 
 /** Admin / 08 Products (Figma 25:6156). Filter di browser — katalog kecil (puluhan produk). */
-export function ProductsTable({ initial, categories, lowStock }: Props) {
+export function ProductsTable({ initial, categories, lowStock, initialNotice }: Props) {
   const [items, setItems] = useState(initial);
   const [category, setCategory] = useState("all");
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [stock, setStock] = useState("");
-  const changed = items.some((p, i) => p.visible !== initial[i].visible);
+  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(initialNotice ? { text: initialNotice } : null);
+  const [pending, startToggle] = useTransition();
+
+  const toggleVisible = (p: AdminProduct) => {
+    const next = !p.visible;
+    const apply = (visible: boolean) => setItems((list) => list.map((x) => (x.slug === p.slug ? { ...x, visible, status: visible ? "active" : "draft" } : x)));
+    apply(next); // optimistis — dikembalikan kalau gagal
+    startToggle(async () => {
+      const result = await setProductVisible(p.slug, next);
+      if (!result.ok) apply(!next);
+      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+    });
+  };
 
   const needle = q.trim().toLowerCase();
   const shown = items
@@ -53,7 +66,9 @@ export function ProductsTable({ initial, categories, lowStock }: Props) {
         <Image src={p.image} alt="" fill sizes="44px" />
       </span>
       <span className={styles.productText}>
-        <span className={styles.strong}>{p.name}</span>
+        <Link href={`/admin/products/${p.slug}`} className={styles.strongLink}>
+          {p.name}
+        </Link>
         <span className={styles.muted}>{p.sku}</span>
       </span>
     </span>
@@ -66,7 +81,8 @@ export function ProductsTable({ initial, categories, lowStock }: Props) {
       aria-checked={p.visible}
       aria-label={`Tampilkan ${p.name} di Shop`}
       className={cx(styles.switch, p.visible && styles.switchOn)}
-      onClick={() => setItems((list) => list.map((x) => (x.slug === p.slug ? { ...x, visible: !x.visible } : x)))}
+      disabled={pending}
+      onClick={() => toggleVisible(p)}
     >
       <span />
     </button>
@@ -84,10 +100,7 @@ export function ProductsTable({ initial, categories, lowStock }: Props) {
           ))}
         </div>
         <div className={styles.actions}>
-          <AdminButton icon="upload-simple" disabled title="Butuh database">
-            Import CSV
-          </AdminButton>
-          <AdminButton variant="primary" icon="plus-bold" disabled title="Butuh database">
+          <AdminButton href="/admin/products/new" variant="primary" icon="plus-bold">
             Tambah produk
           </AdminButton>
         </div>
@@ -108,9 +121,9 @@ export function ProductsTable({ initial, categories, lowStock }: Props) {
         </div>
       )}
 
-      {changed && (
-        <p className={styles.notice} role="status">
-          Mode demo: perubahan tampil di Shop belum tersimpan karena database (Supabase) belum tersambung.
+      {notice && (
+        <p className={cx(styles.notice, notice.error && styles.noticeError)} role={notice.error ? "alert" : "status"}>
+          {notice.text}
         </p>
       )}
 
@@ -196,9 +209,14 @@ export function ProductsTable({ initial, categories, lowStock }: Props) {
                       <td>{p.sold}</td>
                       <td>{toggle(p)}</td>
                       <td>
-                        <Link href={`/shop/${p.slug}`} target="_blank" className={styles.iconLink} aria-label={`Buka ${p.name} di Shop`}>
-                          <AdminIcon name="arrow-up-right" size={16} />
-                        </Link>
+                        <span className={styles.rowActions}>
+                          <Link href={`/admin/products/${p.slug}`} className={styles.iconLink} aria-label={`Edit ${p.name}`}>
+                            <AdminIcon name="pencil-simple" size={16} />
+                          </Link>
+                          <Link href={`/shop/${p.slug}`} target="_blank" className={styles.iconLink} aria-label={`Buka ${p.name} di Shop`}>
+                            <AdminIcon name="arrow-up-right" size={16} />
+                          </Link>
+                        </span>
                       </td>
                     </tr>
                   ))}

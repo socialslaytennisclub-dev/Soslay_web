@@ -91,7 +91,7 @@ export type MembersResult = {
   cities: string[];
 };
 
-export type Segment = { id: string; name: string; count: number; query: MembersQuery };
+export type Segment = { id: string; name: string; count: number; query: MembersQuery; /** Disimpan tim (bisa dihapus). */ custom?: boolean };
 
 export type UpcomingSession = {
   id: string;
@@ -282,6 +282,8 @@ export type ContentSection = {
   /** Isi section diambil otomatis dari modul lain. */
   source?: { label: string; href: string };
   scheduleNote?: string;
+  /** Draft berbeda dari versi yang tayang di website. */
+  unpublished?: boolean;
 };
 
 export type PhotoAlbum = {
@@ -379,4 +381,65 @@ export type AdminProduct = {
   stockState: StockState;
   sold: number;
   visible: boolean;
+  status: "draft" | "active" | "archived";
+};
+
+/** Form edit produk (products + product_images + product_variants). */
+export type ProductForm = {
+  id: string | null;
+  slug: string;
+  sku: string;
+  name: string;
+  category: "apparel" | "racket" | "accessory";
+  price: number;
+  compareAtPrice: number | null;
+  description: string;
+  details: string[];
+  material: string;
+  status: "draft" | "active" | "archived";
+  featured: boolean;
+  sizeGuide: boolean;
+  images: { path: string; alt: string; position: string }[];
+  /** Kunci pilihan varian ("size", "grip") — kosong = satu varian tanpa pilihan. */
+  optionKey: string;
+  variants: { value: string; stock: number }[];
+};
+
+/** Form edit venue (tabel venues). */
+export type VenueForm = {
+  id: string | null;
+  slug: string;
+  name: string;
+  city: "Jakarta" | "Bali";
+  area: string;
+  type: string;
+  address: string;
+  mapsUrl: string;
+  tagline: string;
+  description: string;
+  coverPath: string;
+  heroPath: string;
+  courts: string[];
+  active: boolean;
+  homepage: boolean;
+};
+
+/** Form edit member (tabel profiles) — nilai enum database apa adanya. */
+export type MemberForm = {
+  id: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  city: string;
+  birthDate: string;
+  gender: "male" | "female" | "undisclosed" | "";
+  kuyId: string;
+  instagram: string;
+  level: TennisLevel | "";
+  playFrequency: string;
+  playFormat: string;
+  hand: string;
+  playingSince: string;
+  status: "active" | "suspended";
+  pointsBalance: number;
 };

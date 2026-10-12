@@ -458,3 +458,40 @@
     grid-template-columns: minmax(0, 1fr) 340px;
   }
 }
+
+.noticeError {
+  background: rgb(253 236 245);
+}
+
+.textButton {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-600);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.textButton:disabled {
+  opacity: 0.5;
+}
+
+.inviteForm {
+  display: grid;
+  gap: var(--space-8);
+  padding: var(--space-12);
+  border-radius: var(--radius-lg);
+  background: var(--color-indigo-50);
+}
+
+.inviteForm .input {
+  min-height: 38px;
+  padding-block: 6px;
+  font-size: 13px;
+}
+
+@media (min-width: 900px) {
+  .inviteForm {
+    grid-template-columns: 1fr 1.3fr auto auto;
+    align-items: center;
+  }
+}

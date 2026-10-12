@@ -1,11 +1,14 @@
 import "server-only";
 import { findProduct } from "@/content/products";
 import { LEVEL_LABEL } from "@/lib/admin-labels";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDataset, type DataMember, type Dataset } from "./dataset";
 import { jakartaWeekStart, TIERS } from "./demo-data";
 import { DAY, pctDelta } from "./time";
 import type {
   MemberDetail,
+  MemberForm,
+  MemberNote,
   MemberListItem,
   MembersQuery,
   MembersResult,
@@ -119,7 +122,28 @@ export async function listSegments(): Promise<Segment[]> {
     { id: "trip", name: "Minat Tennis Trip", query: { interest: "Tennis Trip / Destination" } },
     { id: "dining", name: "Suka Tennis + Dining", query: { interest: "Tennis + Dining" } },
   ];
+  // Segmen yang disimpan tim (member_segments) setelah segmen bawaan.
+  if (d.live) {
+    const supabase = await createSupabaseServerClient();
+    const { data } = await supabase.from("member_segments").select("id, name, filter").order("created_at");
+    for (const row of data ?? []) defs.push({ id: row.id as string, name: row.name as string, query: row.filter as MembersQuery, custom: true });
+  }
   return defs.map((segment) => ({ ...segment, count: applyFilters(everyone, segment.query, d.now).length }));
+}
+
+async function loadNotes(memberId: string): Promise<MemberNote[]> {
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase
+    .from("member_notes")
+    .select("id, body, created_at, staff_members(full_name)")
+    .eq("member_id", memberId)
+    .order("created_at", { ascending: false });
+  return (data ?? []).map((n) => ({
+    id: n.id as string,
+    body: n.body as string,
+    at: n.created_at as string,
+    author: ((n.staff_members as unknown as { full_name: string } | null)?.full_name ?? "Tim").split(" ")[0],
+  }));
 }
 
 export async function getMember(id: string): Promise<MemberDetail | null> {
@@ -189,8 +213,9 @@ export async function getMember(id: string): Promise<MemberDetail | null> {
       payment: booking.payment,
       status: booking.status,
     })),
-    notes:
-      !d.live && id === "m0001"
+    notes: d.live
+      ? await loadNotes(id)
+      : id === "m0001"
         ? [{ id: "n1", author: "Rara", body: "Suka main pagi, sering bawa teman baru. Kandidat ambassador Bali trip.", at: new Date(d.now.getTime() - 16 * DAY).toISOString() }]
         : [],
   };
@@ -336,3 +361,64 @@ export async function getOverview(weeks = 12): Promise<OverviewData> {
   };
 }
 
+
+/** Isi form edit member — nilai mentah dari tabel profiles (live) atau data demo. */
+export async function getMemberForm(id: string): Promise<MemberForm | null> {
+  const d = await getDataset();
+  const member = d.memberById.get(id);
+  if (!member) return null;
+  const pointsBalance = d.stats(id).pointsBalance;
+  if (d.live) {
+    const supabase = await createSupabaseServerClient();
+    const { data: p } = await supabase.from("profiles").select("*").eq("id", id).maybeSingle();
+    if (!p) return null;
+    return {
+      id,
+      fullName: p.full_name,
+      email: p.email,
+      phone: p.phone ?? "",
+      city: p.city ?? "",
+      birthDate: p.birth_date ?? "",
+      gender: p.gender ?? "",
+      kuyId: p.kuy_id ?? "",
+      instagram: p.instagram ?? "",
+      level: p.tennis_level ?? "",
+      playFrequency: p.play_frequency ?? "",
+      playFormat: p.play_format ?? "",
+      hand: p.dominant_hand ?? "",
+      playingSince: p.playing_since ?? "",
+      status: p.status === "suspended" ? "suspended" : "active",
+      pointsBalance,
+    };
+  }
+  return {
+    id,
+    fullName: member.fullName,
+    email: member.email,
+    phone: member.phone,
+    city: member.city,
+    birthDate: member.birthDate,
+    gender: member.gender,
+    kuyId: member.kuyId,
+    instagram: member.instagram,
+    level: member.level,
+    playFrequency: "",
+    playFormat: "",
+    hand: "",
+    playingSince: member.playingSince,
+    status: member.suspended ? "suspended" : "active",
+    pointsBalance,
+  };
+}
+
+/** Sesi mendatang yang bisa di-booking-kan untuk member (belum terdaftar). */
+export async function bookableSessions(memberId: string) {
+  const d = await getDataset();
+  const booked = new Set(d.bookingsOf(memberId).filter((b) => b.status !== "cancelled").map((b) => b.sessionId));
+  const fmt = new Intl.DateTimeFormat("id-ID", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
+  return d.sessions
+    .filter((s) => s.status === "published" && s.startsAt > d.now && !booked.has(s.id))
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
+    .slice(0, 40)
+    .map((s) => ({ id: s.id, label: `${s.title} · ${s.venueName} · ${fmt.format(s.startsAt)}` }));
+}

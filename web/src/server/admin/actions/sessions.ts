@@ -1,11 +1,10 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { isActivityType } from "@/content/activity";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { canAccess, getAdminSession } from "../session";
 import type { TennisLevel } from "../types";
+import { audit, refreshPaths, requireEditor, type ActionResult } from "./common";
 
 /**
  * Tulis sesi dari Activity Editor ke Supabase. Izin dicek dua kali: di sini (pesan yang
@@ -39,26 +38,14 @@ export type SessionInput = {
   crew: { name: string; role: "Host" | "Coach" | "Fotografer" }[];
 };
 
-export type ActionResult = { ok: true; message: string } | { ok: false; error: string };
-
 const WEEK = 7 * 86_400_000;
 const LEVELS: TennisLevel[] = ["beginner", "beginner_intermediate", "intermediate", "intermediate_advanced", "advanced"];
 const CREW_ROLE = { Host: "host", Coach: "coach", Fotografer: "photographer" } as const;
 const wib = (date: string, time: string) => new Date(`${date}T${time}:00+07:00`);
 const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 
-async function requireEditor(): Promise<{ userId: string } | { error: string }> {
-  const session = await getAdminSession();
-  if (session.mode === "demo") return { error: "Mode demo: sambungkan Supabase untuk menyimpan." };
-  if (session.mode !== "live" || !canAccess(session, "activities", "edit")) return { error: "Role kamu tidak punya izin mengubah Activities." };
-  return { userId: session.userId };
-}
-
 function refresh(id?: string) {
-  revalidatePath("/admin", "layout");
-  revalidatePath("/activity");
-  revalidatePath("/venue/[slug]", "page");
-  if (id) revalidatePath(`/admin/activities/${id}`);
+  refreshPaths("/activity", ["/venue/[slug]", "page"], ...(id ? [`/admin/activities/${id}`] : []));
 }
 
 function validate(input: SessionInput): string | null {
@@ -75,7 +62,7 @@ function validate(input: SessionInput): string | null {
 }
 
 export async function saveSession(input: SessionInput): Promise<ActionResult> {
-  const auth = await requireEditor();
+  const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
   const invalid = validate(input);
   if (invalid) return { ok: false, error: invalid };
@@ -163,6 +150,7 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
     if (crewRows.length) await supabase.from("session_crew").insert(crewRows);
   }
 
+  await audit(auth.userId, input.id ? `mengubah sesi ${input.title}` : `membuat sesi ${input.title}${input.repeatWeekly ? " (8 minggu)" : ""}`, "session", id);
   refresh(id);
   if (!input.id) redirect(`/admin/activities/${id}?saved=${input.repeatWeekly ? "series" : "new"}`);
   return { ok: true, message: "Perubahan tersimpan dan sudah tampil di website." };
@@ -170,20 +158,21 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
 
 /** Hapus sesi — hanya bila belum ada peserta; kalau sudah ada, pakai status Dibatalkan. */
 export async function deleteSession(id: string): Promise<ActionResult> {
-  const auth = await requireEditor();
+  const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
   const supabase = await createSupabaseServerClient();
   const { count } = await supabase.from("bookings").select("id", { count: "exact", head: true }).eq("session_id", id).neq("status", "cancelled");
   if (count) return { ok: false, error: `Sesi punya ${count} peserta — ubah status ke "Dibatalkan" saja.` };
-  const { error } = await supabase.from("sessions").delete().eq("id", id);
+  const { data: gone, error } = await supabase.from("sessions").delete().eq("id", id).select("title");
   if (error) return { ok: false, error: `Gagal menghapus: ${error.message}` };
+  await audit(auth.userId, `menghapus sesi ${gone?.[0]?.title ?? ""}`.trim(), "session", id);
   refresh();
   redirect("/admin/activities?deleted=1");
 }
 
 /** Check-in / batal check-in peserta. Poin kehadiran diberi/ditarik oleh trigger database. */
 export async function setCheckIn(sessionId: string, memberId: string, checkedIn: boolean): Promise<ActionResult> {
-  const auth = await requireEditor();
+  const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase

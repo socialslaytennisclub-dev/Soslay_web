@@ -267,7 +267,11 @@
   font-size: 14px;
   text-align: center;
   color: var(--color-navy-900);
-  cursor: not-allowed;
+}
+
+.addCard:hover {
+  border-color: var(--color-indigo-500);
+  background: var(--color-indigo-50);
 }
 
 /* ── Products ── */
@@ -475,4 +479,99 @@
   .venueGrid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
+}
+
+/* ── Editor produk ── */
+.variantList,
+.imageList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  list-style: none;
+}
+
+.variantRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 28px;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.imageRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+}
+
+.imageThumb {
+  position: relative;
+  flex-shrink: 0;
+  width: 56px;
+  height: 56px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--color-indigo-100);
+}
+
+.imageThumb img {
+  object-fit: cover;
+}
+
+.imageFields {
+  display: grid;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+}
+
+.imageFields input {
+  min-height: 36px;
+  padding-block: 6px;
+  font-size: 13px;
+}
+
+.imageActions {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rotateUp {
+  transform: rotate(90deg);
+}
+
+.strongLink {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.strongLink:hover {
+  color: var(--color-indigo-600);
+}
+
+.noticeError {
+  background: rgb(253 236 245);
+  color: var(--color-navy-900);
+}
+
+.rowActions {
+  display: flex;
+  gap: 2px;
+}
+
+.switch:disabled {
+  opacity: 0.6;
+}
+
+.venueEdit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+}
+
+.venueEdit:hover {
+  color: var(--color-indigo-600);
 }

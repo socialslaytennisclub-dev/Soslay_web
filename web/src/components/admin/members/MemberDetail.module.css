@@ -427,3 +427,78 @@
   display: block;
   scroll-margin-top: var(--space-20);
 }
+
+.noteDelete {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-left: 6px;
+  border-radius: 4px;
+  vertical-align: middle;
+  color: var(--color-indigo-muted);
+}
+
+.noteDelete:hover {
+  background: var(--color-indigo-50);
+  color: var(--color-pink-500);
+}
+
+.noteError {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-pink-500);
+}
+
+.bookForm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  max-width: 100%;
+}
+
+.bookSelect {
+  position: relative;
+  display: inline-flex;
+  flex: 1 1 220px;
+  min-width: 0;
+  max-width: 340px;
+}
+
+.bookSelect select {
+  width: 100%;
+  appearance: none;
+  padding: 6px 28px 6px 10px;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-md);
+  background: var(--color-white);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-navy-900);
+}
+
+.bookSelect > span {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.bookCancel {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+}
+
+.bookDone {
+  flex-basis: 100%;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  text-align: right;
+  color: var(--color-navy-900);
+}

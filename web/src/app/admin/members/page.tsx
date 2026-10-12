@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { MembersFilters } from "@/components/admin/members/MembersFilters";
 import { MembersTable } from "@/components/admin/members/MembersTable";
+import { DeleteSegmentButton, SaveSegmentButton } from "@/components/admin/members/SegmentActions";
 import styles from "@/components/admin/members/Members.module.css";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { AdminIcon } from "@/components/admin/ui/AdminIcon";
@@ -56,7 +57,7 @@ export default async function AdminMembersPage({ searchParams }: PageProps<"/adm
             <AdminButton href={`/admin/members/export${exportParams ? `?${exportParams}` : ""}`} icon="download-simple" prefetch={false}>
               Export CSV
             </AdminButton>
-            <AdminButton variant="primary" icon="user-plus" disabled title="Aktif setelah database Supabase tersambung">
+            <AdminButton variant="primary" icon="user-plus" disabled title="Member baru mendaftar sendiri lewat halaman Daftar di website">
               Tambah member
             </AdminButton>
           </div>
@@ -65,16 +66,16 @@ export default async function AdminMembersPage({ searchParams }: PageProps<"/adm
         <div className={styles.segments}>
           <span className={styles.segmentsLabel}>Segmen tersimpan</span>
           {segments.map((segment) => (
-            <Link key={segment.id} href={membersHref({ ...segment.query, page: 1 })} className={styles.segment}>
-              <AdminIcon name="funnel-simple" size={14} />
-              {segment.name}
-              <span className={styles.segmentCount}>{segment.count}</span>
-            </Link>
+            <span key={segment.id} className={styles.segmentWrap}>
+              <Link href={membersHref({ ...segment.query, page: 1 })} className={styles.segment}>
+                <AdminIcon name="funnel-simple" size={14} />
+                {segment.name}
+                <span className={styles.segmentCount}>{segment.count}</span>
+              </Link>
+              {segment.custom && <DeleteSegmentButton id={segment.id} name={segment.name} />}
+            </span>
           ))}
-          <span className={styles.saveSegment} title="Aktif setelah database Supabase tersambung">
-            <AdminIcon name="plus-bold" size={12} />
-            Simpan segmen
-          </span>
+          <SaveSegmentButton query={query} />
         </div>
 
         <section className={styles.panel} aria-label="Daftar member">

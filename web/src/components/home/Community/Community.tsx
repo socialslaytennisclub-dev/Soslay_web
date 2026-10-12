@@ -1,9 +1,9 @@
 import { Button, Container, MediaCard, Text } from "@/components/ui";
-import { community } from "@/content/home";
+import { community as defaultCommunity } from "@/content/home";
 import { TestimonialCarousel } from "./TestimonialCarousel";
 import styles from "./Community.module.css";
 
-export function Community() {
+export function Community({ community = defaultCommunity }: { community?: typeof defaultCommunity }) {
   const { photos } = community;
 
   return (

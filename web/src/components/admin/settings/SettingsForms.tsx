@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { formatRupiahPlain } from "@/lib/admin-labels";
+import { cx } from "@/lib/cx";
+import { saveAppSettings } from "@/server/admin/actions/settings";
 import type { AppSettings } from "@/server/admin/types";
 import { FormCard, Toggle } from "../ui/AdminForm";
 import { AdminButton, TierBadge } from "../ui/AdminUI";
@@ -9,10 +11,16 @@ import styles from "./Settings.module.css";
 
 type Tab = "general" | "membership" | "payment" | "notifications";
 
-/** Tab Umum / Membership & poin / Pembayaran / Notifikasi (app_settings). Simpan masih demo. */
+/** Tab Umum / Membership & poin / Pembayaran / Notifikasi → app_settings & membership_tiers. */
 export function SettingsForms({ tab, initial }: { tab: Tab; initial: AppSettings }) {
   const [s, setS] = useState(initial);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  const [saving, start] = useTransition();
+  const save = () =>
+    start(async () => {
+      const result = await saveAppSettings(tab, s);
+      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+    });
   const dirty = JSON.stringify(s) !== JSON.stringify(initial);
   const set = <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => setS((prev) => ({ ...prev, [key]: value }));
   const num = (v: string) => Number(v.replace(/\D/g, "")) || 0;
@@ -20,8 +28,8 @@ export function SettingsForms({ tab, initial }: { tab: Tab; initial: AppSettings
   const footer = (
     <div className={styles.formFooter}>
       {notice && (
-        <p className={styles.notice} role="status">
-          {notice}
+        <p className={cx(styles.notice, notice.error && styles.noticeError)} role={notice.error ? "alert" : "status"}>
+          {notice.text}
         </p>
       )}
       <div className={styles.formActions}>
@@ -31,8 +39,8 @@ export function SettingsForms({ tab, initial }: { tab: Tab; initial: AppSettings
           }}>
           Batalkan
         </AdminButton>
-        <AdminButton variant="primary" icon="check-bold" disabled={!dirty} onClick={() => setNotice("Mode demo: pengaturan belum tersimpan karena database (Supabase) belum tersambung.")}>
-          Simpan pengaturan
+        <AdminButton variant="primary" icon="check-bold" disabled={!dirty || saving} onClick={save}>
+          {saving ? "Menyimpan…" : "Simpan pengaturan"}
         </AdminButton>
       </div>
     </div>

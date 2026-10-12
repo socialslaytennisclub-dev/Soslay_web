@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import { cx } from "@/lib/cx";
+import { changeStaffRole, createRole, inviteStaff, savePermissions, setStaffActive } from "@/server/admin/actions/settings";
 import type { AdminModule, ModuleAccess, RolePermissions, StaffMember } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge, desktopOnlyClass, MemberAvatar, MobileCard, MobileCardList } from "../ui/AdminUI";
@@ -26,16 +27,33 @@ const STATUS = {
   disabled: { label: "Nonaktif", tone: "neutral" },
 } as const;
 
-/** Anggota tim (staff_members) — ganti role masih demo sampai Supabase Auth tersambung. */
-export function TeamTable({ staff, roles, now }: { staff: StaffMember[]; roles: string[]; now: string }) {
-  const [rows, setRows] = useState(staff);
-  const changed = rows.some((r, i) => r.role !== staff[i].role);
-  const invited = rows.filter((r) => r.status === "invited").length;
+/** Anggota tim (staff_members): ganti role, aktif/nonaktif, undang anggota baru. */
+export function TeamTable({ staff, roles, now, currentUserId }: { staff: StaffMember[]; roles: string[]; now: string; currentUserId?: string }) {
+  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  const [inviting, setInviting] = useState(false);
+  const [invite, setInvite] = useState({ name: "", email: "", role: roles.find((r) => r !== "Super Admin") ?? roles[0] ?? "" });
+  const [pending, start] = useTransition();
+  const invited = staff.filter((r) => r.status === "invited").length;
+
+  const run = (action: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>, after?: () => void) =>
+    start(async () => {
+      const result = await action();
+      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      if (result.ok) after?.();
+    });
 
   const roleSelect = (s: StaffMember) => (
     <label className={styles.roleSelect}>
       <span className="visually-hidden">Role {s.name}</span>
-      <select value={s.role} disabled={s.role === "Super Admin"} onChange={(e) => setRows((list) => list.map((r) => (r.id === s.id ? { ...r, role: e.target.value } : r)))}>
+      <select
+        value={s.role}
+        disabled={s.id === currentUserId || pending}
+        title={s.id === currentUserId ? "Role akunmu sendiri tidak bisa diubah" : undefined}
+        onChange={(e) => {
+          const role = e.target.value;
+          if (window.confirm(`Ubah role ${s.name} menjadi ${role}?`)) run(() => changeStaffRole(s.id, role));
+        }}
+      >
         {roles.map((r) => (
           <option key={r}>{r}</option>
         ))}
@@ -44,11 +62,29 @@ export function TeamTable({ staff, roles, now }: { staff: StaffMember[]; roles: 
     </label>
   );
 
+  const statusToggle = (s: StaffMember) =>
+    s.id === currentUserId ? null : (
+      <button
+        type="button"
+        className={styles.textButton}
+        disabled={pending}
+        onClick={() => {
+          const active = s.status === "disabled";
+          if (window.confirm(`${active ? "Aktifkan lagi" : "Nonaktifkan"} akses admin ${s.name}?`)) run(() => setStaffActive(s.id, active));
+        }}
+      >
+        {s.status === "disabled" ? "Aktifkan" : "Nonaktifkan"}
+      </button>
+    );
+
   const person = (s: StaffMember) => (
     <span className={styles.person}>
       <MemberAvatar name={s.name} size={32} />
       <span className={styles.personText}>
-        <span className={styles.strong}>{s.name}</span>
+        <span className={styles.strong}>
+          {s.name}
+          {s.id === currentUserId && " (kamu)"}
+        </span>
         <span className={styles.muted}>{s.email}</span>
       </span>
     </span>
@@ -60,22 +96,50 @@ export function TeamTable({ staff, roles, now }: { staff: StaffMember[]; roles: 
         <div>
           <h2 className={styles.cardTitle}>Anggota tim</h2>
           <p className={styles.muted}>
-            {rows.length} orang · {invited} undangan tertunda
+            {staff.length} orang · {invited} undangan tertunda
           </p>
         </div>
-        <AdminButton variant="primary" size="sm" icon="user-plus" disabled title="Aktif setelah Supabase Auth tersambung">
+        <AdminButton variant="primary" size="sm" icon="user-plus" onClick={() => setInviting((v) => !v)}>
           Undang anggota
         </AdminButton>
       </header>
 
-      {changed && (
-        <p className={styles.notice} role="status">
-          Mode demo: perubahan role belum tersimpan karena database (Supabase) belum tersambung.
+      {inviting && (
+        <form
+          className={styles.inviteForm}
+          onSubmit={(e) => {
+            e.preventDefault();
+            run(() => inviteStaff(invite), () => {
+              setInviting(false);
+              setInvite((v) => ({ ...v, name: "", email: "" }));
+            });
+          }}
+        >
+          <input className={styles.input} placeholder="Nama" value={invite.name} onChange={(e) => setInvite({ ...invite, name: e.target.value })} aria-label="Nama anggota" />
+          <input className={styles.input} type="email" placeholder="email@domain.com" value={invite.email} onChange={(e) => setInvite({ ...invite, email: e.target.value })} aria-label="Email anggota" />
+          <label className={styles.roleSelect}>
+            <span className="visually-hidden">Role</span>
+            <select value={invite.role} onChange={(e) => setInvite({ ...invite, role: e.target.value })}>
+              {roles.map((r) => (
+                <option key={r}>{r}</option>
+              ))}
+            </select>
+            <AdminIcon name="caret-down" size={12} />
+          </label>
+          <AdminButton type="submit" variant="primary" size="sm" disabled={pending}>
+            {pending ? "Mengirim…" : "Kirim undangan"}
+          </AdminButton>
+        </form>
+      )}
+
+      {notice && (
+        <p className={cx(styles.notice, notice.error && styles.noticeError)} role={notice.error ? "alert" : "status"}>
+          {notice.text}
         </p>
       )}
 
       <MobileCardList label="Anggota tim">
-        {rows.map((s) => (
+        {staff.map((s) => (
           <MobileCard
             key={s.id}
             title={person(s)}
@@ -83,6 +147,7 @@ export function TeamTable({ staff, roles, now }: { staff: StaffMember[]; roles: 
             meta={[
               { label: "Role", value: roleSelect(s) },
               { label: "Terakhir aktif", value: lastActive(s.lastActiveAt, now) },
+              { label: "Akses", value: statusToggle(s) ?? "—" },
             ]}
           />
         ))}
@@ -100,7 +165,7 @@ export function TeamTable({ staff, roles, now }: { staff: StaffMember[]; roles: 
             </tr>
           </thead>
           <tbody>
-            {rows.map((s) => (
+            {staff.map((s) => (
               <tr key={s.id}>
                 <td>{person(s)}</td>
                 <td>{roleSelect(s)}</td>
@@ -110,11 +175,7 @@ export function TeamTable({ staff, roles, now }: { staff: StaffMember[]; roles: 
                     {STATUS[s.status].label}
                   </Badge>
                 </td>
-                <td>
-                  <button type="button" className={styles.iconButton} disabled title="Kirim ulang undangan / nonaktifkan — butuh database" aria-label={`Aksi untuk ${s.name}`}>
-                    <AdminIcon name="dots-three-vertical-bold" size={16} />
-                  </button>
-                </td>
+                <td>{statusToggle(s)}</td>
               </tr>
             ))}
           </tbody>
@@ -132,10 +193,30 @@ const ACCESS: Record<ModuleAccess, { label: string; icon?: "pencil-simple" | "ey
 const NEXT: Record<ModuleAccess, ModuleAccess> = { edit: "view", view: "none", none: "edit" };
 const SHORT: Record<string, string> = { "Community Manager": "Community", "Kasir Shop": "Kasir" };
 
-/** Matriks izin role × modul. Klik sel untuk mengganti Ubah → Lihat → tidak ada (demo). */
+/** Matriks izin role × modul. Klik sel untuk mengganti Ubah → Lihat → tidak ada, lalu Simpan. */
 export function RolesMatrix({ roles, modules }: { roles: RolePermissions[]; modules: { key: AdminModule; label: string }[] }) {
   const [matrix, setMatrix] = useState(roles);
-  const changed = JSON.stringify(matrix) !== JSON.stringify(roles);
+  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  const [pending, start] = useTransition();
+  const changes = matrix.flatMap((r) => {
+    const before = roles.find((x) => x.name === r.name);
+    return modules.filter((m) => before && before.access[m.key] !== r.access[m.key]).map((m) => ({ role: r.name, module: m.key, access: r.access[m.key] }));
+  });
+  const changed = changes.length > 0;
+
+  const save = () =>
+    start(async () => {
+      const result = await savePermissions(changes);
+      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+    });
+  const addRole = () => {
+    const name = window.prompt("Nama role baru (mis. Event Crew):");
+    if (!name?.trim()) return;
+    start(async () => {
+      const result = await createRole(name);
+      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+    });
+  };
 
   const cell = (role: RolePermissions, module: AdminModule) => {
     const access = role.access[module];
@@ -163,17 +244,25 @@ export function RolesMatrix({ roles, modules }: { roles: RolePermissions[]; modu
           <h2 className={styles.cardTitle}>Role & izin akses</h2>
           <p className={styles.muted}>Atur modul yang bisa dilihat dan diubah setiap role</p>
         </div>
-        <AdminButton size="sm" icon="plus-bold" disabled title="Butuh database">
+        <AdminButton size="sm" icon="plus-bold" onClick={addRole} disabled={pending}>
           Buat role
         </AdminButton>
       </header>
 
       {changed && (
         <p className={styles.notice} role="status">
-          Mode demo: izin belum tersimpan karena database (Supabase) belum tersambung.
-          <button type="button" className={styles.reset} onClick={() => setMatrix(roles)}>
+          {changes.length} perubahan izin belum disimpan.
+          <button type="button" className={styles.reset} onClick={() => setMatrix(roles)} disabled={pending}>
             Kembalikan
           </button>
+          <AdminButton size="sm" variant="primary" onClick={save} disabled={pending}>
+            {pending ? "Menyimpan…" : "Simpan izin"}
+          </AdminButton>
+        </p>
+      )}
+      {notice && !changed && (
+        <p className={cx(styles.notice, notice.error && styles.noticeError)} role={notice.error ? "alert" : "status"}>
+          {notice.text}
         </p>
       )}
 

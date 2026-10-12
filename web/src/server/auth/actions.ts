@@ -19,6 +19,8 @@ export async function signIn(email: string, password: string, next?: string): Pr
   if (error) {
     return { error: error.code === "invalid_credentials" ? "Email atau password salah." : "Belum bisa masuk. Coba lagi sebentar." };
   }
+  // Staf undangan jadi aktif di login pertama + catat "terakhir aktif" (diabaikan untuk non-staf).
+  await supabase.rpc("touch_staff_login");
   redirect(safeNext(next));
 }
 

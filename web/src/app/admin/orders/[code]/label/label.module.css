@@ -1,0 +1,81 @@
+.page {
+  padding: var(--space-24) var(--space-16);
+}
+
+.label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-14);
+  width: 105mm;
+  min-height: 148mm;
+  padding: 8mm;
+  border: 1px dashed var(--color-navy-900);
+  background: var(--color-white);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  line-height: 1.45;
+  color: #000;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #000;
+  font-family: var(--font-display);
+}
+
+.caption {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.name {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 18px;
+}
+
+.address {
+  font-size: 15px;
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px;
+  border: 1px solid #000;
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+}
+
+.label ul {
+  padding-left: 1.2em;
+}
+
+/* Cetak hanya label (sidebar & topbar admin disembunyikan). */
+@media print {
+  :global(body *) {
+    visibility: hidden;
+  }
+
+  .label,
+  .label * {
+    visibility: visible;
+  }
+
+  .label {
+    position: absolute;
+    top: 0;
+    left: 0;
+    border: 0;
+  }
+
+  @page {
+    size: A6;
+    margin: 0;
+  }
+}

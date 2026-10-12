@@ -1,11 +1,11 @@
 import Image from "next/image";
 import { Button, Container, Text } from "@/components/ui";
-import { hero } from "@/content/home";
+import { hero as defaultHero } from "@/content/home";
 import styles from "./Hero.module.css";
 import { blurProps } from "@/lib/image";
 
 /** Animasi intro & parallax: src/animations/heroIntro.ts (dipicu oleh data-anim="hero"). */
-export function Hero() {
+export function Hero({ hero = defaultHero }: { hero?: typeof defaultHero & { overlay?: boolean } }) {
   return (
     <section className={styles.hero} aria-labelledby="hero-title" data-anim="hero">
       <div className={styles.media} data-hero-media>
@@ -18,7 +18,7 @@ export function Hero() {
           sizes="100vw"
         />
       </div>
-      <span className={styles.overlay} aria-hidden />
+      {hero.overlay !== false && <span className={styles.overlay} aria-hidden />}
 
       <Container className={styles.content}>
         <Text as="h1" id="hero-title" variant="wordmark" align="center" className={styles.wordmark} data-hero-wordmark>

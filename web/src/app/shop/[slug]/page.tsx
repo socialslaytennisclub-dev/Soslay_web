@@ -7,30 +7,38 @@ import { ProductDetailSection } from "@/components/product/ProductDetailSection/
 import { InstagramFeed } from "@/components/sections/InstagramFeed/InstagramFeed";
 import { TrustSection } from "@/components/sections/TrustSection/TrustSection";
 import { instagram } from "@/content/home";
-import { findProduct, productDetails, productPage, products } from "@/content/products";
+import { productPage } from "@/content/products";
+import { getShopCatalog } from "@/server/public/products";
 
-/** Semua produk di-prerender saat build. Slug lain → 404. */
-export function generateStaticParams() {
+/** Produk aktif di-prerender saat build; produk baru dari admin dirender saat pertama dibuka. */
+export async function generateStaticParams() {
+  const { products } = await getShopCatalog();
   return products.map((product) => ({ slug: product.slug }));
 }
 
-export const dynamicParams = false;
+/** Harga & stok bisa berubah dari admin → render ulang paling lambat tiap 10 menit (dan saat admin menyimpan). */
+export const revalidate = 600;
+
+async function findShopProduct(slug: string) {
+  const { products, details } = await getShopCatalog();
+  const product = products.find((p) => p.slug === slug);
+  return { product, detail: product ? details[product.slug] : undefined };
+}
 
 export async function generateMetadata({ params }: PageProps<"/shop/[slug]">): Promise<Metadata> {
   const { slug } = await params;
-  const product = findProduct(slug);
+  const { product, detail } = await findShopProduct(slug);
   if (!product) return {};
   return {
     title: `${product.name} — SOSLAY Shop`,
-    description: productDetails[product.slug]?.description,
+    description: detail?.description,
   };
 }
 
 /** Product detail (Figma 25:1603). */
 export default async function ProductPage({ params }: PageProps<"/shop/[slug]">) {
   const { slug } = await params;
-  const product = findProduct(slug);
-  const detail = product && productDetails[product.slug];
+  const { product, detail } = await findShopProduct(slug);
   if (!product || !detail) notFound();
 
   return (
