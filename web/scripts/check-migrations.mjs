@@ -93,3 +93,17 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(null);
   console.log("✓ my_admin_access: Coach → activities edit, member biasa → kosong");
 }
+
+// Batal check-in → poin kehadiran ditarik lagi.
+{
+  const [{ id: m2 }] = (await db.query(`insert into auth.users default values returning id`)).rows;
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Uji Batal', 'batal@mail.com')`, [m2]);
+  const s2 = (await one(`select id from sessions limit 1`)).id;
+  const b2 = (await one(`insert into bookings (session_id, member_id) values ($1, $2) returning id`, [s2, m2])).id;
+  await db.query(`update bookings set status = 'attended' where id = $1`, [b2]);
+  const before = Number((await one(`select points_balance from member_stats where member_id = $1`, [m2])).points_balance);
+  await db.query(`update bookings set status = 'registered' where id = $1`, [b2]);
+  const after = Number((await one(`select points_balance from member_stats where member_id = $1`, [m2])).points_balance);
+  console.assert(before > 0 && after === 0, `undo check-in ${before} → ${after}`);
+  console.log(`✓ batal check-in menarik poin (${before} → ${after})`);
+}

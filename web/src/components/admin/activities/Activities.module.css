@@ -338,3 +338,12 @@
     padding: 0;
   }
 }
+
+.notice {
+  padding: var(--space-10) var(--space-14);
+  border-radius: var(--radius-md);
+  background: var(--color-indigo-50);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}

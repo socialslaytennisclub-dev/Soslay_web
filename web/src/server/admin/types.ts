@@ -200,6 +200,8 @@ export type SessionDetail = SessionRow & {
   pointsPerAttendance: number;
   visibility: "public" | "members" | "link";
   publishAt: string | null;
+  /** Batas tampil di website (ISO) — null = sampai sesi mulai. */
+  visibleUntil: string | null;
   waitlistEnabled: boolean;
   membersOnly: boolean;
   showOnHomepage: boolean;

@@ -28,8 +28,12 @@ try {
     process.exit(1);
   }
 
+  // Catat migration yang terpasang supaya `npm run db:migrate` tahu mana yang baru.
+  await sql`create table if not exists schema_migrations (name text primary key, applied_at timestamptz not null default now())`;
+  await sql`alter table schema_migrations enable row level security`;
   for (const file of (await readdir(path.join(root, "migrations"))).filter((f) => f.endsWith(".sql")).sort()) {
     await sql.unsafe(await readFile(path.join(root, "migrations", file), "utf8"));
+    await sql`insert into schema_migrations (name) values (${file})`;
     console.log(`✓ migration ${file}`);
   }
 

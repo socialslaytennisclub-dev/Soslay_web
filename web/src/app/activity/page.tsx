@@ -5,9 +5,10 @@ import { Footer } from "@/components/layout/Footer/Footer";
 import { Navbar } from "@/components/layout/Navbar/Navbar";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 import { InstagramFeed } from "@/components/sections/InstagramFeed/InstagramFeed";
-import { activityPage, isActivityType, sessions } from "@/content/activity";
+import { activityPage, isActivityType } from "@/content/activity";
 import { instagram } from "@/content/home";
 import { filterByType, pastSessions, pickFeatured, upcomingSessions } from "@/lib/sessions";
+import { getWebsiteSessions } from "@/server/public/sessions";
 
 export const metadata: Metadata = {
   title: "Activity — SOSLAY",
@@ -19,6 +20,7 @@ export default async function ActivityPage({ searchParams }: PageProps<"/activit
   const { type } = await searchParams;
   const activeType = isActivityType(type) ? type : undefined;
 
+  const sessions = await getWebsiteSessions();
   const now = new Date();
   const upcoming = upcomingSessions(sessions, now);
   const featured = pickFeatured(upcoming);

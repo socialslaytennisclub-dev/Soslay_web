@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { formatRupiahPlain, LEVEL_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
+import { deleteSession, saveSession, setCheckIn, type SessionInput } from "@/server/admin/actions/sessions";
 import type { SessionDetail, SessionParticipant, TennisLevel } from "@/server/admin/types";
 import { FormCard, MultiChips, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
@@ -17,6 +18,8 @@ type SessionEditorProps = {
   venues: { name: string; city: string; image: string }[];
   /** "new" = form Buat sesi (termasuk hasil Duplikat). */
   mode: "edit" | "new";
+  /** Pesan setelah redirect (mis. sesi baru tersimpan). */
+  initialNotice?: string;
 };
 
 const WIB = 7 * 3600_000;
@@ -48,8 +51,8 @@ const PREVIEW_ROWS = 5;
 const longDate = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" });
 const timeFmt = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
 
-/** Admin / 05 Activity Editor (Figma 25:5098). Simpan masih demo sampai Supabase tersambung. */
-export function SessionEditor({ session, types, venues, mode }: SessionEditorProps) {
+/** Admin / 05 Activity Editor (Figma 25:5098). Simpan → Supabase (server action), tampil di website. */
+export function SessionEditor({ session, types, venues, mode, initialNotice }: SessionEditorProps) {
   const [title, setTitle] = useState(session.title);
   const [typeSlug, setTypeSlug] = useState(session.typeSlug);
   const [description, setDescription] = useState(session.description);
@@ -58,7 +61,7 @@ export function SessionEditor({ session, types, venues, mode }: SessionEditorPro
   const [end, setEnd] = useState(toTime(session.endsAt));
   const [venue, setVenue] = useState(session.venueName);
   const [court, setCourt] = useState(session.court);
-  const [repeatWeekly, setRepeatWeekly] = useState(session.repeatWeekly);
+  const [repeatWeekly, setRepeatWeekly] = useState(false);
   const [price, setPrice] = useState(String(session.price));
   const [capacity, setCapacity] = useState(String(session.capacity));
   const [points, setPoints] = useState(String(session.pointsPerAttendance));
@@ -67,12 +70,15 @@ export function SessionEditor({ session, types, venues, mode }: SessionEditorPro
   const [membersOnly, setMembersOnly] = useState(session.membersOnly);
   const [status, setStatus] = useState<string>(session.displayStatus === "scheduled" ? "scheduled" : session.status === "completed" ? "published" : session.status);
   const [visibility, setVisibility] = useState(session.visibility);
-  const [visibleUntil, setVisibleUntil] = useState(`${toDate(session.startsAt)}T${toTime(session.startsAt)}`);
+  const until = session.visibleUntil ?? session.startsAt;
+  const [visibleUntil, setVisibleUntil] = useState(`${toDate(until)}T${toTime(until)}`);
   const [homepage, setHomepage] = useState(session.showOnHomepage);
   const [crew, setCrew] = useState(session.crew);
   const [checkIns, setCheckIns] = useState(() => new Set(session.participants.filter((p) => p.checkedIn).map((p) => p.memberId)));
   const [showAll, setShowAll] = useState(false);
-  const [notice, setNotice] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ text: string; tone: "ok" | "error" } | null>(initialNotice ? { text: initialNotice, tone: "ok" } : null);
+  const [saving, startSaving] = useTransition();
+  const [checkingIn, setCheckingIn] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [tried, setTried] = useState(false);
 
@@ -101,19 +107,65 @@ export function SessionEditor({ session, types, venues, mode }: SessionEditorPro
   const save = () => {
     setTried(true);
     if (Object.keys(errors).length > 0) {
-      setNotice("Periksa kembali kolom yang ditandai.");
+      setNotice({ text: "Periksa kembali kolom yang ditandai.", tone: "error" });
       return;
     }
-    setNotice("Mode demo: perubahan belum disimpan karena database (Supabase) belum tersambung.");
+    const input: SessionInput = {
+      id: mode === "edit" ? session.id : undefined,
+      title,
+      typeSlug,
+      description,
+      venueName: venue,
+      court,
+      date,
+      start,
+      end,
+      price: Number(price),
+      capacity: Number(capacity),
+      points: Number(points || 0),
+      levels,
+      waitlist,
+      membersOnly,
+      status: status as SessionInput["status"],
+      visibility,
+      visibleUntil,
+      homepage,
+      repeatWeekly: mode === "new" && repeatWeekly,
+      crew,
+    };
+    startSaving(async () => {
+      // Sesi baru → server mengarahkan ke halaman editnya; edit → kembalikan hasil.
+      const result = await saveSession(input);
+      setNotice(result.ok ? { text: result.message, tone: "ok" } : { text: result.error, tone: "error" });
+    });
   };
 
-  const toggleCheckIn = (id: string) =>
-    setCheckIns((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
+  const remove = () => {
+    if (!window.confirm(`Hapus sesi "${session.title}"? Tindakan ini tidak bisa dibatalkan.`)) return;
+    startSaving(async () => {
+      const result = await deleteSession(session.id);
+      if (!result.ok) setNotice({ text: result.error, tone: "error" });
     });
+  };
+
+  const toggleCheckIn = async (memberId: string) => {
+    const next = !checkIns.has(memberId);
+    const apply = (on: boolean) =>
+      setCheckIns((prev) => {
+        const copy = new Set(prev);
+        if (on) copy.add(memberId);
+        else copy.delete(memberId);
+        return copy;
+      });
+    apply(next); // optimistis — dikembalikan kalau gagal
+    setCheckingIn(memberId);
+    const result = await setCheckIn(session.id, memberId, next);
+    setCheckingIn(null);
+    if (!result.ok) {
+      apply(!next);
+      setNotice({ text: result.error, tone: "error" });
+    }
+  };
 
   const copyKuy = async () => {
     try {
@@ -155,7 +207,13 @@ export function SessionEditor({ session, types, venues, mode }: SessionEditorPro
     p.status === "waitlisted" ? (
       <Badge tone="neutral">Waitlist</Badge>
     ) : (
-      <button type="button" className={cx(styles.checkIn, checkIns.has(p.memberId) && styles.checkInDone)} aria-pressed={checkIns.has(p.memberId)} onClick={() => toggleCheckIn(p.memberId)}>
+      <button
+        type="button"
+        className={cx(styles.checkIn, checkIns.has(p.memberId) && styles.checkInDone)}
+        aria-pressed={checkIns.has(p.memberId)}
+        disabled={checkingIn === p.memberId}
+        onClick={() => toggleCheckIn(p.memberId)}
+      >
         <AdminIcon name={checkIns.has(p.memberId) ? "check-bold" : "check-circle"} size={14} />
         {checkIns.has(p.memberId) ? "Hadir" : "Check-in"}
       </button>
@@ -170,7 +228,7 @@ export function SessionEditor({ session, types, venues, mode }: SessionEditorPro
             Activities
           </Link>
           {statusBadge}
-          {mode === "edit" && <span className={styles.muted}>Perubahan belum tersimpan ke database (demo)</span>}
+
         </div>
         <div className={styles.barActions}>
           {mode === "edit" && (
@@ -181,18 +239,21 @@ export function SessionEditor({ session, types, venues, mode }: SessionEditorPro
               <AdminButton href={`/admin/activities/new?from=${session.id}`} size="sm" icon="copy">
                 Duplikat
               </AdminButton>
+              <AdminButton size="sm" icon="trash" onClick={remove} disabled={saving} title={session.booked ? "Sesi dengan peserta tidak bisa dihapus — ubah status ke Dibatalkan" : undefined}>
+                Hapus
+              </AdminButton>
             </>
           )}
-          <AdminButton variant="primary" size="sm" icon="check-bold" onClick={save}>
-            {mode === "new" ? "Simpan sesi" : "Simpan perubahan"}
+          <AdminButton variant="primary" size="sm" icon="check-bold" onClick={save} disabled={saving}>
+            {saving ? "Menyimpan…" : mode === "new" ? "Simpan sesi" : "Simpan perubahan"}
           </AdminButton>
         </div>
       </div>
 
       {notice && (
-        <p className={styles.notice} role="status">
-          <AdminIcon name="warning-circle" size={18} />
-          {notice}
+        <p className={cx(styles.notice, notice.tone === "error" && styles.noticeError)} role={notice.tone === "error" ? "alert" : "status"}>
+          <AdminIcon name={notice.tone === "error" ? "warning-circle" : "check-circle"} size={18} />
+          {notice.text}
           <button type="button" className={styles.noticeClose} aria-label="Tutup" onClick={() => setNotice(null)}>
             <AdminIcon name="x" size={14} />
           </button>
@@ -279,12 +340,16 @@ export function SessionEditor({ session, types, venues, mode }: SessionEditorPro
                 </span>
               </label>
             </div>
-            <Toggle
-              label="Ulangi setiap minggu"
-              hint={repeatWeekly ? `Buat sesi otomatis tiap ${new Intl.DateTimeFormat("id-ID", { weekday: "long", timeZone: "Asia/Jakarta" }).format(startsAt)}` : "Sesi satu kali"}
-              checked={repeatWeekly}
-              onChange={setRepeatWeekly}
-            />
+            {mode === "new" ? (
+              <Toggle
+                label="Ulangi setiap minggu"
+                hint={repeatWeekly ? `Buat 8 sesi: tiap ${new Intl.DateTimeFormat("id-ID", { weekday: "long", timeZone: "Asia/Jakarta" }).format(startsAt)} selama 8 minggu` : "Sesi satu kali"}
+                checked={repeatWeekly}
+                onChange={setRepeatWeekly}
+              />
+            ) : (
+              session.repeatWeekly && <p className={styles.muted}>Bagian dari seri mingguan — perubahan hanya untuk sesi ini.</p>
+            )}
           </FormCard>
 
           <FormCard title="Tiket & kapasitas">

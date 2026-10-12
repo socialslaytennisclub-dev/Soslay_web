@@ -5,11 +5,11 @@ import { Navbar } from "@/components/layout/Navbar/Navbar";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 import { VenueGallery } from "@/components/venue/VenueGallery/VenueGallery";
 import { VenueHero } from "@/components/venue/VenueHero/VenueHero";
-import { sessions } from "@/content/activity";
 import { photosForVenue } from "@/content/gallery";
 import { findVenue, venueList } from "@/content/venues";
 import { formatTanggalISO } from "@/lib/format";
 import { upcomingSessions } from "@/lib/sessions";
+import { getWebsiteSessions } from "@/server/public/sessions";
 
 /** Semua venue di-prerender saat build. Slug lain → 404. */
 export function generateStaticParams() {
@@ -18,7 +18,7 @@ export function generateStaticParams() {
 
 export const dynamicParams = false;
 
-/** "Sesi berikutnya" dihitung dari tanggal hari ini → render ulang tiap jam. */
+/** "Sesi berikutnya" dihitung dari tanggal hari ini → render ulang tiap jam (dan saat admin menyimpan sesi). */
 export const revalidate = 3600;
 
 export async function generateMetadata({ params }: PageProps<"/venue/[slug]">): Promise<Metadata> {
@@ -37,7 +37,7 @@ export default async function VenueDetailPage({ params }: PageProps<"/venue/[slu
   const venue = findVenue(slug);
   if (!venue) notFound();
 
-  const nextSession = upcomingSessions(sessions, new Date()).find((session) => session.venue.name === venue.name);
+  const nextSession = upcomingSessions(await getWebsiteSessions(), new Date()).find((session) => session.venue.name === venue.name);
   const photos = photosForVenue(venue.slug);
   const dateLabels = Object.fromEntries(photos.map((photo) => [photo.id, formatTanggalISO(photo.date, venue.city)]));
 

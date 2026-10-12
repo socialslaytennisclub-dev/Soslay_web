@@ -11,15 +11,21 @@ export async function generateMetadata({ params }: PageProps<"/admin/activities/
 }
 
 /** Admin / 05 Activity Editor (Figma 25:5098). */
-export default async function AdminSessionPage({ params }: PageProps<"/admin/activities/[id]">) {
+const SAVED: Record<string, string> = {
+  new: "Sesi baru tersimpan dan sudah tampil di website (kalau statusnya Published).",
+  series: "8 sesi mingguan dibuat. Ini sesi pertamanya — sesi lain ada di daftar Activities.",
+};
+
+export default async function AdminSessionPage({ params, searchParams }: PageProps<"/admin/activities/[id]">) {
   const session = await getSession((await params).id);
+  const saved = (await searchParams).saved;
   if (!session) notFound();
 
   return (
     <>
       <AdminTopbar breadcrumb={`CMS / Activities / ${session.title}`} title="Edit sesi" />
       <div className={pageStyles.content}>
-        <SessionEditor key={session.id} session={session} types={activityTypeOptions()} venues={await venueOptions()} mode="edit" />
+        <SessionEditor key={session.id} session={session} types={activityTypeOptions()} venues={await venueOptions()} mode="edit" initialNotice={typeof saved === "string" ? SAVED[saved] : undefined} />
       </div>
     </>
   );

@@ -12,6 +12,7 @@
     "db:seed:generate": "node --conditions=react-server --import tsx scripts/generate-seed.ts",
     "db:seed:check": "node scripts/check-seed.mjs",
     "db:setup": "node scripts/db-setup.mjs",
+    "db:migrate": "node scripts/db-migrate.mjs",
     "icons:admin": "node scripts/sync-admin-icons.mjs"
   },
   "dependencies": {

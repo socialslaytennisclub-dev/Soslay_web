@@ -56,6 +56,11 @@
   color: var(--color-navy-900);
 }
 
+.noticeError {
+  border-color: rgb(236 72 153 / 0.35);
+  background: rgb(253 236 245);
+}
+
 .noticeClose {
   display: grid;
   place-items: center;

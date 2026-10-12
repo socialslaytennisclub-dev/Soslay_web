@@ -84,6 +84,11 @@ export default async function AdminActivitiesPage({ searchParams }: PageProps<"/
             { value: "all", label: "Semua tanggal" },
           ]}
         />
+        {one(raw.deleted) && (
+          <p className={styles.notice} role="status">
+            Sesi dihapus dan sudah hilang dari website.
+          </p>
+        )}
         <p className={pageStyles.summary}>
           {result.items.length} sesi · {rangeLabel}
         </p>
