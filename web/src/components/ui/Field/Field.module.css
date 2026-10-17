@@ -88,18 +88,29 @@
   pointer-events: none;
 }
 
-/* Input tanggal: ikon picker bawaan dibuat transparan & ditumpuk di atas ikon kalender Figma */
-.input::-webkit-calendar-picker-indicator {
-  position: absolute;
-  right: var(--space-16);
-  width: 20px;
-  height: 20px;
-  opacity: 0;
-  cursor: pointer;
-}
-
 .error {
   font-family: var(--font-body);
   font-size: 14px;
   color: var(--color-pink-500);
+}
+
+/* DateField: tombol ikon kalender; popover DatePicker diposisikan terhadap .control */
+.pickerWrap {
+  display: contents;
+}
+
+.iconButton {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-indigo-muted);
+  cursor: pointer;
+}
+
+.iconButton:hover,
+.iconButton:focus-visible {
+  color: var(--color-indigo-600);
 }

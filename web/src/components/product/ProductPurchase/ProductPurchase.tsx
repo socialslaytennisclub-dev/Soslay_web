@@ -6,6 +6,7 @@ import { Button, Icon, Modal, OptionChips } from "@/components/ui";
 import { authLinks } from "@/content/site";
 import { productPage, sizeGuide, type ProductOptionGroup } from "@/content/products";
 import { useCart } from "@/hooks/useCart";
+import { flyToCart } from "@/lib/fly-to-cart";
 import { useDialog } from "@/hooks/useDialog";
 import styles from "./ProductPurchase.module.css";
 
@@ -17,14 +18,17 @@ type ProductPurchaseProps = {
 };
 
 /**
- * Figma 25:1642 — pilih varian, "Tambahkan ke Tas Belanja" & "Beli Langsung Sekarang".
+ * Figma 375:2552 — pilih varian, "Add to Bag" & "Buy Now".
  * Validasi: semua grup varian wajib dipilih. Keranjang disimpan via useCart (localStorage).
  */
 export function ProductPurchase({ product, options, soldOut, showSizeGuide }: ProductPurchaseProps) {
   const router = useRouter();
   const cart = useCart();
   const sizeDialog = useDialog();
-  const [selection, setSelection] = useState<Record<string, string>>({});
+  // Grup dengan satu pilihan (mis. Fit "Relaxed Fit") langsung terpilih.
+  const [selection, setSelection] = useState<Record<string, string>>(() =>
+    Object.fromEntries(options.filter((group) => group.values.length === 1).map((group) => [group.key, group.values[0].value])),
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [status, setStatus] = useState<string>();
 
@@ -85,7 +89,7 @@ export function ProductPurchase({ product, options, soldOut, showSizeGuide }: Pr
         ) : (
           <>
             {/* Tombol selebar kolom → efek magnetic dibuat sangat halus */}
-            <Button variant="secondary" onClick={addToBag} className={styles.full}>
+            <Button variant="secondary" onClick={(event) => addToBag() && flyToCart(event.currentTarget)} className={styles.full}>
               {productPage.addToBag}
             </Button>
             <Button variant="primary" onClick={buyNow} className={styles.full} data-magnetic="0.06">

@@ -2,20 +2,19 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { authBackground } from "@/content/auth";
-import { blurProps } from "@/lib/image";
 import styles from "./AuthStage.module.css";
 
 type AuthStageProps = {
   id: string;
   title: string;
   description: string;
-  /** Teks + link pindah halaman di bawah form ("Sudah punya akun? Masuk"). */
+  /** Teks + link pindah halaman di bawah form ("Already a member? Sign In"). */
   switchTo: { prompt: string; label: string; href: string };
   children: ReactNode;
 };
 
 /**
- * Figma 25:1851 "stage": foto komunitas layar penuh + overlay/login,
+ * Figma Website v2 375:2380 "stage": ilustrasi lapangan di atas navy,
  * kartu putih (radius 16, padding 32) di tengah berisi judul Title/36 + form.
  */
 export function AuthStage({ id, title, description, switchTo, children }: AuthStageProps) {
@@ -27,10 +26,8 @@ export function AuthStage({ id, title, description, switchTo, children }: AuthSt
         alt={authBackground.alt}
         fill
         preload
-        sizes="(min-width: 1200px) 186vw, 100vw"
-        {...blurProps(authBackground.src)}
+        sizes="100vw"
       />
-      <span className={styles.overlay} aria-hidden />
 
       <div className={styles.card}>
         <header className={styles.header}>

@@ -1,5 +1,5 @@
 import type { IconName } from "@/components/ui";
-import { featuredProducts, productCardProps } from "./products";
+import { featuredProducts, productCardProps, productDetails } from "./products";
 import { venueList } from "./venues";
 
 /**
@@ -14,11 +14,11 @@ const KUY_BOOKING_URL = "https://kuy.id/soslay";
 export const hero = {
   title: "SOSLAY",
   description: [
-    "Bukan sekadar komunitas bermain tenis.",
-    "Tapi sebuah komunitas untuk bermain, terhubung, dan menikmati momen bersama orang-orang yang tepat",
+    "Not just a tennis community.",
+    "A community to play, connect, and enjoy moments with the right people.",
   ],
-  cta: { label: "Gabung Komunitas", href: "/daftar" },
-  image: { src: `${IMG}/hero.webp`, alt: "Member Soslay melompat bersama di lapangan tenis" },
+  cta: { label: "Join the Community", href: "/daftar" },
+  image: { src: `${IMG}/hero.webp`, alt: "Soslay members jumping together on a tennis court" },
 };
 
 export type ActivityHighlight = {
@@ -33,44 +33,47 @@ export type ActivityHighlight = {
 };
 
 export const activities = {
-  title: "Lebih dari Sekadar Pertandingan!",
+  title: "More Than Just a Match!",
   description:
-    "Dari mabar santai sampai match day, selalu ada cara untuk ikut bermain, bertemu orang baru, dan menikmati serunya tenis bersama komunitas.",
-  cta: { label: "Booking Session di Kuyy", href: KUY_BOOKING_URL },
+    "From casual hit-arounds to match day, there's always a way to play, meet new people, and enjoy tennis with the community.",
+  cta: { label: "Book a Session on Kuyy", href: KUY_BOOKING_URL },
   ctaCaption: "Good courts. Good people. Good times.",
   items: [
     {
-      title: "Weekly MABAR Sessions",
+      title: "MABAR Sessions",
+      description: "Casual weekly hit-arounds at our favorite courts — meet new people, rally, and go home with pro photos.",
       image: `${IMG}/activity-weekly-mabar.webp`,
       imagePosition: "50% 72%",
       overlay: "25",
-      href: "/activity?type=weekly-mabar",
+      href: "/activity/mabar",
       size: "wide",
     },
     {
-      title: "Tennis Match Day",
+      title: "Tennis Event",
+      description: "Match days, socials, and special sessions the community looks forward to all month.",
       image: `${IMG}/activity-match-day.webp`,
       imagePosition: "50% 0%",
       overlay: "25",
-      href: "/activity?type=match-day",
+      href: "/activity/event",
       size: "narrow",
     },
     {
       title: "Tennis Escape",
+      description: "Tennis trips to beautiful courts — from Bali villages to the mountains of Kintamani.",
       image: `${IMG}/activity-tennis-escape.webp`,
       imagePosition: "50% 50%",
       overlay: "45",
-      href: "/activity?type=tennis-escape",
+      href: "/activity/escape",
       size: "narrow",
     },
     {
       title: "Beginner Coaching",
       description:
-        "Baru mulai tenis? Nggak masalah. Pelajari dasar-dasarnya, bangun confidence, dan mulai main bersama komunitas.",
+        "New to tennis? No problem. Learn the basics, build your confidence, and start playing with the community.",
       image: `${IMG}/activity-beginner-coaching.webp`,
       imagePosition: "50% 85%",
       overlay: "50",
-      href: "/activity?type=beginner-coaching",
+      href: "/activity/coaching",
       size: "wide",
     },
   ] satisfies ActivityHighlight[],
@@ -84,14 +87,14 @@ export const stats: { value: string; label: string; icon: IconName }[] = [
 ];
 
 export const venues = {
-  title: "Kami Hanya Bermain di Tempat yang Terlihat Bagus.",
+  title: "We Only Play Where It Looks Good.",
   description:
-    "Kami memilih venue dengan suasana, fasilitas, dan pengalaman yang layak untuk dinikmati. Dari Jakarta sampai Bali, temukan tempat bermain yang bikin setiap sesi terasa lebih spesial.",
+    "We choose venues with the atmosphere, facilities, and experience worth enjoying. From Jakarta to Bali, find courts that make every session feel a little more special.",
   locations: [
-    { city: "Jakarta,", text: "pilihan kami di berbagai sudut Jakarta." },
-    { city: "Bali,", text: "bermain dengan suasana yang sedikit lebih santai." },
+    { city: "Jakarta,", text: "our picks across every corner of Jakarta." },
+    { city: "Bali,", text: "play with a slightly more laid-back vibe." },
   ],
-  cta: { label: "See all Court", href: "/venue" },
+  cta: { label: "See All Courts", href: "/venue" },
   /** Urutan = kolom kiri dulu (3), lalu kolom kanan (3), seperti di Figma. */
   items: venueList,
 };
@@ -100,37 +103,39 @@ export type Testimonial = {
   quote: string;
   name: string;
   avatar?: string;
+  /** Testimoni video pendek 9:16 (Reels / TikTok / Shorts) — tautan dibuka di platformnya. */
+  video?: { url: string; platform: string };
 };
 
 export const community = {
   title: ["The People Make", "the Game."],
   description:
-    "Temukan komunitas yang membuat setiap permainan terasa lebih berarti. Kenalan, bermain, berbagi momen, dan tumbuh bersama orang-orang yang tepat.",
-  cta: { label: "Gabung ke Komunitas", href: "/daftar" },
+    "Find a community that makes every game more meaningful. Meet new people, play, share moments, and grow together with the right crowd.",
+  cta: { label: "Join the Community", href: "/daftar" },
   photos: {
-    group: { src: `${IMG}/community-group.webp`, alt: "Member Soslay berfoto bersama di lapangan", position: "45% 40%" },
-    court: { src: `${IMG}/activity-weekly-mabar.webp`, alt: "Sesi mabar di lapangan outdoor", position: "48% 50%" },
-    highfive: { src: `${IMG}/community-highfive.webp`, alt: "Member saling tos setelah rally", position: "70% 60%" },
+    group: { src: `${IMG}/community-group.webp`, alt: "Soslay members posing together on court", position: "45% 40%" },
+    court: { src: `${IMG}/activity-weekly-mabar.webp`, alt: "A mabar session on an outdoor court", position: "48% 50%" },
+    highfive: { src: `${IMG}/community-highfive.webp`, alt: "Members high-fiving after a rally", position: "70% 60%" },
   },
   testimonials: [
-    { quote: "Niatnya cuma satu sesi. Eh, malah jadi rutin ketemu dan main bareng.", name: "Anitya Ayu Silfia07", avatar: `${IMG}/avatar-anitya.webp` },
-    { quote: "Datang untuk main, tapi selalu ada alasan untuk celebrate bareng.", name: "@vikayusti" },
-    { quote: "Yang aku suka dari Soslay, semuanya terasa effortless. Datang, main, ketemu orang baru, dan have a good time.", name: "@yudisadewa" },
-    { quote: "Yang bikin ketagihan bukan cuma permainannya, tapi orang-orang yang kamu temui di sepanjang jalan.", name: "@sintakusuma" },
-    { quote: "Main bareng, ketawa bareng, repeat lagi minggu depan.", name: "@lily117" },
+    { quote: "I only meant to come for one session. Somehow it turned into a regular thing.", name: "Anitya Ayu Silfia07", avatar: `${IMG}/avatar-anitya.webp` },
+    { quote: "Come to play, but there's always a reason to celebrate together.", name: "@vikayusti" },
+    { quote: "What I love about Soslay is that everything feels effortless. Show up, play, meet new people, and have a good time.", name: "@yudisadewa" },
+    { quote: "What keeps you hooked isn't just the game, it's the people you meet along the way.", name: "@sintakusuma" },
+    { quote: "Play together, laugh together, repeat next week.", name: "@lily117" },
   ] satisfies Testimonial[],
 };
 
 export const marquee = {
-  text: "PLAY. CONNECT. REPEAT.",
+  text: "PLAY CONNECT REPEAT",
 };
 
 export const shop = {
   title: "Beyond the Court.",
   description:
-    "Koleksi yang terinspirasi dari permainan, perjalanan, dan orang-orang yang membuat setiap momen di SOSLAY terasa spesial.",
-  cta: { label: "Lihat Koleksi", href: "/shop" },
-  products: featuredProducts().map(productCardProps),
+    "A collection inspired by the game, the journey, and the people who make every moment at SOSLAY feel special.",
+  cta: { label: "View Collection", href: "/shop" },
+  products: featuredProducts().map((product) => productCardProps(product, productDetails[product.slug])),
 };
 
 export type SocialPost = {
@@ -144,21 +149,21 @@ export type SocialPost = {
 
 export const instagram = {
   title: "See You on the Court!",
-  description: "Lihat keseruan SOSLAY dari dekat. Dari rally seru sampai momen di luar lapangan, semuanya ada di sini.",
+  description: "Get a closer look at SOSLAY. From epic rallies to moments off the court, it's all here.",
   cta: { label: "Follow our Instagram", href: "https://instagram.com/socialslay" },
   posts: [
-    { platform: "instagram", text: ["Main tenis jadi jauh lebih seru ketika kamu bisa menikmati setiap rally dan setiap momennya."], handle: "@andrea42", image: `${IMG}/ig-andrea.webp`, imagePosition: "30% 40%", href: "https://instagram.com/socialslay" },
-    { platform: "instagram", text: ["“Datang untuk main, tapi selalu ada alasan untuk celebrate bareng.”"], handle: "@vikayusti", image: `${IMG}/ig-vika.webp`, imagePosition: "50% 15%", href: "https://instagram.com/socialslay" },
+    { platform: "instagram", text: ["Tennis gets so much more fun when you can enjoy every rally and every moment."], handle: "@andrea42", image: `${IMG}/ig-andrea.webp`, imagePosition: "30% 40%", href: "https://instagram.com/socialslay" },
+    { platform: "instagram", text: ["“Come to play, but there's always a reason to celebrate together.”"], handle: "@vikayusti", image: `${IMG}/ig-vika.webp`, imagePosition: "50% 15%", href: "https://instagram.com/socialslay" },
     {
       platform: "threads",
       text: [
-        "Yang aku suka dari @socialslay, semuanya terasa effortless. Datang, main, ketemu orang baru, dan have a good time.",
-        "Setiap sesi selalu terasa berbeda. Kadang datang buat main, kadang pulang dengan teman baru.",
+        "What I love about @socialslay is that everything feels effortless. Show up, play, meet new people, and have a good time.",
+        "Every session feels different. Sometimes you come to play, sometimes you go home with a new friend.",
       ],
       handle: "@yudisadewa",
       href: "https://threads.net/@socialslay",
     },
-    { platform: "instagram", text: ["Yang bikin ketagihan bukan cuma permainannya, tapi orang-orang yang kamu temui di sepanjang jalan."], handle: "@sintakusuma", image: `${IMG}/ig-sinta.webp`, imagePosition: "50% 25%", href: "https://instagram.com/socialslay" },
-    { platform: "instagram", text: ["Main bareng, ketawa bareng, repeat lagi minggu depan."], handle: "@lily117", image: `${IMG}/ig-lily.webp`, imagePosition: "50% 70%", href: "https://instagram.com/socialslay" },
+    { platform: "instagram", text: ["What keeps you hooked isn't just the game, it's the people you meet along the way."], handle: "@sintakusuma", image: `${IMG}/ig-sinta.webp`, imagePosition: "50% 25%", href: "https://instagram.com/socialslay" },
+    { platform: "instagram", text: ["Play together, laugh together, repeat next week."], handle: "@lily117", image: `${IMG}/ig-lily.webp`, imagePosition: "50% 70%", href: "https://instagram.com/socialslay" },
   ] satisfies SocialPost[],
 };

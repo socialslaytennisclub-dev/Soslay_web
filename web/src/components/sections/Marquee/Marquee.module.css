@@ -1,6 +1,7 @@
-/* Gerak marquee dikendalikan GSAP (src/animations/marquee.ts) — gap dibaca dari column-gap */
+/* Strip lime berjalan terus — dua track identik bergeser sejauh (lebar track + gap), lalu mengulang mulus */
 .marquee {
-  --marquee-gap: 26px;
+  --marquee-gap: 48px;
+  --marquee-duration: 28s;
 
   display: flex;
   gap: var(--marquee-gap);
@@ -16,6 +17,7 @@
   flex-shrink: 0;
   gap: var(--marquee-gap);
   min-width: 100%;
+  animation: marquee-run var(--marquee-duration) linear infinite;
   will-change: transform;
 }
 
@@ -27,4 +29,10 @@
   line-height: 1.1;
   letter-spacing: var(--tracking-tight);
   white-space: nowrap;
+}
+
+@keyframes marquee-run {
+  to {
+    transform: translateX(calc(-100% - var(--marquee-gap)));
+  }
 }

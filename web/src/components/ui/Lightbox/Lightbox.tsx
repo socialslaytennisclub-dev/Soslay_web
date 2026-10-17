@@ -28,10 +28,10 @@ type LightboxProps = {
 /** Figma 25:1327 — overlay blur + kartu foto besar, tanggal, @handle (verified) & caption. */
 export function Lightbox({ dialogRef, item, position, onClose, onNext, onPrev, onBackdropClick }: LightboxProps) {
   return (
-    <dialog ref={dialogRef} className={styles.dialog} aria-label="Foto galeri" onClick={onBackdropClick}>
+    <dialog ref={dialogRef} className={styles.dialog} aria-label="Photo gallery" onClick={onBackdropClick}>
       {item && (
         <div className={styles.frame}>
-          <button type="button" className={`${styles.nav} ${styles.prev}`} onClick={onPrev} aria-label="Foto sebelumnya">
+          <button type="button" className={`${styles.nav} ${styles.prev}`} onClick={onPrev} aria-label="Previous photo">
             <Icon name="caret-down-bold" size={24} />
           </button>
 
@@ -39,7 +39,7 @@ export function Lightbox({ dialogRef, item, position, onClose, onNext, onPrev, o
             <Image className={styles.image} src={item.src} {...blurProps(item.src)} alt={item.alt} fill sizes="(min-width: 768px) 681px, 100vw" />
             <span className={styles.overlay} aria-hidden />
 
-            <button type="button" className={styles.close} onClick={onClose} aria-label="Tutup">
+            <button type="button" className={styles.close} onClick={onClose} aria-label="Close">
               <Icon name="close" size={32} />
             </button>
 
@@ -54,7 +54,7 @@ export function Lightbox({ dialogRef, item, position, onClose, onNext, onPrev, o
             </div>
           </article>
 
-          <button type="button" className={`${styles.nav} ${styles.next}`} onClick={onNext} aria-label="Foto berikutnya">
+          <button type="button" className={`${styles.nav} ${styles.next}`} onClick={onNext} aria-label="Next photo">
             <Icon name="caret-down-bold" size={24} />
           </button>
 

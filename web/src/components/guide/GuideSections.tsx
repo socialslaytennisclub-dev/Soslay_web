@@ -1,10 +1,11 @@
 import Image from "next/image";
 import type { CSSProperties } from "react";
-import { Button, Container, Icon } from "@/components/ui";
+import { Container, Icon } from "@/components/ui";
 import type { GuidePhoto, ParticipantGuide } from "@/content/guides";
 import { cx } from "@/lib/cx";
 import { blurProps } from "@/lib/image";
 import { SectionLabel } from "./SectionLabel";
+import { MemberCta } from "@/components/sections/MemberCta/MemberCta";
 import styles from "./Guide.module.css";
 
 type SectionProps = { guide: ParticipantGuide };
@@ -39,7 +40,7 @@ export function OutfitSection({ guide }: SectionProps) {
           <p className={styles.body} data-anim="fade-up">
             {outfit.body}
           </p>
-          <ul className={styles.palette} aria-label="Warna yang disarankan" data-anim="stagger">
+          <ul className={styles.palette} aria-label="Recommended colors" data-anim="stagger">
             {outfit.palette.map((color) => (
               <li key={color.name} className={styles.swatchItem}>
                 <span className={styles.swatch} style={{ background: color.hex }} aria-hidden />
@@ -172,7 +173,7 @@ export function CourtVibeSection({ guide }: SectionProps) {
               <p className={cx(styles.body, styles.bodyOnPanel)} data-anim="fade-up">
                 {courtVibe.body}
               </p>
-              <ul className={styles.courtPalette} aria-label="Palet warna venue">
+              <ul className={styles.courtPalette} aria-label="Venue color palette">
                 {courtVibe.palette.map((color) => (
                   <li key={color.name} style={{ background: color.hex }} className={color.dark ? styles.onDark : undefined}>
                     {color.name}
@@ -203,7 +204,7 @@ export function CourtVibeSection({ guide }: SectionProps) {
 
 /** 05 — Quick tips + CTA booking (Figma 151:280). */
 export function QuickTipsSection({ guide }: SectionProps) {
-  const { tips, cta } = guide;
+  const { tips } = guide;
   return (
     <section id="quick-tips" className={cx(styles.section, styles.sectionLast)} aria-labelledby="tips-title">
       <Container className={styles.stack}>
@@ -224,15 +225,7 @@ export function QuickTipsSection({ guide }: SectionProps) {
             </li>
           ))}
         </ol>
-        <div className={styles.cta} data-anim="fade-up">
-          <div className={styles.ctaText}>
-            <p className={styles.ctaTitle}>{cta.title}</p>
-            <p className={styles.ctaBody}>{cta.body}</p>
-          </div>
-          <Button href={cta.href} variant="arrow" target="_blank" rel="noopener noreferrer">
-            {cta.label}
-          </Button>
-        </div>
+        <MemberCta embedded />
       </Container>
     </section>
   );

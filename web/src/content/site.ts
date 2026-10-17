@@ -1,8 +1,8 @@
 import type { IconName } from "@/components/ui";
-import { activityTypes } from "./activity";
+import { activityTypeHref, activityTypes } from "./activity";
 import { guidePrompt } from "./guides";
 
-/** Konten global (navbar & footer). Nanti diganti data dari CMS. */
+/** Konten global (navbar & footer) — Figma Website v2 (423:2482). */
 
 export type NavLink = { label: string; href: string };
 
@@ -13,7 +13,7 @@ export const primaryNav: {
   activity: {
     label: "Activity",
     href: "/activity",
-    children: activityTypes.map((type) => ({ label: type.label, href: `/activity?type=${type.slug}` })),
+    children: activityTypes.map((type) => ({ label: type.label, href: activityTypeHref(type.slug) })),
   },
   links: [
     { label: "Venue", href: "/venue" },
@@ -22,34 +22,34 @@ export const primaryNav: {
 };
 
 export const authLinks = {
-  login: { label: "Masuk", href: "/masuk" },
-  cart: { label: "Tas belanja", href: "/akun/order" },
+  login: { label: "Sign In", href: "/masuk" },
+  cart: { label: "Shopping bag", href: "/akun/order" },
 };
 
 export const contact = {
   tagline: "We curate the best courts, the best people, and the best moments then hand you a professional photo",
-  phone: { label: "Telepon", value: "+62 642424792", href: "tel:+62642424792" },
+  phone: { label: "Phone", value: "+62 642424792", href: "tel:+62642424792" },
   email: { label: "Email", value: "support@soslay.com", href: "mailto:support@soslay.com" },
 };
 
 export const footerColumns: { title: string; links: NavLink[] }[] = [
   {
-    title: "Halaman lain",
+    title: "Other Pages",
     links: [
-      { label: "Aktifitas", href: "/activity" },
-      { label: "Tempat", href: "/venue" },
-      { label: "Belanja", href: "/shop" },
-      { label: "Komunitas", href: "/komunitas" },
-      { label: "Acara", href: "/acara" },
+      { label: "Activities", href: "/activity" },
+      { label: "Venues", href: "/venue" },
+      { label: "Shop", href: "/shop" },
+      { label: "Community", href: "/komunitas" },
+      { label: "Events", href: "/acara" },
     ],
   },
   {
-    title: "Bantuan",
+    title: "Help",
     links: [
-      { label: "Panduan Peserta", href: guidePrompt.href },
-      { label: "Kontak", href: "/kontak" },
+      { label: "Participant Guide", href: guidePrompt.href },
+      { label: "Contact", href: "/kontak" },
       { label: "Info", href: "/info" },
-      { label: "Kolaborasi", href: "/kolaborasi" },
+      { label: "Collaboration", href: "/kolaborasi" },
     ],
   },
 ];

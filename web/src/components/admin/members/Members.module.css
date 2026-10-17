@@ -127,8 +127,36 @@
   padding: var(--space-16);
 }
 
-.filters[aria-busy="true"] {
-  opacity: 0.7;
+/* Saat filter/cari diproses: tabel di bawahnya diredupkan sampai hasil baru datang. */
+.panel:has(> .filters[aria-busy="true"]) > :not(.filters) {
+  opacity: 0.45;
+  pointer-events: none;
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.searching {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--color-indigo-200);
+  border-top-color: var(--color-indigo-600);
+  border-radius: var(--radius-full);
+  animation: members-spin 0.7s linear infinite;
+}
+
+@keyframes members-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .searchField {

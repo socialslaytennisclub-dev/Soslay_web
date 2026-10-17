@@ -6,6 +6,7 @@ import type { Testimonial } from "@/content/home";
 import { useAutoRotate } from "@/hooks/useAutoRotate";
 import { cx } from "@/lib/cx";
 import { initials } from "@/lib/text";
+import { VIDEO_PLATFORM_LABEL, type VideoPlatform } from "@/lib/video";
 import styles from "./TestimonialCarousel.module.css";
 import { blurProps } from "@/lib/image";
 
@@ -22,7 +23,7 @@ export function TestimonialCarousel({ items }: TestimonialCarouselProps) {
     <figure
       className={styles.card}
       aria-roledescription="carousel"
-      aria-label="Kata member Soslay"
+      aria-label="What Soslay members say"
       onMouseEnter={pause}
       onMouseLeave={resume}
       onFocus={pause}
@@ -34,8 +35,13 @@ export function TestimonialCarousel({ items }: TestimonialCarouselProps) {
 
       <blockquote key={index} className={styles.quote} aria-live="polite">
         <Text variant="body-18" tone="primary" muted>
-          {active.quote}
+          {active.quote || `Watch ${active.name}'s Soslay story.`}
         </Text>
+        {active.video && (
+          <a href={active.video.url} target="_blank" rel="noopener noreferrer" className={styles.videoLink}>
+            ▶ Watch on {VIDEO_PLATFORM_LABEL[active.video.platform as VideoPlatform]?.split(" ")[0] ?? "video"} ↗
+          </a>
+        )}
       </blockquote>
 
       <figcaption className={styles.bottom}>
@@ -56,7 +62,7 @@ export function TestimonialCarousel({ items }: TestimonialCarouselProps) {
               key={item.name}
               type="button"
               className={cx(styles.dot, i === index && styles.dotActive)}
-              aria-label={`Testimoni ${i + 1} dari ${items.length}`}
+              aria-label={`Testimonial ${i + 1} of ${items.length}`}
               aria-current={i === index}
               onClick={() => goTo(i)}
             />

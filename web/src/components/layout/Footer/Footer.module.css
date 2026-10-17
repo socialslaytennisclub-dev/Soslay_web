@@ -119,6 +119,27 @@
   opacity: 0.7;
 }
 
+/* HP (Figma Website v2 375:3261): copyright di bawah Follow Us, bukan di kolom brand */
+@media (max-width: 1199px) {
+  .brand {
+    display: contents;
+  }
+
+  .brandIntro,
+  .contact {
+    max-width: 425px;
+  }
+
+  /* jarak intro → kontak tetap 24 (gap .top 48) */
+  .contact {
+    margin-top: calc(var(--space-24) - var(--space-48));
+  }
+
+  .copyright {
+    order: 1;
+  }
+}
+
 /* ── ≥ 768px ─────────────────────────────────────────────── */
 @media (min-width: 768px) {
   .columns {

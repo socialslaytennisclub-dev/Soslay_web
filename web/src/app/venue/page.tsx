@@ -9,7 +9,7 @@ import { getWebsiteVenues } from "@/server/public/venues";
 
 export const metadata: Metadata = {
   title: "Venue — SOSLAY",
-  description: "Lapangan tenis pilihan Soslay di Jakarta & Bali — indoor, rooftop, outdoor, sampai tropical.",
+  description: "Soslay's curated tennis courts in Jakarta & Bali — indoor, rooftop, outdoor, and tropical.",
 };
 
 /** Halaman Venue (Figma 25:749). Filter kota lewat ?city=jakarta | bali. */

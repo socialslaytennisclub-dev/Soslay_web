@@ -19,7 +19,7 @@ export function Activities({ activities = defaultActivities, stats = defaultStat
           <ul className={styles.grid}>
             {activities.items.map((item) => (
               <li key={item.title} className={cx(styles.item, styles[item.size])} data-anim="reveal">
-                <Link href={item.href} className={styles.link} data-cursor="Lihat">
+                <Link href={item.href} className={styles.link} data-cursor="View">
                   <MediaCard
                     className={styles.card}
                     src={item.image}
@@ -32,9 +32,12 @@ export function Activities({ activities = defaultActivities, stats = defaultStat
                         {item.title}
                       </Text>
                       {item.description && (
-                        <Text variant="body-16" tone="white" muted className={styles.cardDescription}>
-                          {item.description}
-                        </Text>
+                        /* Desktop: muncul dari bawah saat kartu di-hover/fokus; HP: selalu tampil */
+                        <div className={styles.reveal}>
+                          <Text variant="body-16" tone="white" muted className={styles.cardDescription}>
+                            {item.description}
+                          </Text>
+                        </div>
                       )}
                     </div>
                   </MediaCard>
@@ -54,7 +57,7 @@ export function Activities({ activities = defaultActivities, stats = defaultStat
         </div>
 
         {stats.length > 0 && (
-          <ul className={styles.stats} aria-label="Soslay dalam angka" data-anim="stagger">
+          <ul className={styles.stats} aria-label="Soslay in numbers" data-anim="stagger">
             {stats.map((stat) => (
               <li key={stat.label}>
                 <StatCard {...stat} />

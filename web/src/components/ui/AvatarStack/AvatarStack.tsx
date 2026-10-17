@@ -17,7 +17,7 @@ type AvatarStackProps = {
 /** Figma: avatar inisial bertumpuk (galeri venue, lightbox). Warna: lime / pink / indigo. */
 export function AvatarStack({ items, size = "md", className }: AvatarStackProps) {
   return (
-    <ul className={cx(styles.stack, styles[size], className)} aria-label={`Di foto: ${items.map((i) => i.label).join(", ")}`}>
+    <ul className={cx(styles.stack, styles[size], className)} aria-label={`In photo: ${items.map((i) => i.label).join(", ")}`}>
       {items.map((item) => (
         <li key={item.label} className={cx(styles.avatar, styles[item.tone])} aria-hidden>
           {item.initial}

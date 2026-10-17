@@ -1,0 +1,46 @@
+/* Heading section Venue detail v2 (Figma 375:3701 / 375:3910) */
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(32px, 2.4vw + 14px, 44px);
+  line-height: 1.1;
+  letter-spacing: var(--tracking-snug);
+  color: var(--color-navy-900);
+}
+
+.headingRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-16);
+}
+
+.description {
+  max-width: 781px;
+  font-family: var(--font-body);
+  font-size: clamp(15px, 0.4vw + 12px, 17px);
+  line-height: 1.55;
+  color: var(--color-navy-900);
+}
+
+@media (min-width: 1200px) {
+  .heading {
+    flex-direction: row;
+    align-items: flex-end;
+    gap: 40px;
+  }
+
+  .headingRight {
+    flex: 1;
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-48);
+  }
+}

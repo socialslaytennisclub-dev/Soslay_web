@@ -1,7 +1,8 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { ContentSection } from "../types";
+import { detectVideoPlatform } from "@/lib/video";
+import type { AdminTestimonial, ContentSection } from "../types";
 import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } from "./common";
 
 /** Konten & Galeri → homepage website (content_sections, testimonials). */
@@ -46,6 +47,60 @@ export async function setTestimonialVisible(id: string, visible: boolean): Promi
   await audit(auth.userId, `${visible ? "menampilkan" : "menyembunyikan"} testimoni ${data[0].author_name}`, "testimonial", id);
   refreshPaths("/", "/admin/konten");
   return done(visible ? "Testimoni tampil di homepage." : "Testimoni disembunyikan dari homepage.");
+}
+
+// ── Testimoni (Figma 09b–09f) ───────────────────────────────────────────────
+export type TestimonialInput = Pick<AdminTestimonial, "kind" | "name" | "handle" | "quote" | "memberId" | "sortOrder" | "visible" | "videoUrl" | "durationSeconds">;
+
+function validateTestimonial(t: TestimonialInput): string | null {
+  if (t.name.trim().length < 2 || t.name.trim().length > 80) return "Nama 2–80 karakter.";
+  if (t.handle.trim().length > 40) return "Instagram maksimal 40 karakter.";
+  if (t.quote.trim().length > 200) return "Kutipan maksimal 200 karakter.";
+  if (t.kind === "text" && !t.quote.trim()) return "Kutipan wajib diisi untuk testimoni teks.";
+  if (t.kind === "video" && !detectVideoPlatform(t.videoUrl ?? "")) return "Tempel link Instagram Reels, TikTok, atau YouTube Shorts.";
+  if (!Number.isInteger(t.sortOrder) || t.sortOrder < 0 || t.sortOrder > 999) return "Urutan tampil 0–999.";
+  if (t.durationSeconds !== null && (!Number.isInteger(t.durationSeconds) || t.durationSeconds < 1 || t.durationSeconds > 180)) return "Durasi video 1–180 detik (maks 60 detik disarankan).";
+  return null;
+}
+
+/** id kosong → testimoni baru. */
+export async function saveTestimonial(id: string, input: TestimonialInput): Promise<ActionResult & { id?: string }> {
+  const auth = await requireEditor("content");
+  if ("error" in auth) return fail(auth.error);
+  const invalid = validateTestimonial(input);
+  if (invalid) return fail(invalid);
+  const handle = input.handle.trim().replace(/^@?/, input.handle.trim() ? "@" : "");
+  const row = {
+    kind: input.kind,
+    author_name: input.name.trim(),
+    author_handle: handle || null,
+    quote: input.quote.trim(),
+    member_id: input.memberId || null,
+    sort_order: input.sortOrder,
+    is_published: input.visible,
+    video_url: input.kind === "video" ? input.videoUrl!.trim() : null,
+    video_platform: input.kind === "video" ? detectVideoPlatform(input.videoUrl ?? "") : null,
+    duration_seconds: input.kind === "video" ? input.durationSeconds : null,
+  };
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = id
+    ? await supabase.from("testimonials").update(row).eq("id", id).select("id").single()
+    : await supabase.from("testimonials").insert(row).select("id").single();
+  if (error) return fail(`Gagal menyimpan testimoni: ${error.message}`);
+  await audit(auth.userId, `${id ? "mengubah" : "menambah"} testimoni ${row.author_name}`, "testimonial", data.id as string);
+  refreshPaths("/", "/admin/konten");
+  return { ...done(id ? "Testimoni tersimpan." : "Testimoni ditambahkan."), id: data.id as string };
+}
+
+export async function deleteTestimonial(id: string): Promise<ActionResult> {
+  const auth = await requireEditor("content");
+  if ("error" in auth) return fail(auth.error);
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.from("testimonials").delete().eq("id", id).select("author_name");
+  if (error || !data?.length) return fail(`Gagal menghapus: ${error?.message ?? "testimoni tidak ditemukan"}`);
+  await audit(auth.userId, `menghapus testimoni ${data[0].author_name}`, "testimonial", id);
+  refreshPaths("/", "/admin/konten");
+  return done(`Testimoni ${data[0].author_name} dihapus.`);
 }
 
 /** Post Instagram/Threads berasal dari konten statis; yang disembunyikan dicatat di section "instagram". */

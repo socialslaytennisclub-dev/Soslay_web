@@ -1,3 +1,4 @@
+import { isEmail, validateBirthDate } from "@/lib/auth";
 import { profileSections, requiredProfileFields, type MemberProfile, type ProfileField } from "@/content/member";
 
 function isFilled(value: MemberProfile[ProfileField]): boolean {
@@ -18,18 +19,21 @@ export function profileCompletion(profile: MemberProfile) {
   return { percent: Math.round(((total - missing) / total) * 100), sections };
 }
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** Validasi sebelum simpan. Kunci = field, nilai = pesan error. */
 export function validateProfile(profile: MemberProfile): Partial<Record<ProfileField, string>> {
   const errors: Partial<Record<ProfileField, string>> = {};
 
   for (const field of requiredProfileFields) {
-    if (!isFilled(profile[field])) errors[field] = "Wajib diisi";
+    if (!isFilled(profile[field])) errors[field] = "Required";
   }
-  if (!errors.email && !EMAIL.test(profile.email)) errors.email = "Format email belum benar";
+  if (!errors.email && !isEmail(profile.email)) errors.email = "Please enter a valid email";
   if (!errors.phone && profile.phone.replace(/\D/g, "").length < 9) errors.phone = "Nomor terlalu pendek";
   if (!errors.instagram && /\s/.test(profile.instagram)) errors.instagram = "Username tanpa spasi";
+  if (!errors.birthDate) {
+    const birthDate = validateBirthDate(profile.birthDate);
+    if (birthDate) errors.birthDate = birthDate;
+  }
 
   return errors;
 }

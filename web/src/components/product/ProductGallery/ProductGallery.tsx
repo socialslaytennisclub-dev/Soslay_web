@@ -19,14 +19,14 @@ export function ProductGallery({ images }: ProductGalleryProps) {
   return (
     <div className={cx(styles.gallery, hasThumbs && styles.withThumbs)}>
       {hasThumbs && (
-        <ul className={styles.thumbs} aria-label="Foto produk">
+        <ul className={styles.thumbs} aria-label="Product photos">
           {images.map((image, i) => (
             <li key={image.src}>
               <button
                 type="button"
                 className={cx(styles.thumb, i === active && styles.thumbActive)}
                 onClick={() => setActive(i)}
-                aria-label={`Lihat foto ${i + 1}: ${image.alt}`}
+                aria-label={`View photo ${i + 1}: ${image.alt}`}
                 aria-current={i === active}
               >
                 <Image src={image.src} {...blurProps(image.src)} alt="" fill sizes="96px" style={{ objectPosition: image.position }} />

@@ -134,7 +134,10 @@ const loadProductForms = cache(async (): Promise<ProductForm[]> => {
         slug: p.slug,
         sku: p.sku,
         name: p.name,
+        subtitle: p.subtitle ?? "",
         category: p.category,
+        fit: (p.attributes as Record<string, string> | null)?.fit ?? "",
+        color: (p.attributes as Record<string, string> | null)?.color ?? "",
         price: p.price,
         compareAtPrice: p.compare_at_price,
         description: p.description ?? "",
@@ -146,6 +149,7 @@ const loadProductForms = cache(async (): Promise<ProductForm[]> => {
         images: ((p.product_images as { path: string; alt: string; position: string | null; sort_order: number }[]) ?? [])
           .sort((a, b) => a.sort_order - b.sort_order)
           .map((i) => ({ path: i.path, alt: i.alt, position: i.position ?? "" })),
+        cardImage: (p.card_image as string | null) ?? "",
         optionKey,
         variants: variants.map((v) => ({ value: optionKey ? (v.options[optionKey] ?? "") : "default", stock: v.stock })),
       } satisfies ProductForm;
@@ -160,7 +164,10 @@ const loadProductForms = cache(async (): Promise<ProductForm[]> => {
       slug: p.slug,
       sku: p.sku,
       name: p.name,
+      subtitle: p.subtitle ?? "",
       category: p.category,
+      fit: "",
+      color: "",
       price: p.price,
       compareAtPrice: p.compareAtPrice ?? null,
       description: d?.description ?? "",
@@ -170,6 +177,7 @@ const loadProductForms = cache(async (): Promise<ProductForm[]> => {
       featured: Boolean(p.featured),
       sizeGuide: Boolean(d?.sizeGuide),
       images: (d?.gallery ?? [{ src: p.image, alt: p.name }]).map((g) => ({ path: g.src, alt: g.alt, position: g.position ?? "" })),
+      cardImage: "",
       optionKey: group?.key ?? "",
       variants: values.map((v, i) => ({ value: v.value, stock: Math.floor(p.stock / values.length) + (i < p.stock % values.length ? 1 : 0) })),
     } satisfies ProductForm;
@@ -194,7 +202,7 @@ export async function listProducts(): Promise<AdminProduct[]> {
       sku: p.sku,
       name: p.name,
       category: p.category,
-      categoryLabel: productCategories.find((c) => c.slug === p.category)?.label ?? (p.category === "accessory" ? "Aksesoris" : p.category),
+      categoryLabel: productCategories.find((c) => c.slug === p.category)?.label ?? p.category,
       image: p.images[0]?.path ?? "/images/home/product-a-piece-of-bali.webp",
       variants: p.optionKey ? p.variants.map((v) => v.value) : [],
       price: p.price,
@@ -218,7 +226,10 @@ export function emptyProductForm(): ProductForm {
     slug: "",
     sku: "",
     name: "",
+    subtitle: "",
     category: "apparel",
+    fit: "",
+    color: "",
     price: 0,
     compareAtPrice: null,
     description: "",
@@ -228,11 +239,12 @@ export function emptyProductForm(): ProductForm {
     featured: false,
     sizeGuide: false,
     images: [],
+    cardImage: "",
     optionKey: "size",
     variants: ["S", "M", "L", "XL"].map((value) => ({ value, stock: 0 })),
   };
 }
 
 export function productCategoryOptions() {
-  return [...productCategories.map((c) => ({ value: c.slug, label: c.label })), { value: "accessory", label: "Aksesoris" }];
+  return productCategories.map((c) => ({ value: c.slug, label: c.label }));
 }

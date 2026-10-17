@@ -54,6 +54,12 @@ export function MembersFilters({ cities }: { cities: string[] }) {
         <AdminIcon name="magnifying-glass" size={18} />
         <span className="visually-hidden">Cari member</span>
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nama, email, Kuy ID, Instagram…" />
+        {pending && (
+          <span className={styles.searching} role="status">
+            <span className={styles.spinner} aria-hidden />
+            Mencari…
+          </span>
+        )}
       </label>
       {select("tier", "Tier", Object.entries(TIER_LABEL).map(([value, label]) => ({ value, label })))}
       {select("level", "Level", Object.entries(LEVEL_LABEL).map(([value, label]) => ({ value, label })))}

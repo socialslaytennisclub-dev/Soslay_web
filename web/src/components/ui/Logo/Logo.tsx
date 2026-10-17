@@ -13,7 +13,7 @@ type LogoProps = {
 /** Logo "SLAY CLUB." + ikon pemain. Aset raster dari Figma. */
 export function Logo({ tone = "lime", size = "md", className }: LogoProps) {
   return (
-    <Link href="/" className={cx(styles.logo, styles[size], className)} aria-label="Soslay — beranda">
+    <Link href="/" className={cx(styles.logo, styles[size], className)} aria-label="Soslay — home">
       <Image src={`/images/brand/logo-${tone}.webp`} alt="" width={301} height={87} preload={size === "md"} />
     </Link>
   );

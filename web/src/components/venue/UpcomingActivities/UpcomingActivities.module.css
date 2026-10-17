@@ -1,0 +1,192 @@
+/* Figma Website v2 375:3700 — section/01-upcoming-activities */
+.section {
+  padding-bottom: var(--space-48);
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+}
+
+.seeAll {
+  flex-shrink: 0;
+  padding: var(--space-10) 18px;
+  border: 1.5px solid var(--color-navy-900);
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  white-space: nowrap;
+  color: var(--color-navy-900);
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.seeAll:hover {
+  background: var(--color-navy-900);
+  color: var(--color-white);
+}
+
+/* ── Kartu ── */
+.cards {
+  display: grid;
+  gap: var(--space-20);
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--color-white);
+}
+
+.photo {
+  position: relative;
+  height: 260px;
+  overflow: hidden;
+  background: var(--color-indigo-100);
+}
+
+.image {
+  object-fit: cover;
+  transition: transform var(--duration-slow) var(--ease-out);
+}
+
+.card:hover .image {
+  transform: scale(1.04);
+}
+
+.dateBadge,
+.slotBadge {
+  position: absolute;
+  top: var(--space-16);
+  padding: var(--space-8) 14px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.dateBadge {
+  left: var(--space-16);
+  background: var(--color-white);
+  letter-spacing: 0.06em;
+}
+
+.slotBadge {
+  right: var(--space-16);
+  background: var(--color-lime-550);
+}
+
+.body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-24);
+}
+
+.tag {
+  align-self: flex-start;
+  padding: 5px var(--space-12);
+  border-radius: var(--radius-full);
+  background: rgb(10 8 74 / 0.08);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-navy-900);
+}
+
+.cardTitle {
+  min-height: 2.5em;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: clamp(19px, 0.5vw + 16px, 22px);
+  line-height: 1.25;
+  color: var(--color-navy-900);
+}
+
+.meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-navy-900);
+}
+
+.meta div {
+  display: flex;
+  gap: var(--space-8);
+}
+
+.meta dt {
+  flex-shrink: 0;
+  width: 56px;
+  font-weight: var(--weight-bold);
+  color: rgb(10 8 74 / 0.5);
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  margin-top: auto;
+  padding-top: var(--space-16);
+  border-top: 1px solid rgb(10 8 74 / 0.1);
+}
+
+.price {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: 20px;
+  color: var(--color-navy-900);
+}
+
+.price span {
+  font-family: var(--font-body);
+  font-weight: var(--weight-regular);
+  font-size: 12px;
+  color: rgb(10 8 74 / 0.6);
+}
+
+.empty {
+  padding: var(--space-48) var(--space-24);
+  border: 1px dashed var(--color-indigo-200);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-body);
+  text-align: center;
+  color: var(--color-navy-900);
+}
+
+@media (min-width: 768px) {
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .section {
+    padding-bottom: 68px;
+  }
+
+  .inner {
+    gap: 40px;
+  }
+
+  .cards {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}

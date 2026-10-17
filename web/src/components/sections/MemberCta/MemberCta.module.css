@@ -1,0 +1,120 @@
+/* Figma Website v2 375:4721 — cta/member */
+.section {
+  padding-bottom: var(--space-80);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+  padding: var(--space-32) var(--space-24);
+  border-radius: 24px;
+  background: var(--color-navy-900);
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.eyebrow {
+  align-self: flex-start;
+  padding: var(--space-8) var(--space-16);
+  border-radius: var(--radius-full);
+  background: var(--color-lime-550);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-navy-900);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(26px, 1.6vw + 14px, 34px);
+  line-height: 1.15;
+  color: var(--color-white);
+}
+
+.break {
+  display: none;
+}
+
+.body {
+  max-width: 680px;
+  font-family: var(--font-body);
+  font-size: clamp(15px, 0.3vw + 13px, 17px);
+  line-height: 1.5;
+  color: rgb(255 255 255 / 0.8);
+}
+
+.perks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+  list-style: none;
+}
+
+.perks li {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) 14px var(--space-8) var(--space-12);
+  border: 1px solid rgb(255 255 255 / 0.2);
+  border-radius: var(--radius-full);
+  background: rgb(255 255 255 / 0.08);
+  font-family: var(--font-body);
+  font-weight: var(--weight-bold);
+  font-size: 14px;
+  color: var(--color-white);
+}
+
+.check {
+  font-family: var(--font-display);
+  color: var(--color-lime-550);
+}
+
+.action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.caption {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: rgb(255 255 255 / 0.65);
+}
+
+@media (min-width: 1024px) {
+  .card {
+    flex-direction: row;
+    align-items: center;
+    gap: 40px;
+    padding: var(--space-48) 56px;
+  }
+
+  .text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .break {
+    display: inline;
+  }
+
+  .action {
+    flex-shrink: 0;
+    align-items: center;
+  }
+}
+
+@media (min-width: 1200px) {
+  .section {
+    padding-bottom: 96px;
+  }
+}

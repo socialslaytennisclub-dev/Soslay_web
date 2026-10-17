@@ -1,31 +1,37 @@
 /**
- * Copy halaman Masuk & Daftar. Daftar = Figma 25:1850 ("Desktop - 30");
+ * Copy halaman Masuk & Daftar. Daftar = Figma Website v2 375:2379 ("Sign Up");
  * Masuk belum ada di Figma → memakai layout & gaya yang sama.
- * Placeholder lorem ipsum di Figma diganti copy final.
  */
 
 export const authBackground = {
-  src: "/images/auth/auth-bg.webp",
-  alt: "Member Soslay berfoto bersama di lapangan tenis",
+  src: "/images/auth/auth-court.webp",
+  alt: "",
 };
 
 export const loginPage = {
-  title: "Selamat datang kembali di Social Slay",
-  description: "Masuk untuk lihat jadwal sesi, kartu member, Slay Point, dan pesanan kamu.",
-  submit: "Masuk",
-  remember: "Ingat saya",
-  forgot: { label: "Lupa password?", href: "/lupa-password" },
-  switch: { prompt: "Belum jadi member?", label: "Daftar sekarang", href: "/daftar" },
+  title: "Welcome back to Social Slay",
+  description: "Sign in to see your sessions, member card, Slay Points, and orders.",
+  submit: "Sign In",
+  remember: "Remember me",
+  forgot: { label: "Forgot password?", href: "/lupa-password" },
+  switch: { prompt: "Not a member yet?", label: "Sign up now", href: "/daftar" },
 };
 
 export const registerPage = {
-  title: "Gabung jadi member Social Slay Tennis Club",
+  title: "Become a member of Social Slay Tennis Club",
   description:
-    "Satu akun untuk booking sesi, kumpulkan Slay Point, dan temukan foto kamu dari setiap mabar.",
-  consent: "Saya setuju dengan Syarat & Ketentuan serta Kebijakan Privasi Soslay",
-  submit: "Daftar Sekarang",
-  switch: { prompt: "Sudah punya akun?", label: "Masuk", href: "/masuk" },
+    "Collect Slay Points from every session you play, redeem them for merch and booking discounts, and get early access to favorite slots.",
+  consent: "I agree to the Terms & Conditions and Privacy Policy of Social Slay Tennis Club.",
+  submit: "Create Account",
+  switch: { prompt: "Already a member?", label: "Sign In", href: "/masuk" },
+  confirm: {
+    title: "Check your email ✉️",
+    text: (email: string) => `We sent a verification link to ${email}. Open it to activate your account, then you can sign in.`,
+  },
 };
+
+/** Halaman login khusus tim (admin). */
+export const ADMIN_LOGIN = "/masuk/admin";
 
 /** Tujuan setelah berhasil masuk / daftar. */
 export const AFTER_AUTH = "/akun";

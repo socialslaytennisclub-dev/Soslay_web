@@ -12,7 +12,7 @@ type VenueDirectoryProps = {
 export function VenueDirectory({ venues, activeCity }: VenueDirectoryProps) {
   const [left, right] = splitInHalf(venues);
   const chips: FilterChip[] = [
-    { label: "Semua", href: "/venue#daftar-venue", active: !activeCity },
+    { label: "All", href: "/venue#daftar-venue", active: !activeCity },
     ...venueCities.map((city) => ({
       label: city.label,
       href: `/venue?city=${city.slug}#daftar-venue`,
@@ -32,7 +32,7 @@ export function VenueDirectory({ venues, activeCity }: VenueDirectoryProps) {
               {venuePage.directory.description}
             </Text>
           </div>
-          <FilterChips items={chips} label="Filter kota" tone="dark" className={styles.filter} />
+          <FilterChips items={chips} label="Filter by city" tone="dark" className={styles.filter} />
         </header>
 
         <div className={styles.grid}>

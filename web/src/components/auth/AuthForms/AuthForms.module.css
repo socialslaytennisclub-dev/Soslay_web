@@ -33,7 +33,7 @@
 }
 
 /* Figma: consent Helvetica 14, navy-950 80% */
-.checkbox span:last-child {
+.checkbox > span:last-child {
   font-family: var(--font-body);
   font-weight: var(--weight-regular);
   font-size: 14px;
@@ -86,4 +86,84 @@
   .submit {
     width: 100%;
   }
+}
+
+/* Bar kekuatan password (daftar): 4 segmen, warna mengikuti level */
+.passwordWrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.strength {
+  --strength-color: var(--color-neutral-200);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.strength[data-level="1"] {
+  --strength-color: var(--color-pink-500);
+}
+
+.strength[data-level="2"] {
+  --strength-color: #f5a524;
+}
+
+.strength[data-level="3"] {
+  --strength-color: var(--color-indigo-500);
+}
+
+.strength[data-level="4"] {
+  --strength-color: var(--color-lime-600);
+}
+
+.strengthBars {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.strengthBar {
+  height: 4px;
+  border-radius: var(--radius-full);
+  background: var(--color-neutral-200);
+  transition: background-color var(--duration-base) var(--ease-out);
+}
+
+.strengthOn {
+  background: var(--strength-color);
+}
+
+.strengthText {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--color-indigo-muted);
+}
+
+.strengthText strong {
+  font-weight: var(--weight-semibold);
+  color: var(--color-navy-900);
+}
+
+/* Setelah daftar: tunggu verifikasi email */
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-20, 20px) var(--space-24, 24px);
+  border-radius: var(--radius-lg);
+  background: var(--color-lime-100);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--color-navy-900);
+}
+
+.confirmTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 18px;
 }

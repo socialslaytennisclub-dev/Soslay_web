@@ -29,7 +29,33 @@ export type Session = {
   bookingUrl: string;
   /** Kandidat untuk hero "Aktivitas mendatang". */
   featured?: boolean;
+  /** Harga mulai (Rupiah), kapasitas, sisa slot & level — kartu "Upcoming Activities" (Venue detail). */
+  price?: number;
+  capacity?: number;
+  slotsLeft?: number;
+  levels?: TennisLevel[];
 };
+
+export type TennisLevel = "beginner" | "beginner_intermediate" | "intermediate" | "intermediate_advanced" | "advanced";
+
+const LEVEL_LABEL: Record<TennisLevel, string> = {
+  beginner: "Beginner",
+  beginner_intermediate: "Beginner–Intermediate",
+  intermediate: "Intermediate",
+  intermediate_advanced: "Intermediate–Advanced",
+  advanced: "Advanced",
+};
+
+const LEVEL_ORDER = Object.keys(LEVEL_LABEL) as TennisLevel[];
+
+/** [] → "All levels", ["beginner"] → "Beginner", beberapa level → "Beginner–Intermediate". */
+export function levelLabel(levels: TennisLevel[] = []): string {
+  if (!levels.length || levels.length === LEVEL_ORDER.length) return "All levels";
+  const sorted = [...levels].sort((a, b) => LEVEL_ORDER.indexOf(a) - LEVEL_ORDER.indexOf(b));
+  const first = LEVEL_LABEL[sorted[0]].split("–")[0];
+  const last = LEVEL_LABEL[sorted[sorted.length - 1]].split("–").pop()!;
+  return first === last ? first : `${first}–${last}`;
+}
 
 const KUY = "https://kuy.id/soslay";
 const VENUE_IMG = "/images/home";
@@ -37,7 +63,7 @@ const VENUE_IMG = "/images/home";
 export const sessions: Session[] = [
   {
     slug: "mabar-di-bali-altitude-kintamani",
-    title: "Mabar di Bali [Altitude Kintamani] with Photographer",
+    title: "Mabar in Bali [Altitude Kintamani] with Photographer",
     type: "tennis-escape",
     venue: {
       name: "Altitude Tennis Court",
@@ -147,29 +173,93 @@ export function isActivityType(value: unknown): value is ActivityTypeSlug {
   return activityTypes.some((type) => type.slug === value);
 }
 
+/**
+ * Halaman per tipe aktivitas (Figma Website v2 347:2665 · 347:2831 · 347:2997 · 347:3163):
+ * hero wordmark raksasa + jadwal sesi tipe tersebut.
+ */
+export const activityLandings = [
+  {
+    path: "mabar",
+    type: "weekly-mabar",
+    wordmark: "Mabar",
+    title: "Weekly MABAR for Every Level",
+    highlight: "Every Level",
+    description: "Casual hit-arounds every week at our favorite courts — meet new people, rally, and take home pro photos.",
+    meta: ["Every week", "All levels", "A photographer at every session"],
+    image: { src: "/images/home/activity-weekly-mabar.webp", alt: "A Weekly MABAR session on an outdoor court", position: "50% 72%" },
+  },
+  {
+    path: "event",
+    type: "match-day",
+    wordmark: "Event",
+    title: "Tennis Events Worth Showing Up For",
+    highlight: "Showing Up For",
+    description: "Match days, socials, and special sessions — the moments the community looks forward to all month.",
+    meta: ["Match days & socials", "Jakarta & Bali", "Limited slots"],
+    image: { src: "/images/home/activity-match-day.webp", alt: "Players at a Soslay Tennis Match Day", position: "50% 20%" },
+  },
+  {
+    path: "escape",
+    type: "tennis-escape",
+    wordmark: "Escape",
+    title: "Tennis Escapes to Beautiful Courts",
+    highlight: "Beautiful Courts",
+    description: "Trips that mix tennis, travel, and the right people — from Bali villages to mountain courts in Kintamani.",
+    meta: ["Bali & beyond", "Courts + stay", "A photographer on every trip"],
+    image: { src: "/images/home/activity-tennis-escape.webp", alt: "Members on a Soslay Tennis Escape in Bali", position: "50% 50%" },
+  },
+  {
+    path: "coaching",
+    type: "beginner-coaching",
+    wordmark: "Coaching",
+    title: "Beginner Coaching, No Pressure",
+    highlight: "No Pressure",
+    description: "New to tennis? Learn the basics, build your confidence, and start playing with the community.",
+    meta: ["Small groups", "Beginner friendly", "Rackets available"],
+    image: { src: "/images/home/activity-beginner-coaching.webp", alt: "A coach guiding beginners on court", position: "50% 85%" },
+  },
+] as const satisfies {
+  path: string;
+  type: ActivityTypeSlug;
+  wordmark: string;
+  title: string;
+  highlight: string;
+  description: string;
+  meta: string[];
+  image: { src: string; alt: string; position: string };
+}[];
+
+export type ActivityLanding = (typeof activityLandings)[number];
+
+/** Link tipe aktivitas: halaman khusus bila ada, selain itu filter di /activity. */
+export function activityTypeHref(slug: ActivityTypeSlug): string {
+  const landing = activityLandings.find((l) => l.type === slug);
+  return landing ? `/activity/${landing.path}` : `/activity?type=${slug}`;
+}
+
 export function activityTypeLabel(slug: ActivityTypeSlug): string {
   return activityTypes.find((type) => type.slug === slug)?.label ?? slug;
 }
 
 /** Copy statis halaman Activity. */
 export const activityPage = {
-  eyebrow: "Aktivitas mendatang",
-  absensi: { label: "Absensi Kehadiran", href: "/absensi" },
-  booking: { label: "Booking Session di Kuyy" },
+  eyebrow: "Upcoming activity",
+  absensi: { label: "Check-in Attendance", href: "/absensi" },
+  booking: { label: "Book a Session on Kuyy" },
   upcoming: {
-    title: "Court Sudah Menunggu. Kamu Kapan?",
+    title: "The Court Is Waiting. Are You?",
     description:
-      "Mabar santai, match day, sampai tennis escape — pilih jadwal yang pas, booking di Kuyy, dan sampai jumpa di court. Slot favorit biasanya cepat penuh.",
+      "Casual mabar, match day, or a tennis escape — pick the schedule that fits, book on Kuyy, and see you on the court. Favorite slots usually fill up fast.",
   },
   past: {
-    title: "Rally Kemarin, Cerita Hari Ini.",
+    title: "Yesterday's Rally, Today's Story.",
     description:
-      "Sesi-sesi yang sudah lewat — buka kartunya untuk lihat venue dan foto-fotonya. Siapa tahu jadi inspirasi sesi kamu berikutnya.",
+      "Past sessions — open a card to see the venue and its photos. Who knows, it might inspire your next session.",
     /** Jumlah sesi lama yang ditampilkan. */
     limit: 6,
   },
   empty: {
-    title: "Belum ada sesi untuk kategori ini.",
-    description: "Coba kategori lain, atau pantau Instagram kami untuk jadwal terbaru.",
+    title: "No sessions in this category yet.",
+    description: "Try another category, or follow our Instagram for the latest schedule.",
   },
 };

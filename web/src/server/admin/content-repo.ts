@@ -6,7 +6,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDataset } from "./dataset";
 import { DAY } from "./time";
 import { activityTypeLabels, DEMO_NOW } from "./demo-data";
-import type { CommunityPost, ContentSection, PhotoAlbum, SitePage } from "./types";
+import type { AdminTestimonial, CommunityPost, ContentSection, PhotoAlbum, SitePage } from "./types";
 
 /**
  * Data Konten & Galeri (content_sections, photo_albums, photos, testimonials). Isi awal diambil
@@ -195,32 +195,55 @@ export async function listAlbums(limit?: number): Promise<{ albums: PhotoAlbum[]
   };
 }
 
+/** Post Instagram & Threads di feed "See You on the Court!" (tampil/sembunyi per post). */
 export async function listCommunityPosts(): Promise<CommunityPost[]> {
+  let hidden = new Set<string>();
   if (isSupabaseConfigured) {
     const supabase = await createSupabaseServerClient();
-    const [{ data: testimonials }, { data: ig }] = await Promise.all([
-      supabase.from("testimonials").select("id, author_name, author_handle, quote, avatar_path, is_published").order("sort_order"),
-      supabase.from("content_sections").select("published").eq("page", "home").eq("key", "instagram").maybeSingle(),
-    ]);
-    const hidden = new Set(((ig?.published as { hiddenPosts?: string[] } | null)?.hiddenPosts) ?? []);
-    return [
-      ...(testimonials ?? []).map((t): CommunityPost => ({
-        id: t.id as string,
-        kind: "testimonial",
-        text: t.quote as string,
-        handle: (t.author_handle as string | null) ?? (t.author_name as string),
-        image: (t.avatar_path as string | null) ?? undefined,
-        visible: t.is_published as boolean,
-      })),
-      ...instagram.posts.map((p): CommunityPost => ({ id: `ig:${p.handle}`, kind: p.platform, text: p.text.join(" "), handle: p.handle, image: p.image, visible: !hidden.has(p.handle) })),
-    ];
+    const { data: ig } = await supabase.from("content_sections").select("published").eq("page", "home").eq("key", "instagram").maybeSingle();
+    hidden = new Set(((ig?.published as { hiddenPosts?: string[] } | null)?.hiddenPosts) ?? []);
   }
+  return instagram.posts.map((p): CommunityPost => ({ id: `ig:${p.handle}`, kind: p.platform, text: p.text.join(" "), handle: p.handle, image: p.image, visible: !hidden.has(p.handle) }));
+}
+
+/** Testimoni untuk tab Testimoni & IG (CRUD). Demo: kutipan statis homepage + 2 contoh tersembunyi. */
+export async function listTestimonials(): Promise<AdminTestimonial[]> {
+  if (isSupabaseConfigured) {
+    const supabase = await createSupabaseServerClient();
+    const { data, error } = await supabase
+      .from("testimonials")
+      .select("id, kind, author_name, author_handle, quote, avatar_path, member_id, sort_order, is_published, video_url, video_platform, duration_seconds, created_at")
+      .order("sort_order")
+      .order("created_at");
+    if (error) throw new Error(`Gagal memuat testimoni: ${error.message}`);
+    return (data ?? []).map((t) => ({
+      id: t.id as string,
+      kind: (t.kind as AdminTestimonial["kind"]) ?? "text",
+      name: t.author_name as string,
+      handle: (t.author_handle as string | null) ?? "",
+      quote: t.quote as string,
+      avatar: (t.avatar_path as string | null) ?? null,
+      memberId: (t.member_id as string | null) ?? null,
+      sortOrder: t.sort_order as number,
+      visible: t.is_published as boolean,
+      videoUrl: (t.video_url as string | null) ?? null,
+      videoPlatform: (t.video_platform as AdminTestimonial["videoPlatform"]) ?? null,
+      durationSeconds: (t.duration_seconds as number | null) ?? null,
+      createdAt: t.created_at as string,
+    }));
+  }
+  const at = new Date(DEMO_NOW.getTime() - 14 * DAY).toISOString();
+  const base = (i: number, name: string, handle: string, quote: string, visible: boolean, avatar?: string): AdminTestimonial => ({
+    id: `t${i}`, kind: "text", name, handle, quote, avatar: avatar ?? null, memberId: null, sortOrder: i, visible, videoUrl: null, videoPlatform: null, durationSeconds: null, createdAt: at,
+  });
   return [
-    ...community.testimonials.map((t, i): CommunityPost => ({ id: `t${i}`, kind: "testimonial", text: t.quote, handle: t.name, image: t.avatar, visible: true })),
-    ...instagram.posts.map((p, i): CommunityPost => ({ id: `ig${i}`, kind: p.platform, text: p.text.join(" "), handle: p.handle, image: p.image, visible: true })),
-    { id: "t-new1", kind: "testimonial", text: "Pertama kali ikut Beginner Coaching, coach-nya sabar banget. Sekarang udah berani ikut mabar.", handle: "@nadiasalsa", visible: false },
-    { id: "t-new2", kind: "testimonial", text: "Tennis Escape ke Bali kemarin jadi trip terbaik tahun ini.", handle: "@gilanghermawan", visible: false },
+    ...community.testimonials.map((t, i) => base(i + 1, t.name.replace(/^@/, ""), t.name.startsWith("@") ? t.name : "", t.quote, true, t.avatar)),
+    base(6, "Nadia Salsabila", "@nadiasalsa", "My first Beginner Coaching session — the coach was so patient. Now I'm confident enough to join mabar.", false),
   ];
+}
+
+export function emptyTestimonial(): AdminTestimonial {
+  return { id: "", kind: "text", name: "", handle: "", quote: "", avatar: null, memberId: null, sortOrder: 0, visible: true, videoUrl: null, videoPlatform: null, durationSeconds: null, createdAt: "" };
 }
 
 export async function listSitePages(): Promise<SitePage[]> {

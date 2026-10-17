@@ -1,4 +1,4 @@
-/* Figma: stage — foto penuh, kartu di tengah, padding atas = tinggi navbar */
+/* Figma Website v2 375:2380: stage — ilustrasi lapangan, kartu di tengah, padding atas = tinggi navbar */
 .stage {
   position: relative;
   isolation: isolate;
@@ -12,21 +12,11 @@
   background: var(--color-navy-900);
 }
 
-/* Zoom ringan dari atas → watermark "Social Slay" di bawah foto terpotong di HP */
+/* Figma Website v2 377:2376 — ilustrasi garis lapangan + blob indigo di atas navy */
 .photo {
-  z-index: -2;
-  object-fit: cover;
-  object-position: 50% 40%;
-  transform: scale(1.2);
-  transform-origin: 50% 20%;
-}
-
-/* Figma: overlay/login — gelap di atas (navbar terbaca) & bawah */
-.overlay {
-  position: absolute;
-  inset: 0;
   z-index: -1;
-  background: linear-gradient(180deg, rgb(0 0 0 / 0.75) 0%, rgb(0 0 0 / 0) 50.5%, rgb(0 0 0 / 0.5) 100%);
+  object-fit: cover;
+  object-position: 50% 50%;
 }
 
 /* Figma: form/card — putih, radius 16, padding 32, shadow 0 4 16 / 10% */

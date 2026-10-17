@@ -197,41 +197,6 @@
   color: var(--color-white);
 }
 
-.anchors {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--space-12);
-}
-
-.anchor {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-8);
-  padding: var(--space-10) 18px;
-  border: 1px solid rgb(255 255 255 / 0.25);
-  border-radius: var(--radius-full);
-  background: rgb(255 255 255 / 0.08);
-  font-family: var(--font-body);
-  font-weight: var(--weight-bold);
-  font-size: 15px;
-  color: var(--color-white);
-  transition:
-    background-color var(--duration-fast) var(--ease-out),
-    border-color var(--duration-fast) var(--ease-out);
-}
-
-.anchor:hover {
-  border-color: var(--color-lime-550);
-  background: rgb(255 255 255 / 0.14);
-}
-
-.anchorNumber {
-  font-family: var(--font-display);
-  font-size: 14px;
-  color: var(--color-lime-550);
-}
-
 .heroMedia {
   position: relative;
   width: 100%;
@@ -641,37 +606,6 @@
   color: rgb(10 8 74 / 0.7);
 }
 
-.cta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-24);
-  padding: var(--space-32) var(--space-24);
-  border-radius: 24px;
-  background: var(--color-navy-900);
-}
-
-.ctaText {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-10);
-}
-
-.ctaTitle {
-  font-family: var(--font-display);
-  font-weight: var(--weight-extrabold);
-  font-size: clamp(26px, 1.6vw + 14px, 34px);
-  line-height: 1.15;
-  color: var(--color-white);
-}
-
-.ctaBody {
-  font-family: var(--font-body);
-  font-size: 17px;
-  line-height: 1.5;
-  color: rgb(255 255 255 / 0.8);
-}
-
 /* ── ≥ 768px ─────────────────────────────────────────────── */
 @media (min-width: 768px) {
   .section {
@@ -732,12 +666,6 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .cta {
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--space-48) 56px;
-  }
 }
 
 /* ── ≥ 1200px: layout Figma 1440 ─────────────────────────── */

@@ -104,15 +104,26 @@ function buildDemoDataset(): Dataset {
 let demoDataset: Dataset | undefined;
 
 // ── Live (Supabase) ─────────────────────────────────────────────────────────
-/** PostgREST membatasi 1.000 baris per request → ambil bertahap. */
-async function fetchAll<T>(client: SupabaseClient, table: string, columns: string, order: string): Promise<T[]> {
-  const rows: T[] = [];
-  for (let from = 0; ; from += 1000) {
-    const { data, error } = await client.from(table).select(columns).order(order).range(from, from + 999);
-    if (error) throw new Error(`Gagal memuat ${table}: ${error.message}`);
-    rows.push(...((data ?? []) as T[]));
-    if (!data || data.length < 1000) return rows;
-  }
+/** PostgREST membatasi 1.000 baris per request → hitung dulu, lalu ambil semua halaman paralel. */
+async function fetchAll<T>(client: SupabaseClient, table: string, columns: string, order: string, unique = "id"): Promise<T[]> {
+  const PAGE = 1000;
+  // Urutan wajib unik supaya halaman paralel tidak dobel / terlewat saat nilai `order` kembar.
+  const query = (withCount = false) => {
+    const q = client.from(table).select(columns, withCount ? { count: "exact" } : undefined).order(order);
+    return unique === order ? q : q.order(unique);
+  };
+  const first = await query(true).range(0, PAGE - 1);
+  if (first.error) throw new Error(`Gagal memuat ${table}: ${first.error.message}`);
+  const total = first.count ?? 0;
+  const rest = await Promise.all(
+    Array.from({ length: Math.max(0, Math.ceil(total / PAGE) - 1) }, async (_, i) => {
+      const from = (i + 1) * PAGE;
+      const { data, error } = await query().range(from, from + PAGE - 1);
+      if (error) throw new Error(`Gagal memuat ${table}: ${error.message}`);
+      return (data ?? []) as T[];
+    }),
+  );
+  return [...((first.data ?? []) as T[]), ...rest.flat()];
 }
 
 const slugByProductName = new Map(catalog.map((p) => [p.name, p.slug]));
@@ -151,7 +162,7 @@ async function loadLive(): Promise<Dataset> {
 
   const [profiles, statsRows, sessionRows, bookingRows, orderRows] = await Promise.all([
     fetchAll<ProfileRow>(client, "profiles", "*", "joined_at"),
-    fetchAll<StatsRow>(client, "member_stats", "member_id, points_balance, points_earned, total_spent", "member_id"),
+    fetchAll<StatsRow>(client, "member_stats", "member_id, points_balance, points_earned, total_spent", "member_id", "member_id"),
     fetchAll<SessionRow>(
       client,
       "sessions",

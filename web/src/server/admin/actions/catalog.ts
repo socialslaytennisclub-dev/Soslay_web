@@ -18,14 +18,15 @@ function refreshShop(slug?: string) {
 function validateProduct(p: ProductForm): string | null {
   if (!p.name.trim()) return "Nama produk wajib diisi.";
   if (!p.sku.trim()) return "SKU wajib diisi.";
-  if (!["apparel", "racket", "accessory"].includes(p.category)) return "Kategori tidak dikenal.";
+  if (!["apparel", "socks", "pin", "figure", "racket", "accessory"].includes(p.category)) return "Kategori tidak dikenal.";
+  if (p.subtitle.length > 80) return "Subjudul maksimal 80 karakter.";
   if (!Number.isInteger(p.price) || p.price < 0) return "Harga tidak valid.";
   if (p.compareAtPrice !== null && (!Number.isInteger(p.compareAtPrice) || p.compareAtPrice < p.price)) return "Harga coret harus lebih besar dari harga jual.";
   if (!["draft", "active", "archived"].includes(p.status)) return "Status tidak dikenal.";
   if (!p.variants.length) return "Minimal satu varian.";
   if (p.variants.some((v) => !v.value.trim() || !Number.isInteger(v.stock) || v.stock < 0)) return "Setiap varian butuh nama dan stok ≥ 0.";
   if (new Set(p.variants.map((v) => v.value.trim().toLowerCase())).size !== p.variants.length) return "Nama varian tidak boleh dobel.";
-  if (p.images.some((i) => !isImagePath(i.path))) return "Path foto harus diawali /images/ atau https://.";
+  if (p.images.some((i) => !isImagePath(i.path)) || (p.cardImage && !isImagePath(p.cardImage))) return "Path foto harus diawali /images/ atau https://.";
   return null;
 }
 
@@ -38,8 +39,12 @@ export async function saveProduct(input: ProductForm): Promise<ActionResult> {
   const supabase = await createSupabaseServerClient();
   const row = {
     name: input.name.trim(),
+    subtitle: input.subtitle.trim() || null,
     sku: input.sku.trim().toUpperCase(),
     category: input.category,
+    attributes: Object.fromEntries(
+      Object.entries({ fit: input.fit.trim(), color: input.color.trim() }).filter(([, value]) => value),
+    ),
     price: input.price,
     compare_at_price: input.compareAtPrice,
     description: input.description.trim() || null,
@@ -48,6 +53,7 @@ export async function saveProduct(input: ProductForm): Promise<ActionResult> {
     status: input.status,
     is_featured: input.featured,
     show_size_guide: input.sizeGuide,
+    card_image: input.cardImage.trim() || null,
   };
 
   let id = input.id;

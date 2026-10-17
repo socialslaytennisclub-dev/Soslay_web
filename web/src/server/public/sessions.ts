@@ -1,6 +1,6 @@
 import "server-only";
 import { cache } from "react";
-import { isActivityType, sessions as contentSessions, type Session } from "@/content/activity";
+import { isActivityType, sessions as contentSessions, type Session, type TennisLevel } from "@/content/activity";
 import { CITY_TIMEZONE, type City } from "@/lib/format";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabasePublicClient } from "@/lib/supabase/public";
@@ -26,6 +26,9 @@ type Row = {
   is_featured: boolean;
   show_on_homepage: boolean;
   visible_until: string | null;
+  price: number;
+  capacity: number;
+  recommended_levels: TennisLevel[];
   venues: { name: string; city: string; address: string | null; cover_path: string | null } | null;
 };
 
@@ -48,13 +51,19 @@ export const getWebsiteSessions = cache(async (): Promise<Session[]> => {
   if (!isSupabaseConfigured) return contentSessions;
 
   const since = new Date(Date.now() - PAST_WINDOW_DAYS * 86_400_000).toISOString();
-  const { data, error } = await createSupabasePublicClient()
-    .from("sessions")
-    .select("id, slug, title, type_slug, starts_at, ends_at, cover_path, kuy_booking_url, is_featured, show_on_homepage, visible_until, venues(name, city, address, cover_path)")
-    .in("status", ["published", "completed"])
-    .gte("starts_at", since)
-    .order("starts_at")
-    .limit(500);
+  const client = createSupabasePublicClient();
+  const [{ data, error }, { data: slots }] = await Promise.all([
+    client
+      .from("sessions")
+      .select("id, slug, title, type_slug, starts_at, ends_at, cover_path, kuy_booking_url, is_featured, show_on_homepage, visible_until, price, capacity, recommended_levels, venues(name, city, address, cover_path)")
+      .in("status", ["published", "completed"])
+      .gte("starts_at", since)
+      .order("starts_at")
+      .limit(500),
+    // Sisa slot sesi mendatang (bookings tidak bisa dibaca publik → fungsi SECURITY DEFINER).
+    client.rpc("public_session_slots"),
+  ]);
+  const slotsLeft = new Map(((slots ?? []) as { session_id: string; slots_left: number }[]).map((r) => [r.session_id, r.slots_left]));
   // Database tidak bisa dihubungi → tetap tampilkan jadwal statis, jangan halaman error.
   if (error || !data) {
     console.error("[sessions] gagal memuat dari Supabase:", error?.message);
@@ -80,6 +89,10 @@ export const getWebsiteSessions = cache(async (): Promise<Session[]> => {
         image: s.cover_path || s.venues.cover_path || "/images/home/activity-weekly-mabar.webp",
         bookingUrl: s.kuy_booking_url || KUY_DEFAULT,
         featured: s.is_featured || s.show_on_homepage,
+        price: s.price,
+        capacity: s.capacity,
+        slotsLeft: slotsLeft.get(s.id),
+        levels: s.recommended_levels ?? [],
       },
     ];
   });

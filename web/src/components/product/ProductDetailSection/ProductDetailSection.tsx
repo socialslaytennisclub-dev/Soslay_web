@@ -2,8 +2,11 @@ import { Accordion, Button, Container, Icon, Text } from "@/components/ui";
 import { productPage, type Product, type ProductDetail } from "@/content/products";
 import { cx } from "@/lib/cx";
 import { ProductGallery } from "../ProductGallery/ProductGallery";
+import { socialLinks } from "@/content/site";
 import { ProductPurchase } from "../ProductPurchase/ProductPurchase";
 import styles from "./ProductDetailSection.module.css";
+
+const whatsappHref = socialLinks.find((link) => link.label === "WhatsApp")?.href ?? "https://wa.me/62642424792";
 
 type ProductDetailSectionProps = {
   product: Product;
@@ -27,16 +30,16 @@ export function ProductDetailSection({ product, detail }: ProductDetailSectionPr
               <Text as="h1" id="product-title" variant="heading-42" tone="primary" data-anim="split">
                 {product.name}
               </Text>
-              {/* Figma: "RP." Inter Bold 18 + angka Poppins Bold 20; harga coret abu */}
+              {/* Figma v2: "IDR" Inter Bold 18 + angka Poppins Bold 20; harga coret abu */}
               <p className={styles.price} data-anim="fade-up">
                 <span className={styles.current}>
-                  <span className={styles.currency}>RP.</span>
+                  <span className={styles.currency}>IDR</span>
                   {rupiah.format(product.price)}
                 </span>
                 {product.compareAtPrice && (
                   <s className={cx(styles.current, styles.compare)}>
-                    <span className="visually-hidden">Harga normal </span>
-                    <span className={styles.currency}>RP.</span>
+                    <span className="visually-hidden">Regular price </span>
+                    <span className={styles.currency}>IDR</span>
                     {rupiah.format(product.compareAtPrice)}
                   </s>
                 )}
@@ -77,7 +80,19 @@ export function ProductDetailSection({ product, detail }: ProductDetailSectionPr
                   </ul>
                 ),
               },
-              { title: productPage.accordion.material, content: <p>{detail.material}</p> },
+              {
+                title: productPage.accordion.material,
+                content: detail.material.trim() ? (
+                  <p>{detail.material}</p>
+                ) : (
+                  <p className={styles.empty}>
+                    {productPage.accordion.materialEmpty.text}{" "}
+                    <a href={whatsappHref} target="_blank" rel="noopener noreferrer" className={styles.emptyLink}>
+                      {productPage.accordion.materialEmpty.cta}
+                    </a>
+                  </p>
+                ),
+              },
             ]}
           />
         </div>

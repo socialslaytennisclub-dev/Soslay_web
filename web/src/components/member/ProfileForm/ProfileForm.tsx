@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { pinWithin } from "@/animations";
-import { Avatar, Button, Checkbox, ChoiceChips, SelectField, TextField } from "@/components/ui";
+import { Avatar, Button, Checkbox, ChoiceChips, DateField, SelectField, TextField } from "@/components/ui";
 import {
   cityOptions,
   eventTypeOptions,
@@ -20,6 +20,7 @@ import {
   type ProfileField,
 } from "@/content/member";
 import { gsap, useGSAP } from "@/lib/gsap";
+import { todayIso } from "@/lib/auth";
 import { profileCompletion, validateProfile } from "@/lib/profile";
 import { ProfileSummary } from "./ProfileSummary";
 import styles from "./ProfileForm.module.css";
@@ -149,7 +150,7 @@ export function ProfileForm() {
           <div className={styles.grid}>
             <TextField label="Full Name" required value={profile.fullName} error={errors.fullName} autoComplete="name" onChange={(e) => update("fullName", e.target.value)} />
             <TextField label="Display Name / Nickname" value={profile.displayName} autoComplete="nickname" onChange={(e) => update("displayName", e.target.value)} />
-            <TextField label="Date of Birth" type="date" icon="calendar-blank" value={profile.birthDate} autoComplete="bday" onChange={(e) => update("birthDate", e.target.value)} />
+            <DateField label="Date of Birth" value={profile.birthDate} error={errors.birthDate} autoComplete="bday" onChange={(value) => update("birthDate", value)} max={todayIso()} />
             <SelectField label="Gender" options={genderOptions} value={profile.gender} placeholder="Pilih gender" onChange={(value) => update("gender", value)} />
             <TextField label="Phone Number / WhatsApp" required prefix="+62" type="tel" inputMode="tel" autoComplete="tel-national" value={profile.phone} error={errors.phone} onChange={(e) => update("phone", e.target.value)} />
             <SelectField label="City / Location" required options={cityOptions} value={profile.city} placeholder="Pilih kota" error={errors.city} onChange={(value) => update("city", value)} />

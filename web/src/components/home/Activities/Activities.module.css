@@ -45,9 +45,10 @@
   border-radius: var(--radius-lg);
 }
 
+/* Figma Website v2 mobile (375:3003): kartu ±240px */
 .card {
   height: 100%;
-  min-height: 320px;
+  min-height: 240px;
 }
 
 .cardText {
@@ -59,6 +60,47 @@
 
 .cardDescription {
   max-width: 480px;
+  text-shadow: 0 1px 12px rgb(0 0 0 / 0.35);
+}
+
+/* Deskripsi: tinggi 0 → penuh (grid-template-rows) + geser dari bawah, hanya di perangkat ber-hover */
+.reveal {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+
+.reveal > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cardText {
+    gap: 0;
+    transition: gap var(--duration-base) var(--ease-out);
+  }
+
+  .reveal {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: translateY(16px);
+    transition:
+      grid-template-rows var(--duration-base) var(--ease-out),
+      opacity var(--duration-base) var(--ease-out),
+      transform var(--duration-base) var(--ease-out);
+  }
+
+  .link:hover .cardText,
+  .link:focus-visible .cardText {
+    gap: var(--space-16);
+  }
+
+  .link:hover .reveal,
+  .link:focus-visible .reveal {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    transform: none;
+  }
 }
 
 /* ── Statistik ───────────────────────────────────────────── */

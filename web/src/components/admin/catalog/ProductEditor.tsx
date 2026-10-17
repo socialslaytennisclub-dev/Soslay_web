@@ -119,6 +119,10 @@ export function ProductEditor({ initial, categories, imageOptions, initialNotice
                 <input className={styles.input} value={p.sku} onChange={(e) => set("sku", e.target.value.toUpperCase())} placeholder="SOS-APP-010" />
               </label>
             </div>
+            <label className={styles.field}>
+              <span className={styles.label}>Subjudul kartu</span>
+              <input className={styles.input} value={p.subtitle} maxLength={80} onChange={(e) => set("subtitle", e.target.value)} placeholder="mis. Oversized fit T-shirt" />
+            </label>
             <fieldset className={styles.fieldset}>
               <legend className={styles.label}>Kategori</legend>
               <div className={styles.segmentWrap}>
@@ -129,6 +133,16 @@ export function ProductEditor({ initial, categories, imageOptions, initialNotice
                 ))}
               </div>
             </fieldset>
+            <div className={styles.cols2}>
+              <label className={styles.field}>
+                <span className={styles.label}>Fit (opsional)</span>
+                <input className={styles.input} value={p.fit} onChange={(e) => set("fit", e.target.value)} placeholder="mis. Relaxed Fit – Semi-Oversized" />
+              </label>
+              <label className={styles.field}>
+                <span className={styles.label}>Warna (opsional)</span>
+                <input className={styles.input} value={p.color} onChange={(e) => set("color", e.target.value)} placeholder="mis. Washed Black" />
+              </label>
+            </div>
             <TextArea label="Deskripsi" value={p.description} onChange={(v) => set("description", v)} maxLength={600} rows={4} />
             <TextArea label="Detail produk (satu poin per baris)" value={p.details.join("\n")} onChange={(v) => set("details", v.split("\n"))} maxLength={1200} rows={4} />
             <TextArea label="Material & perawatan" value={p.material} onChange={(v) => set("material", v)} maxLength={400} rows={2} />
@@ -195,7 +209,7 @@ export function ProductEditor({ initial, categories, imageOptions, initialNotice
             )}
           </FormCard>
 
-          <FormCard title="Foto" subtitle="Foto pertama = cover kartu produk">
+          <FormCard title="Foto" subtitle="Galeri halaman produk · foto pertama = foto utama">
             <ul className={own.imageList}>
               {p.images.map((img, i) => (
                 <li key={`${img.path}-${i}`} className={own.imageRow}>
@@ -233,6 +247,20 @@ export function ProductEditor({ initial, categories, imageOptions, initialNotice
                 <AdminIcon name="caret-down" size={14} />
               </span>
               <span className={styles.muted}>Upload foto baru aktif setelah Supabase Storage disiapkan.</span>
+            </label>
+            <label className={styles.field}>
+              <span className={styles.label}>Foto kartu Shop (mockup)</span>
+              <span className={styles.selectWrap}>
+                <select className={cx(styles.input, styles.select)} value={p.cardImage} onChange={(e) => set("cardImage", e.target.value)}>
+                  <option value="">Sama dengan foto pertama</option>
+                  {[...new Set([...p.images.map((img) => img.path), ...imageOptions])].map((src) => (
+                    <option key={src} value={src}>
+                      {src.replace("/images/", "")}
+                    </option>
+                  ))}
+                </select>
+                <AdminIcon name="caret-down" size={14} />
+              </span>
             </label>
           </FormCard>
         </div>

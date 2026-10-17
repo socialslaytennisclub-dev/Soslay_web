@@ -44,6 +44,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
         <div className={styles.deniedActions}>
           <Link href="/">Kembali ke website</Link>
           <form action={signOut}>
+            <input type="hidden" name="to" value="admin" />
             <button type="submit">Masuk dengan akun lain</button>
           </form>
         </div>

@@ -1,10 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useRef, useState, type FormEvent } from "react";
-import { Button, Checkbox, TextField } from "@/components/ui";
-import { AFTER_AUTH, registerPage } from "@/content/auth";
-import { compact, MIN_PASSWORD, required, validateEmail, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
+import { useRef, useState, useTransition, type FormEvent } from "react";
+import { Button, Checkbox, DateField, TextField } from "@/components/ui";
+import { registerPage } from "@/content/auth";
+import { compact, MIN_PASSWORD, required, todayIso, validateBirthDate, validateEmail, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
+import { signUp } from "@/server/auth/actions";
 import { PasswordField } from "./PasswordField";
 import styles from "./AuthForms.module.css";
 
@@ -15,48 +15,67 @@ const initialValues: Values = { fullName: "", displayName: "", kuyId: "", birthD
 
 /**
  * Figma 25:1854 — form daftar: Nama Lengkap · Display Name + Kuy ID · Tanggal lahir + Phone ·
- * Email + Password · persetujuan · tombol arrow. Belum ada backend (siap diganti POST /api/auth/register).
+ * Email + Password · persetujuan · tombol arrow → server action `signUp` (Supabase Auth + profil member).
  */
 export function RegisterForm() {
-  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [values, setValues] = useState<Values>(initialValues);
   const [consent, setConsent] = useState(false);
   const [errors, setErrors] = useState<FieldErrors<Field>>({});
-  const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [confirmEmail, setConfirmEmail] = useState<string | null>(null);
+  const [submitting, startSubmit] = useTransition();
 
   const update = (field: keyof Values, value: string) => {
     setValues((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
+    setFormError(null);
   };
 
   function submit(event: FormEvent) {
     event.preventDefault();
     const next = compact<Field>({
-      fullName: required(values.fullName, "Nama lengkap"),
+      fullName: required(values.fullName, "Full name"),
       kuyId: required(values.kuyId, "Kuy ID"),
+      birthDate: validateBirthDate(values.birthDate),
       phone: validatePhone(values.phone),
       email: validateEmail(values.email),
       password: validatePassword(values.password, true),
-      consent: consent ? undefined : "Centang persetujuan untuk melanjutkan",
+      consent: consent ? undefined : "Please agree to continue",
     });
     setErrors(next);
     if (Object.keys(next).length) {
       formRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus();
       return;
     }
-    setSubmitting(true);
-    router.push(AFTER_AUTH);
+    startSubmit(async () => {
+      const result = await signUp(values);
+      if (result?.fieldErrors) {
+        setErrors(result.fieldErrors);
+        requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus());
+      }
+      if (result?.error) setFormError(result.error);
+      if (result?.confirmEmail) setConfirmEmail(result.confirmEmail);
+    });
+  }
+
+  if (confirmEmail) {
+    return (
+      <div className={styles.confirm} role="status">
+        <p className={styles.confirmTitle}>{registerPage.confirm.title}</p>
+        <p>{registerPage.confirm.text(confirmEmail)}</p>
+      </div>
+    );
   }
 
   return (
     <form ref={formRef} className={styles.form} onSubmit={submit} noValidate>
       <div className={styles.fields}>
         <TextField
-          label="Nama Lengkap"
+          label="Full Name"
           required
           autoComplete="name"
-          placeholder="Nama lengkap kamu"
+          placeholder="Enter your full name"
           value={values.fullName}
           error={errors.fullName}
           onChange={(event) => update("fullName", event.target.value)}
@@ -65,26 +84,19 @@ export function RegisterForm() {
           <TextField
             label="Display Name"
             autoComplete="nickname"
-            placeholder="Nama panggilan"
+            placeholder="How should we call you?"
             value={values.displayName}
             onChange={(event) => update("displayName", event.target.value)}
           />
           <TextField
-            label="Kuy ID"
+            label="Kuyy ID"
             required
-            placeholder="Username Kuy kamu"
+            placeholder="Your Kuyy username"
             value={values.kuyId}
             error={errors.kuyId}
             onChange={(event) => update("kuyId", event.target.value)}
           />
-          <TextField
-            label="Date of Birth"
-            type="date"
-            icon="calendar-blank"
-            autoComplete="bday"
-            value={values.birthDate}
-            onChange={(event) => update("birthDate", event.target.value)}
-          />
+          <DateField label="Date of Birth" autoComplete="bday" value={values.birthDate} error={errors.birthDate} onChange={(iso) => update("birthDate", iso)} max={todayIso()} />
           <TextField
             label="Phone Number"
             required
@@ -102,7 +114,7 @@ export function RegisterForm() {
             required
             type="email"
             autoComplete="email"
-            placeholder="nama@email.com"
+            placeholder="you@email.com"
             value={values.email}
             error={errors.email}
             onChange={(event) => update("email", event.target.value)}
@@ -110,8 +122,9 @@ export function RegisterForm() {
           <PasswordField
             label="Password"
             required
+            showStrength
             autoComplete="new-password"
-            placeholder={`Minimal ${MIN_PASSWORD} karakter`}
+            placeholder={`Minimum ${MIN_PASSWORD} characters`}
             value={values.password}
             error={errors.password}
             onChange={(event) => update("password", event.target.value)}
@@ -133,8 +146,13 @@ export function RegisterForm() {
           </Checkbox>
           {errors.consent && <p className={styles.error}>{errors.consent}</p>}
         </div>
+        {formError && (
+          <p className={styles.error} role="alert">
+            {formError}
+          </p>
+        )}
         <Button type="submit" variant="arrow" className={styles.submit} disabled={submitting}>
-          {submitting ? "Memproses…" : registerPage.submit}
+          {submitting ? "Processing…" : registerPage.submit}
         </Button>
       </div>
     </form>

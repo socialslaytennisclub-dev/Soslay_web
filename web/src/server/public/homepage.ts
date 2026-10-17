@@ -78,7 +78,7 @@ export const getHomepage = cache(async (): Promise<Homepage> => {
   const client = createSupabasePublicClient();
   const [{ data: rows, error }, { data: testimonials }, venues, catalog] = await Promise.all([
     client.from("content_sections").select("key, published, is_enabled, sort_order").eq("page", "home").order("sort_order"),
-    client.from("testimonials").select("author_name, author_handle, quote, avatar_path").eq("is_published", true).order("sort_order"),
+    client.from("testimonials").select("author_name, author_handle, quote, avatar_path, kind, video_url, video_platform").eq("is_published", true).order("sort_order"),
     getWebsiteVenues(),
     getShopCatalog(),
   ]);
@@ -123,7 +123,12 @@ export const getHomepage = cache(async (): Promise<Homepage> => {
       description: community.description ?? base.community.description,
       cta: community.cta ?? base.community.cta,
       testimonials: (testimonials?.length
-        ? testimonials.map((t) => ({ quote: t.quote as string, name: (t.author_handle as string | null) ?? (t.author_name as string), avatar: (t.avatar_path as string | null) ?? undefined }))
+        ? testimonials.map((t) => ({
+            quote: t.quote as string,
+            name: (t.author_handle as string | null) ?? (t.author_name as string),
+            avatar: (t.avatar_path as string | null) ?? undefined,
+            video: t.kind === "video" && t.video_url ? { url: t.video_url as string, platform: (t.video_platform as string | null) ?? "instagram" } : undefined,
+          }))
         : base.community.testimonials) as typeof base.community.testimonials,
     },
     marquee: marquee.title || base.marquee,
@@ -132,7 +137,8 @@ export const getHomepage = cache(async (): Promise<Homepage> => {
       title: shop.title || base.shop.title,
       description: shop.description ?? base.shop.description,
       cta: shop.cta ?? base.shop.cta,
-      products: catalog.products.filter((p) => p.featured).map(productCardProps),
+      // Figma: 2 kartu unggulan (Best Seller teratas).
+      products: catalog.products.filter((p) => p.featured).slice(0, 2).map((p) => productCardProps(p, catalog.details[p.slug])),
     },
     instagram: {
       ...base.instagram,

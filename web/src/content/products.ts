@@ -6,9 +6,14 @@
 
 import type { PageHeroContent } from "@/components/sections/PageHero/PageHero";
 
+/** Urutan = urutan section di halaman Shop (Figma Website v2 347:2044). */
 export const productCategories = [
-  { slug: "apparel", label: "Apparel" },
-  { slug: "racket", label: "Racket" },
+  { slug: "apparel", label: "T-Shirt", description: "Tees made for the court and beyond. Breathable, easy to style, and inspired by the places we play." },
+  { slug: "socks", label: "Socks", description: "Comfy crew socks in 100% cotton. The finishing touch for a clean, all-white tennis look." },
+  { slug: "pin", label: "Enamel Pin", description: "Collectible pins from every Soslay series. Clip them on your bag, cap, or jacket to show off the rallies you've been part of." },
+  { slug: "figure", label: "Custom Figure", description: "Mini collectible figures of the Slayers. A playful keepsake for your desk, shelf, or racket bag." },
+  { slug: "racket", label: "Racket", description: "Rackets picked and played by the community — from control frames to easy-swinging lites." },
+  { slug: "accessory", label: "Accessory", description: "The little extras that complete your kit." },
 ] as const;
 
 export type ProductCategory = (typeof productCategories)[number]["slug"];
@@ -17,13 +22,15 @@ export type Product = {
   slug: string;
   sku: string;
   name: string;
+  /** Baris kecil di kartu, mis. "Oversized fit T-shirt". */
+  subtitle?: string;
   category: ProductCategory;
   price: number;
   compareAtPrice?: number;
   image: string;
   /** Crop foto di kartu. */
   imagePosition?: string;
-  /** Tampil di section unggulan (homepage & atas halaman Shop). */
+  /** Best Seller di Shop & produk unggulan homepage. */
   featured?: boolean;
   /** 0 = habis. */
   stock: number;
@@ -41,7 +48,6 @@ export const products: Product[] = [
     compareAtPrice: 250000,
     image: `${IMG}/home/product-a-piece-of-bali.webp`,
     imagePosition: "50% 66%",
-    featured: true,
     stock: 42,
   },
   {
@@ -53,7 +59,6 @@ export const products: Product[] = [
     compareAtPrice: 250000,
     image: `${IMG}/home/product-a-piece-of-the-really.webp`,
     imagePosition: "30% 20%",
-    featured: true,
     stock: 4,
   },
   {
@@ -96,6 +101,32 @@ export const products: Product[] = [
     imagePosition: "20% 30%",
     stock: 0,
   },
+  ...([
+    ["destination-series-bali-white", "SOS-APP-010", "Destination Series 01: Bali — White", "apparel", "Oversized fit T-shirt", 220000, 280000, false],
+    ["love-game-black-washed", "SOS-APP-011", "Love Game — Black Washed", "apparel", "Relaxed semi-oversized fit T-shirt", 250000, 300000, false],
+    ["rally-in-paradise-white", "SOS-APP-012", "Rally in Paradise — White", "apparel", "Regular fit T-shirt", 200000, 250000, true],
+    ["destination-series-bali-black", "SOS-APP-013", "Destination Series 01: Bali — Black", "apparel", "Oversized fit T-shirt", 220000, 280000, true],
+    ["beyond-the-court-black", "SOS-APP-014", "Beyond the Court — Black", "apparel", "Relaxed semi-oversized fit T-shirt", 200000, 280000, false],
+    ["slay-socks-white", "SOS-SCK-001", "Slay Socks — White", "socks", "Crew socks · 100% cotton", 80000, undefined, false],
+    ["pin-destination-series-lime", "SOS-PIN-001", "Destination Series — Lime", "pin", "Collectible enamel pin", 70000, undefined, false],
+    ["pin-destination-series-navy", "SOS-PIN-002", "Destination Series — Navy", "pin", "Collectible enamel pin", 70000, undefined, false],
+    ["pin-love-game", "SOS-PIN-003", "Love Game Series", "pin", "Collectible enamel pin", 70000, undefined, false],
+    ["pin-beyond-the-court", "SOS-PIN-004", "Beyond the Court", "pin", "Collectible enamel pin", 70000, undefined, true],
+    ["pin-rally-in-paradise", "SOS-PIN-005", "Rally in Paradise", "pin", "Collectible enamel pin", 70000, undefined, false],
+    ["mini-slayers-figure", "SOS-FIG-001", "Mini Slayers Figure", "figure", "Collectible mini figure", 220000, undefined, true],
+  ] as const).map(([slug, sku, name, category, subtitle, price, compareAtPrice, featured]): Product => ({
+    slug,
+    sku,
+    name,
+    subtitle,
+    category,
+    price,
+    compareAtPrice,
+    image: `${IMG}/products/${slug}.webp`,
+    imagePosition: "50% 50%",
+    featured,
+    stock: 10,
+  })),
 ];
 
 export type ProductOptionGroup = {
@@ -121,7 +152,7 @@ export type ProductDetail = {
 const apparelOptions: ProductOptionGroup[] = [
   {
     key: "type",
-    label: "Pilih Type",
+    label: "Select Type",
     values: [
       { value: "oversize", label: "Oversize" },
       { value: "regular", label: "Regular" },
@@ -129,15 +160,15 @@ const apparelOptions: ProductOptionGroup[] = [
   },
   {
     key: "color",
-    label: "Pilih Warna",
+    label: "Select Color",
     values: [
-      { value: "putih", label: "Putih", hex: "#FFFFFF" },
+      { value: "putih", label: "White", hex: "#FFFFFF" },
       { value: "charcoal", label: "Charcoal", hex: "#5F5F5F" },
     ],
   },
   {
     key: "size",
-    label: "Pilih Ukuran",
+    label: "Select Size",
     values: ["S", "M", "L", "XL", "XXL"].map((size) => ({ value: size, label: size })),
   },
 ];
@@ -145,7 +176,7 @@ const apparelOptions: ProductOptionGroup[] = [
 const racketOptions: ProductOptionGroup[] = [
   {
     key: "grip",
-    label: "Pilih Grip",
+    label: "Select Grip",
     values: [
       { value: "G2", label: "G2" },
       { value: "G3", label: "G3" },
@@ -154,77 +185,77 @@ const racketOptions: ProductOptionGroup[] = [
 ];
 
 const apparelDetails = [
-  "Cotton combed 24s, 220 gsm — tebal tapi tetap adem untuk main pagi.",
-  "Sablon plastisol di bagian belakang, tahan dicuci berulang.",
-  "Jahitan rantai di bahu & leher supaya tidak melar.",
+  "Combed cotton 24s, 220 gsm — thick yet breathable for morning sessions.",
+  "Plastisol print on the back that holds up wash after wash.",
+  "Chain-stitched shoulders & collar so it keeps its shape.",
 ];
 
 const racketDetails = [
-  "Head size 100 sq in — sweet spot luas, cocok untuk rally panjang.",
-  "Berat tanpa senar ±300 g, balance sedikit head-light.",
-  "Termasuk cover raket Soslay edisi terbatas.",
+  "100 sq in head — a generous sweet spot for long rallies.",
+  "±300 g unstrung, slightly head-light balance.",
+  "Comes with a limited-edition Soslay racket cover.",
 ];
 
 export const productDetails: Record<string, ProductDetail> = {
   "a-piece-of-bali": {
     description:
-      "Kaos edisi Tennis Escape Bali — bunga kamboja ala lapangan tenis di punggung, dibuat untuk member yang ikut sesi di Kintamani. Enak dipakai main, lebih enak lagi dipakai setelahnya.",
+      "The Tennis Escape Bali tee — a tennis-court frangipani on the back, made for members who joined the Kintamani sessions. Great to play in, even better afterwards.",
     details: apparelDetails,
-    material: "100% cotton combed 24s, 220 gsm. Cuci dengan air dingin, jangan disetrika langsung di atas sablon.",
+    material: "100% combed cotton 24s, 220 gsm. Wash cold and don't iron directly on the print.",
     options: apparelOptions,
     gallery: [
-      { src: `${IMG}/home/product-a-piece-of-bali.webp`, alt: "A Piece of Bali tampak belakang", position: "50% 30%" },
-      { src: `${IMG}/home/activity-tennis-escape.webp`, alt: "Member memakai kaos A Piece of Bali di sesi Tennis Escape", position: "50% 40%" },
+      { src: `${IMG}/home/product-a-piece-of-bali.webp`, alt: "A Piece of Bali, back view", position: "50% 30%" },
+      { src: `${IMG}/home/activity-tennis-escape.webp`, alt: "A member wearing A Piece of Bali at a Tennis Escape session", position: "50% 40%" },
     ],
     sizeGuide: true,
   },
   "a-piece-of-the-really": {
     description:
-      "Kaos “Beyond the Court” dengan sablon bunga tangan di punggung. Washed charcoal yang makin bagus tiap kali dicuci — buat main, nongkrong, sampai jalan-jalan.",
+      "The “Beyond the Court” tee with a hand-drawn flower print on the back. Washed charcoal that gets better with every wash — for playing, hanging out, and travelling.",
     details: apparelDetails,
-    material: "100% cotton combed 24s, 220 gsm, proses acid wash. Warna bisa sedikit berbeda tiap potong.",
+    material: "100% combed cotton 24s, 220 gsm, acid-washed. Color may vary slightly per piece.",
     options: apparelOptions,
     gallery: [
-      { src: `${IMG}/home/product-a-piece-of-the-really.webp`, alt: "A Piece of The Really tampak belakang", position: "50% 25%" },
-      { src: `${IMG}/home/community-group.webp`, alt: "Member Soslay memakai merchandise di lapangan", position: "40% 50%" },
+      { src: `${IMG}/home/product-a-piece-of-the-really.webp`, alt: "A Piece of The Really, back view", position: "50% 25%" },
+      { src: `${IMG}/home/community-group.webp`, alt: "Soslay members wearing merch on court", position: "40% 50%" },
     ],
     sizeGuide: true,
   },
   "pro-racket-series": {
-    description: "Raket kontrol untuk pemain intermediate–advanced. Frame kaku, feel solid saat volley di net.",
+    description: "A control racket for intermediate–advanced players. Stiff frame, solid feel on net volleys.",
     details: racketDetails,
-    material: "Graphite 100% dengan grommet anti-getar. Senar belum terpasang.",
+    material: "100% graphite with anti-vibration grommets. Sold unstrung.",
     options: racketOptions,
-    gallery: [{ src: `${IMG}/products/racket-net-clay.webp`, alt: "Pro Racket Series bersandar di net", position: "30% 40%" }],
+    gallery: [{ src: `${IMG}/products/racket-net-clay.webp`, alt: "Pro Racket Series leaning on the net", position: "30% 40%" }],
   },
   "court-racket-lite": {
-    description: "Raket ringan untuk pemula — mudah diayun, memaafkan pukulan yang belum tepat di tengah.",
+    description: "A light racket for beginners — easy to swing and forgiving on off-center hits.",
     details: racketDetails,
-    material: "Graphite composite. Termasuk senar terpasang (tension 52 lbs).",
+    material: "Graphite composite. Comes strung (52 lbs tension).",
     options: racketOptions,
-    gallery: [{ src: `${IMG}/products/racket-black-hand.webp`, alt: "Court Racket Lite dipegang di tangan", position: "40% 40%" }],
+    gallery: [{ src: `${IMG}/products/racket-black-hand.webp`, alt: "Court Racket Lite held in hand", position: "40% 40%" }],
   },
   "blade-green-edition": {
-    description: "Edisi hijau untuk yang suka main dengan feel klasik. Fleksibel, presisi, dan jelas mencuri perhatian.",
+    description: "A green edition for players who love a classic feel. Flexible, precise, and an obvious head-turner.",
     details: racketDetails,
-    material: "Braided graphite + basalt. Senar belum terpasang.",
+    material: "Braided graphite + basalt. Sold unstrung.",
     options: racketOptions,
     gallery: [{ src: `${IMG}/products/racket-wilson-green.webp`, alt: "Blade Green Edition close-up", position: "50% 30%" }],
   },
   "green-line-racket": {
-    description: "Raket all-round dengan aksen hijau. Restock berikutnya diumumkan di Instagram kami.",
+    description: "An all-round racket with green accents. The next restock will be announced on our Instagram.",
     details: racketDetails,
-    material: "Graphite composite. Senar belum terpasang.",
+    material: "Graphite composite. Sold unstrung.",
     options: racketOptions,
-    gallery: [{ src: `${IMG}/products/racket-green-paving.webp`, alt: "Green Line Racket di atas paving", position: "40% 40%" }],
+    gallery: [{ src: `${IMG}/products/racket-green-paving.webp`, alt: "Green Line Racket on paving", position: "40% 40%" }],
   },
 };
 
 /** Tabel panduan ukuran apparel (cm). */
 export const sizeGuide = {
-  title: "Panduan Ukuran",
-  note: "Ukur kaos favoritmu yang paling pas, lalu bandingkan. Toleransi ±1–2 cm.",
-  columns: ["Ukuran", "Lebar dada", "Panjang badan"],
+  title: "Size Guide",
+  note: "Measure your best-fitting tee and compare. Tolerance ±1–2 cm.",
+  columns: ["Size", "Chest width", "Body length"],
   rows: [
     ["S", "50", "68"],
     ["M", "53", "71"],
@@ -268,10 +299,27 @@ export function featuredProducts(): Product[] {
   return products.filter((product) => product.featured);
 }
 
-/** Data siap pakai untuk <ProductCard>. */
-export function productCardProps(product: Product) {
+/**
+ * Data siap pakai untuk <ProductCard>. `detail` (opsional) → tombol tas di kartu:
+ * semua grup satu nilai (pin, figure) → langsung masuk tas; tepat satu grup dengan banyak nilai
+ * (ukuran kaos) → pilih di kartu; lebih dari itu → tombol membuka halaman produk.
+ */
+export function productCardProps(product: Product, detail?: ProductDetail) {
+  const groups = detail?.options ?? [];
+  const multi = groups.filter((group) => group.values.length > 1);
+  const quickAdd =
+    detail && multi.length <= 1
+      ? {
+          fixed: Object.fromEntries(groups.filter((group) => group.values.length === 1).map((group) => [group.key, group.values[0].value])),
+          choice: multi[0] && { key: multi[0].key, label: multi[0].label, values: multi[0].values.map((v) => v.value) },
+        }
+      : undefined;
   return {
+    slug: product.slug,
+    quickAdd,
+    featured: product.featured,
     name: product.name,
+    subtitle: product.subtitle,
     href: productHref(product),
     image: product.image,
     imagePosition: product.imagePosition,
@@ -285,52 +333,50 @@ export function isProductCategory(value: unknown): value is ProductCategory {
   return productCategories.some((category) => category.slug === value);
 }
 
-/** Copy halaman Shop (Figma 25:1346). */
+/** Copy Product detail (Figma Website v2 375:2522). */
 export const productPage = {
-  addToBag: "Tambahkan ke Tas Belanja",
-  buyNow: "Beli Langsung Sekarang",
-  soldOut: "Stok habis",
-  added: "Ditambahkan ke tas belanja.",
-  /** "Pilih Ukuran" → "Pilih Ukuran dulu ya." */
-  chooseFirst: (label: string) => `${label} dulu ya.`,
-  loginBanner: { text: "Masuk untuk dapat Slay Point dari setiap pembelian.", cta: "Masuk", href: "/masuk" },
-  accordion: { details: "Detail Produk", material: "Material" },
+  addToBag: "Add to Bag",
+  buyNow: "Buy Now",
+  soldOut: "Sold out",
+  added: "Added to your bag.",
+  /** "Select Size" → "Select Size first." */
+  chooseFirst: (label: string) => `${label} first.`,
+  loginBanner: { text: "Sign in to earn Slay Points on this purchase.", cta: "Sign In", href: "/masuk" },
+  accordion: {
+    details: "Product Details",
+    material: "Material",
+    /** Tampil bila material belum diisi di admin Products. */
+    materialEmpty: { text: "Material & care details are coming soon. Have a question?", cta: "Chat with us on WhatsApp" },
+  },
   trust: {
-    title: "Belanja dengan rasa aman dan nyaman",
+    title: "Shop with peace of mind",
     items: [
-      { icon: "truck", title: "Pengiriman cepat", text: "Dikirim lewat JNE & SiCepat, sampai dalam 2–3 hari kerja untuk Jabodetabek dan Bali." },
-      { icon: "package", title: "Dikemas rapi", text: "Setiap pesanan dibungkus box Soslay dan diperiksa satu per satu sebelum dikirim." },
-      { icon: "shield-check", title: "Pembayaran aman", text: "Bayar dengan QRIS, virtual account, atau e-wallet. Tukar ukuran gratis dalam 7 hari." },
+      { icon: "truck", title: "Fast, tracked shipping", text: "Orders ship within 2–3 business days with a tracking number, so you always know where your package is." },
+      { icon: "package", title: "Easy size exchange", text: "Wrong size? Exchange it within 7 days of delivery, as long as it's unworn and the tags are still attached." },
+      { icon: "shield-check", title: "Secure checkout", text: "Pay safely through trusted payment partners — from bank transfer to e-wallets and cards." },
     ],
   },
 } as const;
 
+/** Copy halaman Shop (Figma Website v2 347:2044). */
 export const shopPage = {
   hero: {
     wordmark: "Shop",
     eyebrow: "Soslay Shop",
-    title: "Dari Lapangan ke Keseharian",
-    highlight: "Keseharian",
-    description:
-      "Apparel dan perlengkapan tenis pilihan komunitas Soslay. Dibuat untuk dipakai main — dan dipamerkan sesudahnya.",
-    cta: { label: "Lihat koleksi", href: "#koleksi" },
-    meta: ["Edisi terbatas", "Dikirim 2–3 hari", "+1 Slay Point / Rp10.000"],
+    title: "From the Court to Every Day",
+    highlight: "Every Day",
+    description: "Apparel and accessories picked by the Soslay community. Made to play in and to show off afterwards.",
+    cta: { label: "Shop the collection", href: "#koleksi" },
+    meta: ["Limited edition", "Ships in 2–3 days", "+1 Slay Point per Rp10,000"],
     image: {
-      src: "/images/home/hero.webp",
-      alt: "Member Soslay melompat bersama di lapangan tenis",
-      position: "50% 60%",
+      src: "/images/shop/shop-hero.webp",
+      alt: "Soslay tees laid out on a tennis court",
+      position: "50% 50%",
     },
   } satisfies PageHeroContent,
-  featured: {
-    title: "Beyond the Court.",
-    description:
-      "Koleksi yang terinspirasi dari permainan, perjalanan, dan orang-orang yang membuat setiap momen di SOSLAY terasa spesial.",
+  bestSeller: {
+    title: "Best Seller",
+    description: "Community favorites — the pieces that keep selling out and keep showing up on court.",
   },
-  catalog: {
-    title: "Semua Koleksi",
-    description: "Apparel, raket, dan perlengkapan pilihan — dikurasi dan dipakai sendiri oleh komunitas.",
-    soldOut: "Habis",
-    lowStock: "Stok terbatas",
-    empty: "Belum ada produk di kategori ini.",
-  },
+  empty: "New drops are on the way — check back soon.",
 };

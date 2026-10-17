@@ -120,6 +120,7 @@ export function AdminSidebar({ memberCount, ordersToProcess, pendingRedemptions,
             <span className={styles.profileRole}>{user.role}</span>
           </span>
           <form action={signOut}>
+            <input type="hidden" name="to" value="admin" />
             <button
               type="submit"
               className={styles.signOut}

@@ -1,8 +1,11 @@
 "use client";
 
-import { useId, type ComponentPropsWithoutRef, type ReactNode } from "react";
+import { useCallback, useId, useRef, useState, type ComponentPropsWithoutRef, type ReactNode } from "react";
 import { cx } from "@/lib/cx";
 import { Icon, type IconName } from "../Icon/Icon";
+import { useClickOutside } from "@/hooks/useClickOutside";
+import { isValidIsoDate } from "@/lib/auth";
+import { DatePicker } from "./DatePicker";
 import styles from "./Field.module.css";
 
 type FieldShellProps = {
@@ -63,6 +66,114 @@ export function TextField({ label, required, error, prefix, icon, action, classN
           aria-invalid={error ? true : undefined}
           aria-describedby={describedBy}
           className={styles.input}
+        />
+      )}
+    </FieldShell>
+  );
+}
+
+/** "2001-07-05" → "05 / 07 / 2001". */
+const isoToText = (iso: string) => {
+  const [y, m, d] = iso.split("-");
+  return y && m && d ? `${d} / ${m} / ${y}` : "";
+};
+
+/** Digit yang diketik → "DD / MM / YYYY" bertahap. */
+const formatDigits = (digits: string) =>
+  [digits.slice(0, 2), digits.slice(2, 4), digits.slice(4, 8)].filter(Boolean).join(" / ");
+
+/** "05 / 07 / 2001" → "2001-07-05" bila tanggalnya ada di kalender, selain itu "". */
+function textToIso(text: string) {
+  const digits = text.replace(/\D/g, "");
+  const iso = digits.length === 8 ? `${digits.slice(4)}-${digits.slice(2, 4)}-${digits.slice(0, 2)}` : "";
+  return isValidIsoDate(iso) ? iso : "";
+}
+
+type DateFieldProps = Omit<FieldShellProps, "children" | "icon" | "prefix" | "action"> & {
+  /** ISO "YYYY-MM-DD", "" (kosong), atau teks ketikan apa adanya bila belum valid — cek dengan validateBirthDate. */
+  value: string;
+  onChange: (value: string) => void;
+  autoComplete?: string;
+  max?: string;
+};
+
+/**
+ * Tanggal "DD / MM / YYYY" (Figma) yang bisa diketik langsung — garis miring otomatis, keyboard angka
+ * di HP — plus ikon kalender yang membuka kalender Soslay (DatePicker), bukan pemilih bawaan browser.
+ */
+export function DateField({ label, required, error, className, value, onChange, autoComplete, max }: DateFieldProps) {
+  const [text, setText] = useState(() => isoToText(value));
+
+  // Nilai dari luar berubah (profil termuat / form di-reset) → tampilkan. Teks ketikan sendiri dibiarkan.
+  const [lastValue, setLastValue] = useState(value);
+  if (value !== lastValue) {
+    setLastValue(value);
+    if (value !== text && value !== textToIso(text)) setText(isValidIsoDate(value) ? isoToText(value) : value);
+  }
+
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLSpanElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const close = useCallback(() => {
+    setOpen(false);
+    buttonRef.current?.focus({ preventScroll: true });
+  }, []);
+  const dismiss = useCallback(() => setOpen(false), []);
+  useClickOutside(wrapRef, dismiss, open);
+
+  return (
+    <FieldShell
+      label={label}
+      required={required}
+      error={error}
+      className={className}
+      action={
+        <span ref={wrapRef} className={styles.pickerWrap}>
+          <button
+            ref={buttonRef}
+            type="button"
+            className={styles.iconButton}
+            onClick={() => setOpen((v) => !v)}
+            aria-label={`Pick ${label.toLowerCase()} from calendar`}
+            aria-expanded={open}
+          >
+            <Icon name="calendar-blank" size={20} />
+          </button>
+          {open && (
+            <DatePicker
+              value={isValidIsoDate(value) ? value : ""}
+              max={max}
+              onClose={close}
+              onSelect={(iso) => {
+                setText(isoToText(iso));
+                onChange(iso);
+                close();
+              }}
+            />
+          )}
+        </span>
+      }
+    >
+      {({ id, describedBy }) => (
+        <input
+          id={id}
+          type="text"
+          inputMode="numeric"
+          autoComplete={autoComplete}
+          placeholder="DD / MM / YYYY"
+          maxLength={14}
+          required={required}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={describedBy}
+          className={styles.input}
+          value={text}
+          onChange={(event) => {
+            const raw = event.target.value;
+            // Autofill browser (autoComplete="bday") mengisi "YYYY-MM-DD" — jangan diacak jadi DD/MM.
+            const next = isValidIsoDate(raw) ? isoToText(raw) : formatDigits(raw.replace(/\D/g, "").slice(0, 8));
+            setText(next);
+            onChange(textToIso(next) || next);
+          }}
         />
       )}
     </FieldShell>

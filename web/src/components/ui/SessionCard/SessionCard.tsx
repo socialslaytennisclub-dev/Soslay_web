@@ -31,7 +31,7 @@ export function SessionCard({
   image,
   imagePosition,
   href,
-  ctaLabel = "Booking Session di Kuyy",
+  ctaLabel = "Book a Session on Kuyy",
   cursorLabel = "Booking",
 }: SessionCardProps) {
   const external = /^https?:/.test(href);
@@ -77,7 +77,7 @@ export function SessionCard({
       href={href}
       className={styles.link}
       data-cursor={cursorLabel}
-      aria-label={`Lihat ${venueName}, sesi ${dateLabel}`}
+      aria-label={`View ${venueName}, session ${dateLabel}`}
     >
       {content}
     </Link>

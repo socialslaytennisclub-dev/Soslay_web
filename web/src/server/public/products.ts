@@ -23,6 +23,7 @@ type Row = {
   slug: string;
   sku: string;
   name: string;
+  subtitle: string | null;
   category: ProductCategory;
   price: number;
   compare_at_price: number | null;
@@ -31,17 +32,38 @@ type Row = {
   material: string | null;
   is_featured: boolean;
   show_size_guide: boolean;
+  /** Atribut tetap, mis. {"fit":"Relaxed Fit","color":"Washed Black"}. */
+  attributes: Record<string, string> | null;
+  /** Foto kartu Shop (mockup); null → foto galeri pertama. */
+  card_image: string | null;
   product_images: { path: string; alt: string; position: string | null; sort_order: number }[];
   product_variants: { options: Record<string, string>; stock: number }[];
 };
 
-const OPTION_LABEL: Record<string, string> = { size: "Pilih Ukuran", grip: "Pilih Grip", type: "Pilih Type", color: "Pilih Warna" };
+const OPTION_LABEL: Record<string, string> = { size: "Select Size", grip: "Select Grip", type: "Select Type", color: "Select Color", fit: "Select Fit" };
 
-/** Grup pilihan dari varian database (mis. {"size":"L"}) — satu grup per kunci. */
-function optionsFromVariants(variants: Row["product_variants"]): ProductOptionGroup[] {
+/** Warna atribut → swatch (Figma: "Select Color · Washed Black"). Nama lain tampil sebagai chip. */
+const COLOR_HEX: Record<string, string> = { white: "#FFFFFF", black: "#1C1C1C", "washed black": "#5F5F5F", navy: "#0A084A", lime: "#CAF100", cream: "#EFE6D2" };
+
+/** Urutan grup di halaman produk (Figma: Fit → Color → Size). JSONB tidak menjaga urutan kunci. */
+const OPTION_ORDER = ["type", "fit", "color", "size", "grip"];
+const SIZE_ORDER = ["XS", "S", "M", "L", "XL", "XXL", "XXXL"];
+
+/** Grup pilihan dari atribut produk (satu nilai) + varian database (mis. {"size":"L"}) — satu grup per kunci. */
+function optionsFromVariants(variants: Row["product_variants"], attributes: Row["attributes"]): ProductOptionGroup[] {
   const groups = new Map<string, Set<string>>();
+  for (const [key, value] of Object.entries(attributes ?? {})) if (value) groups.set(key, new Set([value]));
   for (const v of variants) for (const [key, value] of Object.entries(v.options ?? {})) groups.set(key, (groups.get(key) ?? new Set()).add(value));
-  return [...groups].map(([key, values]) => ({ key, label: OPTION_LABEL[key] ?? `Pilih ${key}`, values: [...values].map((value) => ({ value, label: value })) }));
+  const rank = (key: string) => (OPTION_ORDER.includes(key) ? OPTION_ORDER.indexOf(key) : OPTION_ORDER.length);
+  return [...groups]
+    .sort(([a], [b]) => rank(a) - rank(b))
+    .map(([key, values]) => ({
+      key,
+      label: OPTION_LABEL[key] ?? `Select ${key}`,
+      values: [...values]
+        .sort((a, b) => (key === "size" ? SIZE_ORDER.indexOf(a) - SIZE_ORDER.indexOf(b) : 0))
+        .map((value) => ({ value, label: value, hex: key === "color" ? COLOR_HEX[value.toLowerCase()] : undefined })),
+    }));
 }
 
 export const getShopCatalog = cache(async (): Promise<ShopCatalog> => {
@@ -50,7 +72,7 @@ export const getShopCatalog = cache(async (): Promise<ShopCatalog> => {
 
   const { data, error } = await createSupabasePublicClient()
     .from("products")
-    .select("slug, sku, name, category, price, compare_at_price, description, details, material, is_featured, show_size_guide, product_images(path, alt, position, sort_order), product_variants(options, stock)")
+    .select("slug, sku, name, subtitle, category, price, compare_at_price, description, details, material, is_featured, show_size_guide, attributes, card_image, product_images(path, alt, position, sort_order), product_variants(options, stock)")
     .eq("status", "active")
     .order("sort_order");
   if (error || !data) {
@@ -69,11 +91,12 @@ export const getShopCatalog = cache(async (): Promise<ShopCatalog> => {
       slug: p.slug,
       sku: p.sku,
       name: p.name,
+      subtitle: p.subtitle ?? undefined,
       category: p.category,
       price: p.price,
       compareAtPrice: p.compare_at_price ?? undefined,
-      image: cover?.path ?? content?.image ?? "/images/home/product-a-piece-of-bali.webp",
-      imagePosition: cover?.position ?? content?.imagePosition,
+      image: p.card_image ?? cover?.path ?? content?.image ?? "/images/home/product-a-piece-of-bali.webp",
+      imagePosition: p.card_image ? undefined : (cover?.position ?? content?.imagePosition),
       featured: p.is_featured,
       stock: p.product_variants.reduce((sum, v) => sum + v.stock, 0),
     });
@@ -81,7 +104,7 @@ export const getShopCatalog = cache(async (): Promise<ShopCatalog> => {
       description: p.description ?? contentDetail?.description ?? "",
       details: p.details?.length ? p.details : (contentDetail?.details ?? []),
       material: p.material ?? contentDetail?.material ?? "",
-      options: contentDetail?.options ?? optionsFromVariants(p.product_variants),
+      options: contentDetail?.options ?? optionsFromVariants(p.product_variants, p.attributes),
       gallery: images.length ? images.map((i) => ({ src: i.path, alt: i.alt || p.name, position: i.position ?? undefined })) : (contentDetail?.gallery ?? []),
       sizeGuide: p.show_size_guide,
     };

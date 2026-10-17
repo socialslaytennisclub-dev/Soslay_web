@@ -49,23 +49,27 @@ const firstHref = (html, prefix) =>
 
 console.log(`Smoke test ${base} (${demo ? "demo" : "live"})\n── Website`);
 await check("/", { includes: ["SOSLAY"] });
-const activity = await check("/activity", { includes: ["Booking"] });
+const activity = await check("/activity", { includes: ["Book a Session"] });
 await check("/activity?type=weekly-mabar");
+for (const type of ["mabar", "event", "escape", "coaching"]) await check(`/activity/${type}`, { includes: ["Soslay Activities"] });
+await check("/activity/tidak-ada", { status: 404 });
 const venues = await check("/venue");
 await check("/venue?city=bali");
 const venuePath = firstHref(venues, "/venue/");
-if (venuePath) await check(venuePath);
+if (venuePath) await check(venuePath, { includes: ["Upcoming", "Moments from"] });
 else failures.push("/venue → tidak ada link venue");
-await check("/venue/common-grounds-menteng/guide");
-const shop = await check("/shop", { includes: ["Rp"] });
-await check("/shop?category=racket");
+await check("/venue/common-grounds-menteng", { includes: ["View Participant Guideline", "Become a Member"] });
+await check("/venue/common-grounds-menteng/guide", { includes: ["Participant Guideline", "What to wear?"] });
+const shop = await check("/shop", { includes: ["Rp", "T-Shirt", "Best Seller"] });
 const productPath = firstHref(shop, "/shop/");
-// Halaman detail menulis harga "RP. 220.000" (huruf besar sesuai desain).
-if (productPath) await check(productPath, { includes: ["RP.", "SOSLAY Shop"] });
+// Halaman detail menulis harga "IDR 220.000" (Figma Website v2).
+if (productPath) await check(productPath, { includes: ["IDR", "SOSLAY Shop", "Add to Bag"] });
 else failures.push("/shop → tidak ada link produk");
-await check("/masuk");
-await check("/daftar");
-await check("/akun");
+await check("/masuk", { includes: ["Sign In"] });
+await check("/masuk/admin", { includes: ["Masuk ke Dashboard", "Area tim"] });
+await check("/daftar", { includes: ["Create Account"] });
+await check("/akun", demo ? {} : { status: 307, location: "/masuk?next=" });
+if (!demo) await check("/akun/order", { status: 307, location: "/masuk?next=" });
 await check("/auth/undangan");
 await check("/keranjang", { status: [307, 308], location: "/akun/order" });
 await check("/halaman-yang-tidak-ada", { status: 404 });
@@ -105,8 +109,8 @@ const adminPaths = [
 ];
 
 if (!demo) {
-  // Tanpa login semua halaman admin harus diarahkan ke /masuk (dan tidak membocorkan data).
-  for (const p of [...adminPaths, "/admin/members/export", "/admin/orders/SOS-2309/label", "/admin/points/export"]) await check(p, { status: 307, location: "/masuk?next=" });
+  // Tanpa login semua halaman admin harus diarahkan ke login admin (dan tidak membocorkan data).
+  for (const p of [...adminPaths, "/admin/members/export", "/admin/orders/SOS-2309/label", "/admin/points/export"]) await check(p, { status: 307, location: "/masuk/admin?next=" });
 } else {
   for (const p of adminPaths) await check(p);
   const members = await check("/admin/members?tab=all");
@@ -138,6 +142,9 @@ if (!demo) {
   if (venueEdit) await check(venueEdit, { includes: ["Lapangan"] });
   else failures.push("/admin/venues → tidak ada link edit venue");
   await check("/admin/members/export?tier=gold", { contentType: "text/csv" });
+  await check("/admin/konten?tab=community", { includes: ["Testimoni komunitas", "Tambah testimoni", "Post Instagram"] });
+  const productEditor = await check("/admin/products/new", { includes: ["Subjudul kartu", "Foto kartu Shop"] });
+  if (!productEditor.includes("Enamel Pin")) failures.push("/admin/products/new → kategori Enamel Pin tidak ada");
   // Slay Point & Reward: editor reward, panel penukaran, aturan, tier + riwayat, export.
   const rewards = await check("/admin/points", { includes: ["Katalog reward", "Poin beredar"] });
   const rewardId = [...rewards.matchAll(/\/admin\/points\?reward=([\w-]+)/g)].map((m) => m[1]).find((id) => id !== "new");

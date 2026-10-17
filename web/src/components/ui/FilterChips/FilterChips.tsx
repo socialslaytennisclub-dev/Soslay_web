@@ -20,7 +20,9 @@ export function FilterChips({ items, label, tone = "light", className }: FilterC
           <li key={item.href}>
             <Link
               href={item.href}
-              scroll={false}
+              // Filter di halaman yang sama (?query / #anchor) → posisi scroll dipertahankan;
+              // pindah ke halaman lain (mis. /activity/mabar) → mulai dari atas (hero).
+              scroll={/[?#]/.test(item.href) ? false : undefined}
               className={cx(styles.chip, item.active && styles.active)}
               aria-current={item.active ? "page" : undefined}
             >

@@ -28,16 +28,17 @@
   display: block;
 }
 
+/* Mobile — Figma Website v2 375:3144: 350×220 · 350×360 · 350×220 */
 .photoShort {
-  aspect-ratio: 424 / 299;
+  aspect-ratio: 350 / 220;
 }
 
 .photoTall {
-  aspect-ratio: 4 / 5;
+  aspect-ratio: 350 / 360;
 }
 
 .photoFlex {
-  aspect-ratio: 424 / 299;
+  aspect-ratio: 350 / 220;
 }
 
 /* ── Tablet: 2 kolom ─────────────────────────────────────── */

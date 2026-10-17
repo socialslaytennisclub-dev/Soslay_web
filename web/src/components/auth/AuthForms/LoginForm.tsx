@@ -50,7 +50,7 @@ export function LoginForm({ next }: { next?: string }) {
           label="Email"
           type="email"
           autoComplete="email"
-          placeholder="nama@email.com"
+          placeholder="you@email.com"
           value={values.email}
           error={errors.email}
           onChange={(event) => update("email", event.target.value)}
@@ -58,7 +58,7 @@ export function LoginForm({ next }: { next?: string }) {
         <PasswordField
           label="Password"
           autoComplete="current-password"
-          placeholder="Password kamu"
+          placeholder="Your password"
           value={values.password}
           error={errors.password}
           onChange={(event) => update("password", event.target.value)}
@@ -80,7 +80,7 @@ export function LoginForm({ next }: { next?: string }) {
       )}
 
       <Button type="submit" variant="arrow" className={styles.submit} disabled={submitting}>
-        {submitting ? "Memproses…" : loginPage.submit}
+        {submitting ? "Processing…" : loginPage.submit}
       </Button>
     </form>
   );

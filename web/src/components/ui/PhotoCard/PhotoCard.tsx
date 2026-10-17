@@ -17,7 +17,7 @@ export type PhotoCardProps = {
 export function PhotoCard({ src, alt, position, dateLabel, people, onOpen }: PhotoCardProps) {
   return (
     <figure className={styles.card}>
-      <button type="button" className={styles.photo} onClick={onOpen} data-cursor="Lihat" aria-label={`Lihat foto: ${alt}`}>
+      <button type="button" className={styles.photo} onClick={onOpen} data-cursor="View" aria-label={`View photo: ${alt}`}>
         <Image
           className={styles.image}
           src={src} {...blurProps(src)}

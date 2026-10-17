@@ -21,17 +21,19 @@ export type Venue = {
   description: string;
   /** Foto besar di hero Venue detail (default: `image`). */
   heroImage?: string;
+  /** Wilayah, mis. "Central Jakarta" — breadcrumb & kartu info hero Venue detail. */
+  area?: string;
 };
 
 const IMG = "/images/home";
 
 export const venueList: Venue[] = [
-  { slug: "ayana-midplaza-jakarta", name: "AYANA Midplaza Jakarta", city: "Jakarta", type: "Indoor", image: `${IMG}/venue-ayana.webp`, imagePosition: "50% 40%" , tagline: "Lapangan indoor di jantung Sudirman — tetap main walau hujan turun.", description: "Lapangan indoor dengan pencahayaan rata dan permukaan hard court. Favorit untuk Weekly MABAR pagi sebelum Jakarta macet." },
-  { slug: "raffles-hotel-jakarta", name: "Raffles Hotel Jakarta", city: "Jakarta", type: "Rooftop", image: `${IMG}/venue-raffles.webp`, imagePosition: "50% 50%" , tagline: "Rooftop court dengan pemandangan kota Kuningan.", description: "Main di atas ketinggian dengan langit Jakarta sebagai latar. Cocok untuk sesi coaching sore dan sunset rally." },
-  { slug: "common-grounds-menteng", name: "Common Grounds Menteng", city: "Jakarta", type: "Outdoor", image: `${IMG}/venue-common-grounds.webp`, imagePosition: "50% 50%" , tagline: "Tembok oranye ikonik, rindang, dan selalu fotogenik.", description: "Lapangan outdoor di Menteng dengan tembok oranye khas yang jadi latar foto favorit member. Suasananya santai, cocok untuk mabar pagi.", heroImage: "/images/venues/common-grounds-hero.webp" },
-  { slug: "maison-playcourt", name: "Maison Playcourt", city: "Jakarta", type: "Premium", image: `${IMG}/venue-maison.webp`, imagePosition: "50% 50%" , tagline: "Clay court premium dengan nuansa resort di tengah kota.", description: "Permukaan clay yang empuk di kaki dan desain venue yang hangat. Tempat kami menggelar Tennis Match Day." },
-  { slug: "kula-mani-tennis-village", name: "Kula Mani Tennis Village", city: "Bali", type: "Premium", image: `${IMG}/venue-kula-mani.webp`, imagePosition: "50% 60%" , tagline: "Tennis village di Bali yang dikelilingi pohon kelapa.", description: "Lapangan biru dengan udara Bali yang sejuk di pagi hari. Basecamp untuk sesi Tennis Escape dan Sunset Rally." },
-  { slug: "swan-paradise-pramana", name: "Swan Paradise Pramana", city: "Bali", type: "Tropical", image: `${IMG}/venue-swan-paradise.webp`, imagePosition: "50% 50%" , tagline: "Grass court tropis — main tenis rasa liburan.", description: "Lapangan rumput di tengah taman tropis. Biasanya ditutup dengan brunch bareng setelah sesi." },
+  { slug: "ayana-midplaza-jakarta", name: "AYANA Midplaza Jakarta", city: "Jakarta", type: "Indoor", image: `${IMG}/venue-ayana.webp`, imagePosition: "50% 40%" , tagline: "An indoor court in the heart of Sudirman — keep playing even when it rains.", description: "An indoor hard court with even lighting. A favorite for early Weekly MABAR sessions before the Jakarta traffic kicks in.", area: "Central Jakarta" },
+  { slug: "raffles-hotel-jakarta", name: "Raffles Hotel Jakarta", city: "Jakarta", type: "Rooftop", image: `${IMG}/venue-raffles.webp`, imagePosition: "50% 50%" , tagline: "A rooftop court overlooking the Kuningan skyline.", description: "Play high above the city with the Jakarta sky as your backdrop. Perfect for afternoon coaching and sunset rallies.", area: "South Jakarta" },
+  { slug: "common-grounds-menteng", name: "Common Grounds Menteng", city: "Jakarta", type: "Outdoor", image: `${IMG}/venue-common-grounds.webp`, imagePosition: "50% 50%" , tagline: "Iconic terracotta walls, leafy shade, and always photogenic.", description: "A hidden tennis courtyard in the heart of Menteng. Check upcoming sessions, the participant guide, and highlights from past sessions — all on one page.", heroImage: "/images/venues/common-grounds-hero.webp", area: "Central Jakarta" },
+  { slug: "maison-playcourt", name: "Maison Playcourt", city: "Jakarta", type: "Premium", image: `${IMG}/venue-maison.webp`, imagePosition: "50% 50%" , tagline: "A premium clay court with resort vibes in the middle of the city.", description: "A soft clay surface and a warm, inviting venue. Home of our Tennis Match Day." },
+  { slug: "kula-mani-tennis-village", name: "Kula Mani Tennis Village", city: "Bali", type: "Premium", image: `${IMG}/venue-kula-mani.webp`, imagePosition: "50% 60%" , tagline: "A tennis village in Bali surrounded by coconut trees.", description: "Blue courts and cool Bali mornings. Our basecamp for Tennis Escape and Sunset Rally sessions." },
+  { slug: "swan-paradise-pramana", name: "Swan Paradise Pramana", city: "Bali", type: "Tropical", image: `${IMG}/venue-swan-paradise.webp`, imagePosition: "50% 50%" , tagline: "A tropical grass court — tennis that feels like a holiday.", description: "A grass court in the middle of a tropical garden. Sessions usually end with brunch together." },
 ];
 
 export const venueCities = [
@@ -64,29 +66,41 @@ export function findVenue(slug: string): Venue | undefined {
 export const venuePage = {
   hero: {
     wordmark: "Venue",
-    eyebrow: "Venue Soslay",
-    title: "Tempat Terbaik untuk Setiap Rally",
-    highlight: "Setiap Rally",
-    description:
-      "Kami hanya bermain di tempat yang terlihat bagus — dari rooftop Jakarta sampai lapangan tropis di Bali.",
-    cta: { label: "Jelajahi venue", href: "#daftar-venue" },
-    meta: ["6 venue kurasi", "Jakarta & Bali", "Fotografer di setiap sesi"],
+    eyebrow: "Soslay Venues",
+    title: "The Best Places for Every Rally",
+    highlight: "Every Rally",
+    description: "We only play where it looks good — from Jakarta rooftops to tropical courts in Bali.",
+    cta: { label: "Explore venues", href: "#daftar-venue" },
+    meta: ["6 curated venues", "Jakarta & Bali", "A photographer at every session"],
     image: {
       src: "/images/venues/common-grounds-hero.webp",
-      alt: "Lapangan tenis Common Grounds Menteng",
+      alt: "Common Grounds Menteng tennis court",
       position: "50% 55%",
     },
   } satisfies PageHeroContent,
   detail: {
-    booking: "Booking Session di Kuyy",
-    noSession: "Belum ada sesi terjadwal di venue ini.",
-    seeSchedule: "Lihat jadwal",
-    galleryTitle: "Momen di Lapangan",
-    galleryEmpty: "Galeri foto venue ini segera hadir — sampai jumpa di sesi pertama!",
+    eyebrow: "Venue detail",
+    booking: "Book a Session on Kuyy",
+    guideCta: "View Participant Guideline",
+    noSession: "No sessions scheduled at this venue yet.",
+    seeSchedule: "See full schedule",
+    upcoming: {
+      title: ["Upcoming", "Activities"],
+      description: (venue: string) =>
+        `The next sessions at ${venue}. Slots are limited so everyone gets comfortable play time and great photos — secure your spot early.`,
+      /** Jumlah kartu sesi mendatang. */
+      limit: 3,
+    },
+    gallery: {
+      title: ["Moments from", "past sessions."],
+      description: (venue: string) =>
+        `Real photos from mabar sessions and events held at ${venue}. Who knows — next time it could be you in the gallery.`,
+      empty: "This venue's photo gallery is coming soon — see you at the first session!",
+    },
   },
   directory: {
-    title: "Pilih Lapangan Favoritmu",
+    title: "Pick Your Favorite Court",
     description:
-      "Setiap venue kami pilih karena suasana, fasilitas, dan pengalamannya. Temukan lapangan yang paling cocok untuk sesi berikutnya.",
+      "Every venue is chosen for its atmosphere, facilities, and experience. Find the court that fits your next session best.",
   },
 };

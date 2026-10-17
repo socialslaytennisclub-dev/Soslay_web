@@ -7,7 +7,7 @@ import { saveTier } from "@/server/admin/actions/points";
 import type { TierBenefits } from "@/server/admin/types";
 import settingsStyles from "../settings/Settings.module.css";
 import { AdminButton } from "../ui/AdminUI";
-import { ActionNotice, type Notice } from "./ActionNotice";
+import { ActionNotice, type Notice } from "../ui/ActionNotice";
 import styles from "./Points.module.css";
 
 /** Kartu tier + benefit, bisa diedit di tempat (Figma 322:2 atas). */

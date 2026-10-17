@@ -19,7 +19,7 @@ export function Modal({ dialogRef, title, onClose, onBackdropClick, children }: 
       <div className={styles.panel}>
         <header className={styles.header}>
           <h2 className={styles.title}>{title}</h2>
-          <button type="button" className={styles.close} onClick={onClose} aria-label="Tutup">
+          <button type="button" className={styles.close} onClick={onClose} aria-label="Close">
             <Icon name="close" size={24} />
           </button>
         </header>

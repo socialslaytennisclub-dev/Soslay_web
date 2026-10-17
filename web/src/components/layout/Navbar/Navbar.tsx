@@ -33,7 +33,7 @@ export function Navbar({ variant = "solid" }: NavbarProps) {
         <div className={styles.left}>
           <Logo tone="lime" />
 
-          <nav aria-label="Navigasi utama" className={styles.desktopNav}>
+          <nav aria-label="Main navigation" className={styles.desktopNav}>
             <ul className={styles.navList}>
               <li
                 ref={dropdownRef}
@@ -83,6 +83,7 @@ export function Navbar({ variant = "solid" }: NavbarProps) {
           <Link
             href={authLinks.cart.href}
             className={styles.cart}
+            data-cart-target
             aria-label={cart.count > 0 ? `${authLinks.cart.label}, ${cart.count} item` : authLinks.cart.label}
           >
             <Icon name="shopping-bag-open" />
@@ -99,7 +100,7 @@ export function Navbar({ variant = "solid" }: NavbarProps) {
           <button
             type="button"
             className={cx(styles.burger, menu.isOpen && styles.burgerOpen)}
-            aria-label={menu.isOpen ? "Tutup menu" : "Buka menu"}
+            aria-label={menu.isOpen ? "Close menu" : "Open menu"}
             aria-expanded={menu.isOpen}
             aria-controls="nav-mobile-menu"
             onClick={menu.toggle}
@@ -113,7 +114,7 @@ export function Navbar({ variant = "solid" }: NavbarProps) {
 
       <nav
         id="nav-mobile-menu"
-        aria-label="Navigasi utama"
+        aria-label="Main navigation"
         className={cx(styles.mobileMenu, menu.isOpen && styles.mobileMenuOpen)}
         hidden={!menu.isOpen}
       >

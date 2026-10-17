@@ -4,6 +4,7 @@ import { Container, Lightbox, PhotoCard, Text, type LightboxItem } from "@/compo
 import type { GalleryPhoto } from "@/content/gallery";
 import { venuePage } from "@/content/venues";
 import { useLightbox } from "@/hooks/useLightbox";
+import { SplitHeading } from "../SplitHeading/SplitHeading";
 import styles from "./VenueGallery.module.css";
 
 type VenueGalleryProps = {
@@ -13,7 +14,7 @@ type VenueGalleryProps = {
   dateLabels: Record<string, string>;
 };
 
-/** Figma 25:917 — grid 3 kolom foto potret + lightbox (25:1327). */
+/** Figma Website v2 375:3909 — "Moments from past sessions": grid 3 kolom foto potret + lightbox. */
 export function VenueGallery({ venueName, photos, dateLabels }: VenueGalleryProps) {
   const lightbox = useLightbox(photos.length);
   const active = lightbox.index !== null ? photos[lightbox.index] : null;
@@ -34,14 +35,11 @@ export function VenueGallery({ venueName, photos, dateLabels }: VenueGalleryProp
   return (
     <section className={styles.section} aria-labelledby="venue-gallery-title">
       <Container className={styles.inner}>
-        {/* Figma 25:917 tanpa judul section — judul tetap ada untuk pembaca layar */}
-        <h2 id="venue-gallery-title" className="visually-hidden">
-          {venuePage.detail.galleryTitle} di {venueName}
-        </h2>
+        <SplitHeading id="venue-gallery-title" title={venuePage.detail.gallery.title} description={venuePage.detail.gallery.description(venueName)} />
 
         {photos.length === 0 ? (
           <Text variant="body-16" tone="primary" muted className={styles.empty}>
-            {venuePage.detail.galleryEmpty}
+            {venuePage.detail.gallery.empty}
           </Text>
         ) : (
           <ul className={styles.grid}>

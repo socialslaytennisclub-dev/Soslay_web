@@ -299,11 +299,29 @@ export type PhotoAlbum = {
 
 export type CommunityPost = {
   id: string;
-  kind: "testimonial" | "instagram" | "threads";
+  kind: "instagram" | "threads";
   text: string;
   handle: string;
   image?: string;
   visible: boolean;
+};
+
+/** Testimoni komunitas (Figma 09b–09f) — teks atau video pendek 9:16. */
+export type AdminTestimonial = {
+  id: string;
+  kind: "text" | "video";
+  name: string;
+  /** "@anitya07" (tanpa @ di database juga diterima). */
+  handle: string;
+  quote: string;
+  avatar: string | null;
+  memberId: string | null;
+  sortOrder: number;
+  visible: boolean;
+  videoUrl: string | null;
+  videoPlatform: "instagram" | "tiktok" | "youtube" | "upload" | null;
+  durationSeconds: number | null;
+  createdAt: string;
 };
 
 export type SitePage = { path: string; name: string; description: string; updatedAt: string; updatedBy: string };
@@ -390,7 +408,12 @@ export type ProductForm = {
   slug: string;
   sku: string;
   name: string;
-  category: "apparel" | "racket" | "accessory";
+  /** Baris kecil di kartu Shop, mis. "Oversized fit T-shirt". */
+  subtitle: string;
+  category: "apparel" | "socks" | "pin" | "figure" | "racket" | "accessory";
+  /** Atribut tetap (satu nilai) yang tampil sebagai pilihan di halaman produk. */
+  fit: string;
+  color: string;
   price: number;
   compareAtPrice: number | null;
   description: string;
@@ -400,6 +423,8 @@ export type ProductForm = {
   featured: boolean;
   sizeGuide: boolean;
   images: { path: string; alt: string; position: string }[];
+  /** Foto kartu Shop (mockup lime). Kosong → foto pertama. */
+  cardImage: string;
   /** Kunci pilihan varian ("size", "grip") — kosong = satu varian tanpa pilihan. */
   optionKey: string;
   variants: { value: string; stock: number }[];

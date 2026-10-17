@@ -1,0 +1,256 @@
+/* Login admin — split screen: panel brand navy (kiri) + form di latar dashboard indigo-50 (kanan) */
+.page {
+  display: grid;
+  min-height: 100vh;
+  background: var(--color-indigo-50);
+}
+
+/* ── Panel brand ── */
+.brand {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  padding: var(--space-24) var(--space-16);
+  overflow: hidden;
+  background:
+    linear-gradient(rgb(255 255 255 / 0.05) 1px, transparent 1px) 0 0 / 48px 48px,
+    linear-gradient(90deg, rgb(255 255 255 / 0.05) 1px, transparent 1px) 0 0 / 48px 48px,
+    radial-gradient(120% 80% at 100% 100%, var(--color-indigo-700), transparent 60%),
+    var(--color-navy-950);
+  color: var(--color-white);
+}
+
+.logo {
+  width: 112px;
+}
+
+.logo img {
+  width: 100%;
+  height: auto;
+}
+
+.pitch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.eyebrow {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-lime-500);
+}
+
+.headline {
+  max-width: 14ch;
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(28px, 2.4vw + 16px, 48px);
+  line-height: 1.1;
+}
+
+.headline span {
+  color: var(--color-lime-500);
+}
+
+.modules,
+.brandFoot {
+  display: none;
+}
+
+/* ── Panel form ── */
+.panel {
+  display: grid;
+  place-items: center;
+  padding: var(--space-24) var(--space-16) var(--space-48, 48px);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  width: min(100%, 420px);
+  padding: var(--space-32, 32px) var(--space-24);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: 20px;
+  background: var(--color-white);
+  box-shadow: 0 24px 60px rgb(10 8 74 / 0.08);
+}
+
+.badge {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-50);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+  color: var(--color-indigo-600);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: 26px;
+  line-height: 1.2;
+  color: var(--color-navy-900);
+}
+
+.lead {
+  margin-bottom: var(--space-8);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-indigo-muted);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.formError {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 10px 12px;
+  border-radius: var(--radius-lg);
+  background: var(--color-pink-100);
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.formError svg,
+.formError > span {
+  flex-shrink: 0;
+  color: var(--color-pink-500);
+}
+
+.submit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  min-height: 50px;
+  margin-top: var(--space-4, 4px);
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--color-navy-900);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 15px;
+  color: var(--color-lime-500);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.submit:hover:not(:disabled) {
+  background: var(--color-indigo-700);
+  transform: translateY(-1px);
+}
+
+.submit:focus-visible {
+  outline: 2px solid var(--color-indigo-500);
+  outline-offset: 3px;
+}
+
+.submit:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
+.switch {
+  margin-top: var(--space-8);
+  padding-top: var(--space-16);
+  border-top: 1px solid var(--color-indigo-border);
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--color-indigo-muted);
+  text-align: center;
+}
+
+.switch a {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  color: var(--color-indigo-600);
+}
+
+.switch a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ── Desktop: dua kolom penuh tinggi layar ── */
+@media (min-width: 1024px) {
+  .page {
+    grid-template-columns: minmax(420px, 5fr) 6fr;
+  }
+
+  .brand {
+    justify-content: space-between;
+    padding: var(--space-40, 40px) clamp(40px, 4vw, 72px);
+  }
+
+  .logo {
+    width: 140px;
+  }
+
+  .modules {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    margin-top: var(--space-24);
+  }
+
+  .modules li {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-12);
+    font-family: var(--font-body);
+    font-size: 14px;
+    line-height: 1.5;
+    color: rgb(255 255 255 / 0.7);
+  }
+
+  .modules strong {
+    display: block;
+    font-family: var(--font-display);
+    font-weight: var(--weight-semibold);
+    font-size: 15px;
+    color: var(--color-white);
+  }
+
+  .moduleIcon {
+    display: grid;
+    flex-shrink: 0;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    border: 1px solid rgb(255 255 255 / 0.12);
+    border-radius: 12px;
+    background: rgb(255 255 255 / 0.06);
+    color: var(--color-lime-500);
+  }
+
+  .brandFoot {
+    display: block;
+    font-family: var(--font-body);
+    font-size: 13px;
+    color: rgb(255 255 255 / 0.45);
+  }
+
+  .card {
+    padding: var(--space-40, 40px);
+  }
+}

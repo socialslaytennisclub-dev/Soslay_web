@@ -11,7 +11,7 @@ import settingsStyles from "../settings/Settings.module.css";
 import { TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton } from "../ui/AdminUI";
-import { ActionNotice, type Notice } from "./ActionNotice";
+import { ActionNotice, type Notice } from "../ui/ActionNotice";
 import styles from "./Points.module.css";
 import { RewardThumb } from "./RewardCatalog";
 

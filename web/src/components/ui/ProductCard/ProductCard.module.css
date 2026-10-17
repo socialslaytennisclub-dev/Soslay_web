@@ -1,24 +1,33 @@
+/* Kartu produk Shop — foto mockup lime "mengambang" di dalam kartu putih */
 .card {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: var(--space-16);
-  overflow: hidden;
-  border: 1px solid var(--surface-card-soft);
-  border-radius: var(--radius-lg);
-  background: var(--surface-card-soft);
-  transition: box-shadow var(--duration-base) var(--ease-out), transform var(--duration-base) var(--ease-out);
+  height: 100%;
+  padding: 10px;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: 24px;
+  background: var(--color-white);
+  box-shadow: 0 8px 24px rgb(10 8 74 / 0.06);
+  transition:
+    transform var(--duration-base) var(--ease-out),
+    box-shadow var(--duration-base) var(--ease-out),
+    border-color var(--duration-base) var(--ease-out);
 }
 
 .card:hover {
-  transform: translateY(-4px);
-  box-shadow: var(--shadow-card);
+  transform: translateY(-6px);
+  border-color: var(--color-lime-500);
+  box-shadow: 0 20px 44px rgb(10 8 74 / 0.14);
 }
 
+/* ── Foto ── */
 .media {
   position: relative;
-  aspect-ratio: 424 / 528;
+  aspect-ratio: 415 / 390;
   overflow: hidden;
-  background: var(--color-neutral-100);
+  border-radius: 16px;
+  background: #d4ef1f;
 }
 
 .image {
@@ -27,85 +36,40 @@
 }
 
 .card:hover .image {
-  transform: scale(1.04);
+  transform: scale(1.06);
 }
 
-.bag {
-  position: absolute;
-  right: var(--space-16);
-  bottom: var(--space-16);
-  display: inline-flex;
-  padding: var(--space-8);
-  border-radius: var(--radius-md);
-  background: var(--gradient-lime-neon);
-  color: var(--color-navy-900);
-}
-
-/* Kartu kecil (2 kolom mobile): badge tas lebih ringkas */
-@media (max-width: 767px) {
-  .bag {
-    right: var(--space-10);
-    bottom: var(--space-10);
-    padding: var(--space-4);
-  }
-
-  .bag > span {
-    width: 24px;
-    height: 24px;
-  }
-}
-
-.info {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-4);
-  padding: 0 var(--space-24) var(--space-16);
-}
-
-.name {
-  font-family: var(--font-display);
-  font-weight: var(--weight-bold);
-  font-size: clamp(20px, 0.6vw + 15px, 24px);
-  line-height: 1;
-  letter-spacing: var(--tracking-tighter);
-  color: var(--color-navy-900);
-}
-
-.prices {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: var(--space-4);
-  font-family: var(--font-body);
-  font-weight: var(--weight-bold);
-  line-height: 1.6;
-  color: var(--color-navy-800);
-}
-
-.price {
-  font-size: 18px;
-  letter-spacing: var(--tracking-tighter);
-}
-
-.compare {
-  font-size: 16px;
-}
-
-/* ── Label stok ──────────────────────────────────────────── */
-.stock {
+.badges {
   position: absolute;
   top: var(--space-12);
   left: var(--space-12);
-  padding: var(--space-4) var(--space-12);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.badge {
+  padding: 5px 10px;
   border-radius: var(--radius-full);
   font-family: var(--font-display);
-  font-weight: var(--weight-semibold);
+  font-weight: var(--weight-bold);
   font-size: 12px;
-  line-height: 1.6;
+  line-height: 1.3;
+  box-shadow: 0 2px 8px rgb(10 8 74 / 0.15);
+}
+
+.discount {
+  background: var(--color-pink-500);
+  color: var(--color-white);
+}
+
+.best {
+  background: var(--color-navy-900);
+  color: var(--color-lime-500);
 }
 
 .low {
-  background: var(--color-lime-100);
+  background: var(--color-white);
   color: var(--color-navy-900);
 }
 
@@ -119,29 +83,193 @@
   opacity: 0.7;
 }
 
-/* ── Ukuran sm: kartu katalog (Figma catalog/card 246×369) ── */
-.sm {
-  gap: var(--space-16);
-  padding-bottom: var(--space-16);
+/* ── Info ── */
+.info {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 10px 6px;
+}
+
+.subtitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-indigo-muted);
+}
+
+.name {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: clamp(17px, 0.4vw + 14px, 19px);
+  line-height: 1.25;
+  color: var(--color-navy-900);
+}
+
+/* Seluruh kartu bisa diklik lewat link nama produk */
+.name::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+}
+
+.name:focus-visible {
+  outline: none;
+}
+
+.name:focus-visible::after {
+  outline: 2px solid var(--color-indigo-500);
+  outline-offset: 3px;
+}
+
+.footer {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-12);
+  margin-top: auto;
+  padding-top: var(--space-12);
+}
+
+.prices {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.price {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(19px, 0.6vw + 14px, 23px);
+  line-height: 1.1;
+  color: var(--color-navy-900);
+}
+
+.compare {
+  font-family: var(--font-body);
+  font-size: 13px;
+  color: rgb(10 8 74 / 0.45);
+}
+
+/* ── Tombol tas (di atas link kartu) ── */
+.quickAdd {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 46px;
+  height: 46px;
   border: 0;
-  border-radius: var(--radius-xl);
+  border-radius: var(--radius-full);
+  background: var(--color-lime-500);
+  color: var(--color-navy-900);
+  cursor: pointer;
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
 }
 
-.sm .media {
-  aspect-ratio: 246 / 280;
-  border-radius: var(--radius-xl);
+.quickAdd:hover {
+  transform: scale(1.08);
+  background: var(--color-navy-900);
+  color: var(--color-lime-500);
 }
 
-.sm .info {
+.quickAdd:focus-visible {
+  outline: 2px solid var(--color-indigo-500);
+  outline-offset: 3px;
+}
+
+.quickAdded,
+.quickAdded:hover {
+  background: var(--color-navy-900);
+  color: var(--color-lime-500);
+}
+
+/* ── Pilih ukuran di kartu (popover di atas tombol tas) ── */
+.quickWrap {
+  position: relative;
+  z-index: 3;
+  flex-shrink: 0;
+}
+
+.quickPopover {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 10px);
+  display: flex;
+  flex-direction: column;
   gap: var(--space-8);
-  padding: 0 var(--space-16);
+  width: max-content;
+  max-width: 260px;
+  padding: var(--space-12);
+  border-radius: 16px;
+  background: var(--color-navy-900);
+  box-shadow: 0 16px 36px rgb(10 8 74 / 0.3);
+  animation: quick-pop var(--duration-base) var(--ease-out);
 }
 
-.sm .name {
-  font-size: clamp(16px, 0.8vw + 10px, 20px);
-  letter-spacing: 0;
+/* panah kecil ke arah tombol */
+.quickPopover::after {
+  content: "";
+  position: absolute;
+  right: 17px;
+  bottom: -6px;
+  width: 12px;
+  height: 12px;
+  background: var(--color-navy-900);
+  transform: rotate(45deg);
 }
 
-.sm .price {
-  letter-spacing: 0;
+.quickLabel {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+  color: rgb(255 255 255 / 0.7);
+}
+
+.quickChoices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.quickChoice {
+  min-width: 40px;
+  padding: 8px 10px;
+  border: 1px solid rgb(255 255 255 / 0.25);
+  border-radius: var(--radius-full);
+  background: transparent;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 13px;
+  color: var(--color-white);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
+}
+
+.quickChoice:hover,
+.quickChoice:focus-visible {
+  border-color: var(--color-lime-500);
+  background: var(--color-lime-500);
+  color: var(--color-navy-900);
+  outline: none;
+}
+
+@keyframes quick-pop {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.96);
+  }
 }

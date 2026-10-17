@@ -1,7 +1,9 @@
 "use server";
 
+import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { AFTER_AUTH } from "@/content/auth";
+import { ADMIN_LOGIN, AFTER_AUTH } from "@/content/auth";
+import { compact, required, todayIso, validateBirthDate, validateEmail, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
@@ -10,24 +12,93 @@ function safeNext(next: string | undefined) {
   return next && next.startsWith("/") && !next.startsWith("//") ? next : AFTER_AUTH;
 }
 
-export type SignInResult = { error: string } | undefined;
+export type SignInResult = { error: string; code: "invalid_credentials" | "failed" } | undefined;
 
 export async function signIn(email: string, password: string, next?: string): Promise<SignInResult> {
   if (!isSupabaseConfigured) redirect(safeNext(next));
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
-    return { error: error.code === "invalid_credentials" ? "Email atau password salah." : "Belum bisa masuk. Coba lagi sebentar." };
+    return error.code === "invalid_credentials"
+      ? { error: "Incorrect email or password.", code: "invalid_credentials" }
+      : { error: "Couldn't sign in. Please try again in a moment.", code: "failed" };
   }
   // Staf undangan jadi aktif di login pertama + catat "terakhir aktif" (diabaikan untuk non-staf).
   await supabase.rpc("touch_staff_login");
   redirect(safeNext(next));
 }
 
-export async function signOut() {
+export type SignUpInput = {
+  fullName: string;
+  displayName: string;
+  kuyId: string;
+  birthDate: string;
+  phone: string;
+  email: string;
+  password: string;
+};
+type SignUpField = keyof SignUpInput;
+/** `confirm` → akun dibuat, tunggu klik link verifikasi di email. */
+export type SignUpResult = { error?: string; fieldErrors?: FieldErrors<SignUpField>; confirmEmail?: string } | undefined;
+
+/**
+ * Daftar member → Supabase Auth. Data profil ikut sebagai metadata; trigger DB
+ * `handle_member_signup` membuat baris profiles. Bila "Confirm email" aktif di Supabase,
+ * belum ada sesi → form menampilkan "cek email"; selain itu langsung masuk ke /akun.
+ */
+export async function signUp(input: SignUpInput): Promise<SignUpResult> {
+  if (!isSupabaseConfigured) redirect(AFTER_AUTH);
+
+  const values = Object.fromEntries(Object.entries(input).map(([k, v]) => [k, k === "password" ? String(v ?? "") : String(v ?? "").trim()])) as SignUpInput;
+  const fieldErrors = compact<SignUpField>({
+    fullName: required(values.fullName, "Full name"),
+    kuyId: required(values.kuyId, "Kuy ID"),
+    phone: validatePhone(values.phone),
+    email: validateEmail(values.email),
+    password: validatePassword(values.password, true),
+    // Server berjalan di UTC, member di WIB → toleransi satu hari untuk "hari ini".
+    birthDate: validateBirthDate(values.birthDate, todayIso(new Date(Date.now() + 86_400_000))),
+  });
+  if (Object.keys(fieldErrors).length) return { fieldErrors };
+
+  const supabase = await createSupabaseServerClient();
+  const { data: kuyFree } = await supabase.rpc("kuy_id_available", { p_kuy_id: values.kuyId });
+  if (kuyFree === false) return { fieldErrors: { kuyId: "This Kuy ID is already registered" } };
+
+  const origin = (await headers()).get("origin") ?? "";
+  const { data, error } = await supabase.auth.signUp({
+    email: values.email,
+    password: values.password,
+    options: {
+      emailRedirectTo: `${origin}/auth/confirm?next=${encodeURIComponent(AFTER_AUTH)}`,
+      data: {
+        signup: "member",
+        full_name: values.fullName,
+        display_name: values.displayName,
+        kuy_id: values.kuyId,
+        phone: values.phone.replace(/\D/g, ""),
+        birth_date: values.birthDate,
+      },
+    },
+  });
+
+  if (error) {
+    if (error.code === "user_already_exists" || error.code === "email_exists") return { fieldErrors: { email: "This email is already registered — sign in instead" } };
+    if (error.code === "weak_password") return { fieldErrors: { password: "Password is too weak — try a longer one" } };
+    if (error.code === "over_email_send_rate_limit") return { error: "Too many sign-ups right now. Please try again in a few minutes." };
+    return { error: "Couldn't create your account. Please try again in a moment." };
+  }
+  // Supabase tidak membocorkan email yang sudah terdaftar: user tanpa identities = sudah ada.
+  if (data.user && data.user.identities?.length === 0) return { fieldErrors: { email: "This email is already registered — sign in instead" } };
+  if (!data.session) return { confirmEmail: values.email };
+  redirect(AFTER_AUTH);
+}
+
+/** Keluar → halaman Masuk member, atau login admin bila form mengirim `to=admin`. */
+export async function signOut(formData?: FormData) {
   if (isSupabaseConfigured) {
     const supabase = await createSupabaseServerClient();
     await supabase.auth.signOut();
   }
-  redirect("/masuk");
+  redirect(formData?.get("to") === "admin" ? ADMIN_LOGIN : "/masuk");
 }

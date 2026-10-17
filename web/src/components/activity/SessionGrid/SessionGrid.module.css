@@ -17,10 +17,24 @@
   gap: var(--space-24);
 }
 
+/*
+ * Tablet & desktop: zigzag — kolom kiri turun (Figma 25:493: kiri mulai y200, kanan y0).
+ * transform tidak memengaruhi layout → padding bawah grid menampung pergeseran kartu terakhir.
+ */
 @media (min-width: 768px) {
   .grid {
+    --zigzag: 96px;
+
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--space-48) var(--space-24);
+  }
+
+  .grid:has(> :nth-child(2)) {
+    padding-bottom: var(--zigzag);
+  }
+
+  .grid:has(> :nth-child(2)) > :nth-child(odd) {
+    transform: translateY(var(--zigzag));
   }
 }
 
@@ -31,6 +45,8 @@
   }
 
   .grid {
+    --zigzag: 200px;
+
     gap: var(--space-128) var(--space-48);
   }
 }

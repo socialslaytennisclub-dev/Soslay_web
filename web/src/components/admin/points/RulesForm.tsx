@@ -9,7 +9,7 @@ import settingsStyles from "../settings/Settings.module.css";
 import { FormCard } from "../ui/AdminForm";
 import formStyles from "../ui/AdminForm.module.css";
 import { AdminButton, Badge } from "../ui/AdminUI";
-import { ActionNotice, type Notice } from "./ActionNotice";
+import { ActionNotice, type Notice } from "../ui/ActionNotice";
 import styles from "./Points.module.css";
 
 const digits = (v: string) => Number(v.replace(/\D/g, "")) || 0;

@@ -12,7 +12,6 @@ import {
   parallax,
   splitReveal,
   staggerChildren,
-  velocityMarquee,
 } from "@/animations";
 import { gsap, MOTION, ScrollSmoother, useGSAP } from "@/lib/gsap";
 import styles from "./MotionProvider.module.css";
@@ -20,6 +19,14 @@ import styles from "./MotionProvider.module.css";
 type MotionProviderProps = {
   children: ReactNode;
 };
+
+/**
+ * Navigasi lewat tombol Back/Forward → posisi scroll dipulihkan; navigasi biasa → halaman baru
+ * mulai dari atas. Tanpa ini ScrollSmoother mewarisi scroll halaman sebelumnya (mis. dari chip
+ * filter di /activity ke /activity/mabar langsung jatuh di tengah, hero terlewat).
+ */
+let fromHistory = false;
+if (typeof window !== "undefined") window.addEventListener("popstate", () => (fromHistory = true));
 
 /**
  * Membungkus konten halaman (di bawah Navbar) dengan:
@@ -37,6 +44,8 @@ export function MotionProvider({ children }: MotionProviderProps) {
     () => {
       const scope = contentRef.current;
       if (!scope) return;
+      if (!fromHistory && !window.location.hash) window.scrollTo(0, 0);
+      fromHistory = false;
       const mm = gsap.matchMedia();
 
       // ScrollSmoother harus dibuat SEBELUM ScrollTrigger lain.
@@ -64,7 +73,6 @@ export function MotionProvider({ children }: MotionProviderProps) {
         mediaReveal(scope);
         staggerChildren(scope);
         footerWordmark(scope);
-        return velocityMarquee(scope);
       });
 
       mm.add(MOTION.desktop, () => {

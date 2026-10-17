@@ -14,6 +14,7 @@ type Row = {
   name: string;
   city: string;
   venue_type: string | null;
+  area: string | null;
   tagline: string | null;
   description: string | null;
   cover_path: string | null;
@@ -29,7 +30,7 @@ export const getWebsiteVenues = cache(async (): Promise<WebsiteVenue[]> => {
 
   const { data, error } = await createSupabasePublicClient()
     .from("venues")
-    .select("slug, name, city, venue_type, tagline, description, cover_path, hero_path, show_on_homepage")
+    .select("slug, name, city, area, venue_type, tagline, description, cover_path, hero_path, show_on_homepage")
     .eq("is_active", true)
     .order("sort_order")
     .order("name");
@@ -52,6 +53,7 @@ export const getWebsiteVenues = cache(async (): Promise<WebsiteVenue[]> => {
         tagline: v.tagline ?? "",
         description: v.description ?? "",
         heroImage: v.hero_path ?? content?.heroImage,
+        area: v.area ?? content?.area,
         showOnHomepage: v.show_on_homepage,
       };
     });

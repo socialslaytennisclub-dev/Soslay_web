@@ -9,7 +9,7 @@ type ActivityHeroProps = {
   session: Session;
 };
 
-/** Figma 25:497 — sesi unggulan "Aktivitas mendatang" di atas latar navy + swoosh. */
+/** Figma 25:497 — sesi unggulan "Upcoming activity" di atas latar navy + swoosh. */
 export function ActivityHero({ session }: ActivityHeroProps) {
   const dateLabel = formatTanggal(sessionStart(session), sessionTimeZone(session));
   const timeLabel = formatJamRange(session.start, session.end);
@@ -56,7 +56,7 @@ export function ActivityHero({ session }: ActivityHeroProps) {
           <Image
             className={styles.image}
             src={session.image} {...blurProps(session.image)}
-            alt={`Sesi ${session.title} di ${session.venue.name}`}
+            alt={`${session.title} session at ${session.venue.name}`}
             fill
             preload
             sizes="(min-width: 1200px) 666px, 100vw"

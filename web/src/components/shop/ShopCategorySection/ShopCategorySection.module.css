@@ -1,0 +1,90 @@
+/* Figma Website v2 347:2069 — section/featured (kategori) & 347:2086 — Best Seller */
+.section {
+  scroll-margin-top: var(--nav-height);
+  padding-block: var(--space-48);
+  background: var(--color-indigo-50);
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+}
+
+.heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  max-width: 555px;
+}
+
+/* Heading/42 Poppins ExtraBold, gradien navy */
+.title {
+  align-self: flex-start;
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(32px, 1.8vw + 18px, 42px);
+  line-height: 1;
+  letter-spacing: -0.03em;
+  background: linear-gradient(180deg, #100e54 0%, #0a084a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.description {
+  font-family: var(--font-body);
+  font-size: 16px;
+  line-height: 1.6;
+  letter-spacing: var(--tracking-tight);
+  color: var(--color-navy-900);
+  opacity: 0.8;
+}
+
+.products {
+  display: grid;
+  gap: var(--space-20);
+  list-style: none;
+}
+
+/* Best Seller: geser horizontal, kartu 415px seperti Figma */
+.carousel {
+  display: flex;
+  margin-inline: calc(var(--gutter) * -1);
+  padding: var(--space-8) var(--gutter) var(--space-24);
+  overflow-x: auto;
+  scroll-padding-inline: var(--gutter);
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.carousel::-webkit-scrollbar {
+  display: none;
+}
+
+.carousel li {
+  flex: 0 0 min(78vw, 415px);
+  scroll-snap-align: start;
+}
+
+@media (min-width: 640px) {
+  .products:not(.carousel) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) {
+  .products:not(.carousel) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .section {
+    padding-block: 78px var(--space-64);
+  }
+
+  .products:not(.carousel) {
+    grid-template-columns: repeat(3, minmax(0, 415px));
+  }
+}

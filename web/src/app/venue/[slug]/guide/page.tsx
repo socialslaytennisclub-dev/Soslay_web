@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Caveat } from "next/font/google";
 import { notFound } from "next/navigation";
-import { GuideHero } from "@/components/guide/GuideHero";
+import { SpotlightHero } from "@/components/guide/SpotlightHero";
 import {
   BringSection,
   CourtVibeSection,
@@ -13,7 +13,7 @@ import { Footer } from "@/components/layout/Footer/Footer";
 import { Navbar } from "@/components/layout/Navbar/Navbar";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 import { findGuide, participantGuides } from "@/content/guides";
-import { venueHref, findVenue } from "@/content/venues";
+import { findVenue, venueCities, venueHref } from "@/content/venues";
 
 /** Tulisan tangan di kartu hero & panel Court Vibe (Figma: Caveat Bold) — hanya dimuat di halaman ini. */
 const caveat = Caveat({ subsets: ["latin"], weight: "700", variable: "--font-caveat" });
@@ -35,7 +35,7 @@ export async function generateMetadata({ params }: PageProps<"/venue/[slug]/guid
   };
 }
 
-/** Participant Guide per venue (Figma 151:52). */
+/** Participant Guideline per venue (Figma Website v2 375:4188). */
 export default async function ParticipantGuidePage({ params }: PageProps<"/venue/[slug]/guide">) {
   const { slug } = await params;
   const guide = findGuide(slug);
@@ -47,7 +47,19 @@ export default async function ParticipantGuidePage({ params }: PageProps<"/venue
       <Navbar variant="overlay" />
       <MotionProvider>
         <main>
-          <GuideHero guide={guide} venueHref={venueHref(venue)} />
+          <SpotlightHero
+            breadcrumb={[
+              { label: "Venue", href: "/venue" },
+              { label: venue.area ?? venue.city, href: `/venue?city=${venueCities.find((c) => c.city === venue.city)?.slug ?? ""}#daftar-venue` },
+              { label: guide.venueName, href: venueHref(venue) },
+              { label: "Participant Guideline" },
+            ]}
+            eyebrow="Participant Guideline"
+            title={guide.venueName}
+            intro={guide.intro}
+            photo={guide.hero}
+            card={{ name: guide.venueName, facts: guide.facts, note: guide.note, ink: guide.theme.ink }}
+          />
           <OutfitSection guide={guide} />
           <BringSection guide={guide} />
           <PhotoReferenceSection guide={guide} />

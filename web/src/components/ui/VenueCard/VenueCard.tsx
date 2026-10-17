@@ -19,7 +19,7 @@ export function VenueCard({ name, city, type, image, imagePosition, href }: Venu
       <MediaCard
         className={styles.card}
         src={image}
-        alt={`Lapangan ${name}`}
+        alt={`${name} court`}
         objectPosition={imagePosition}
         radius="md"
         sizes="(min-width: 1200px) 633px, (min-width: 768px) 50vw, 100vw"

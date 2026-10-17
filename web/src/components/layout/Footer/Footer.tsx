@@ -49,7 +49,7 @@ export function Footer() {
             ))}
             <div className={styles.column}>
               <Text as="h2" variant="subtitle-20" tone="primary" muted>
-                Ikuti Kami
+                Follow Us
               </Text>
               <ul className={styles.socials}>
                 {socialLinks.map((social) => (

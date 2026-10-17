@@ -13,7 +13,7 @@ import path from "node:path";
 import { productDetails, products } from "@/content/products";
 import { venueList } from "@/content/venues";
 import { listVenues } from "@/server/admin/catalog-repo";
-import { listAlbums, listCommunityPosts, listHomepageSections } from "@/server/admin/content-repo";
+import { listAlbums, listTestimonials, listHomepageSections } from "@/server/admin/content-repo";
 import { activityTypeLabels, bookings, memberCode, members, memberStats, orders, sessionById, sessions } from "@/server/admin/demo-data";
 import { getOrder } from "@/server/admin/orders-repo";
 import { getSession } from "@/server/admin/sessions-repo";
@@ -283,11 +283,11 @@ begin;
       return ["home", s.key, s.name, { json: body }, { json: body }, s.enabled, i, new Date("2026-09-24T03:24:00Z")];
     }),
   );
-  const posts = (await listCommunityPosts()).filter((p) => p.kind === "testimonial");
+  const testimonials = await listTestimonials();
   insert(
     "testimonials",
     ["author_name", "author_handle", "quote", "avatar_path", "is_published", "sort_order"],
-    posts.map((p, i) => [p.handle.replace(/^@/, ""), p.handle.startsWith("@") ? p.handle : null, p.text, p.image ?? null, p.visible, i]),
+    testimonials.map((t) => [t.name, t.handle || null, t.quote, t.avatar, t.visible, t.sortOrder]),
   );
   const { albums } = await listAlbums();
   insert(

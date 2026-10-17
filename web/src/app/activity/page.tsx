@@ -12,7 +12,7 @@ import { getWebsiteSessions } from "@/server/public/sessions";
 
 export const metadata: Metadata = {
   title: "Activity — SOSLAY",
-  description: "Jadwal mabar, match day, coaching, dan tennis escape Soslay di Jakarta & Bali.",
+  description: "Soslay mabar, match day, coaching, and tennis escape schedules in Jakarta & Bali.",
 };
 
 /** Halaman Activity (Figma 25:493). Hanya menyusun data + section. */

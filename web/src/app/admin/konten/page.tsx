@@ -2,13 +2,15 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AlbumGrid } from "@/components/admin/content/AlbumGrid";
 import { CommunityPosts } from "@/components/admin/content/CommunityPosts";
+import { TestimonialManager } from "@/components/admin/content/TestimonialManager";
 import styles from "@/components/admin/content/Content.module.css";
 import { HomepageEditor } from "@/components/admin/content/HomepageEditor";
 import { SitePages } from "@/components/admin/content/SitePages";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { AdminButton } from "@/components/admin/ui/AdminUI";
 import { cx } from "@/lib/cx";
-import { listAlbums, listCommunityPosts, listHomepageSections, listSitePages } from "@/server/admin/content-repo";
+import { emptyTestimonial, listAlbums, listCommunityPosts, listHomepageSections, listSitePages, listTestimonials } from "@/server/admin/content-repo";
+import { memberChoices } from "@/server/admin/repo";
 import pageStyles from "../page.module.css";
 
 export const metadata: Metadata = { title: "Konten & Galeri" };
@@ -21,7 +23,7 @@ const num = new Intl.NumberFormat("id-ID");
 export default async function AdminContentPage({ searchParams }: PageProps<"/admin/konten">) {
   const raw = (await searchParams).tab;
   const tab: Tab = TABS.find((t) => t === (Array.isArray(raw) ? raw[0] : raw)) ?? "homepage";
-  const [sections, gallery, posts, pages] = await Promise.all([listHomepageSections(), listAlbums(), listCommunityPosts(), listSitePages()]);
+  const [sections, gallery, posts, pages, testimonials] = await Promise.all([listHomepageSections(), listAlbums(), listCommunityPosts(), listSitePages(), listTestimonials()]);
 
   const tabs = (
     <nav className={styles.tabs} aria-label="Bagian konten">
@@ -29,7 +31,7 @@ export default async function AdminContentPage({ searchParams }: PageProps<"/adm
         [
           ["homepage", "Homepage", null],
           ["gallery", "Galeri foto", gallery.totalPhotos],
-          ["community", "Testimoni & IG", posts.length],
+          ["community", "Testimoni & IG", posts.length + testimonials.length],
           ["pages", "Halaman lain", pages.length],
         ] as const
       ).map(([value, label, count]) => (
@@ -83,7 +85,12 @@ export default async function AdminContentPage({ searchParams }: PageProps<"/adm
           <>
             <div className={styles.toolbar}>{tabs}</div>
             {tab === "gallery" && galleryCard()}
-            {tab === "community" && <CommunityPosts initial={posts} />}
+            {tab === "community" && (
+              <>
+                <TestimonialManager initial={testimonials} members={await memberChoices()} empty={emptyTestimonial()} />
+                <CommunityPosts initial={posts} />
+              </>
+            )}
             {tab === "pages" && <SitePages pages={pages} />}
           </>
         )}

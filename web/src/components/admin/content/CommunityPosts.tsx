@@ -3,19 +3,18 @@
 import Image from "next/image";
 import { useState, useTransition } from "react";
 import { cx } from "@/lib/cx";
-import { setInstagramPostVisible, setTestimonialVisible } from "@/server/admin/actions/content";
+import { setInstagramPostVisible } from "@/server/admin/actions/content";
 import type { CommunityPost } from "@/server/admin/types";
 import { AdminIcon, type AdminIconName } from "../ui/AdminIcon";
 import { Badge, type BadgeTone } from "../ui/AdminUI";
 import styles from "./Content.module.css";
 
 const KIND: Record<CommunityPost["kind"], { label: string; icon: AdminIconName; tone: BadgeTone }> = {
-  testimonial: { label: "Testimoni", icon: "chat-circle-text", tone: "indigo" },
   instagram: { label: "Instagram", icon: "instagram-logo", tone: "pink" },
   threads: { label: "Threads", icon: "chat-circle-text", tone: "neutral" },
 };
 
-/** Tab Testimoni & IG: kurasi kutipan & post yang tampil di homepage. */
+/** Tab Testimoni & IG: post Instagram & Threads di feed "See You on the Court!" homepage. */
 export function CommunityPosts({ initial }: { initial: CommunityPost[] }) {
   const [posts, setPosts] = useState(initial);
   const [filter, setFilter] = useState<"all" | "visible" | "hidden">("all");
@@ -27,7 +26,7 @@ export function CommunityPosts({ initial }: { initial: CommunityPost[] }) {
     const apply = (visible: boolean) => setPosts((list) => list.map((x) => (x.id === p.id ? { ...x, visible } : x)));
     apply(next);
     startToggle(async () => {
-      const result = p.kind === "testimonial" ? await setTestimonialVisible(p.id, next) : await setInstagramPostVisible(p.handle, next);
+      const result = await setInstagramPostVisible(p.handle, next);
       if (!result.ok) apply(!next);
       setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
     });
@@ -38,7 +37,7 @@ export function CommunityPosts({ initial }: { initial: CommunityPost[] }) {
     <section className={styles.card}>
       <header className={styles.cardHeader}>
         <div>
-          <h2 className={styles.cardTitle}>Testimoni & post komunitas</h2>
+          <h2 className={styles.cardTitle}>Post Instagram & Threads</h2>
           <p className={styles.muted}>
             {posts.filter((p) => p.visible).length} tampil di homepage · langsung tersimpan
           </p>

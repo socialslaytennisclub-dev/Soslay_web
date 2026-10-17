@@ -15,7 +15,7 @@ type QuantityStepperProps = {
 /** Figma: stepper pill (− qty +), border indigo-border. */
 export function QuantityStepper({ value, onChange, min = 1, max = 99, itemLabel }: QuantityStepperProps) {
   return (
-    <div className={styles.stepper} role="group" aria-label={`Jumlah ${itemLabel}`}>
+    <div className={styles.stepper} role="group" aria-label={`Quantity of ${itemLabel}`}>
       <button
         type="button"
         className={styles.button}
@@ -33,7 +33,7 @@ export function QuantityStepper({ value, onChange, min = 1, max = 99, itemLabel 
         className={styles.button}
         onClick={() => onChange(value + 1)}
         disabled={value >= max}
-        aria-label={`Tambah ${itemLabel}`}
+        aria-label={`Add ${itemLabel}`}
       >
         <Icon name="plus-bold" size={20} />
       </button>

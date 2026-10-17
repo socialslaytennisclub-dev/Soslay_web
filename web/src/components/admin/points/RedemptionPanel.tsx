@@ -11,7 +11,7 @@ import ordersStyles from "../orders/Orders.module.css";
 import settingsStyles from "../settings/Settings.module.css";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, MemberAvatar, TierBadge } from "../ui/AdminUI";
-import { ActionNotice, type Notice } from "./ActionNotice";
+import { ActionNotice, type Notice } from "../ui/ActionNotice";
 import styles from "./Points.module.css";
 import { RedemptionBadge } from "./RedemptionBadge";
 import { RewardThumb } from "./RewardCatalog";

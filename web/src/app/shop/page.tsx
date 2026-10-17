@@ -5,23 +5,26 @@ import { MotionProvider } from "@/components/motion/MotionProvider";
 import { InstagramFeed } from "@/components/sections/InstagramFeed/InstagramFeed";
 import { Marquee } from "@/components/sections/Marquee/Marquee";
 import { PageHero } from "@/components/sections/PageHero/PageHero";
-import { ShopCatalog } from "@/components/shop/ShopCatalog/ShopCatalog";
-import { ShopFeatured } from "@/components/shop/ShopFeatured/ShopFeatured";
+import { ShopCategorySection } from "@/components/shop/ShopCategorySection/ShopCategorySection";
 import { instagram } from "@/content/home";
-import { isProductCategory, shopPage } from "@/content/products";
+import { productCategories, shopPage } from "@/content/products";
 import { getShopCatalog } from "@/server/public/products";
 
 export const metadata: Metadata = {
   title: "Shop — SOSLAY",
-  description: "Beyond the Court — apparel dan perlengkapan tenis pilihan komunitas Soslay.",
+  description: "From the court to every day — apparel and accessories picked by the Soslay community.",
 };
 
-/** Halaman Shop (Figma 25:1346). Filter kategori lewat ?category=apparel | racket. */
-export default async function ShopPage({ searchParams }: PageProps<"/shop">) {
-  const { category } = await searchParams;
-  const activeCategory = isProductCategory(category) ? category : undefined;
-  const { products } = await getShopCatalog();
-  const catalog = activeCategory ? products.filter((product) => product.category === activeCategory) : products;
+/**
+ * Halaman Shop (Figma Website v2 347:2044): hero · satu section per kategori (urutan
+ * productCategories, kategori kosong disembunyikan) · marquee · Best Seller · Instagram.
+ */
+export default async function ShopPage() {
+  const { products, details } = await getShopCatalog();
+  const sections = productCategories
+    .map((category) => ({ ...category, products: products.filter((p) => p.category === category.slug) }))
+    .filter((section) => section.products.length > 0);
+  const bestSellers = products.filter((product) => product.featured);
 
   return (
     <>
@@ -29,9 +32,15 @@ export default async function ShopPage({ searchParams }: PageProps<"/shop">) {
       <MotionProvider>
         <main>
           <PageHero id="shop-hero-title" {...shopPage.hero} />
-          <ShopFeatured products={products.filter((product) => product.featured)} />
+          <div id="koleksi">
+            {sections.map((section) => (
+              <ShopCategorySection key={section.slug} id={`shop-${section.slug}`} title={section.label} description={section.description} products={section.products} details={details} />
+            ))}
+          </div>
           <Marquee />
-          <ShopCatalog products={catalog} activeCategory={activeCategory} />
+          {bestSellers.length > 0 && (
+            <ShopCategorySection id="best-seller" layout="carousel" products={bestSellers} details={details} {...shopPage.bestSeller} />
+          )}
           <InstagramFeed {...instagram} />
         </main>
         <Footer />

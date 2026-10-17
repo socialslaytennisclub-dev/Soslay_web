@@ -25,7 +25,7 @@ const chillax = localFont({
 export const metadata: Metadata = {
   title: "SOSLAY — Social Slay Tennis Club",
   description:
-    "Bukan sekadar komunitas bermain tenis. Komunitas untuk bermain, terhubung, dan menikmati momen bersama orang-orang yang tepat — di Jakarta & Bali.",
+    "Not just a tennis community. A community to play, connect, and enjoy moments with the right people — in Jakarta & Bali.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -33,7 +33,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
     // suppressHydrationWarning: ekstensi browser (mis. Demoway, Grammarly) sering menyisipkan
     // atribut ke <html>/<body> sebelum React hydrate. Hanya berlaku untuk atribut elemen ini, bukan anak-anaknya.
     <html
-      lang="id"
+      lang="en"
       className={`${poppins.variable} ${inter.variable} ${chillax.variable}`}
       suppressHydrationWarning
     >
