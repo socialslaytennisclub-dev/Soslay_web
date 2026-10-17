@@ -1,4 +1,5 @@
 import { gsap, SplitText } from "@/lib/gsap";
+import { whenIntroGateOpen } from "@/lib/intro-gate";
 
 /**
  * Intro hero saat halaman dibuka:
@@ -16,6 +17,9 @@ export function heroIntro(scope: HTMLElement) {
 
   const tl = gsap.timeline({ defaults: { ease: "expo.out" } });
   tl.set(hero, { autoAlpha: 1 }, 0);
+  // Overlay pembuka (splash) masih tampil → intro ditahan sampai gerbangnya dibuka.
+  tl.pause();
+  whenIntroGateOpen(() => tl.play());
 
   if (media) tl.fromTo(media, { scale: 1.2 }, { scale: 1, duration: 1.8 }, 0);
 

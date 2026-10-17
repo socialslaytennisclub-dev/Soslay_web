@@ -1,0 +1,94 @@
+/* Splash homepage — hanya terlihat saat <html data-splash> (dipasang skrip sebelum paint). */
+.splash {
+  display: none;
+}
+
+:global(html[data-splash]) {
+  overflow: hidden;
+}
+
+:global(html[data-splash]) .splash,
+.splash[data-active] {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-splash);
+  display: block;
+  overflow: hidden;
+  background: var(--color-navy-900);
+  cursor: pointer;
+}
+
+.stage {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(12px, 2vw, 24px);
+}
+
+.word {
+  display: flex;
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(72px, 17vw, 240px);
+  line-height: 1;
+  letter-spacing: var(--tracking-wordmark);
+  color: var(--color-lime-neon);
+}
+
+/* Huruf muncul dari bawah "lantai" (sisi atas huruf sejajar titik pendaratan bola) */
+.charMask {
+  display: inline-block;
+  overflow: hidden;
+  padding: 0 0.01em;
+}
+
+/* Tersembunyi sampai dipukul bola (transform sepenuhnya milik GSAP) */
+.char {
+  display: inline-block;
+  visibility: hidden;
+  transform-origin: 50% 100%;
+}
+
+.motto {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: clamp(11px, 1.2vw, 16px);
+  letter-spacing: 0.34em;
+  text-transform: uppercase;
+  color: rgb(255 255 255 / 0.7);
+  opacity: 0;
+}
+
+/* Bola: pembungkus digeser (x/y), gambar di dalamnya berputar & gepeng (rotate/scale) */
+.ball {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: clamp(28px, 6vw, 84px);
+  visibility: hidden;
+  will-change: transform;
+}
+
+/* Tanpa will-change: SVG di-render ulang saat membesar 3× (smash), jadi tetap tajam */
+.sprite {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Lingkaran lime penutup layar saat smash — diskalakan GPU (bukan SVG bola yang diperbesar 30×) */
+.flash {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100px;
+  height: 100px;
+  margin: -50px 0 0 -50px;
+  border-radius: 50%;
+  background: var(--color-lime-neon);
+  visibility: hidden;
+  will-change: transform;
+}

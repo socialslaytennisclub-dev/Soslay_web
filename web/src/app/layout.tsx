@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Inter, Poppins } from "next/font/google";
 import localFont from "next/font/local";
+import Script from "next/script";
+import { SPLASH_SCRIPT } from "@/components/home/SplashScreen/splash";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -37,7 +39,13 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${poppins.variable} ${inter.variable} ${chillax.variable}`}
       suppressHydrationWarning
     >
-      <body suppressHydrationWarning>{children}</body>
+      <body suppressHydrationWarning>
+        {/* Splash homepage: tandai <html data-splash> sebelum paint supaya homepage tidak berkedip dulu. */}
+        <Script id="soslay-splash" strategy="beforeInteractive">
+          {SPLASH_SCRIPT}
+        </Script>
+        {children}
+      </body>
     </html>
   );
 }

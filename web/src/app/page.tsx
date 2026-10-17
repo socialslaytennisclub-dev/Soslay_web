@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Activities, Community, Hero, Shop, Venues } from "@/components/home";
+import { SplashScreen } from "@/components/home/SplashScreen/SplashScreen";
 import { Footer } from "@/components/layout/Footer/Footer";
 import { Navbar } from "@/components/layout/Navbar/Navbar";
 import { MotionProvider } from "@/components/motion/MotionProvider";
@@ -29,6 +30,8 @@ export default async function HomePage() {
 
   return (
     <>
+      {/* Splash tiap load homepage — penandanya dipasang skrip beforeInteractive di root layout. */}
+      <SplashScreen />
       {/* Navbar fixed harus di luar MotionProvider (ScrollSmoother men-transform kontennya) */}
       <Navbar variant="overlay" />
       <MotionProvider>

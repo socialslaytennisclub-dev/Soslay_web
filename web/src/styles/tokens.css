@@ -143,6 +143,7 @@
   /* ── Z-index ──────────────────────────────────────────────── */
   --z-nav: 50;
   --z-overlay: 100;
+  --z-splash: 1000; /* splash homepage di atas segalanya (navbar, kursor, overlay) */
 }
 
 @media (min-width: 768px) {

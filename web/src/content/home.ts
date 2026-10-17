@@ -130,6 +130,12 @@ export const marquee = {
   text: "PLAY CONNECT REPEAT",
 };
 
+/** Splash homepage: kata yang "ditulis" bola + motto di bawahnya (dari teks marquee). */
+export const splash = {
+  word: "SOSLAY",
+  motto: marquee.text.split(" ").join(" · "),
+};
+
 export const shop = {
   title: "Beyond the Court.",
   description:
