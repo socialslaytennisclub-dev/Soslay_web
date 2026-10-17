@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
 import { Button } from "@/components/ui";
+import { AFTER_AUTH } from "@/content/auth";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { PasswordField } from "./PasswordField";
 import styles from "./AuthForms.module.css";
@@ -11,7 +12,8 @@ type State = "checking" | "ready" | "invalid" | "saving";
 
 /**
  * Link undangan Supabase membawa token di URL (#access_token=…). Token dipakai untuk membuat
- * sesi, lalu user menetapkan password dan diarahkan ke /admin.
+ * sesi, lalu user menetapkan password. Staf diundang → /admin; member yang ditambahkan admin
+ * (metadata signup = "member") → /akun.
  */
 export function AcceptInviteForm() {
   const router = useRouter();
@@ -19,6 +21,7 @@ export function AcceptInviteForm() {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isMember, setIsMember] = useState(false);
 
   useEffect(() => {
     const supabase = createSupabaseBrowserClient();
@@ -29,6 +32,7 @@ export function AcceptInviteForm() {
     start.then(({ data }) => {
       // Token jangan tertinggal di address bar / riwayat.
       window.history.replaceState(null, "", window.location.pathname);
+      setIsMember(data.session?.user.user_metadata?.signup === "member");
       setState(data.session ? "ready" : "invalid");
     });
   }, []);
@@ -45,13 +49,13 @@ export function AcceptInviteForm() {
       setState("ready");
       return;
     }
-    await supabase.rpc("touch_staff_login");
-    router.replace("/admin");
+    if (!isMember) await supabase.rpc("touch_staff_login");
+    router.replace(isMember ? AFTER_AUTH : "/admin");
     router.refresh();
   }
 
   if (state === "checking") return <p className={styles.error}>Memeriksa undangan…</p>;
-  if (state === "invalid") return <p className={styles.error}>Link undangan sudah kedaluwarsa atau sudah dipakai. Minta Super Admin mengirim undangan baru.</p>;
+  if (state === "invalid") return <p className={styles.error}>Link undangan sudah kedaluwarsa atau sudah dipakai. Minta admin Soslay mengirim undangan baru.</p>;
 
   return (
     <form className={styles.form} onSubmit={submit} noValidate>
@@ -65,7 +69,7 @@ export function AcceptInviteForm() {
         </p>
       )}
       <Button type="submit" variant="arrow" className={styles.submit} disabled={state === "saving"}>
-        {state === "saving" ? "Menyimpan…" : "Simpan & masuk admin"}
+        {state === "saving" ? "Menyimpan…" : isMember ? "Simpan & masuk" : "Simpan & masuk admin"}
       </Button>
     </form>
   );

@@ -3,9 +3,9 @@ import { AcceptInviteForm } from "@/components/auth/AuthForms/AcceptInviteForm";
 import { AuthStage } from "@/components/auth/AuthStage/AuthStage";
 import { Navbar } from "@/components/layout/Navbar/Navbar";
 
-export const metadata: Metadata = { title: "Aktifkan akun tim — SOSLAY", robots: { index: false } };
+export const metadata: Metadata = { title: "Aktifkan akun — SOSLAY", robots: { index: false } };
 
-/** Tujuan link undangan email (Settings → Undang anggota): buat password lalu masuk admin. */
+/** Tujuan link undangan email (undang anggota tim / tambah member): buat password lalu masuk. */
 export default function AcceptInvitePage() {
   return (
     <>
@@ -13,9 +13,9 @@ export default function AcceptInvitePage() {
       <main>
         <AuthStage
           id="invite-title"
-          title="Selamat bergabung di tim Soslay"
-          description="Buat password untuk akunmu. Setelah itu kamu langsung masuk ke dashboard admin."
-          switchTo={{ prompt: "Sudah punya password?", label: "Masuk", href: "/masuk?next=/admin" }}
+          title="Selamat bergabung di Soslay"
+          description="Buat password untuk akunmu. Setelah itu kamu langsung masuk."
+          switchTo={{ prompt: "Sudah punya password?", label: "Masuk", href: "/masuk" }}
         >
           <AcceptInviteForm />
         </AuthStage>

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { AddMemberButton } from "@/components/admin/members/AddMemberButton";
 import { MembersFilters } from "@/components/admin/members/MembersFilters";
 import { MembersTable } from "@/components/admin/members/MembersTable";
 import { DeleteSegmentButton, SaveSegmentButton } from "@/components/admin/members/SegmentActions";
@@ -57,9 +58,7 @@ export default async function AdminMembersPage({ searchParams }: PageProps<"/adm
             <AdminButton href={`/admin/members/export${exportParams ? `?${exportParams}` : ""}`} icon="download-simple" prefetch={false}>
               Export CSV
             </AdminButton>
-            <AdminButton variant="primary" icon="user-plus" disabled title="Member baru mendaftar sendiri lewat halaman Daftar di website">
-              Tambah member
-            </AdminButton>
+            <AddMemberButton />
           </div>
         </div>
 

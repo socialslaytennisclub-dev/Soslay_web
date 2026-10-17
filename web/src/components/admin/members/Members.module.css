@@ -504,3 +504,36 @@ button.saveSegment:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* Modal Tambah member */
+.addForm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.addLead {
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-indigo-muted);
+}
+
+.addGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-16);
+}
+
+.addActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-12);
+}
+
+@media (min-width: 640px) {
+  .addGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

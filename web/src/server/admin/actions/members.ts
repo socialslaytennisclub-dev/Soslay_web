@@ -1,5 +1,8 @@
 "use server";
 
+import { headers } from "next/headers";
+import { isEmail } from "@/lib/auth";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { MemberForm, MembersQuery } from "../types";
 import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } from "./common";
@@ -17,6 +20,50 @@ const orNull = (v: string, allowed: string[]) => (allowed.includes(v) ? v : null
 
 function refreshMember(id: string) {
   refreshPaths("/admin/members", `/admin/members/${id}`);
+}
+
+export type NewMemberInput = { fullName: string; email: string; phone: string; kuyId: string; city: string; level: string };
+
+/**
+ * Tambah member dari admin: buat akun Auth lewat email undangan (butuh SUPABASE_SERVICE_ROLE_KEY).
+ * Metadata `signup: "member"` → trigger handle_member_signup membuat profilnya, sama seperti daftar
+ * di website. Member membuka link di email, membuat password, lalu masuk ke /akun.
+ */
+export async function addMember(input: NewMemberInput): Promise<ActionResult> {
+  const auth = await requireEditor("members");
+  if ("error" in auth) return fail(auth.error);
+  const fullName = input.fullName.trim();
+  const email = input.email.trim().toLowerCase();
+  const kuyId = input.kuyId.trim();
+  const phone = input.phone.replace(/\D/g, "").replace(/^62/, "").replace(/^0/, "");
+  if (!fullName) return fail("Isi nama lengkap member.");
+  if (!isEmail(email)) return fail("Email tidak valid.");
+  if (phone && phone.length < 9) return fail("Nomor WhatsApp terlalu pendek.");
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) return fail("Tambah member belum aktif: SUPABASE_SERVICE_ROLE_KEY belum dipasang di server.");
+
+  const supabase = await createSupabaseServerClient();
+  const [{ data: existing }, kuy] = await Promise.all([
+    supabase.from("profiles").select("full_name").eq("email", email).maybeSingle(),
+    kuyId ? supabase.rpc("kuy_id_available", { p_kuy_id: kuyId }) : Promise.resolve({ data: true }),
+  ]);
+  if (existing) return fail(`Email ini sudah terdaftar sebagai member (${existing.full_name}).`);
+  if (kuy.data === false) return fail(`Kuy ID @${kuyId} sudah dipakai member lain.`);
+
+  const h = await headers();
+  const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
+  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
+    redirectTo: `${origin}/auth/undangan`,
+    data: { signup: "member", full_name: fullName, phone, kuy_id: kuyId, city: input.city.trim(), tennis_level: orNull(input.level, ENUMS.level) ?? "" },
+  });
+  if (error || !data.user) {
+    const taken = /already|registered|exists/i.test(error?.message ?? "");
+    return fail(taken ? "Email ini sudah punya akun Soslay (mis. akun tim) — minta dia daftar sendiri atau hubungi Super Admin." : `Gagal membuat akun: ${error?.message ?? "coba lagi"}`);
+  }
+  await audit(auth.userId, `menambah member ${fullName}`, "member", data.user.id);
+  refreshPaths("/admin/members");
+  return done(`${fullName} ditambahkan. Undangan terkirim ke ${email} — dia tinggal klik link di email dan membuat password.`);
 }
 
 export async function updateMember(input: MemberForm): Promise<ActionResult> {
