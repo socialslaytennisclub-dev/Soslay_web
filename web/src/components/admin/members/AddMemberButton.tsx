@@ -16,7 +16,7 @@ import styles from "./Members.module.css";
 const EMPTY: NewMemberInput = { fullName: "", email: "", phone: "", kuyId: "", city: "", level: "" };
 const LEVELS = Object.entries(LEVEL_LABEL) as [TennisLevel, string][];
 
-/** Tombol "Tambah member" + form di panel samping (kiri) → akun member dibuat lewat email undangan. */
+/** Tombol "Tambah member" + form di panel samping (kanan) → akun member dibuat lewat email undangan. */
 export function AddMemberButton() {
   const router = useRouter();
   const dialog = useDialog();

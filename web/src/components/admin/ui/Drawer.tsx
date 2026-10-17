@@ -16,7 +16,7 @@ type DrawerProps = {
 };
 
 /**
- * Panel samping admin yang meluncur dari kiri, setinggi layar. Dibangun di atas <dialog> native
+ * Panel samping admin yang mengambang di kanan (jarak 16px dari tepi) dan meluncur masuk. Dibangun di atas <dialog> native
  * (fokus terkunci, Esc, klik latar untuk menutup) — pakai bersama hook useDialog().
  */
 export function Drawer({ dialogRef, title, subtitle, onClose, onBackdropClick, footer, children }: DrawerProps) {
