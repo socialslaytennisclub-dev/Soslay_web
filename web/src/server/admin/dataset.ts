@@ -123,13 +123,21 @@ async function fetchAll<T>(client: SupabaseClient, table: string, columns: strin
       return (data ?? []) as T[];
     }),
   );
-  return [...((first.data ?? []) as T[]), ...rest.flat()];
+  const rows = [...((first.data ?? []) as T[]), ...rest.flat()];
+  // Baris baru masuk setelah hitungan awal → halaman terakhir penuh; lanjutkan sampai halaman tidak penuh.
+  for (let from = rows.length; rows.length % PAGE === 0 && rows.length > 0; from += PAGE) {
+    const { data, error } = await query().range(from, from + PAGE - 1);
+    if (error) throw new Error(`Gagal memuat ${table}: ${error.message}`);
+    rows.push(...((data ?? []) as T[]));
+    if (!data || data.length < PAGE) break;
+  }
+  return rows;
 }
 
 const slugByProductName = new Map(catalog.map((p) => [p.name, p.slug]));
 
 // Enum database → label yang dipakai UI (sama dengan data demo).
-const FREQUENCY: Record<string, string> = { rarely: "First time / Rarely", monthly: "1–2x/month", weekly: "1x/week", twice_weekly: "2–3x/week", often: "4x+/week" };
+export const FREQUENCY: Record<string, string> = { rarely: "First time / Rarely", monthly: "1–2x/month", weekly: "1x/week", twice_weekly: "2–3x/week", often: "4x+/week" };
 const FORMAT: Record<string, string> = { singles: "Singles", doubles: "Doubles", both: "Both" };
 const HAND: Record<string, string> = { right: "Right", left: "Left", both: "Both" };
 const CREW: Record<string, "Host" | "Coach" | "Fotografer"> = { host: "Host", coach: "Coach", photographer: "Fotografer" };

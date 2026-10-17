@@ -65,7 +65,10 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
   const { data: kuyFree } = await supabase.rpc("kuy_id_available", { p_kuy_id: values.kuyId });
   if (kuyFree === false) return { fieldErrors: { kuyId: "This Kuy ID is already registered" } };
 
-  const origin = (await headers()).get("origin") ?? "";
+  // Link verifikasi harus absolut: Origin dari browser, cadangan Host (+ proto dari proxy Vercel).
+  const h = await headers();
+  const host = h.get("x-forwarded-host") ?? h.get("host");
+  const origin = h.get("origin") ?? (host ? `${h.get("x-forwarded-proto") ?? "https"}://${host}` : "");
   const { data, error } = await supabase.auth.signUp({
     email: values.email,
     password: values.password,
@@ -86,6 +89,9 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
     if (error.code === "user_already_exists" || error.code === "email_exists") return { fieldErrors: { email: "This email is already registered — sign in instead" } };
     if (error.code === "weak_password") return { fieldErrors: { password: "Password is too weak — try a longer one" } };
     if (error.code === "over_email_send_rate_limit") return { error: "Too many sign-ups right now. Please try again in a few minutes." };
+    // Trigger profil gagal (biasanya Kuy ID baru saja dipakai orang lain di antara cek & daftar).
+    const { data: stillFree } = await supabase.rpc("kuy_id_available", { p_kuy_id: values.kuyId });
+    if (stillFree === false) return { fieldErrors: { kuyId: "This Kuy ID is already registered" } };
     return { error: "Couldn't create your account. Please try again in a moment." };
   }
   // Supabase tidak membocorkan email yang sudah terdaftar: user tanpa identities = sudah ada.

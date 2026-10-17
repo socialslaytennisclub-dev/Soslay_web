@@ -2,7 +2,9 @@ import "server-only";
 import { findProduct } from "@/content/products";
 import { LEVEL_LABEL } from "@/lib/admin-labels";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getDataset, type DataMember, type Dataset } from "./dataset";
+import { countSegmentsLive, listMembersLive, sidebarCountsLive } from "./member-list";
 import { jakartaWeekStart, TIERS } from "./demo-data";
 import { DAY, pctDelta } from "./time";
 import type {
@@ -85,6 +87,7 @@ function sortMembers(list: MemberListItem[], sort: MembersQuery["sort"] = "last_
 
 // ── Members ─────────────────────────────────────────────────────────────────
 export async function listMembers(query: MembersQuery): Promise<MembersResult> {
+  if (isSupabaseConfigured) return listMembersLive(query, MEMBERS_PAGE_SIZE);
   const d = await getDataset();
   const everyone = allMembers(d);
   const filtered = sortMembers(applyFilters(everyone, query, d.now), query.sort, query.dir);
@@ -114,8 +117,6 @@ export async function exportMembers(query: MembersQuery): Promise<MemberListItem
 
 /** Segmen tersimpan (tabel member_segments) — filter disimpan sebagai query. */
 export async function listSegments(): Promise<Segment[]> {
-  const d = await getDataset();
-  const everyone = allMembers(d);
   const defs: Omit<Segment, "count">[] = [
     { id: "gold-jakarta", name: "Gold+ di Jakarta", query: { tier: "gold", city: "Jakarta" } },
     { id: "beginner-new", name: "Beginner baru (30 hari)", query: { tab: "new", level: "beginner" } },
@@ -124,11 +125,15 @@ export async function listSegments(): Promise<Segment[]> {
     { id: "dining", name: "Suka Tennis + Dining", query: { interest: "Tennis + Dining" } },
   ];
   // Segmen yang disimpan tim (member_segments) setelah segmen bawaan.
-  if (d.live) {
+  if (isSupabaseConfigured) {
     const supabase = await createSupabaseServerClient();
     const { data } = await supabase.from("member_segments").select("id, name, filter").order("created_at");
     for (const row of data ?? []) defs.push({ id: row.id as string, name: row.name as string, query: row.filter as MembersQuery, custom: true });
+    const counts = await countSegmentsLive(defs.map((segment) => segment.query));
+    return defs.map((segment, i) => ({ ...segment, count: counts[i] }));
   }
+  const d = await getDataset();
+  const everyone = allMembers(d);
   return defs.map((segment) => ({ ...segment, count: applyFilters(everyone, segment.query, d.now).length }));
 }
 
@@ -229,6 +234,7 @@ const needsProcessing = (o: { status: string; payment: string }) => o.status ===
 
 /** Angka badge sidebar (dipakai layout di setiap halaman admin) — tanpa menghitung overview penuh. */
 export async function getSidebarCounts() {
+  if (isSupabaseConfigured) return sidebarCountsLive();
   const d = await getDataset();
   return { members: d.members.length, ordersToProcess: d.orders.filter(needsProcessing).length };
 }
