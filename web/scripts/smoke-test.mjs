@@ -95,11 +95,18 @@ const adminPaths = [
   "/admin/settings?tab=payment",
   "/admin/settings?tab=notifications",
   "/admin/settings?tab=integrations",
+  "/admin/points",
+  "/admin/points?reward=new",
+  "/admin/points?tab=redemptions",
+  "/admin/points?tab=redemptions&code=new",
+  "/admin/points?tab=rules",
+  "/admin/points?tab=history",
+  "/admin/points?tab=history&reason=attendance",
 ];
 
 if (!demo) {
   // Tanpa login semua halaman admin harus diarahkan ke /masuk (dan tidak membocorkan data).
-  for (const p of [...adminPaths, "/admin/members/export", "/admin/orders/SOS-2309/label"]) await check(p, { status: 307, location: "/masuk?next=" });
+  for (const p of [...adminPaths, "/admin/members/export", "/admin/orders/SOS-2309/label", "/admin/points/export"]) await check(p, { status: 307, location: "/masuk?next=" });
 } else {
   for (const p of adminPaths) await check(p);
   const members = await check("/admin/members?tab=all");
@@ -131,6 +138,18 @@ if (!demo) {
   if (venueEdit) await check(venueEdit, { includes: ["Lapangan"] });
   else failures.push("/admin/venues → tidak ada link edit venue");
   await check("/admin/members/export?tier=gold", { contentType: "text/csv" });
+  // Slay Point & Reward: editor reward, panel penukaran, aturan, tier + riwayat, export.
+  const rewards = await check("/admin/points", { includes: ["Katalog reward", "Poin beredar"] });
+  const rewardId = [...rewards.matchAll(/\/admin\/points\?reward=([\w-]+)/g)].map((m) => m[1]).find((id) => id !== "new");
+  if (rewardId) await check(`/admin/points?reward=${rewardId}`, { includes: ["Edit reward", "Harga poin"] });
+  else failures.push("/admin/points → tidak ada link reward");
+  const queue = await check("/admin/points?tab=redemptions", { includes: ["Penukaran"] });
+  const rdm = queue.match(/RDM-\d{4}/)?.[0];
+  if (rdm) await check(`/admin/points?tab=redemptions&code=${rdm}`, { includes: ["Saldo member sekarang"] });
+  else failures.push("/admin/points?tab=redemptions → tidak ada kode penukaran");
+  await check("/admin/points?tab=rules", { includes: ["Poin kehadiran per tipe sesi", "Bonus massal"] });
+  await check("/admin/points?tab=history", { includes: ["Edit tier &amp; benefit", "Riwayat poin"] });
+  await check("/admin/points/export?reason=attendance", { contentType: "text/csv" });
 }
 
 console.log(`\n${passed} lolos · ${failures.length} gagal`);

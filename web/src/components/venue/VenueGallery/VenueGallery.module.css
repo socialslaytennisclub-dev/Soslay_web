@@ -1,6 +1,6 @@
 .section {
   background: var(--surface-page);
-  padding-block: var(--space-48) var(--space-80);
+  padding-block: var(--space-32) var(--space-80);
 }
 
 .inner {

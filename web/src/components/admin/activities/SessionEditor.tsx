@@ -20,6 +20,8 @@ type SessionEditorProps = {
   mode: "edit" | "new";
   /** Pesan setelah redirect (mis. sesi baru tersimpan). */
   initialNotice?: string;
+  /** Default Slay Point per tipe sesi (Aturan poin) — dipakai saat tipe diganti di sesi baru. */
+  pointDefaults?: Record<string, number>;
 };
 
 const WIB = 7 * 3600_000;
@@ -52,7 +54,7 @@ const longDate = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numer
 const timeFmt = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
 
 /** Admin / 05 Activity Editor (Figma 25:5098). Simpan → Supabase (server action), tampil di website. */
-export function SessionEditor({ session, types, venues, mode, initialNotice }: SessionEditorProps) {
+export function SessionEditor({ session, types, venues, mode, initialNotice, pointDefaults }: SessionEditorProps) {
   const [title, setTitle] = useState(session.title);
   const [typeSlug, setTypeSlug] = useState(session.typeSlug);
   const [description, setDescription] = useState(session.description);
@@ -65,6 +67,11 @@ export function SessionEditor({ session, types, venues, mode, initialNotice }: S
   const [price, setPrice] = useState(String(session.price));
   const [capacity, setCapacity] = useState(String(session.capacity));
   const [points, setPoints] = useState(String(session.pointsPerAttendance));
+  // Poin ikut default tipe baru selama admin belum mengubahnya sendiri.
+  const changeType = (slug: string) => {
+    if (pointDefaults && points === String(pointDefaults[typeSlug] ?? "") && pointDefaults[slug] !== undefined) setPoints(String(pointDefaults[slug]));
+    setTypeSlug(slug);
+  };
   const [levels, setLevels] = useState<TennisLevel[]>(session.recommendedLevels);
   const [waitlist, setWaitlist] = useState(session.waitlistEnabled);
   const [membersOnly, setMembersOnly] = useState(session.membersOnly);
@@ -273,7 +280,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice }: S
               <legend className={styles.label}>Tipe sesi *</legend>
               <div className={styles.segmentWrap}>
                 {types.map((t) => (
-                  <button key={t.slug} type="button" aria-pressed={typeSlug === t.slug} className={cx(styles.option, typeSlug === t.slug && styles.optionOn)} onClick={() => setTypeSlug(t.slug)}>
+                  <button key={t.slug} type="button" aria-pressed={typeSlug === t.slug} className={cx(styles.option, typeSlug === t.slug && styles.optionOn)} onClick={() => changeType(t.slug)}>
                     {t.label}
                   </button>
                 ))}

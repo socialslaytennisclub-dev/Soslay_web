@@ -1,6 +1,6 @@
 "use client";
 
-import { Container, Lightbox, PhotoCard, SectionIntro, Text, type LightboxItem } from "@/components/ui";
+import { Container, Lightbox, PhotoCard, Text, type LightboxItem } from "@/components/ui";
 import type { GalleryPhoto } from "@/content/gallery";
 import { venuePage } from "@/content/venues";
 import { useLightbox } from "@/hooks/useLightbox";
@@ -34,11 +34,10 @@ export function VenueGallery({ venueName, photos, dateLabels }: VenueGalleryProp
   return (
     <section className={styles.section} aria-labelledby="venue-gallery-title">
       <Container className={styles.inner}>
-        <SectionIntro
-          id="venue-gallery-title"
-          title={venuePage.detail.galleryTitle}
-          description={`Foto sesi di ${venueName} — diambil oleh fotografer profesional Soslay.`}
-        />
+        {/* Figma 25:917 tanpa judul section — judul tetap ada untuk pembaca layar */}
+        <h2 id="venue-gallery-title" className="visually-hidden">
+          {venuePage.detail.galleryTitle} di {venueName}
+        </h2>
 
         {photos.length === 0 ? (
           <Text variant="body-16" tone="primary" muted className={styles.empty}>

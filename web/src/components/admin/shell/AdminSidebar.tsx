@@ -15,6 +15,8 @@ type NavItem = { label: string; href: string; icon: AdminIconName; badge?: numbe
 type AdminSidebarProps = {
   memberCount: number;
   ordersToProcess: number;
+  /** Penukaran Slay Point yang menunggu diproses. */
+  pendingRedemptions: number;
   user: { name: string; role: string };
   /** Menu yang tidak boleh dilihat role ini (role_permissions = none). */
   hiddenHrefs?: string[];
@@ -23,13 +25,19 @@ type AdminSidebarProps = {
 };
 
 /** Figma 25:3187 — sidebar navy: Umum · CRM · CMS, lalu Settings, Bantuan & profil admin di bawah. */
-export function AdminSidebar({ memberCount, ordersToProcess, user, hiddenHrefs = [], canSignOut = false }: AdminSidebarProps) {
+export function AdminSidebar({ memberCount, ordersToProcess, pendingRedemptions, user, hiddenHrefs = [], canSignOut = false }: AdminSidebarProps) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
   const groups: { label: string; items: NavItem[] }[] = [
     { label: "Umum", items: [{ label: "Overview", href: "/admin", icon: "squares-four", ready: true }] },
-    { label: "CRM", items: [{ label: "Members", href: "/admin/members", icon: "users-three", badge: memberCount, ready: true }] },
+    {
+      label: "CRM",
+      items: [
+        { label: "Members", href: "/admin/members", icon: "users-three", badge: memberCount, ready: true },
+        { label: "Slay Point & Reward", href: "/admin/points", icon: "coins", badge: pendingRedemptions, ready: true },
+      ],
+    },
     {
       label: "CMS",
       items: [

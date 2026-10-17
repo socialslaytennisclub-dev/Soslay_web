@@ -79,7 +79,6 @@ export const venuePage = {
   } satisfies PageHeroContent,
   detail: {
     booking: "Booking Session di Kuyy",
-    nextSession: "Sesi berikutnya",
     noSession: "Belum ada sesi terjadwal di venue ini.",
     seeSchedule: "Lihat jadwal",
     galleryTitle: "Momen di Lapangan",

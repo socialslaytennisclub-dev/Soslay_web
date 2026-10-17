@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SessionEditor } from "@/components/admin/activities/SessionEditor";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
+import { attendancePointDefaults } from "@/server/admin/points-repo";
 import { activityTypeOptions, getSessionDraft, venueOptions } from "@/server/admin/sessions-repo";
 import pageStyles from "../../page.module.css";
 
@@ -10,13 +11,15 @@ export const metadata: Metadata = { title: "Buat sesi" };
 export default async function AdminNewSessionPage({ searchParams }: PageProps<"/admin/activities/new">) {
   const from = (await searchParams).from;
   const fromId = Array.isArray(from) ? from[0] : from;
-  const draft = await getSessionDraft(fromId);
+  const [draft, pointDefaults] = await Promise.all([getSessionDraft(fromId), attendancePointDefaults()]);
+  // Sesi baru (bukan duplikat) memakai Slay Point default dari Aturan poin.
+  if (!fromId) draft.pointsPerAttendance = pointDefaults[draft.typeSlug] ?? draft.pointsPerAttendance;
 
   return (
     <>
       <AdminTopbar breadcrumb="CMS / Activities / Buat sesi" title={fromId ? "Duplikat sesi" : "Buat sesi"} />
       <div className={pageStyles.content}>
-        <SessionEditor key={fromId ?? "new"} session={draft} types={activityTypeOptions()} venues={await venueOptions()} mode="new" />
+        <SessionEditor key={fromId ?? "new"} session={draft} types={activityTypeOptions()} venues={await venueOptions()} mode="new" pointDefaults={pointDefaults} />
       </div>
     </>
   );

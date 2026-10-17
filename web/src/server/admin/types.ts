@@ -443,3 +443,83 @@ export type MemberForm = {
   status: "active" | "suspended";
   pointsBalance: number;
 };
+
+// ── Slay Point & Reward ─────────────────────────────────────────────────────
+
+export type RewardCategory = "merch" | "session" | "voucher" | "experience";
+export type RedemptionStatus = "pending" | "approved" | "fulfilled" | "rejected";
+export type PointsReason = "attendance" | "purchase" | "redeem" | "adjustment" | "bonus";
+
+export type AdminReward = {
+  id: string;
+  name: string;
+  description: string;
+  category: RewardCategory;
+  image: string | null;
+  pointsCost: number;
+  /** null = tanpa batas. */
+  stock: number | null;
+  minTier: Tier;
+  active: boolean;
+  /** Jumlah penukaran yang disetujui/selesai. */
+  redeemed: number;
+};
+
+export type AdminRedemption = {
+  code: string;
+  memberId: string;
+  memberName: string;
+  memberCode: string;
+  memberTier: Tier;
+  memberBalance: number;
+  rewardName: string;
+  rewardImage: string | null;
+  points: number;
+  status: RedemptionStatus;
+  note: string;
+  createdAt: string; // ISO
+  handledAt: string | null;
+  handledBy: string | null;
+};
+
+export type LedgerEntry = {
+  id: string;
+  at: string; // ISO
+  memberId: string;
+  memberName: string;
+  memberTier: Tier;
+  reason: PointsReason;
+  note: string;
+  delta: number;
+  /** Saldo member setelah transaksi ini. */
+  balanceAfter: number;
+  by: string;
+};
+
+export type TierBenefits = { tier: Tier; label: string; minPoints: number; benefits: string[]; members: number };
+
+export type BonusKey = "signup" | "birthday" | "referral" | "testimonial" | "streak";
+
+/** app_settings "points_rules" (+ "rupiah_per_point"). Semua angka bebas, bilangan bulat ≥ 0. */
+export type PointRules = {
+  attendance: Record<string, number>;
+  checkInOnly: boolean;
+  rupiahPerPoint: number;
+  discountedProducts: boolean;
+  redeemDiscount: { enabled: boolean; rupiahPerPoint: number; maxPercent: number };
+  bonuses: { key: BonusKey; points: number; enabled: boolean }[];
+  expiry: { months: number; remind: boolean; tierKeeps: boolean };
+};
+
+export type PointsOverview = {
+  circulating: number;
+  redeemedThisMonth: number;
+  redemptionsThisMonth: number;
+  redemptionsDelta: number | null;
+  activeRewards: number;
+  lowStock: number;
+  pending: number;
+  pendingOverdue: number;
+};
+
+export type MemberChoice = { id: string; name: string; code: string; tier: Tier; balance: number };

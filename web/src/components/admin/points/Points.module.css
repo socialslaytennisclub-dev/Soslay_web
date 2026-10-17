@@ -1,0 +1,464 @@
+/* Admin / 11 Slay Point & Reward — Figma 316:2 · 317:37 · 317:482 · 322:2 */
+
+/* Tab modul (Katalog · Penukaran · Aturan · Riwayat) + aksi kanan */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.pills {
+  display: flex;
+  gap: var(--space-4);
+  max-width: 100%;
+  padding: var(--space-4);
+  overflow-x: auto;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-full);
+  background: var(--color-white);
+  scrollbar-width: none;
+}
+
+.pill {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-8);
+  padding: var(--space-8) var(--space-14);
+  border-radius: var(--radius-full);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.pill:hover {
+  color: var(--color-indigo-600);
+}
+
+.pillActive,
+.pillActive:hover {
+  background: var(--color-navy-900);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  color: var(--color-white);
+}
+
+.pillCount {
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-50);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 11px;
+  color: var(--color-navy-900);
+}
+
+.pillActive .pillCount {
+  background: var(--color-lime-500);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.hint {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+/* ── Daftar + panel ── */
+.layout {
+  display: grid;
+  gap: var(--space-16);
+  align-items: start;
+}
+
+/* HP/tablet: panel yang dibuka tampil di atas daftar. */
+.layout > aside {
+  order: -1;
+}
+
+/* Panel kanan hanya saat reward/penukaran dipilih; tanpa panel daftar selebar konten. */
+@media (min-width: 1200px) {
+  .layout:has(> aside) {
+    grid-template-columns: minmax(0, 1fr) 380px;
+  }
+
+  .layout > aside {
+    order: 0;
+  }
+
+  .panel {
+    position: sticky;
+    top: 96px;
+  }
+}
+
+.listHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.listTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  color: var(--color-navy-900);
+}
+
+/* Foto reward 40×40 · placeholder ikon kalau belum ada foto */
+.thumb {
+  position: relative;
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--color-indigo-50);
+  color: var(--color-indigo-600);
+}
+
+.thumbLarge {
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 10;
+  border-radius: var(--radius-lg);
+}
+
+.thumb img {
+  object-fit: cover;
+}
+
+.ptsPill {
+  display: inline-flex;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-500);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--color-navy-900);
+}
+
+.stockLow {
+  color: var(--color-pink-500);
+}
+
+.inactiveRow {
+  opacity: 0.55;
+}
+
+.plus {
+  color: #16a34a;
+}
+
+.minus {
+  color: #dc2626;
+}
+
+/* ── Panel form ── */
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  min-width: 0;
+  padding: var(--space-20);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-14);
+}
+
+.row2 {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-12);
+}
+
+.select {
+  width: 100%;
+  min-height: 44px;
+  padding: var(--space-10) var(--space-14);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--color-navy-950);
+}
+
+.select:focus {
+  border-color: var(--color-indigo-500);
+  outline: none;
+  box-shadow: 0 0 0 3px rgb(64 53 222 / 0.12);
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.buttons > * {
+  flex: 1 1 auto;
+  justify-content: center;
+}
+
+.danger {
+  color: #dc2626;
+}
+
+/* ── Aturan poin ── */
+.rulesGrid {
+  display: grid;
+  gap: var(--space-16);
+  align-items: start;
+}
+
+@media (min-width: 1024px) {
+  .rulesGrid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.rulesCol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  min-width: 0;
+}
+
+.rule {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding-block: var(--space-12);
+  border-top: 1px solid var(--color-indigo-border);
+}
+
+.ruleText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.ruleControls {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+/* Input angka bebas "175 pts" */
+.pts {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 var(--space-10);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-md);
+  background: var(--color-white);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.pts:focus-within {
+  border-color: var(--color-indigo-600);
+  box-shadow: 0 0 0 3px rgb(64 53 222 / 0.15);
+}
+
+.pts input {
+  width: 7ch;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  text-align: right;
+  color: inherit;
+}
+
+.pts input:focus {
+  outline: none;
+}
+
+.pts span {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-regular);
+  font-size: 11px;
+  color: var(--color-indigo-muted);
+}
+
+.bulk {
+  display: grid;
+  gap: var(--space-12);
+  align-items: end;
+}
+
+@media (min-width: 1024px) {
+  .bulk {
+    grid-template-columns: minmax(0, 1.2fr) 150px minmax(0, 1.3fr) auto;
+  }
+}
+
+.footer {
+  position: sticky;
+  bottom: var(--space-12);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-16);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: rgb(255 255 255 / 0.95);
+  box-shadow: 0 8px 24px rgb(10 8 74 / 0.08);
+}
+
+/* ── Tier ── */
+.tiers {
+  display: grid;
+  gap: var(--space-16);
+}
+
+@media (min-width: 768px) {
+  .tiers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1200px) {
+  .tiers {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.tierCard {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-14);
+  padding: var(--space-16);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+}
+
+.tierHead {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tierName {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  color: var(--color-navy-900);
+}
+
+.tierDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.dot-basic { background: #8c8ab3; }
+.dot-silver { background: #9ea3b8; }
+.dot-gold { background: #d9a10d; }
+.dot-platinum { background: var(--color-indigo-600); }
+
+.share {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--color-indigo-50);
+}
+
+.share span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+}
+
+.benefits {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-8);
+  list-style: none;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.benefits li {
+  display: flex;
+  gap: var(--space-8);
+}
+
+.benefits li::before {
+  content: "✓";
+  font-weight: 700;
+  color: #16a34a;
+}
+
+/* ── Riwayat ── */
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.filter {
+  padding: 6px var(--space-12);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-full);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.filter:hover {
+  color: var(--color-navy-900);
+}
+
+.filterActive,
+.filterActive:hover {
+  border-color: var(--color-navy-900);
+  background: var(--color-navy-900);
+  color: var(--color-white);
+}
+
+.right {
+  text-align: right;
+}

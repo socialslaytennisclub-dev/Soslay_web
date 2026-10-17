@@ -1,4 +1,15 @@
-import type { BookingStatus, MemberStatus, OrderStatus, PaymentStatus, TennisLevel, Tier } from "@/server/admin/types";
+import type {
+  BonusKey,
+  BookingStatus,
+  MemberStatus,
+  OrderStatus,
+  PaymentStatus,
+  PointsReason,
+  RedemptionStatus,
+  RewardCategory,
+  TennisLevel,
+  Tier,
+} from "@/server/admin/types";
 
 /** Label tampilan admin (Bahasa Indonesia) untuk nilai enum database. */
 
@@ -52,3 +63,21 @@ const shortDate = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "sho
 export function formatShortDate(iso: string | null): string {
   return iso ? shortDate.format(new Date(iso)).replace(".", "") : "—";
 }
+
+// ── Slay Point & Reward ─────────────────────────────────────────────────────
+export const REWARD_CATEGORY_LABEL: Record<RewardCategory, string> = { merch: "Merch", session: "Sesi", voucher: "Voucher", experience: "Pengalaman" };
+
+export const REDEMPTION_STATUS_LABEL: Record<RedemptionStatus, string> = { pending: "Menunggu", approved: "Disetujui", fulfilled: "Selesai", rejected: "Ditolak" };
+
+export const POINTS_REASON_LABEL: Record<PointsReason, string> = { attendance: "Kehadiran", purchase: "Belanja", bonus: "Bonus", redeem: "Penukaran", adjustment: "Manual" };
+
+export const BONUS_LABEL: Record<BonusKey, { label: string; hint: string }> = {
+  signup: { label: "Member baru", hint: "Langsung setelah akun dibuat" },
+  birthday: { label: "Ulang tahun", hint: "Dikirim jam 08.00 di hari ulang tahun" },
+  referral: { label: "Ajak teman", hint: "Untuk kamu & teman, setelah teman hadir 1×" },
+  testimonial: { label: "Testimoni disetujui", hint: "Teks atau video yang tampil di homepage" },
+  streak: { label: "Streak 4 minggu", hint: "Hadir 4 minggu berturut-turut" },
+};
+
+/** "1.250 pts" / "−300 pts"; `signed` menambah "+" untuk angka positif. */
+export const formatPoints = (n: number, signed = false) => `${n < 0 ? "−" : signed && n > 0 ? "+" : ""}${Math.abs(n).toLocaleString("id-ID")} pts`;

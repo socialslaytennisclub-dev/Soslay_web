@@ -1,5 +1,5 @@
 .hero {
-  --photo-ratio: 0.8168; /* 544 / 666 (Figma) */
+  --photo-ratio: 0.713; /* 544 / 763 (Figma) */
 
   --pad-top: var(--space-48);
   --gap: var(--space-48);
@@ -48,24 +48,19 @@
   max-width: 560px;
 }
 
-/* Mobile: foto → info → deskripsi */
+/* Mobile: foto → info sesi */
 .body {
   display: grid;
   grid-template-areas:
     "photo"
-    "info"
-    "description";
+    "info";
   gap: var(--space-32);
-}
-
-.description {
-  grid-area: description;
 }
 
 .photo {
   grid-area: photo;
   position: relative;
-  aspect-ratio: 666 / 544;
+  aspect-ratio: 763 / 544;
   overflow: hidden;
   border-radius: var(--radius-xl);
   background: var(--color-neutral-100);
@@ -80,88 +75,74 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--space-24);
+  gap: var(--space-32);
+}
+
+.sessionHeading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+/* Mobile: di atas latar terang → indigo; desktop: gradien lime neon di atas navy */
+.eyebrow {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(16px, 0.6vw + 12px, 20px);
+  line-height: 1.4;
+  color: var(--color-indigo-600);
+}
+
+/* Heading/48 Poppins ExtraBold lh 1.2 */
+.sessionTitle {
+  font-family: var(--font-display);
+  font-weight: var(--weight-extrabold);
+  font-size: clamp(30px, 2.6vw + 16px, 48px);
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  color: var(--color-navy-900);
+  text-wrap: balance;
 }
 
 .details {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-24);
+  max-width: 307px;
+  color: var(--color-black);
 }
 
-.eyebrow {
-  margin-bottom: var(--space-4);
-  font-family: var(--font-display);
-  font-weight: var(--weight-semibold);
-  font-size: 12px;
-  letter-spacing: var(--tracking-overline);
-  text-transform: uppercase;
-  color: var(--color-indigo-600);
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
 }
 
-.venueName {
-  font-family: var(--font-display);
-  font-weight: var(--weight-bold);
-  font-size: 20px;
-  line-height: 1;
-  color: var(--color-navy-900);
-}
-
-.date {
-  margin-top: var(--space-4);
+.detailMain {
   font-family: var(--font-body);
   font-weight: var(--weight-bold);
   font-size: 18px;
   line-height: 1.4;
-  color: var(--color-navy-700);
 }
 
-.time {
+.detailSub {
   font-family: var(--font-body);
   font-weight: var(--weight-bold);
   font-size: 16px;
   line-height: 1.6;
   letter-spacing: var(--tracking-tight);
-  color: var(--color-navy-700);
   opacity: 0.8;
 }
 
-.time a {
-  color: var(--color-indigo-600);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-16) var(--space-24);
 }
 
-/* ── Desktop: layout Figma — deskripsi 262 | foto 666 | info 279, rata bawah, gap 30 ── */
-@media (min-width: 1200px) {
-  .hero {
-    --pad-top: var(--space-64);
-    --gap: var(--space-80);
-
-    padding-bottom: var(--space-64);
-  }
-
-  /* navy setinggi 634px dari atas halaman, persis Figma */
-  .hero .backdrop {
-    bottom: auto;
-    height: 634px;
-  }
-
-  .body {
-    grid-template-columns: 262px 666px 279px;
-    grid-template-areas: "description photo info";
-    align-items: end;
-    justify-content: center;
-    column-gap: 30px;
-  }
-
-  .info {
-    gap: var(--space-64);
-  }
-}
-
-/* Link ke Participant Guide (hanya venue yang punya panduan) */
-.guideLink {
+/* "Lihat jadwal" & Participant Guide */
+.link {
   font-family: var(--font-display);
   font-weight: var(--weight-bold);
   font-size: 15px;
@@ -172,6 +153,50 @@
   text-underline-offset: 4px;
 }
 
-.guideLink:hover {
+.link:hover {
   color: var(--color-navy-900);
+}
+
+/* ── Desktop: layout Figma — info 509 | foto 763×544, rata bawah, gap 30 ── */
+@media (min-width: 1200px) {
+  .hero {
+    --pad-top: var(--space-64);
+    --gap: var(--space-80);
+
+    padding-bottom: var(--space-64);
+  }
+
+  /* navy setinggi 634px dari atas halaman, persis Figma → judul sesi di atas navy, detail di bawahnya */
+  .hero .backdrop {
+    bottom: auto;
+    height: 634px;
+  }
+
+  .body {
+    grid-template-columns: minmax(0, 509px) minmax(0, 763px);
+    grid-template-areas: "info photo";
+    align-items: end;
+    justify-content: space-between;
+    column-gap: 30px;
+  }
+
+  .info {
+    gap: 27px;
+  }
+
+  .sessionHeading {
+    gap: var(--space-24);
+    margin-bottom: 60px;
+  }
+
+  .eyebrow {
+    background: var(--gradient-lime-neon);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .sessionTitle {
+    color: var(--color-white);
+  }
 }

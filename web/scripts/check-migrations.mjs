@@ -33,6 +33,9 @@ for (const file of (await readdir(dir)).filter((f) => f.endsWith(".sql")).sort()
 // ── Uji perilaku ────────────────────────────────────────────────────────────
 const one = async (sql, params) => (await db.query(sql, params)).rows[0];
 const as = (uid) => db.exec(`select set_config('request.jwt.claim.sub', '${uid ?? ""}', false)`);
+// Uji saldo di bawah memakai angka pasti → matikan bonus member baru dulu (diuji terpisah di akhir).
+const setSignupBonus = (on) => db.query(`update app_settings set value = jsonb_set(value, '{bonuses,0,enabled}', $1::jsonb) where key = 'points_rules'`, [String(on)]);
+await setSignupBonus(false);
 
 const member = (await one(`insert into auth.users default values returning id`)).id;
 await db.query(`insert into profiles (id, full_name, email, joined_at) values ($1, 'Arya Putra Dewangga', 'arya@mail.com', '2025-07-01')`, [member]);
@@ -106,4 +109,60 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const after = Number((await one(`select points_balance from member_stats where member_id = $1`, [m2])).points_balance);
   console.assert(before > 0 && after === 0, `undo check-in ${before} → ${after}`);
   console.log(`✓ batal check-in menarik poin (${before} → ${after})`);
+}
+
+// Penukaran reward: harga dari server, saldo dipotong saat disetujui, dikembalikan saat ditolak.
+{
+  const [{ id: m3 }] = (await db.query(`insert into auth.users default values returning id`)).rows;
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Uji Tukar', 'tukar@mail.com')`, [m3]);
+  const admin = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(
+    `insert into staff_members (user_id, role_id, full_name, email, status)
+     select $1, id, 'Rara', 'rara@soslay.test', 'active' from roles where name = 'Super Admin'`,
+    [admin],
+  );
+  await db.query(`insert into points_ledger (member_id, delta, reason, note) values ($1, 1000, 'bonus', 'uji')`, [m3]);
+  const reward = await one(`select id, stock from rewards where name = 'Tote bag Slay Club'`);
+  await as(m3);
+  const rd = await one(`insert into reward_redemptions (member_id, reward_id, points, status) values ($1, $2, 1, 'fulfilled') returning code, points, status`, [m3, reward.id]);
+  console.assert(rd.points === 900 && rd.status === "pending", `harga dari server ${JSON.stringify(rd)}`);
+  let denied = false;
+  try {
+    await db.query(`select set_redemption_status($1, 'approved')`, [rd.code]);
+  } catch {
+    denied = true;
+  }
+  console.assert(denied, "member bisa menyetujui penukaran sendiri!");
+  await as(admin);
+  await db.query(`select set_redemption_status($1, 'approved')`, [rd.code]);
+  const bal = async () => Number((await one(`select points_balance from member_stats where member_id = $1`, [m3])).points_balance);
+  const stock = async () => (await one(`select stock from rewards where id = $1`, [reward.id])).stock;
+  console.assert((await bal()) === 100 && (await stock()) === reward.stock - 1, "potong poin & stok");
+  await db.query(`select set_redemption_status($1, 'rejected', 'stok rusak')`, [rd.code]);
+  console.assert((await bal()) === 1000 && (await stock()) === reward.stock, "refund poin & stok");
+  let invalid = false;
+  try {
+    await db.query(`select set_redemption_status($1, 'approved')`, [rd.code]);
+  } catch {
+    invalid = true;
+  }
+  console.assert(invalid, "penukaran ditolak bisa disetujui lagi!");
+  await as(null);
+  console.log(`✓ penukaran ${rd.code}: harga dari server, potong 900 pts + stok, refund saat ditolak`);
+}
+
+// Poin otomatis: bonus member baru + belanja Shop saat order selesai (sekali per order).
+{
+  await setSignupBonus(true);
+  const [{ id: m4 }] = (await db.query(`insert into auth.users default values returning id`)).rows;
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Uji Bonus', 'bonus@mail.com')`, [m4]);
+  const bal = async () => Number((await one(`select points_balance from member_stats where member_id = $1`, [m4])).points_balance);
+  console.assert((await bal()) === 100, `bonus member baru ${await bal()}`);
+  const o = await one(`insert into orders (member_id, subtotal, total, recipient_name, recipient_phone, shipping_address)
+    values ($1, 235000, 250000, 'Uji', '0812', 'Jl. Uji') returning id`, [m4]);
+  await db.query(`update orders set status = 'completed' where id = $1`, [o.id]);
+  await db.query(`update orders set status = 'shipped' where id = $1`, [o.id]);
+  await db.query(`update orders set status = 'completed' where id = $1`, [o.id]);
+  console.assert((await bal()) === 123, `poin belanja ${await bal()}`);
+  console.log("✓ poin otomatis: member baru +100, belanja Rp235.000 → +23 (sekali per order)");
 }

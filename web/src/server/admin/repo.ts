@@ -6,6 +6,7 @@ import { getDataset, type DataMember, type Dataset } from "./dataset";
 import { jakartaWeekStart, TIERS } from "./demo-data";
 import { DAY, pctDelta } from "./time";
 import type {
+  MemberChoice,
   MemberDetail,
   MemberForm,
   MemberNote,
@@ -421,4 +422,24 @@ export async function bookableSessions(memberId: string) {
     .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())
     .slice(0, 40)
     .map((s) => ({ id: s.id, label: `${s.title} · ${s.venueName} · ${fmt.format(s.startsAt)}` }));
+}
+
+// ── Untuk modul Slay Point ──────────────────────────────────────────────────
+/** Semua member yang tidak disuspend (pilihan "Catat penukaran"). */
+export async function memberChoices(): Promise<MemberChoice[]> {
+  const d = await getDataset();
+  return allMembers(d)
+    .filter((m) => m.status !== "suspended")
+    .map((m) => ({ id: m.id, name: m.fullName, code: m.memberCode, tier: m.tier, balance: m.pointsBalance }))
+    .sort((a, b) => a.name.localeCompare(b.name, "id"));
+}
+
+/** ID member (tidak disuspend) dalam segmen bawaan atau tersimpan — penerima bonus massal. */
+export async function segmentMemberIds(segmentId: string): Promise<string[] | null> {
+  const segment = (await listSegments()).find((s) => s.id === segmentId);
+  if (!segment) return null;
+  const d = await getDataset();
+  return applyFilters(allMembers(d), segment.query, d.now)
+    .filter((m) => m.status !== "suspended")
+    .map((m) => m.id);
 }
