@@ -1,5 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createHash } from "node:crypto";
+import { cookies } from "next/headers";
 import { cache } from "react";
 import { products as catalog } from "@/content/products";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -21,6 +23,8 @@ import { DAY } from "./time";
 export type DataMember = demo.DemoMember & { memberCode: string; tier?: Tier; status?: MemberStatus };
 export type DataSession = demo.DemoSession & {
   kuyUrl?: string | null;
+  /** URL foto cover dari Storage (null → foto venue). */
+  coverPath?: string | null;
   visibleUntil?: Date | null;
   crew?: { name: string; role: "Host" | "Coach" | "Fotografer" }[];
   courts?: string[];
@@ -153,7 +157,7 @@ type SessionRow = {
   id: string; title: string; type_slug: string; description: string | null; court_label: string | null; starts_at: string; ends_at: string;
   capacity: number; price: number; points_per_attendance: number; status: demo.SessionStatus; publish_at: string | null;
   visibility: "public" | "members" | "link"; waitlist_enabled: boolean; members_only: boolean; show_on_homepage: boolean;
-  recommended_levels: TennisLevel[]; series_id: string | null; kuy_booking_url: string | null; visible_until: string | null;
+  recommended_levels: TennisLevel[]; series_id: string | null; kuy_booking_url: string | null; visible_until: string | null; cover_path: string | null;
   venues: { name: string; courts: string[] } | null;
   session_crew: { role: string; staff_members: { full_name: string } | null }[];
 };
@@ -174,7 +178,7 @@ async function loadLive(): Promise<Dataset> {
     fetchAll<SessionRow>(
       client,
       "sessions",
-      "id, title, type_slug, description, court_label, starts_at, ends_at, capacity, price, points_per_attendance, status, publish_at, visibility, waitlist_enabled, members_only, show_on_homepage, recommended_levels, series_id, kuy_booking_url, visible_until, venues(name, courts), session_crew(role, staff_members(full_name))",
+      "id, title, type_slug, description, court_label, starts_at, ends_at, capacity, price, points_per_attendance, status, publish_at, visibility, waitlist_enabled, members_only, show_on_homepage, recommended_levels, series_id, kuy_booking_url, visible_until, cover_path, venues(name, courts), session_crew(role, staff_members(full_name))",
       "starts_at",
     ),
     fetchAll<BookingRow>(client, "bookings", "session_id, member_id, status, payment_status, source, guests, checked_in_at, created_at", "created_at"),
@@ -234,6 +238,7 @@ async function loadLive(): Promise<Dataset> {
     recommendedLevels: s.recommended_levels ?? [],
     repeatWeekly: Boolean(s.series_id),
     kuyUrl: s.kuy_booking_url,
+    coverPath: s.cover_path,
     visibleUntil: s.visible_until ? new Date(s.visible_until) : null,
     crew: s.session_crew.filter((c) => c.staff_members).map((c) => ({ name: c.staff_members!.full_name, role: CREW[c.role] ?? "Host" })),
   }));
@@ -338,8 +343,38 @@ async function loadLive(): Promise<Dataset> {
   };
 }
 
+/**
+ * Cache singkat lintas request (per sesi login): pindah modul admin dalam DATASET_TTL tidak memuat
+ * ulang semua member/booking/order. Dikosongkan oleh invalidateDataset() setiap admin menyimpan
+ * (refreshPaths), jadi perubahan sendiri langsung terlihat. Kunci = hash cookie sesi Supabase,
+ * sehingga RLS tetap per pengguna.
+ */
+const DATASET_TTL = 20_000;
+const liveCache = new Map<string, { at: number; data: Promise<Dataset> }>();
+
+export function invalidateDataset() {
+  liveCache.clear();
+}
+
+async function cachedLive(): Promise<Dataset> {
+  const session = (await cookies())
+    .getAll()
+    .filter((c) => c.name.startsWith("sb-"))
+    .map((c) => c.value)
+    .join("|");
+  const key = createHash("sha256").update(session).digest("hex");
+  const now = Date.now();
+  for (const [k, v] of liveCache) if (now - v.at > DATASET_TTL) liveCache.delete(k);
+  const hit = liveCache.get(key);
+  if (hit) return hit.data;
+  const data = loadLive();
+  liveCache.set(key, { at: now, data });
+  data.catch(() => liveCache.delete(key));
+  return data;
+}
+
 /** Data admin untuk request ini (demo atau Supabase). */
-export const getDataset = cache(async (): Promise<Dataset> => (isSupabaseConfigured ? loadLive() : (demoDataset ??= buildDemoDataset())));
+export const getDataset = cache(async (): Promise<Dataset> => (isSupabaseConfigured ? cachedLive() : (demoDataset ??= buildDemoDataset())));
 
 /** "Sekarang" versi admin tanpa memuat data: tanggal demo, atau jam asli saat live. */
 export const adminNow = () => (isSupabaseConfigured ? new Date() : demo.DEMO_NOW);

@@ -7,7 +7,7 @@ import { MotionProvider } from "@/components/motion/MotionProvider";
 import { InstagramFeed } from "@/components/sections/InstagramFeed/InstagramFeed";
 import { activityPage, isActivityType } from "@/content/activity";
 import { instagram } from "@/content/home";
-import { filterByType, pastSessions, pickFeatured, upcomingSessions } from "@/lib/sessions";
+import { filterByType, newestFirst, pastSessions, pickFeatured, upcomingSessions } from "@/lib/sessions";
 import { getWebsiteSessions } from "@/server/public/sessions";
 
 export const metadata: Metadata = {
@@ -25,7 +25,7 @@ export default async function ActivityPage({ searchParams }: PageProps<"/activit
   const upcoming = upcomingSessions(sessions, now);
   const featured = pickFeatured(upcoming);
   // Sesi unggulan sudah tampil di hero → tidak diulang di grid.
-  const listed = filterByType(upcoming, activeType).filter((session) => session !== featured);
+  const listed = newestFirst(filterByType(upcoming, activeType).filter((session) => session !== featured));
   const past = filterByType(pastSessions(sessions, now), activeType).slice(0, activityPage.past.limit);
 
   return (

@@ -33,3 +33,12 @@ export function pastSessions(sessions: Session[], now: Date): Session[] {
 export function pickFeatured(sessions: Session[]): Session | undefined {
   return sessions.find((session) => session.featured) ?? sessions[0];
 }
+
+/**
+ * Urutan grid upcoming: sesi yang paling baru ditambahkan di admin dulu. Sesi dari batch yang
+ * sama (mis. 8 sesi mingguan) atau tanpa createdAt (konten statis) tetap urut dari yang terdekat.
+ */
+export function newestFirst(sessions: Session[]): Session[] {
+  const created = (session: Session) => (session.createdAt ? Date.parse(session.createdAt) : 0);
+  return [...sessions].sort((a, b) => created(b) - created(a) || sessionStart(a).getTime() - sessionStart(b).getTime());
+}

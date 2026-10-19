@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { SectionIntro, SessionCard } from "@/components/ui";
+import { cx } from "@/lib/cx";
 import { activityTypeLabel, sessionStart, sessionTimeZone, type Session } from "@/content/activity";
 import { venueHrefByName } from "@/content/venues";
 import { formatJamRange, formatTanggal } from "@/lib/format";
@@ -27,10 +28,12 @@ export function SessionGrid({ id, title, description, sessions, variant = "upcom
         <SectionIntro id={id} title={title} description={description} className={styles.intro} />
         {aside}
       </div>
-      <ul className={styles.grid} aria-labelledby={id}>
+      {/* Upcoming: baris sejajar kiri-kanan; past: zigzag. */}
+      <ul className={cx(styles.grid, past && styles.zigzag)} aria-labelledby={id}>
         {sessions.map((session) => (
           <li key={session.slug} data-anim="reveal">
             <SessionCard
+              title={session.title}
               venueName={session.venue.name}
               dateLabel={formatTanggal(sessionStart(session), sessionTimeZone(session))}
               timeLabel={formatJamRange(session.start, session.end)}

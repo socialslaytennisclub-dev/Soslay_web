@@ -7,6 +7,24 @@
   min-width: 0;
 }
 
+/* Konten halaman (dan skeleton) muncul halus saat pindah menu */
+.main > * {
+  animation: admin-page-in 0.25s var(--ease-out);
+}
+
+@keyframes admin-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .main > * {
+    animation: none;
+  }
+}
+
 /* Sidebar fixed 248px di desktop */
 @media (min-width: 1024px) {
   .main {

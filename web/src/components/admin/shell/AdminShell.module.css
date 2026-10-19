@@ -87,6 +87,33 @@ a.navActive:hover {
   color: var(--color-navy-900);
 }
 
+/* Klik menu: langsung bergaya aktif (sebelum halaman tujuan selesai dimuat) */
+.navItem:has(.navPending[data-pending]) {
+  background: var(--color-lime-500);
+  color: var(--color-navy-900);
+}
+
+.navPending {
+  display: none;
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+  border-radius: var(--radius-full);
+  background: var(--color-navy-900);
+}
+
+.navPending[data-pending] {
+  display: block;
+  animation: nav-pulse 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes nav-pulse {
+  from {
+    opacity: 0.3;
+    transform: scale(0.7);
+  }
+}
+
 .navDisabled {
   opacity: 0.55;
   cursor: not-allowed;

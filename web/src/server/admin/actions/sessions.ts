@@ -2,6 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { isActivityType } from "@/content/activity";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { supabaseUrl } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { TennisLevel } from "../types";
 import { audit, refreshPaths, requireEditor, type ActionResult } from "./common";
@@ -33,6 +35,8 @@ export type SessionInput = {
   /** "2026-10-18T07:00" (WIB) atau "". */
   visibleUntil: string;
   homepage: boolean;
+  /** URL foto cover dari uploadSessionCover, atau null → website memakai foto venue. */
+  coverPath: string | null;
   /** Hanya saat membuat sesi baru: buat juga 7 sesi mingguan berikutnya (total 8). */
   repeatWeekly: boolean;
   crew: { name: string; role: "Host" | "Coach" | "Fotografer" }[];
@@ -45,7 +49,8 @@ const wib = (date: string, time: string) => new Date(`${date}T${time}:00+07:00`)
 const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 
 function refresh(id?: string) {
-  refreshPaths("/activity", ["/venue/[slug]", "page"], ...(id ? [`/admin/activities/${id}`] : []));
+  // Website: daftar aktivitas, halaman per tipe (/activity/mabar …), detail venue & homepage.
+  refreshPaths("/", "/activity", ["/activity/[type]", "page"], ["/venue/[slug]", "page"], ...(id ? [`/admin/activities/${id}`] : []));
 }
 
 function validate(input: SessionInput): string | null {
@@ -58,7 +63,48 @@ function validate(input: SessionInput): string | null {
   if (!Number.isInteger(input.points) || input.points < 0) return "Slay Point tidak valid.";
   if (input.description.length > 500) return "Deskripsi maksimal 500 karakter.";
   if (input.levels.some((l) => !LEVELS.includes(l))) return "Level tidak dikenal.";
+  if (input.coverPath && !input.coverPath.startsWith(coverUrlPrefix())) return "Foto cover tidak valid.";
   return null;
+}
+
+// ── Foto cover ──────────────────────────────────────────────────────────────
+// Bucket publik di Supabase Storage; dibuat otomatis saat upload pertama (tanpa migrasi,
+// karena skema `storage` tidak ada di PGlite check-migrations). Upload lewat service role
+// setelah requireEditor, jadi tidak perlu policy RLS di storage.objects.
+const COVER_BUCKET = "session-covers";
+const COVER_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+const COVER_MAX_BYTES = 5 * 1024 * 1024;
+const coverUrlPrefix = () => `${supabaseUrl}/storage/v1/object/public/${COVER_BUCKET}/`;
+
+export async function uploadSessionCover(formData: FormData): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const auth = await requireEditor("activities");
+  if ("error" in auth) return { ok: false, error: auth.error };
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Pilih file foto dulu." };
+  const ext = COVER_TYPES[file.type];
+  if (!ext) return { ok: false, error: "Format harus JPG, PNG, atau WebP." };
+  if (file.size > COVER_MAX_BYTES) return { ok: false, error: "Ukuran foto maksimal 5 MB." };
+
+  const admin = createSupabaseAdminClient();
+  if (!admin) return { ok: false, error: "Upload belum aktif: SUPABASE_SERVICE_ROLE_KEY belum dipasang." };
+
+  const { data: bucket } = await admin.storage.getBucket(COVER_BUCKET);
+  if (!bucket) {
+    const { error } = await admin.storage.createBucket(COVER_BUCKET, {
+      public: true,
+      fileSizeLimit: COVER_MAX_BYTES,
+      allowedMimeTypes: Object.keys(COVER_TYPES),
+    });
+    if (error && !/already exists/i.test(error.message)) return { ok: false, error: `Gagal menyiapkan Storage: ${error.message}` };
+  }
+
+  const path = `${new Date().toISOString().slice(0, 7)}/${crypto.randomUUID()}.${ext}`;
+  const { error } = await admin.storage.from(COVER_BUCKET).upload(path, file, { contentType: file.type, cacheControl: "31536000" });
+  if (error) return { ok: false, error: `Gagal upload: ${error.message}` };
+
+  await audit(auth.userId, "session.cover_upload", "session_cover", path);
+  return { ok: true, url: admin.storage.from(COVER_BUCKET).getPublicUrl(path).data.publicUrl };
 }
 
 export async function saveSession(input: SessionInput): Promise<ActionResult> {
@@ -106,6 +152,7 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
     publish_at: publishAt && publishAt.getTime() > Date.now() ? publishAt.toISOString() : null,
     visible_until: input.visibleUntil ? new Date(`${input.visibleUntil}:00+07:00`).toISOString() : null,
     show_on_homepage: input.homepage,
+    cover_path: input.coverPath,
   };
 
   let id = input.id;
@@ -136,9 +183,10 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
         created_by: auth.userId,
       };
     });
-    const { data, error } = await supabase.from("sessions").insert(rows).select("id").order("starts_at");
+    // Hasil INSERT hanya bisa diurutkan dengan kolom yang ikut dikembalikan → urutkan di sini.
+    const { data, error } = await supabase.from("sessions").insert(rows).select("id, starts_at");
     if (error || !data?.length) return { ok: false, error: `Gagal membuat sesi: ${error?.message ?? "tidak ada data"}` };
-    id = data[0].id as string;
+    id = [...data].sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)))[0].id as string;
   }
 
   // Crew: cocokkan nama dengan staf aktif.
@@ -153,7 +201,16 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
   await audit(auth.userId, input.id ? `mengubah sesi ${input.title}` : `membuat sesi ${input.title}${input.repeatWeekly ? " (8 minggu)" : ""}`, "session", id);
   refresh(id);
   if (!input.id) redirect(`/admin/activities/${id}?saved=${input.repeatWeekly ? "series" : "new"}`);
-  return { ok: true, message: "Perubahan tersimpan dan sudah tampil di website." };
+  // Pesan sesuai status — Draft/Dibatalkan/terjadwal belum (atau tidak) tampil di website.
+  const live = row.status === "published" && !row.publish_at;
+  const message = live
+    ? `Tersimpan dan sudah tampil di website${row.visibility === "public" ? "" : row.visibility === "members" ? " (khusus member yang login)" : " (hanya lewat link)"}.`
+    : row.status === "draft"
+      ? "Tersimpan sebagai Draft — belum tampil di website. Ubah Status ke Published untuk menampilkannya."
+      : row.status === "cancelled"
+        ? "Tersimpan · sesi Dibatalkan tidak tampil di website."
+        : `Tersimpan · tampil otomatis di website mulai ${new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(row.publish_at!))} WIB.`;
+  return { ok: true, message };
 }
 
 /** Hapus sesi — hanya bila belum ada peserta; kalau sudah ada, pakai status Dibatalkan. */

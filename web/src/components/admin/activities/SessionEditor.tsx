@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
 import { formatRupiahPlain, LEVEL_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
-import { deleteSession, saveSession, setCheckIn, type SessionInput } from "@/server/admin/actions/sessions";
+import { deleteSession, saveSession, setCheckIn, uploadSessionCover, type SessionInput } from "@/server/admin/actions/sessions";
 import type { SessionDetail, SessionParticipant, TennisLevel } from "@/server/admin/types";
 import { FormCard, MultiChips, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
@@ -58,6 +58,9 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   const [title, setTitle] = useState(session.title);
   const [typeSlug, setTypeSlug] = useState(session.typeSlug);
   const [description, setDescription] = useState(session.description);
+  // null = belum ada foto sendiri → website memakai foto venue.
+  const [cover, setCover] = useState<string | null>(session.coverPath);
+  const [uploading, setUploading] = useState(false);
   const [date, setDate] = useState(toDate(session.startsAt));
   const [start, setStart] = useState(toTime(session.startsAt));
   const [end, setEnd] = useState(toTime(session.endsAt));
@@ -90,6 +93,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   const [tried, setTried] = useState(false);
 
   const venueInfo = venues.find((v) => v.name === venue) ?? venues[0];
+  const coverSrc = cover ?? venueInfo.image;
   const startsAt = fromWib(date, start);
   const endsAt = fromWib(date, end);
 
@@ -111,7 +115,8 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   const visibleRows = showAll ? ordered : ordered.slice(0, PREVIEW_ROWS);
   const hidden = ordered.length - visibleRows.length;
 
-  const save = () => {
+  /** `publish` → simpan sekaligus ubah status ke Published (tombol "Publikasikan" untuk draft). */
+  const save = (publish = false) => {
     setTried(true);
     if (Object.keys(errors).length > 0) {
       setNotice({ text: "Periksa kembali kolom yang ditandai.", tone: "error" });
@@ -133,18 +138,34 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
       levels,
       waitlist,
       membersOnly,
-      status: status as SessionInput["status"],
+      status: (publish ? "published" : status) as SessionInput["status"],
       visibility,
       visibleUntil,
       homepage,
+      coverPath: cover,
       repeatWeekly: mode === "new" && repeatWeekly,
       crew,
     };
+    if (publish) setStatus("published");
     startSaving(async () => {
       // Sesi baru → server mengarahkan ke halaman editnya; edit → kembalikan hasil.
       const result = await saveSession(input);
       setNotice(result.ok ? { text: result.message, tone: "ok" } : { text: result.error, tone: "error" });
     });
+  };
+
+  /** Upload langsung ke Storage; URL baru tersimpan ke sesi saat admin menekan Simpan. */
+  const uploadCover = async (file: File | undefined) => {
+    if (!file) return;
+    setUploading(true);
+    const body = new FormData();
+    body.append("file", file);
+    const result = await uploadSessionCover(body).catch(() => ({ ok: false as const, error: "Upload gagal — coba lagi." }));
+    setUploading(false);
+    if (result.ok) {
+      setCover(result.url);
+      setNotice({ text: "Foto cover terupload — tekan Simpan untuk menerapkannya.", tone: "ok" });
+    } else setNotice({ text: result.error, tone: "error" });
   };
 
   const remove = () => {
@@ -251,9 +272,21 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
               </AdminButton>
             </>
           )}
-          <AdminButton variant="primary" size="sm" icon="check-bold" onClick={save} disabled={saving}>
-            {saving ? "Menyimpan…" : mode === "new" ? "Simpan sesi" : "Simpan perubahan"}
-          </AdminButton>
+          {status === "draft" ? (
+            // Draft belum tampil di website → aksi utama = Publikasikan, simpan draft jadi sekunder.
+            <>
+              <AdminButton size="sm" icon="check-bold" onClick={() => save()} disabled={saving}>
+                Simpan draft
+              </AdminButton>
+              <AdminButton variant="primary" size="sm" icon="globe-simple" onClick={() => save(true)} disabled={saving} title="Simpan dan tampilkan di website">
+                {saving ? "Menyimpan…" : "Publikasikan"}
+              </AdminButton>
+            </>
+          ) : (
+            <AdminButton variant="primary" size="sm" icon="check-bold" onClick={() => save()} disabled={saving}>
+              {saving ? "Menyimpan…" : mode === "new" ? "Simpan sesi" : "Simpan perubahan"}
+            </AdminButton>
+          )}
         </div>
       </div>
 
@@ -293,14 +326,39 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
               <span className={styles.label}>Foto cover *</span>
               <div className={styles.coverRow}>
                 <span className={styles.cover}>
-                  <Image src={venueInfo.image} alt="" fill sizes="(min-width: 768px) 180px, 100vw" />
+                  <Image src={coverSrc} alt="" fill sizes="(min-width: 768px) 180px, 100vw" />
                 </span>
-                <div className={styles.dropzone} title="Upload aktif setelah Supabase Storage tersambung">
+                <label
+                  className={cx(styles.dropzone, uploading && styles.dropzoneBusy)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (!uploading) uploadCover(e.dataTransfer.files[0]);
+                  }}
+                >
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="visually-hidden"
+                    disabled={uploading}
+                    onChange={(e) => {
+                      uploadCover(e.target.files?.[0]);
+                      e.target.value = "";
+                    }}
+                  />
                   <AdminIcon name="upload-simple" size={20} />
-                  <strong>Tarik foto ke sini atau pilih file</strong>
-                  <span className={styles.muted}>JPG/PNG · rasio 4:3 · maks 5 MB</span>
-                </div>
+                  <strong>{uploading ? "Mengupload…" : cover ? "Ganti foto" : "Tarik foto ke sini atau pilih file"}</strong>
+                  <span className={styles.muted}>JPG/PNG/WebP · rasio 4:3 · maks 5 MB</span>
+                </label>
               </div>
+              <span className={styles.muted}>
+                {cover ? "Foto sendiri dipakai di website. " : "Belum ada foto sendiri — website memakai foto venue. "}
+                {cover && (
+                  <button type="button" className={styles.linkButton} onClick={() => setCover(null)}>
+                    Pakai foto venue
+                  </button>
+                )}
+              </span>
             </div>
           </FormCard>
 
@@ -514,7 +572,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
 
           <FormCard title="Preview kartu" subtitle="Seperti tampil di website">
             <div className={styles.preview}>
-              <Image src={venueInfo.image} alt="" fill sizes="(min-width: 1024px) 300px, 100vw" />
+              <Image src={coverSrc} alt="" fill sizes="(min-width: 1024px) 300px, 100vw" />
               <span className={styles.previewText}>
                 <strong>{venue}</strong>
                 <span>

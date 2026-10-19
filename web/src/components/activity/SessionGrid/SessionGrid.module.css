@@ -18,7 +18,7 @@
 }
 
 /*
- * Tablet & desktop: zigzag — kolom kiri turun (Figma 25:493: kiri mulai y200, kanan y0).
+ * Tablet & desktop: 2 kolom. Sesi lama (variant past) zigzag — kolom kiri turun (Figma 25:493: kiri mulai y200, kanan y0).
  * transform tidak memengaruhi layout → padding bawah grid menampung pergeseran kartu terakhir.
  */
 @media (min-width: 768px) {
@@ -29,16 +29,16 @@
     gap: var(--space-48) var(--space-24);
   }
 
-  .grid:has(> :nth-child(2)) {
+  .zigzag:has(> :nth-child(2)) {
     padding-bottom: var(--zigzag);
   }
 
-  .grid:has(> :nth-child(2)) > :nth-child(odd) {
+  .zigzag:has(> :nth-child(2)) > :nth-child(odd) {
     transform: translateY(var(--zigzag));
   }
 }
 
-/* Desktop: gap kolom 48px, baris 128px — sesuai Figma */
+/* Desktop: gap kolom 48px; baris 48px (sejajar) / 128px untuk zigzag — sesuai Figma */
 @media (min-width: 1200px) {
   .group {
     gap: var(--space-80);
@@ -47,6 +47,10 @@
   .grid {
     --zigzag: 200px;
 
-    gap: var(--space-128) var(--space-48);
+    gap: var(--space-48);
+  }
+
+  .zigzag {
+    row-gap: var(--space-128);
   }
 }

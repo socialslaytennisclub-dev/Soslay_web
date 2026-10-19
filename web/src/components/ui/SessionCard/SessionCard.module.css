@@ -42,21 +42,26 @@
   color: var(--color-lime-500);
 }
 
+/* Nama venue di bawah judul sesi */
+.venue {
+  font-family: var(--font-body);
+  font-weight: var(--weight-bold);
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--color-white);
+}
+
 .date {
   margin-top: var(--space-4);
   font-family: var(--font-body);
   font-weight: var(--weight-bold);
-  font-size: clamp(16px, 0.3vw + 14px, 18px);
+  font-size: clamp(15px, 0.3vw + 13px, 16px);
   line-height: 1.4;
   color: var(--color-white);
 }
 
 .time {
-  font-family: var(--font-body);
-  font-weight: var(--weight-bold);
-  font-size: 16px;
-  line-height: 1.6;
-  letter-spacing: var(--tracking-tight);
+  white-space: nowrap;
   color: rgb(255 255 255 / 0.8);
 }
 

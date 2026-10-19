@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDataset, type Dataset } from "./dataset";
 import { TIERS } from "./demo-data";
@@ -114,8 +115,7 @@ function demoLedger(d: Dataset): Omit<LedgerEntry, "balanceAfter">[] {
 
 // ── Pemuat bersama ──────────────────────────────────────────────────────────
 const loadRewards = cache(async (): Promise<RewardRow[]> => {
-  const d = await getDataset();
-  if (!d.live) return DEMO_REWARDS;
+  if (!isSupabaseConfigured) return DEMO_REWARDS;
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("rewards")
@@ -127,8 +127,7 @@ const loadRewards = cache(async (): Promise<RewardRow[]> => {
 });
 
 const loadRedemptions = cache(async (): Promise<RedemptionRow[]> => {
-  const d = await getDataset();
-  if (!d.live) return demoRedemptions(d);
+  if (!isSupabaseConfigured) return demoRedemptions(await getDataset());
   const supabase = await createSupabaseServerClient();
   const columns = "code, member_id, reward_id, points, status, note, created_at, handled_at, staff_members(full_name)";
   // Semua yang masih menunggu (antrean tidak boleh terpotong) + 500 riwayat terbaru.
@@ -218,8 +217,7 @@ export async function listRedemptions(): Promise<AdminRedemption[]> {
 
 // ── Aturan ──────────────────────────────────────────────────────────────────
 export async function getPointRules(): Promise<PointRules> {
-  const d = await getDataset();
-  if (!d.live) return DEFAULT_RULES;
+  if (!isSupabaseConfigured) return DEFAULT_RULES;
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase.from("app_settings").select("key, value").in("key", ["points_rules", "rupiah_per_point"]);
   const value = new Map((data ?? []).map((r) => [r.key as string, r.value as unknown]));

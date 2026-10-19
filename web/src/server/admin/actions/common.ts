@@ -1,4 +1,5 @@
 import "server-only";
+import { invalidateDataset } from "../dataset";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { canAccess, getAdminSession } from "../session";
@@ -37,6 +38,7 @@ export async function audit(actorId: string, action: string, entityType: string,
 
 /** Segarkan admin (sidebar, daftar) + halaman website yang terdampak. */
 export function refreshPaths(...paths: (string | [string, "page" | "layout"])[]) {
+  invalidateDataset();
   revalidatePath("/admin", "layout");
   for (const p of paths) {
     if (Array.isArray(p)) revalidatePath(p[0], p[1]);

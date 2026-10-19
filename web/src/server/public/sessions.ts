@@ -19,6 +19,7 @@ type Row = {
   slug: string;
   title: string;
   type_slug: string;
+  created_at: string;
   starts_at: string;
   ends_at: string;
   cover_path: string | null;
@@ -55,7 +56,7 @@ export const getWebsiteSessions = cache(async (): Promise<Session[]> => {
   const [{ data, error }, { data: slots }] = await Promise.all([
     client
       .from("sessions")
-      .select("id, slug, title, type_slug, starts_at, ends_at, cover_path, kuy_booking_url, is_featured, show_on_homepage, visible_until, price, capacity, recommended_levels, venues(name, city, address, cover_path)")
+      .select("id, slug, title, type_slug, created_at, starts_at, ends_at, cover_path, kuy_booking_url, is_featured, show_on_homepage, visible_until, price, capacity, recommended_levels, venues(name, city, address, cover_path)")
       .in("status", ["published", "completed"])
       .gte("starts_at", since)
       .order("starts_at")
@@ -81,6 +82,7 @@ export const getWebsiteSessions = cache(async (): Promise<Session[]> => {
       {
         slug: s.slug,
         title: s.title,
+        createdAt: s.created_at,
         type: s.type_slug,
         venue: { name: s.venues.name, city, address: s.venues.address ?? undefined },
         date: start.date,

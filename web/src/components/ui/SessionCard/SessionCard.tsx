@@ -4,6 +4,8 @@ import { MediaCard } from "../MediaCard/MediaCard";
 import styles from "./SessionCard.module.css";
 
 export type SessionCardProps = {
+  /** Judul sesi dari admin (mis. "Night Mabar"); tanpa judul → nama venue jadi judul kartu. */
+  title?: string;
   venueName: string;
   dateLabel: string;
   timeLabel: string;
@@ -24,6 +26,7 @@ export type SessionCardProps = {
  * Seluruh kartu adalah satu link: ke halaman booking (eksternal), atau ke halaman venue untuk sesi yang sudah lewat.
  */
 export function SessionCard({
+  title,
   venueName,
   dateLabel,
   timeLabel,
@@ -45,9 +48,11 @@ export function SessionCard({
     >
       <div className={styles.body}>
         <div className={styles.info}>
-          <h3 className={styles.name}>{venueName}</h3>
-          <p className={styles.date}>{dateLabel}</p>
-          <p className={styles.time}>{timeLabel}</p>
+          <h3 className={styles.name}>{title || venueName}</h3>
+          {title && <p className={styles.venue}>{venueName}</p>}
+          <p className={styles.date}>
+            {dateLabel} <span className={styles.time}>· {timeLabel}</span>
+          </p>
         </div>
         {ctaLabel && (
           <span className={styles.cta}>
@@ -59,7 +64,8 @@ export function SessionCard({
       </div>
     </MediaCard>
   );
-  const label = `${ctaLabel ?? venueName}: ${venueName}, ${dateLabel}, ${timeLabel}`;
+  const heading = title ? `${title} at ${venueName}` : venueName;
+  const label = `${ctaLabel ?? heading}: ${heading}, ${dateLabel}, ${timeLabel}`;
 
   return external ? (
     <a
@@ -77,7 +83,7 @@ export function SessionCard({
       href={href}
       className={styles.link}
       data-cursor={cursorLabel}
-      aria-label={`View ${venueName}, session ${dateLabel}`}
+      aria-label={`View ${venueName}, session ${title ? `${title}, ` : ""}${dateLabel}`}
     >
       {content}
     </Link>

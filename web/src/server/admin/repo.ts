@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { findProduct } from "@/content/products";
 import { LEVEL_LABEL } from "@/lib/admin-labels";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -116,7 +117,7 @@ export async function exportMembers(query: MembersQuery): Promise<MemberListItem
 }
 
 /** Segmen tersimpan (tabel member_segments) — filter disimpan sebagai query. */
-export async function listSegments(): Promise<Segment[]> {
+export const listSegments = cache(async (): Promise<Segment[]> => {
   const defs: Omit<Segment, "count">[] = [
     { id: "gold-jakarta", name: "Gold+ di Jakarta", query: { tier: "gold", city: "Jakarta" } },
     { id: "beginner-new", name: "Beginner baru (30 hari)", query: { tab: "new", level: "beginner" } },
@@ -135,7 +136,7 @@ export async function listSegments(): Promise<Segment[]> {
   const d = await getDataset();
   const everyone = allMembers(d);
   return defs.map((segment) => ({ ...segment, count: applyFilters(everyone, segment.query, d.now).length }));
-}
+});
 
 async function loadNotes(memberId: string): Promise<MemberNote[]> {
   const supabase = await createSupabaseServerClient();

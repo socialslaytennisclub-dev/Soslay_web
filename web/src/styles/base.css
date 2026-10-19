@@ -15,6 +15,11 @@ html {
   scrollbar-gutter: stable;
 }
 
+/* Splash homepage tampil (lihat SplashScreen) → halaman belum bisa di-scroll */
+html[data-splash] {
+  overflow: hidden;
+}
+
 body {
   min-height: 100vh;
   background: var(--surface-page);

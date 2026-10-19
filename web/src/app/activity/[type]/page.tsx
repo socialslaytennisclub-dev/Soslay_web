@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { ActivityAbout } from "@/components/activity/ActivityAbout/ActivityAbout";
 import { SessionsSection } from "@/components/activity/SessionsSection/SessionsSection";
 import { Footer } from "@/components/layout/Footer/Footer";
 import { Navbar } from "@/components/layout/Navbar/Navbar";
@@ -8,7 +9,7 @@ import { InstagramFeed } from "@/components/sections/InstagramFeed/InstagramFeed
 import { PageHero } from "@/components/sections/PageHero/PageHero";
 import { activityLandings, activityPage } from "@/content/activity";
 import { instagram } from "@/content/home";
-import { filterByType, pastSessions, upcomingSessions } from "@/lib/sessions";
+import { filterByType, newestFirst, pastSessions, upcomingSessions } from "@/lib/sessions";
 import { getWebsiteSessions } from "@/server/public/sessions";
 
 export function generateStaticParams() {
@@ -35,7 +36,7 @@ export default async function ActivityTypePage({ params }: PageProps<"/activity/
 
   const sessions = await getWebsiteSessions();
   const now = new Date();
-  const upcoming = filterByType(upcomingSessions(sessions, now), landing.type);
+  const upcoming = newestFirst(filterByType(upcomingSessions(sessions, now), landing.type));
   const past = filterByType(pastSessions(sessions, now), landing.type).slice(0, activityPage.past.limit);
 
   return (
@@ -54,7 +55,8 @@ export default async function ActivityTypePage({ params }: PageProps<"/activity/
             meta={[...landing.meta]}
             image={landing.image}
           />
-          <SessionsSection upcoming={upcoming} past={past} activeType={landing.type} />
+          {"about" in landing && <ActivityAbout id="activity-about-title" {...landing.about} />}
+          <SessionsSection upcoming={upcoming} past={past} activeType={landing.type} showFilter={false} />
           <InstagramFeed {...instagram} />
         </main>
         <Footer />

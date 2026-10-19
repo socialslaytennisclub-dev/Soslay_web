@@ -1,3 +1,4 @@
+import type { IconName } from "@/components/ui";
 import { CITY_TIMEZONE, type City } from "@/lib/format";
 
 /**
@@ -18,6 +19,8 @@ export type ActivityTypeSlug = (typeof activityTypes)[number]["slug"];
 export type Session = {
   slug: string;
   title: string;
+  /** Waktu sesi dibuat di admin (ISO) — urutan "terbaru ditambahkan" di grid upcoming. */
+  createdAt?: string;
   type: ActivityTypeSlug;
   venue: { name: string; city: City; address?: string };
   /** Tanggal & jam lokal venue. */
@@ -187,6 +190,20 @@ export const activityLandings = [
     description: "Casual hit-arounds every week at our favorite courts — meet new people, rally, and take home pro photos.",
     meta: ["Every week", "All levels", "A photographer at every session"],
     image: { src: "/images/home/activity-weekly-mabar.webp", alt: "A Weekly MABAR session on an outdoor court", position: "50% 72%" },
+    about: {
+      heading: "What is Mabar?",
+      title: "Tennis together, every single week.",
+      image: { src: "/images/home/community-group.webp", alt: "Soslay members lined up on court after a Weekly MABAR", position: "50% 60%" },
+      paragraphs: [
+        "Mabar — short for main bareng, “playing together” — is our weekly community session. No tournament, no pressure: just book a slot, show up, and rally with whoever's on court.",
+        "Our hosts mix players by level and rotate partners so everyone gets court time, makes new friends, and leaves with pro photos from the session.",
+      ],
+      points: [
+        { icon: "calendar-check-bold", title: "Every week", text: "Regular slots at our favorite courts in Jakarta & Bali." },
+        { icon: "users-three-bold", title: "Rotating partners", text: "Hosts pair you by level, so every rally feels fun and fair." },
+        { icon: "aperture-bold", title: "Pro photos", text: "A photographer at every session — tag-ready shots, delivered." },
+      ],
+    },
   },
   {
     path: "event",
@@ -197,6 +214,20 @@ export const activityLandings = [
     description: "Match days, socials, and special sessions — the moments the community looks forward to all month.",
     meta: ["Match days & socials", "Jakarta & Bali", "Limited slots"],
     image: { src: "/images/home/activity-match-day.webp", alt: "Players at a Soslay Tennis Match Day", position: "50% 20%" },
+    about: {
+      heading: "What is Match Day?",
+      title: "Real matches, friendly vibes.",
+      image: { src: "/images/home/community-highfive.webp", alt: "Players shaking hands at the net after a Match Day game", position: "50% 55%" },
+      paragraphs: [
+        "Match Day is where rallies turn into real games. Players are grouped by level and play scored matches — doubles or singles — in a format that's competitive but still all about the community.",
+        "It's the best way to test your game, meet players at your level, and celebrate together after the last point.",
+      ],
+      points: [
+        { icon: "tennis-ball-bold", title: "Scored matches", text: "Short-format games with real points — every match counts." },
+        { icon: "users-three-bold", title: "Level-based groups", text: "Play opponents close to your level for tight, fun matches." },
+        { icon: "seal-check-fill", title: "Prizes & photos", text: "Winners take home prizes, everyone takes home great shots." },
+      ],
+    },
   },
   {
     path: "escape",
@@ -207,6 +238,20 @@ export const activityLandings = [
     description: "Trips that mix tennis, travel, and the right people — from Bali villages to mountain courts in Kintamani.",
     meta: ["Bali & beyond", "Courts + stay", "A photographer on every trip"],
     image: { src: "/images/home/activity-tennis-escape.webp", alt: "Members on a Soslay Tennis Escape in Bali", position: "50% 50%" },
+    about: {
+      heading: "What is Escape?",
+      title: "A tennis trip, planned for you.",
+      image: { src: "/images/activity/featured-altitude.webp", alt: "Members rallying at Altitude Tennis Court in Kintamani, Bali", position: "45% 50%" },
+      paragraphs: [
+        "Tennis Escape is a short getaway built around tennis. We pick a beautiful court outside the city, sort out the sessions, and bring the community along — you just pack your racket.",
+        "Expect morning hits with a view, time to explore in between, and a trip you'll want to repeat with the people you met there.",
+      ],
+      points: [
+        { icon: "map-pin", title: "Beautiful courts", text: "From Bali villages to mountain courts in Kintamani." },
+        { icon: "calendar-dots-bold", title: "All arranged", text: "Court sessions and itinerary planned — just book and show up." },
+        { icon: "aperture-bold", title: "Trip photographer", text: "Every moment captured, on court and off." },
+      ],
+    },
   },
   {
     path: "coaching",
@@ -227,7 +272,18 @@ export const activityLandings = [
   description: string;
   meta: string[];
   image: { src: string; alt: string; position: string };
+  /** Section "apa itu …?" tepat di bawah hero. */
+  about?: ActivityAbout;
 }[];
+
+export type ActivityAbout = {
+  /** Label kecil ("What is Mabar?") di atas `title`. */
+  heading: string;
+  title: string;
+  image: { src: string; alt: string; position?: string };
+  paragraphs: readonly string[];
+  points: readonly { icon: IconName; title: string; text: string }[];
+};
 
 export type ActivityLanding = (typeof activityLandings)[number];
 

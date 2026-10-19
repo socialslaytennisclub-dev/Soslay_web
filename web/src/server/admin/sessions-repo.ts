@@ -132,6 +132,7 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
   return {
     ...row,
     description: s.description,
+    coverPath: s.coverPath ?? null,
     court: s.court,
     courts: s.courts?.length ? [...new Set([...s.courts, s.court].filter(Boolean))] : ["Court 1", "Court 2", "Court 2 & 3", "Center court"],
     pointsPerAttendance: s.pointsPerAttendance,
@@ -215,6 +216,7 @@ export async function getSessionDraft(fromId?: string): Promise<SessionDetail> {
     status: "draft",
     displayStatus: "draft",
     description: "",
+    coverPath: null,
     court: "Court 1",
     courts: ["Court 1", "Court 2", "Court 2 & 3", "Center court"],
     pointsPerAttendance: 50,

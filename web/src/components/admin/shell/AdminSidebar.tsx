@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cx } from "@/lib/cx";
@@ -76,6 +76,7 @@ export function AdminSidebar({ memberCount, ordersToProcess, pendingRedemptions,
         onClick={() => setOpen(false)} // drawer HP tertutup setelah memilih menu
       >
         {content}
+        <NavPending />
       </Link>
     ) : (
       <span key={item.href} className={cx(styles.navItem, styles.navDisabled)} aria-disabled="true" title="Dibangun di tahap berikutnya">
@@ -135,4 +136,10 @@ export function AdminSidebar({ memberCount, ordersToProcess, pendingRedemptions,
       </aside>
     </>
   );
+}
+
+/** Menu yang baru diklik langsung tampak aktif + titik berdenyut sampai halaman tujuan siap. */
+function NavPending() {
+  const { pending } = useLinkStatus();
+  return <span className={styles.navPending} data-pending={pending || undefined} aria-hidden />;
 }

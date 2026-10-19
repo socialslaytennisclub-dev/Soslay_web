@@ -195,6 +195,8 @@ export type SessionParticipant = {
 
 export type SessionDetail = SessionRow & {
   description: string;
+  /** Foto cover yang diupload (URL Storage) — null = pakai foto venue. */
+  coverPath: string | null;
   court: string;
   courts: string[];
   pointsPerAttendance: number;

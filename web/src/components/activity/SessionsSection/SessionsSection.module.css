@@ -4,6 +4,12 @@
   scroll-margin-top: var(--nav-height);
 }
 
+/* Section sesi lama dipisah dengan latar sedikit lebih gelap */
+.past {
+  background: var(--surface-card-soft);
+  padding-top: var(--space-64);
+}
+
 .inner {
   display: flex;
   flex-direction: column;
@@ -24,6 +30,10 @@
 @media (min-width: 1200px) {
   .section {
     padding-block: var(--space-64) var(--space-128);
+  }
+
+  .past {
+    padding-top: var(--space-128);
   }
 
   .inner {
