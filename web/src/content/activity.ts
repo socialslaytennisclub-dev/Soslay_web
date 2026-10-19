@@ -1,4 +1,3 @@
-import type { IconName } from "@/components/ui";
 import { CITY_TIMEZONE, type City } from "@/lib/format";
 
 /**
@@ -199,9 +198,9 @@ export const activityLandings = [
         "Our hosts mix players by level and rotate partners so everyone gets court time, makes new friends, and leaves with pro photos from the session.",
       ],
       points: [
-        { icon: "calendar-check-bold", title: "Every week", text: "Regular slots at our favorite courts in Jakarta & Bali." },
-        { icon: "users-three-bold", title: "Rotating partners", text: "Hosts pair you by level, so every rally feels fun and fair." },
-        { icon: "aperture-bold", title: "Pro photos", text: "A photographer at every session — tag-ready shots, delivered." },
+        { title: "Every week", text: "Regular slots at our favorite courts in Jakarta & Bali." },
+        { title: "Rotating partners", text: "Hosts pair you by level, so every rally feels fun and fair." },
+        { title: "Pro photos", text: "A photographer at every session — tag-ready shots, delivered." },
       ],
     },
   },
@@ -223,9 +222,9 @@ export const activityLandings = [
         "It's the best way to test your game, meet players at your level, and celebrate together after the last point.",
       ],
       points: [
-        { icon: "tennis-ball-bold", title: "Scored matches", text: "Short-format games with real points — every match counts." },
-        { icon: "users-three-bold", title: "Level-based groups", text: "Play opponents close to your level for tight, fun matches." },
-        { icon: "seal-check-fill", title: "Prizes & photos", text: "Winners take home prizes, everyone takes home great shots." },
+        { title: "Scored matches", text: "Short-format games with real points — every match counts." },
+        { title: "Level-based groups", text: "Play opponents close to your level for tight, fun matches." },
+        { title: "Prizes & photos", text: "Winners take home prizes, everyone takes home great shots." },
       ],
     },
   },
@@ -247,9 +246,9 @@ export const activityLandings = [
         "Expect morning hits with a view, time to explore in between, and a trip you'll want to repeat with the people you met there.",
       ],
       points: [
-        { icon: "map-pin", title: "Beautiful courts", text: "From Bali villages to mountain courts in Kintamani." },
-        { icon: "calendar-dots-bold", title: "All arranged", text: "Court sessions and itinerary planned — just book and show up." },
-        { icon: "aperture-bold", title: "Trip photographer", text: "Every moment captured, on court and off." },
+        { title: "Beautiful courts", text: "From Bali villages to mountain courts in Kintamani." },
+        { title: "All arranged", text: "Court sessions and itinerary planned — just book and show up." },
+        { title: "Trip photographer", text: "Every moment captured, on court and off." },
       ],
     },
   },
@@ -282,7 +281,7 @@ export type ActivityAbout = {
   title: string;
   image: { src: string; alt: string; position?: string };
   paragraphs: readonly string[];
-  points: readonly { icon: IconName; title: string; text: string }[];
+  points: readonly { title: string; text: string }[];
 };
 
 export type ActivityLanding = (typeof activityLandings)[number];

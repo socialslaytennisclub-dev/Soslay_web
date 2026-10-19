@@ -83,7 +83,7 @@ export function SessionCard({
       href={href}
       className={styles.link}
       data-cursor={cursorLabel}
-      aria-label={`View ${venueName}, session ${title ? `${title}, ` : ""}${dateLabel}`}
+      aria-label={`View ${heading}, session ${dateLabel}`}
     >
       {content}
     </Link>

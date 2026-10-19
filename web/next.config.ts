@@ -16,7 +16,7 @@ const nextConfig: NextConfig = {
   images: {
     // Foto cover sesi yang diupload admin ke Supabase Storage (bucket publik).
     remotePatterns: process.env.NEXT_PUBLIC_SUPABASE_URL
-      ? [new URL(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/**`)]
+      ? [new URL(`${process.env.NEXT_PUBLIC_SUPABASE_URL.replace(/\/+$/, "")}/storage/v1/object/public/**`)]
       : [],
     // Lebar srcset: termasuk 1440 (desain desktop) & 2560 (retina besar) supaya tidak lompat terlalu jauh.
     deviceSizes: [640, 750, 828, 1080, 1200, 1440, 1920, 2560],

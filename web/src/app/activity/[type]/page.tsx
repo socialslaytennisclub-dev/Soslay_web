@@ -56,7 +56,7 @@ export default async function ActivityTypePage({ params }: PageProps<"/activity/
             image={landing.image}
           />
           {"about" in landing && <ActivityAbout id="activity-about-title" {...landing.about} />}
-          <SessionsSection upcoming={upcoming} past={past} activeType={landing.type} showFilter={false} />
+          <SessionsSection upcoming={upcoming} past={past} />
           <InstagramFeed {...instagram} />
         </main>
         <Footer />

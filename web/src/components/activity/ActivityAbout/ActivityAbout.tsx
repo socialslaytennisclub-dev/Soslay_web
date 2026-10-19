@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { Container, Icon, Text } from "@/components/ui";
+import { Chip, Container, Icon, Text } from "@/components/ui";
 import type { ActivityAbout as ActivityAboutContent } from "@/content/activity";
 import { blurProps } from "@/lib/image";
 import styles from "./ActivityAbout.module.css";
@@ -22,15 +22,17 @@ export function ActivityAbout({ id, heading, title, image, paragraphs, points }:
             {...blurProps(image.src)}
             alt={image.alt}
             fill
-            sizes="(min-width: 1200px) 540px, 100vw"
+            sizes="540px" // hanya tampil di desktop (lihat .photo)
             style={{ objectPosition: image.position }}
           />
         </div>
 
         <div className={styles.content}>
-          <p className={styles.label} data-anim="fade-up">
-            <Icon name="tennis-ball-bold" size={16} />
-            {heading}
+          <p data-anim="fade-up">
+            <Chip tone="navy" strong className={styles.label}>
+              <Icon name="tennis-ball-bold" size={16} />
+              {heading}
+            </Chip>
           </p>
           <Text as="h2" id={id} variant="heading-42" tone="primary" className={styles.title} data-anim="split">
             {title}

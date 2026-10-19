@@ -60,7 +60,6 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   const [description, setDescription] = useState(session.description);
   // null = belum ada foto sendiri → website memakai foto venue.
   const [cover, setCover] = useState<string | null>(session.coverPath);
-  const [uploading, setUploading] = useState(false);
   const [date, setDate] = useState(toDate(session.startsAt));
   const [start, setStart] = useState(toTime(session.startsAt));
   const [end, setEnd] = useState(toTime(session.endsAt));
@@ -88,12 +87,14 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   const [showAll, setShowAll] = useState(false);
   const [notice, setNotice] = useState<{ text: string; tone: "ok" | "error" } | null>(initialNotice ? { text: initialNotice, tone: "ok" } : null);
   const [saving, startSaving] = useTransition();
+  const [uploading, startUploading] = useTransition();
   const [checkingIn, setCheckingIn] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [tried, setTried] = useState(false);
 
   const venueInfo = venues.find((v) => v.name === venue) ?? venues[0];
   const coverSrc = cover ?? venueInfo.image;
+  const isDraft = status === "draft";
   const startsAt = fromWib(date, start);
   const endsAt = fromWib(date, end);
 
@@ -155,17 +156,17 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   };
 
   /** Upload langsung ke Storage; URL baru tersimpan ke sesi saat admin menekan Simpan. */
-  const uploadCover = async (file: File | undefined) => {
-    if (!file) return;
-    setUploading(true);
+  const uploadCover = (file: File | undefined) => {
+    if (!file || uploading) return;
     const body = new FormData();
     body.append("file", file);
-    const result = await uploadSessionCover(body).catch(() => ({ ok: false as const, error: "Upload gagal — coba lagi." }));
-    setUploading(false);
-    if (result.ok) {
-      setCover(result.url);
-      setNotice({ text: "Foto cover terupload — tekan Simpan untuk menerapkannya.", tone: "ok" });
-    } else setNotice({ text: result.error, tone: "error" });
+    startUploading(async () => {
+      const result = await uploadSessionCover(body).catch(() => ({ ok: false as const, error: "Upload gagal — coba lagi." }));
+      if (result.ok) {
+        setCover(result.url);
+        setNotice({ text: "Foto cover terupload — tekan Simpan untuk menerapkannya.", tone: "ok" });
+      } else setNotice({ text: result.error, tone: "error" });
+    });
   };
 
   const remove = () => {
@@ -272,21 +273,22 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
               </AdminButton>
             </>
           )}
-          {status === "draft" ? (
-            // Draft belum tampil di website → aksi utama = Publikasikan, simpan draft jadi sekunder.
-            <>
-              <AdminButton size="sm" icon="check-bold" onClick={() => save()} disabled={saving}>
-                Simpan draft
-              </AdminButton>
-              <AdminButton variant="primary" size="sm" icon="globe-simple" onClick={() => save(true)} disabled={saving} title="Simpan dan tampilkan di website">
-                {saving ? "Menyimpan…" : "Publikasikan"}
-              </AdminButton>
-            </>
-          ) : (
-            <AdminButton variant="primary" size="sm" icon="check-bold" onClick={() => save()} disabled={saving}>
-              {saving ? "Menyimpan…" : mode === "new" ? "Simpan sesi" : "Simpan perubahan"}
+          {/* Draft belum tampil di website → aksi utama = Publikasikan, simpan draft jadi sekunder. */}
+          {isDraft && (
+            <AdminButton size="sm" icon="check-bold" onClick={() => save()} disabled={saving}>
+              Simpan draft
             </AdminButton>
           )}
+          <AdminButton
+            variant="primary"
+            size="sm"
+            icon={isDraft ? "globe-simple" : "check-bold"}
+            onClick={() => save(isDraft)}
+            disabled={saving}
+            title={isDraft ? "Simpan dan tampilkan di website" : undefined}
+          >
+            {saving ? "Menyimpan…" : isDraft ? "Publikasikan" : mode === "new" ? "Simpan sesi" : "Simpan perubahan"}
+          </AdminButton>
         </div>
       </div>
 
@@ -333,7 +335,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault();
-                    if (!uploading) uploadCover(e.dataTransfer.files[0]);
+                    uploadCover(e.dataTransfer.files[0]);
                   }}
                 >
                   <input

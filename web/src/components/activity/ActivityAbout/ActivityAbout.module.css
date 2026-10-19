@@ -28,19 +28,10 @@
   align-items: flex-start;
 }
 
-/* Pill label navy + lime — penanda "apa itu" yang ringan, bukan judul kedua */
+/* Chip navy + lime (penanda "apa itu" yang ringan, bukan judul kedua) — tambah ruang untuk ikon */
 .label {
-  display: inline-flex;
-  align-items: center;
   gap: var(--space-8);
-  padding: 6px var(--space-14) 6px var(--space-12);
-  border-radius: var(--radius-full);
-  background: var(--color-navy-900);
-  font-family: var(--font-display);
-  font-weight: var(--weight-bold);
-  font-size: 14px;
-  line-height: 1.4;
-  color: var(--color-lime-500);
+  padding-left: var(--space-12);
 }
 
 .title {

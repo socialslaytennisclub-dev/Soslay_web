@@ -5,6 +5,7 @@ import { isActivityType } from "@/content/activity";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { supabaseUrl } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { monthKey } from "../time";
 import type { TennisLevel } from "../types";
 import { audit, refreshPaths, requireEditor, type ActionResult } from "./common";
 
@@ -63,7 +64,7 @@ function validate(input: SessionInput): string | null {
   if (!Number.isInteger(input.points) || input.points < 0) return "Slay Point tidak valid.";
   if (input.description.length > 500) return "Deskripsi maksimal 500 karakter.";
   if (input.levels.some((l) => !LEVELS.includes(l))) return "Level tidak dikenal.";
-  if (input.coverPath && !input.coverPath.startsWith(coverUrlPrefix())) return "Foto cover tidak valid.";
+  if (input.coverPath && !isCoverUrl(input.coverPath)) return "Foto cover tidak valid.";
   return null;
 }
 
@@ -74,7 +75,12 @@ function validate(input: SessionInput): string | null {
 const COVER_BUCKET = "session-covers";
 const COVER_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 const COVER_MAX_BYTES = 5 * 1024 * 1024;
-const coverUrlPrefix = () => `${supabaseUrl}/storage/v1/object/public/${COVER_BUCKET}/`;
+/** Hanya URL hasil uploadSessionCover: <bucket publik>/<YYYY-MM>/<uuid>.<ext> — tanpa "../" ke bucket lain. */
+const COVER_KEY = /^\d{4}-\d{2}\/[0-9a-f-]{36}\.(jpg|png|webp)$/;
+const isCoverUrl = (url: string) => {
+  const prefix = `${supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/public/${COVER_BUCKET}/`;
+  return url.startsWith(prefix) && COVER_KEY.test(url.slice(prefix.length));
+};
 
 export async function uploadSessionCover(formData: FormData): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const auth = await requireEditor("activities");
@@ -89,18 +95,19 @@ export async function uploadSessionCover(formData: FormData): Promise<{ ok: true
   const admin = createSupabaseAdminClient();
   if (!admin) return { ok: false, error: "Upload belum aktif: SUPABASE_SERVICE_ROLE_KEY belum dipasang." };
 
-  const { data: bucket } = await admin.storage.getBucket(COVER_BUCKET);
-  if (!bucket) {
-    const { error } = await admin.storage.createBucket(COVER_BUCKET, {
+  const path = `${monthKey(new Date())}/${crypto.randomUUID()}.${ext}`;
+  const upload = () => admin.storage.from(COVER_BUCKET).upload(path, file, { contentType: file.type, cacheControl: "31536000" });
+  let { error } = await upload();
+  // Upload pertama di project baru: bucket belum ada → buat sekali, lalu ulangi.
+  if (error && /bucket not found/i.test(error.message)) {
+    const created = await admin.storage.createBucket(COVER_BUCKET, {
       public: true,
       fileSizeLimit: COVER_MAX_BYTES,
       allowedMimeTypes: Object.keys(COVER_TYPES),
     });
-    if (error && !/already exists/i.test(error.message)) return { ok: false, error: `Gagal menyiapkan Storage: ${error.message}` };
+    if (created.error && !/already exists/i.test(created.error.message)) return { ok: false, error: `Gagal menyiapkan Storage: ${created.error.message}` };
+    ({ error } = await upload());
   }
-
-  const path = `${new Date().toISOString().slice(0, 7)}/${crypto.randomUUID()}.${ext}`;
-  const { error } = await admin.storage.from(COVER_BUCKET).upload(path, file, { contentType: file.type, cacheControl: "31536000" });
   if (error) return { ok: false, error: `Gagal upload: ${error.message}` };
 
   await audit(auth.userId, "session.cover_upload", "session_cover", path);
@@ -183,10 +190,10 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
         created_by: auth.userId,
       };
     });
-    // Hasil INSERT hanya bisa diurutkan dengan kolom yang ikut dikembalikan → urutkan di sini.
+    // Hasil INSERT tidak bisa di-.order() → ambil sesi paling awal di sini.
     const { data, error } = await supabase.from("sessions").insert(rows).select("id, starts_at");
     if (error || !data?.length) return { ok: false, error: `Gagal membuat sesi: ${error?.message ?? "tidak ada data"}` };
-    id = [...data].sort((a, b) => String(a.starts_at).localeCompare(String(b.starts_at)))[0].id as string;
+    id = data.reduce((a, b) => (a.starts_at <= b.starts_at ? a : b)).id as string;
   }
 
   // Crew: cocokkan nama dengan staf aktif.
@@ -201,16 +208,18 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
   await audit(auth.userId, input.id ? `mengubah sesi ${input.title}` : `membuat sesi ${input.title}${input.repeatWeekly ? " (8 minggu)" : ""}`, "session", id);
   refresh(id);
   if (!input.id) redirect(`/admin/activities/${id}?saved=${input.repeatWeekly ? "series" : "new"}`);
-  // Pesan sesuai status — Draft/Dibatalkan/terjadwal belum (atau tidak) tampil di website.
-  const live = row.status === "published" && !row.publish_at;
-  const message = live
-    ? `Tersimpan dan sudah tampil di website${row.visibility === "public" ? "" : row.visibility === "members" ? " (khusus member yang login)" : " (hanya lewat link)"}.`
-    : row.status === "draft"
-      ? "Tersimpan sebagai Draft — belum tampil di website. Ubah Status ke Published untuk menampilkannya."
-      : row.status === "cancelled"
-        ? "Tersimpan · sesi Dibatalkan tidak tampil di website."
-        : `Tersimpan · tampil otomatis di website mulai ${new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(row.publish_at!))} WIB.`;
-  return { ok: true, message };
+  return { ok: true, message: savedMessage(row) };
+}
+
+const VISIBILITY_SUFFIX = { public: "", members: " (khusus member yang login)", link: " (hanya lewat link)" } as const;
+const publishAtFmt = new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" });
+
+/** Pesan simpan sesuai status — Draft/Dibatalkan/terjadwal belum (atau tidak) tampil di website. */
+function savedMessage(row: { status: string; publish_at: string | null; visibility: SessionInput["visibility"] }): string {
+  if (row.status === "draft") return "Tersimpan sebagai Draft — belum tampil di website. Ubah Status ke Published untuk menampilkannya.";
+  if (row.status === "cancelled") return "Tersimpan · sesi Dibatalkan tidak tampil di website.";
+  if (row.publish_at) return `Tersimpan · tampil otomatis di website mulai ${publishAtFmt.format(new Date(row.publish_at))} WIB.`;
+  return `Tersimpan dan sudah tampil di website${VISIBILITY_SUFFIX[row.visibility]}.`;
 }
 
 /** Hapus sesi — hanya bila belum ada peserta; kalau sudah ada, pakai status Dibatalkan. */

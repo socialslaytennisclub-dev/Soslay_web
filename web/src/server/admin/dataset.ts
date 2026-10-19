@@ -1,12 +1,11 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { createHash } from "node:crypto";
-import { cookies } from "next/headers";
 import { cache } from "react";
 import { products as catalog } from "@/content/products";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import * as demo from "./demo-data";
+import { getAdminSession } from "./session";
 import type { BookingStatus, MemberStatus, OrderStatus, PaymentStatus, TennisLevel, Tier } from "./types";
 
 /**
@@ -346,8 +345,8 @@ async function loadLive(): Promise<Dataset> {
 /**
  * Cache singkat lintas request (per sesi login): pindah modul admin dalam DATASET_TTL tidak memuat
  * ulang semua member/booking/order. Dikosongkan oleh invalidateDataset() setiap admin menyimpan
- * (refreshPaths), jadi perubahan sendiri langsung terlihat. Kunci = hash cookie sesi Supabase,
- * sehingga RLS tetap per pengguna.
+ * (refreshPaths), jadi perubahan sendiri langsung terlihat. Kunci = user id admin (RLS per
+ * pengguna) → paling banyak satu entri per admin.
  */
 const DATASET_TTL = 20_000;
 const liveCache = new Map<string, { at: number; data: Promise<Dataset> }>();
@@ -357,20 +356,17 @@ export function invalidateDataset() {
 }
 
 async function cachedLive(): Promise<Dataset> {
-  const session = (await cookies())
-    .getAll()
-    .filter((c) => c.name.startsWith("sb-"))
-    .map((c) => c.value)
-    .join("|");
-  const key = createHash("sha256").update(session).digest("hex");
+  const session = await getAdminSession();
+  if (session.mode !== "live") return loadLive();
+  const key = session.userId;
   const now = Date.now();
-  for (const [k, v] of liveCache) if (now - v.at > DATASET_TTL) liveCache.delete(k);
   const hit = liveCache.get(key);
-  if (hit) return hit.data;
-  const data = loadLive();
-  liveCache.set(key, { at: now, data });
-  data.catch(() => liveCache.delete(key));
-  return data;
+  if (hit && now - hit.at < DATASET_TTL) return hit.data;
+  const entry = { at: now, data: loadLive() };
+  liveCache.set(key, entry);
+  // Gagal → jangan simpan, tapi jangan hapus entri lebih baru yang sudah menggantikannya.
+  entry.data.catch(() => liveCache.get(key) === entry && liveCache.delete(key));
+  return entry.data;
 }
 
 /** Data admin untuk request ini (demo atau Supabase). */

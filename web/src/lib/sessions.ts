@@ -35,10 +35,11 @@ export function pickFeatured(sessions: Session[]): Session | undefined {
 }
 
 /**
- * Urutan grid upcoming: sesi yang paling baru ditambahkan di admin dulu. Sesi dari batch yang
- * sama (mis. 8 sesi mingguan) atau tanpa createdAt (konten statis) tetap urut dari yang terdekat.
+ * Urutan grid upcoming: sesi yang paling baru ditambahkan di admin dulu. Input sudah urut dari
+ * yang terdekat (upcomingSessions) dan sort stabil, jadi sesi dari batch yang sama (mis. 8 sesi
+ * mingguan) atau tanpa createdAt (konten statis) tetap urut dari yang terdekat.
  */
 export function newestFirst(sessions: Session[]): Session[] {
   const created = (session: Session) => (session.createdAt ? Date.parse(session.createdAt) : 0);
-  return [...sessions].sort((a, b) => created(b) - created(a) || sessionStart(a).getTime() - sessionStart(b).getTime());
+  return [...sessions].sort((a, b) => created(b) - created(a));
 }

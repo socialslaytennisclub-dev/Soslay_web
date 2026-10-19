@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ActivityHero } from "@/components/activity/ActivityHero/ActivityHero";
+import { ActivityTypeFilter } from "@/components/activity/ActivityTypeFilter/ActivityTypeFilter";
 import { SessionsSection } from "@/components/activity/SessionsSection/SessionsSection";
 import { Footer } from "@/components/layout/Footer/Footer";
 import { Navbar } from "@/components/layout/Navbar/Navbar";
@@ -34,7 +35,7 @@ export default async function ActivityPage({ searchParams }: PageProps<"/activit
       <MotionProvider>
         <main>
           {featured && <ActivityHero session={featured} />}
-          <SessionsSection upcoming={listed} past={past} activeType={activeType} />
+          <SessionsSection upcoming={listed} past={past} filter={<ActivityTypeFilter activeType={activeType} />} />
           <InstagramFeed {...instagram} />
         </main>
         <Footer />
