@@ -30,6 +30,28 @@ export const registerPage = {
   },
 };
 
+export const forgotPage = {
+  title: "Forgot your password?",
+  description: "Enter the email you used to sign up. We'll send you a link to set a new password.",
+  submit: "Send reset link",
+  sent: {
+    title: "Check your email ✉️",
+    text: (email: string) => `If ${email} is registered, a reset link is on its way. Open it on this device to set a new password.`,
+  },
+  switch: { prompt: "Remembered it?", label: "Sign In", href: "/masuk" },
+};
+
+export const resetPage = {
+  title: "Set a new password",
+  description: "Choose a new password for your Social Slay account. You'll stay signed in after saving.",
+  submit: "Save password",
+  expired: "This reset link has expired or was already used. Request a new one below.",
+  switch: { prompt: "Need a new link?", label: "Forgot password", href: "/lupa-password" },
+};
+
+/** Halaman setel password baru (tujuan link reset di email). */
+export const RESET_PASSWORD = "/reset-password";
+
 /** Halaman login khusus tim (admin). */
 export const ADMIN_LOGIN = "/masuk/admin";
 
