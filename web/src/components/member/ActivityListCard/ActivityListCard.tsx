@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Chip, type ChipTone } from "@/components/ui";
-import { memberSessions, sessionStatusLabel, type MemberSessionStatus } from "@/content/member";
+import { sessionStatusLabel, splitSessions, type MemberSession, type MemberSessionStatus } from "@/content/member";
 import { formatJamRange, formatTanggalBox, formatTanggalISO } from "@/lib/format";
 import styles from "./ActivityListCard.module.css";
 
@@ -11,10 +11,8 @@ const statusTone: Record<MemberSessionStatus, ChipTone> = {
 };
 
 /** Figma 25:2932 — 5 sesi terdekat/terakhir dengan status. */
-export function ActivityListCard() {
-  // Mendatang dulu (terdekat di atas), lalu riwayat terbaru.
-  const upcoming = memberSessions.filter((s) => s.status !== "done").sort((a, b) => a.date.localeCompare(b.date));
-  const past = memberSessions.filter((s) => s.status === "done").sort((a, b) => b.date.localeCompare(a.date));
+export function ActivityListCard({ sessions }: { sessions: MemberSession[] }) {
+  const { upcoming, past } = splitSessions(sessions);
   const items = [...upcoming, ...past].slice(0, 5);
 
   return (
@@ -25,6 +23,7 @@ export function ActivityListCard() {
           Lihat semua
         </Link>
       </header>
+      {items.length === 0 && <p className={styles.detail}>Belum ada sesi. Booking sesi di Kuyy — setelah admin memasukkan data peserta, sesimu muncul di sini.</p>}
       <ul className={styles.list}>
         {items.map((session) => {
           const box = formatTanggalBox(session.date);
@@ -35,7 +34,11 @@ export function ActivityListCard() {
                 <span className={styles.month}>{box.month}</span>
               </time>
               <div className={styles.text}>
-                <p className={styles.name}>{session.title}</p>
+                <p className={styles.name}>
+                  <Link href={`/akun/aktivitas/${session.slug}`} className={styles.nameLink}>
+                    {session.title}
+                  </Link>
+                </p>
                 <p className={styles.detail}>
                   {session.venue} · {formatJamRange(session.start, session.end, "–")}
                 </p>

@@ -4,8 +4,14 @@ import { member } from "@/content/member";
 import styles from "./MemberHeader.module.css";
 import { blurProps } from "@/lib/image";
 
-/** Figma 25:2602 — cover foto, avatar menimpa cover, nama + meta, tier, aksi. Dipakai semua tab member. */
-export function MemberHeader() {
+type HeaderData = { name: string; username: string; email: string; tier: string; memberSince: string; memberId: string };
+
+/**
+ * Figma 25:2602 — cover foto, avatar menimpa cover, nama + meta, tier, aksi. Dipakai semua tab member.
+ * `data` = profil member yang login (Supabase); tanpa itu memakai data contoh.
+ */
+export function MemberHeader({ data }: { data?: HeaderData | null }) {
+  const m = data ?? member;
   return (
     <header className={styles.header}>
       <Container>
@@ -14,20 +20,27 @@ export function MemberHeader() {
         </div>
 
         <div className={styles.profile}>
-          <Avatar name={member.name} size={128} ring className={styles.avatar} />
+          <Avatar name={m.name} size={128} ring className={styles.avatar} />
 
           <div className={styles.info} data-anim="fade-up">
-            <h1 className={styles.name}>{member.name}</h1>
+            <h1 className={styles.name}>{m.name}</h1>
             <p className={styles.meta}>
-              <span className={styles.username}>@{member.username}</span>
+              {/* ID Soslay = ID akun member, ditampilkan paling depan; lalu Kuy ID. */}
+              <span className={styles.username}>ID {m.memberId}</span>
+              {m.username && (
+                <>
+                  <span className={styles.dot} aria-hidden />
+                  <span className={styles.username}>Kuy @{m.username}</span>
+                </>
+              )}
               <span className={styles.dot} aria-hidden />
-              <span className={styles.email}>{member.email}</span>
+              <span className={styles.email}>{m.email}</span>
             </p>
             <p className={styles.membership}>
               <Chip tone="lime" strong>
-                {member.tier} Member
+                {m.tier} Member
               </Chip>
-              <span>Club member sejak {member.memberSince}</span>
+              <span>Club member sejak {m.memberSince}</span>
             </p>
           </div>
 

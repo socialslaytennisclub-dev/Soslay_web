@@ -45,6 +45,8 @@
 
 .body {
   max-width: 680px;
+  /* Jarak ke chip perks = 2rem (gap .text 16px + 1rem). */
+  margin-bottom: 1rem;
   font-family: var(--font-body);
   font-size: clamp(15px, 0.3vw + 13px, 17px);
   line-height: 1.5;

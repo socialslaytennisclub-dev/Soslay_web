@@ -11,13 +11,13 @@ import { FormCard, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge } from "../ui/AdminUI";
 import own from "./Catalog.module.css";
+import { toast, ToastOnMount } from "../ui/Toaster";
 
 const TYPES = ["Indoor", "Outdoor", "Rooftop", "Premium", "Tropical"];
 
 /** Tambah / edit venue — tampil di halaman Venue, detail venue, dan homepage. */
 export function VenueEditor({ initial, imageOptions, initialNotice }: { initial: VenueForm; imageOptions: string[]; initialNotice?: string }) {
   const [v, setV] = useState(initial);
-  const [notice, setNotice] = useState<{ text: string; tone: "ok" | "error" } | null>(initialNotice ? { text: initialNotice, tone: "ok" } : null);
   const [saving, start] = useTransition();
   const set = <K extends keyof VenueForm>(key: K, value: VenueForm[K]) => setV((prev) => ({ ...prev, [key]: value }));
   const isNew = !initial.id && !initial.slug;
@@ -25,7 +25,7 @@ export function VenueEditor({ initial, imageOptions, initialNotice }: { initial:
   const save = () =>
     start(async () => {
       const result = await saveVenue(v);
-      setNotice(result.ok ? { text: result.message, tone: "ok" } : { text: result.error, tone: "error" });
+      toast.result(result);
     });
 
   const imageSelect = (label: string, key: "coverPath" | "heroPath", hint?: string) => (
@@ -70,15 +70,7 @@ export function VenueEditor({ initial, imageOptions, initialNotice }: { initial:
         </div>
       </div>
 
-      {notice && (
-        <p className={cx(styles.notice, notice.tone === "error" && styles.noticeError)} role={notice.tone === "error" ? "alert" : "status"}>
-          <AdminIcon name={notice.tone === "error" ? "warning-circle" : "check-circle"} size={18} />
-          {notice.text}
-          <button type="button" className={styles.noticeClose} aria-label="Tutup" onClick={() => setNotice(null)}>
-            <AdminIcon name="x" size={14} />
-          </button>
-        </p>
-      )}
+      {initialNotice && <ToastOnMount text={initialNotice} />}
 
       <div className={styles.grid}>
         <div className={styles.main}>

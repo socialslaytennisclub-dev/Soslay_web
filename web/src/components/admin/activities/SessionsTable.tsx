@@ -3,7 +3,7 @@ import Link from "next/link";
 import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { blurProps } from "@/lib/image";
-import type { SessionDisplayStatus, SessionRow } from "@/server/admin/types";
+import type { SessionDisplayStatus, SessionRow, SessionSort } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
 import { Badge, desktopOnlyClass, MobileCard, MobileCardList, type BadgeTone } from "../ui/AdminUI";
 import styles from "./Activities.module.css";
@@ -53,11 +53,34 @@ function Thumb({ s }: { s: SessionRow }) {
   );
 }
 
-/** Tabel Activities (Figma 25:4725) + versi kartu di HP. */
-export function SessionsTable({ items }: { items: SessionRow[] }) {
+type SessionsTableProps = {
+  items: SessionRow[];
+  sort: SessionSort;
+  dir: "asc" | "desc";
+  /** URL urutan per kolom (dihitung di server, mempertahankan filter). */
+  sortHrefs: Record<"title" | "schedule", string>;
+};
+
+/** Tabel Activities (Figma 25:4725) + versi kartu di HP. Kolom Sesi & Jadwal bisa diurutkan. */
+export function SessionsTable({ items, sort, dir, sortHrefs }: SessionsTableProps) {
   if (items.length === 0) {
     return <p className={styles.empty}>Tidak ada sesi untuk filter ini.</p>;
   }
+
+  const sortHeader = (key: "title" | "schedule", label: string) => {
+    const active = sort === key;
+    return (
+      <Link
+        href={sortHrefs[key]}
+        scroll={false}
+        className={cx(styles.sortLink, active && styles.sortActive)}
+        aria-label={`Urutkan ${label}${active ? (dir === "asc" ? ", sekarang naik" : ", sekarang turun") : ""}`}
+      >
+        {label}
+        <AdminIcon name={active ? (dir === "asc" ? "arrow-up" : "arrow-down") : "arrows-down-up"} size={12} />
+      </Link>
+    );
+  };
 
   return (
     <>
@@ -94,8 +117,8 @@ export function SessionsTable({ items }: { items: SessionRow[] }) {
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>Sesi</th>
-              <th>Jadwal</th>
+              <th aria-sort={sort === "title" ? (dir === "asc" ? "ascending" : "descending") : undefined}>{sortHeader("title", "Sesi")}</th>
+              <th aria-sort={sort === "schedule" ? (dir === "asc" ? "ascending" : "descending") : undefined}>{sortHeader("schedule", "Jadwal")}</th>
               <th>Venue</th>
               <th>Kapasitas</th>
               <th>Harga</th>

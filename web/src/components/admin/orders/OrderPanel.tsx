@@ -4,12 +4,12 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { formatRupiahPlain, TIER_LABEL } from "@/lib/admin-labels";
-import { cx } from "@/lib/cx";
 import { updateOrder, type OrderUpdate } from "@/server/admin/actions/orders";
 import type { OrderDetail } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, MemberAvatar, OrderStatusBadge, PaymentBadge } from "../ui/AdminUI";
 import styles from "./Orders.module.css";
+import { toast } from "../ui/Toaster";
 
 const COURIERS = ["JNE REG", "SiCepat REG", "J&T EZ", "GoSend Same Day"];
 const placedFmt = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
@@ -18,7 +18,6 @@ const placedFmt = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "sho
 export function OrderPanel({ order, closeHref }: { order: OrderDetail; closeHref?: string }) {
   const [courier, setCourier] = useState(order.courier || COURIERS[0]);
   const [tracking, setTracking] = useState(order.trackingNumber ?? "");
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const [saving, start] = useTransition();
   const ref = useRef<HTMLElement>(null);
 
@@ -33,12 +32,12 @@ export function OrderPanel({ order, closeHref }: { order: OrderDetail; closeHref
     if (confirmText && !window.confirm(confirmText)) return;
     start(async () => {
       const result = await updateOrder(order.code, update);
-      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
     });
   };
   const markShipped = () => {
     if (!tracking.trim()) {
-      setNotice({ text: "Isi nomor resi dulu sebelum menandai dikirim.", error: true });
+      toast.error("Isi nomor resi dulu sebelum menandai dikirim.");
       return;
     }
     run({ action: "ship", courier, tracking });
@@ -167,11 +166,6 @@ export function OrderPanel({ order, closeHref }: { order: OrderDetail; closeHref
           </>
         ) : (
           <p className={styles.muted}>{order.status === "cancelled" ? "Order dibatalkan — tidak dikirim." : "Menunggu pembayaran."}</p>
-        )}
-        {notice && (
-          <p className={cx(styles.notice, notice.error && styles.noticeError)} role={notice.error ? "alert" : "status"}>
-            {notice.text}
-          </p>
         )}
       </section>
     </aside>

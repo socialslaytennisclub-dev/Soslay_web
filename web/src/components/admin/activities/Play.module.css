@@ -1,0 +1,835 @@
+/* Format & skor, Match list & line-up, impor peserta Kuyy — Figma ADM-10 / ADM-12 */
+
+.divider {
+  border: 0;
+  border-top: 1px solid var(--color-indigo-border);
+}
+
+.soon {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-neutral-100);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+  font-size: 10px;
+  color: var(--color-indigo-muted);
+  vertical-align: middle;
+}
+
+.optionDisabled,
+.optionDisabled:hover {
+  border-color: var(--color-neutral-200);
+  background: var(--color-neutral-100);
+  color: var(--color-indigo-muted);
+  cursor: not-allowed;
+}
+
+/* ── Pengisian skor (kartu radio) ── */
+.radioCards {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.radioCard {
+  display: flex;
+  gap: var(--space-12);
+  padding: var(--space-16);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  text-align: left;
+}
+
+.radioCardOn {
+  border: 2px solid var(--color-indigo-600);
+  background: var(--color-indigo-50);
+}
+
+.radioCardOff {
+  background: var(--color-neutral-100);
+  cursor: not-allowed;
+}
+
+.radioCardOff .radioTitle,
+.radioCardOff .radioText {
+  color: var(--color-indigo-muted);
+}
+
+.radioDot {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin-top: 1px;
+  border: 2px solid var(--color-neutral-300);
+  border-radius: 50%;
+}
+
+.radioCardOn .radioDot {
+  border: 6px solid var(--color-indigo-600);
+}
+
+.radioTitle {
+  display: block;
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.radioText {
+  display: block;
+  margin-top: 4px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-indigo-muted);
+}
+
+.info {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-14);
+  border-radius: var(--radius-lg);
+  background: var(--color-indigo-50);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.warn {
+  background: rgb(250 204 21 / 0.16);
+}
+
+/* ── Line-up ── */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.chip {
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-50);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+  color: var(--color-navy-900);
+}
+
+.chipGood {
+  background: rgb(190 242 100 / 0.45);
+}
+
+.chipWarn {
+  background: rgb(250 204 21 / 0.25);
+}
+
+.rounds {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.round {
+  flex: none;
+  min-width: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.roundOn {
+  border-color: var(--color-navy-900);
+  background: var(--color-navy-900);
+  color: var(--color-white);
+}
+
+.roundDone {
+  border-color: var(--color-lime-400);
+}
+
+.courts {
+  display: grid;
+  gap: var(--space-12);
+}
+
+.court {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-12);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+}
+
+.courtRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+}
+
+.courtLabel {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--color-navy-900);
+  color: #fff;
+  font-family: var(--font-ui);
+  line-height: 1.1;
+}
+
+.courtLabel strong {
+  font-family: var(--font-display);
+  font-size: 15px;
+}
+
+.courtLabel span {
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.courtRow > .teams {
+  flex: 1;
+  min-width: 0;
+}
+
+.slot {
+  position: relative;
+  display: flex;
+  flex: 1 1 140px;
+  align-items: center;
+  min-width: 0;
+  height: 36px;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-md);
+  background: #fff;
+}
+
+.slotAvatar {
+  position: absolute;
+  left: 7px;
+  display: flex;
+  pointer-events: none;
+}
+
+.slotName,
+.slotSelect {
+  width: 100%;
+  min-width: 0;
+  padding: 0 28px 0 36px;
+  overflow: hidden;
+  font: inherit;
+  font-size: 13px;
+  font-weight: var(--weight-medium);
+  color: var(--color-navy-900);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slotSelect {
+  height: 100%;
+  border: 0;
+  background: transparent;
+  appearance: none;
+  cursor: pointer;
+}
+
+.slotSelect:focus-visible {
+  outline: 2px solid var(--color-lime-500);
+  outline-offset: 1px;
+  border-radius: var(--radius-md);
+}
+
+.slotCaret {
+  position: absolute;
+  right: 10px;
+  color: var(--color-indigo-muted);
+  pointer-events: none;
+}
+
+.deskRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-10);
+}
+
+.teams {
+  display: grid;
+  gap: 6px;
+}
+
+.team {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+
+
+.vs {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.player {
+  max-width: 100%;
+  overflow: hidden;
+  padding: 5px 10px;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-full);
+  background: var(--color-white);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-950);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.score {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 15px;
+  color: var(--color-navy-900);
+}
+
+.restLabel {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-indigo-muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-8);
+}
+
+/* ── Input skor (host) ── */
+.scoreInput {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding-top: var(--space-8);
+  border-top: 1px solid var(--color-indigo-border);
+}
+
+.scoreRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+}
+
+.scoreTeam {
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  color: var(--color-navy-900);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stepper {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-full);
+}
+
+.stepper button {
+  width: 32px;
+  height: 32px;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 16px;
+  color: var(--color-navy-900);
+}
+
+.stepper button:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.stepper input {
+  width: 36px;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 15px;
+  color: var(--color-navy-900);
+  text-align: center;
+}
+
+/* ── Impor Kuyy ── */
+/* Isi drawer impor: tiap blok (file, info, ringkasan, daftar) diberi jarak sendiri. */
+.importBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+}
+
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-12);
+}
+
+.importRow {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-16);
+  padding: var(--space-14) var(--space-16);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+}
+
+.importMeta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.importMeta strong {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.importMeta span {
+  overflow: hidden;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+  text-overflow: ellipsis;
+}
+
+/* Tambah peserta manual: isian pencarian + tombol Cek sebaris */
+.lookupRow {
+  display: flex;
+  gap: var(--space-8);
+}
+
+.lookupRow > :first-child {
+  flex: 1;
+}
+
+/* Username Soslay + badge member terverifikasi di preview impor */
+.username {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Badge member terverifikasi — hijau lime seperti Figma. */
+.verified {
+  color: var(--color-lime-600);
+}
+
+.importBadges {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  flex: none;
+}
+
+/* ── Undangan member via WhatsApp (wa.me) — Figma: link teks hijau bergaris bawah ── */
+/* Hijau = warna brand WhatsApp (bukan token Soslay) supaya langsung dikenali. */
+.waInvite {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 12px;
+  white-space: nowrap;
+  color: #16a34a;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.waInvite:hover {
+  color: #128c4b;
+}
+
+/* ── Pilih host ── */
+.rest {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+@media (min-width: 640px) {
+  .radioCards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .courts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .teams {
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
+    gap: var(--space-8);
+  }
+
+  .teams > .team:last-child {
+    justify-content: flex-end;
+  }
+}
+
+/* ── Drawer Tambah peserta (Figma ADM-10 · 05i/05j) ── */
+.footerNote {
+  margin-right: auto;
+}
+
+.tabs {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-50);
+}
+
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  color: var(--color-indigo-muted);
+}
+
+.tabOn {
+  background: var(--color-white);
+  box-shadow: 0 1px 4px rgb(10 8 74 / 0.12);
+  color: var(--color-navy-900);
+}
+
+.dropBig {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-32) var(--space-16);
+  border: 1.5px dashed var(--color-indigo-200);
+  border-radius: var(--radius-xl);
+  background: rgb(244 243 255 / 0.5);
+  text-align: center;
+  cursor: pointer;
+}
+
+.dropBig strong {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 15px;
+  color: var(--color-navy-900);
+  word-break: break-word;
+}
+
+.dropIcon {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-100);
+  color: var(--color-navy-900);
+}
+
+.dropOr {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-10);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-indigo-muted);
+}
+
+.pickButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: 1px solid var(--color-navy-900);
+  border-radius: var(--radius-full);
+  background: var(--color-white);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.readBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+  padding: var(--space-14) var(--space-16);
+  border-radius: var(--radius-lg);
+  background: var(--color-indigo-50);
+}
+
+.readBox strong {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.readCols {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.readCol {
+  padding: 3px 10px;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-full);
+  background: var(--color-white);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-navy-900);
+}
+
+.readNote {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--color-navy-900);
+}
+
+.readNote > span:first-child {
+  margin-top: 2px;
+  color: var(--color-lime-600);
+}
+
+.sampleLink {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  color: var(--color-indigo-600);
+}
+
+.fileCard {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-14);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+}
+
+.fileCard .importMeta {
+  flex: 1;
+}
+
+.xlsxIcon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border-radius: var(--radius-md);
+  background: #1d7044; /* warna ikon file Excel */
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 10px;
+  color: var(--color-white);
+}
+
+.fileAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  color: var(--color-indigo-600);
+}
+
+.previewWrap {
+  overflow-x: auto;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+}
+
+.previewTable {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.previewTable th {
+  padding: var(--space-10) var(--space-12);
+  background: var(--color-indigo-50);
+  font-weight: var(--weight-medium);
+  font-size: 12px;
+  text-align: left;
+  color: var(--color-indigo-muted);
+}
+
+.previewTable td {
+  padding: var(--space-12);
+  border-top: 1px solid var(--color-indigo-border);
+  vertical-align: middle;
+}
+
+.pickCell {
+  width: 36px;
+}
+
+.pickCell input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-navy-900);
+}
+
+.rowMuted td {
+  opacity: 0.5;
+}
+
+.person {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-10);
+  min-width: 0;
+}
+
+.contact {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.memberLabel {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 13px !important;
+  color: var(--color-navy-900) !important;
+}
+
+.ghostDot {
+  width: 14px;
+  height: 14px;
+  border: 1.5px dashed var(--color-indigo-200);
+  border-radius: var(--radius-full);
+}
+
+.paid {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+}
+
+/* ── Drawer Tambah crew (Figma ADM-13 · 05k) ── */
+.crewResults {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.crewResults li + li {
+  border-top: 1px solid var(--color-indigo-border);
+}
+
+.crewOption {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-14);
+  text-align: left;
+}
+
+.crewOption .importMeta {
+  flex: 1;
+}
+
+.crewOptionOn {
+  background: var(--color-indigo-50);
+}
+
+.crewOptionOn .radioDot {
+  border: 6px solid var(--color-navy-900);
+}
+
+.registered {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: rgb(190 242 100 / 0.35);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 12px;
+  color: var(--color-lime-800);
+}
+
+.accessList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  list-style: none;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.accessList li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ── Foto sesi (Figma ADM-16) ── */
+.photoThumb {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 16 / 9;
+  background: var(--color-indigo-50);
+  color: var(--color-indigo-muted);
+}

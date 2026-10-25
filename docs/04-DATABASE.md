@@ -58,6 +58,8 @@ erDiagram
 | Member (CRM) | `profiles`, `membership_tiers`, `member_notes`, `member_segments` | `profiles.id` = `auth.users.id`. Segmen disimpan sebagai filter JSON |
 | Venue | `venues`, `venue_guides` | Participant Guide disimpan sebagai JSON (struktur sama dengan `src/content/guides.ts`) |
 | Aktivitas | `activity_types`, `sessions`, `session_series`, `session_crew`, `bookings` | Status booking: registered → attended / no_show / cancelled / waitlisted |
+| Ghost member | `ghost_members` | Peserta Kuyy yang belum daftar; dikenali lagi lewat Kuy ID miliknya (lalu email/telepon). Saat dia daftar, trigger `claim_ghost_member` memindahkan semua sesinya ke akun baru (booking + poin hadir ikut) |
+| Permainan sesi | `session_participants`, `session_hosts`, `session_matches` | Format & skor di kolom `sessions` (`match_format`, `court_count`, `round_count`, `target_points`, `score_entry`). Peserta = import XLSX Kuyy (bisa tamu tanpa akun; yang cocok member ikut tercatat di `bookings`). v1: Americano, skor hanya oleh host |
 | Slay Point | `points_ledger` | Saldo = `SUM(delta)`; tier dari poin kumulatif (`delta > 0`) |
 | Shop | `products`, `product_images`, `product_variants`, `cart_items`, `orders`, `order_items` | Stok per varian; kode order `SOS-2309` dari sequence |
 | Konten | `content_sections`, `testimonials` | `draft` (diedit admin) vs `published` (dibaca website) → tombol *Publikasikan* |
@@ -81,6 +83,7 @@ erDiagram
 - **Publik (anon)**: baca sesi `published` + `public`, venue aktif, produk aktif, konten aktif, album `published`.
 - **Member login**: baca/ubah `profiles` miliknya (kolom tier/status/member_code dikunci), booking sesi yang `published` & belum mulai, baca booking/poin/order/keranjang miliknya.
 - **Staf**: akses per modul lewat `has_permission()`; contoh Kasir Shop hanya `products`/`orders` (edit) + `overview`/`members` (lihat).
+- **Host sesi**: member biasa yang ditunjuk di `session_hosts`. `is_session_host(sesi)` hanya benar selama sesi itu belum diakhiri (`ended_at`) / selesai / dibatalkan — setelah itu kembali member biasa. Host tidak punya izin tulis tabel; check-in & skor lewat RPC `set_participant_check_in` dan `save_match_score` (total poin harus = `target_points`).
 - Aksi sensitif (check-in, ubah status order, catatan) tercatat di `admin_audit_log`.
 
 ## Setup Supabase

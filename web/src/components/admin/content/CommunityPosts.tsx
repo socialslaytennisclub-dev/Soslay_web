@@ -8,6 +8,7 @@ import type { CommunityPost } from "@/server/admin/types";
 import { AdminIcon, type AdminIconName } from "../ui/AdminIcon";
 import { Badge, type BadgeTone } from "../ui/AdminUI";
 import styles from "./Content.module.css";
+import { toast } from "../ui/Toaster";
 
 const KIND: Record<CommunityPost["kind"], { label: string; icon: AdminIconName; tone: BadgeTone }> = {
   instagram: { label: "Instagram", icon: "instagram-logo", tone: "pink" },
@@ -18,7 +19,6 @@ const KIND: Record<CommunityPost["kind"], { label: string; icon: AdminIconName; 
 export function CommunityPosts({ initial }: { initial: CommunityPost[] }) {
   const [posts, setPosts] = useState(initial);
   const [filter, setFilter] = useState<"all" | "visible" | "hidden">("all");
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const [pending, startToggle] = useTransition();
 
   const toggle = (p: CommunityPost) => {
@@ -28,7 +28,7 @@ export function CommunityPosts({ initial }: { initial: CommunityPost[] }) {
     startToggle(async () => {
       const result = await setInstagramPostVisible(p.handle, next);
       if (!result.ok) apply(!next);
-      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
     });
   };
   const shown = posts.filter((p) => filter === "all" || (filter === "visible") === p.visible);
@@ -56,11 +56,6 @@ export function CommunityPosts({ initial }: { initial: CommunityPost[] }) {
           ))}
         </div>
       </header>
-      {notice && (
-        <p className={cx(styles.notice, notice.error && styles.noticeError)} role={notice.error ? "alert" : "status"}>
-          {notice.text}
-        </p>
-      )}
       <ul className={styles.posts}>
         {shown.map((p) => {
           const kind = KIND[p.kind];

@@ -1,12 +1,12 @@
+import Link from "next/link";
 import { Chip, MediaCard } from "@/components/ui";
-import { memberSessions, myActivitiesPage, type MemberSession } from "@/content/member";
+import { myActivitiesPage, splitSessions, type MemberSession } from "@/content/member";
 import { formatJamRange, formatTanggalISO } from "@/lib/format";
 import styles from "./MyActivities.module.css";
 
 /** Figma 25:1951 — "Terbaru" (sesi terdaftar) & "Lampau" (riwayat + poin). */
-export function MyActivities() {
-  const upcoming = memberSessions.filter((s) => s.status !== "done").sort((a, b) => a.date.localeCompare(b.date));
-  const past = memberSessions.filter((s) => s.status === "done").sort((a, b) => b.date.localeCompare(a.date));
+export function MyActivities({ sessions }: { sessions: MemberSession[] }) {
+  const { upcoming, past } = splitSessions(sessions);
 
   return (
     <>
@@ -37,7 +37,9 @@ function ActivityGroup({ id, title, subtitle, empty, sessions }: ActivityGroupPr
         <ul className={styles.grid}>
           {sessions.map((session) => (
             <li key={session.slug}>
-              <ActivityTicket session={session} />
+              <Link href={`/akun/aktivitas/${session.slug}`} className={styles.cardLink} aria-label={`Detail sesi ${session.title}`}>
+                <ActivityTicket session={session} />
+              </Link>
             </li>
           ))}
         </ul>

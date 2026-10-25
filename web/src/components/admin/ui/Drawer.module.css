@@ -17,6 +17,10 @@
   box-shadow: 0 24px 64px rgb(10 8 74 / 0.25);
 }
 
+.wide {
+  width: min(880px, calc(100vw - 2 * var(--drawer-gap)));
+}
+
 .drawer[open] {
   animation: drawer-in var(--duration-slow, 400ms) var(--ease-out);
 }

@@ -7,8 +7,8 @@ import { saveTier } from "@/server/admin/actions/points";
 import type { TierBenefits } from "@/server/admin/types";
 import settingsStyles from "../settings/Settings.module.css";
 import { AdminButton } from "../ui/AdminUI";
-import { ActionNotice, type Notice } from "../ui/ActionNotice";
 import styles from "./Points.module.css";
+import { toast } from "../ui/Toaster";
 
 /** Kartu tier + benefit, bisa diedit di tempat (Figma 322:2 atas). */
 export function TierCards({ tiers }: { tiers: TierBenefits[] }) {
@@ -26,13 +26,12 @@ function TierCard({ tier: t, share }: { tier: TierBenefits; share: number }) {
   const [editing, setEditing] = useState(false);
   const [minPoints, setMinPoints] = useState(String(t.minPoints));
   const [benefits, setBenefits] = useState(t.benefits.join("\n"));
-  const [notice, setNotice] = useState<Notice>(null);
   const [saving, start] = useTransition();
 
   const save = () =>
     start(async () => {
       const result = await saveTier(t.tier, Number(minPoints || 0), benefits.split("\n"));
-      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
       if (result.ok) setEditing(false);
     });
 
@@ -73,7 +72,7 @@ function TierCard({ tier: t, share }: { tier: TierBenefits; share: number }) {
         </ul>
       )}
 
-      <ActionNotice notice={notice} />
+      
 
       {editing ? (
         <div className={styles.buttons}>

@@ -11,10 +11,10 @@ import ordersStyles from "../orders/Orders.module.css";
 import settingsStyles from "../settings/Settings.module.css";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, MemberAvatar, TierBadge } from "../ui/AdminUI";
-import { ActionNotice, type Notice } from "../ui/ActionNotice";
 import styles from "./Points.module.css";
 import { RedemptionBadge } from "./RedemptionBadge";
 import { RewardThumb } from "./RewardCatalog";
+import { toast } from "../ui/Toaster";
 
 const when = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
 
@@ -35,7 +35,6 @@ function PanelHead({ title, subtitle, closeHref }: { title: string; subtitle?: s
 /** Detail penukaran + Setujui / Tolak / Selesai (Figma 317:37 kanan). */
 export function RedemptionPanel({ redemption: r, closeHref }: { redemption: AdminRedemption; closeHref: string }) {
   const [note, setNote] = useState("");
-  const [notice, setNotice] = useState<Notice>(null);
   const [saving, start] = useTransition();
   const short = r.status === "pending" && r.memberBalance < r.points;
 
@@ -43,7 +42,7 @@ export function RedemptionPanel({ redemption: r, closeHref }: { redemption: Admi
     if (confirmText && !window.confirm(confirmText)) return;
     start(async () => {
       const result = await processRedemption(r.code, status, note);
-      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
       if (result.ok) setNote("");
     });
   };
@@ -126,7 +125,7 @@ export function RedemptionPanel({ redemption: r, closeHref }: { redemption: Admi
           </div>
         </section>
       )}
-      <ActionNotice notice={notice} />
+      
     </aside>
   );
 }
@@ -137,7 +136,6 @@ export function NewRedemptionPanel({ members, rewards, closeHref }: { members: M
   const [query, setQuery] = useState("");
   const [rewardId, setRewardId] = useState(rewards[0]?.id ?? "");
   const [note, setNote] = useState("");
-  const [notice, setNotice] = useState<Notice>(null);
   const [saving, start] = useTransition();
   // Datalist: "Nama · SOS 0001 2507" → cocokkan kembali ke id member.
   const label = (m: MemberChoice) => `${m.name} · ${m.code}`;
@@ -147,12 +145,12 @@ export function NewRedemptionPanel({ members, rewards, closeHref }: { members: M
   const submit = () =>
     start(async () => {
       if (!member) {
-        setNotice({ text: "Pilih member dari daftar.", error: true });
+        toast.error("Pilih member dari daftar.");
         return;
       }
       const result = await createRedemption(member.id, rewardId, note);
       if (result.ok && result.code) router.replace(`/admin/points?tab=redemptions&code=${result.code}`, { scroll: false });
-      else if (!result.ok) setNotice({ text: result.error, error: true });
+      else if (!result.ok) toast.error(result.error);
     });
 
   return (
@@ -192,7 +190,7 @@ export function NewRedemptionPanel({ members, rewards, closeHref }: { members: M
           <p className={ordersStyles.notice}>Saldo {member.name.split(" ")[0]} kurang {formatPoints(reward.pointsCost - member.balance)}.</p>
         )}
       </div>
-      <ActionNotice notice={notice} />
+      
       <div className={styles.buttons}>
         <AdminButton variant="primary" icon="plus-bold" onClick={submit} disabled={saving || !rewardId}>
           {saving ? "Menyimpan…" : "Catat penukaran"}

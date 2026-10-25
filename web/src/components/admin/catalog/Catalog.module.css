@@ -551,11 +551,6 @@
   color: var(--color-indigo-600);
 }
 
-.noticeError {
-  background: rgb(253 236 245);
-  color: var(--color-navy-900);
-}
-
 .rowActions {
   display: flex;
   gap: 2px;

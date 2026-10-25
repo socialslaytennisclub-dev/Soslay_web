@@ -4,11 +4,11 @@ import { ActivitiesFilters } from "@/components/admin/activities/ActivitiesFilte
 import styles from "@/components/admin/activities/Activities.module.css";
 import { SessionsTable } from "@/components/admin/activities/SessionsTable";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
-import { AdminIcon } from "@/components/admin/ui/AdminIcon";
 import { AdminButton } from "@/components/admin/ui/AdminUI";
+import { ToastOnMount } from "@/components/admin/ui/Toaster";
 import { cx } from "@/lib/cx";
 import { listSessions } from "@/server/admin/sessions-repo";
-import type { SessionsQuery } from "@/server/admin/types";
+import type { SessionSort, SessionsQuery } from "@/server/admin/types";
 import { one } from "@/server/admin/query";
 import pageStyles from "../page.module.css";
 
@@ -16,6 +16,7 @@ export const metadata: Metadata = { title: "Activities" };
 
 const TABS = ["upcoming", "completed", "draft", "archived"] as const;
 const RANGES = ["7", "30", "90", "all"] as const;
+const SORTS = ["schedule", "title", "created"] as const;
 
 /** Admin / 04 Activities (Figma 25:4725). */
 export default async function AdminActivitiesPage({ searchParams }: PageProps<"/admin/activities">) {
@@ -26,10 +27,20 @@ export default async function AdminActivitiesPage({ searchParams }: PageProps<"/
     q: one(raw.q),
     type: one(raw.type),
     venue: one(raw.venue),
-    city: one(raw.city),
     range: RANGES.find((r) => r === one(raw.range)),
+    sort: SORTS.find((s) => s === one(raw.sort)),
+    dir: one(raw.dir) === "asc" ? "asc" : one(raw.dir) === "desc" ? "desc" : undefined,
   };
   const result = await listSessions(query);
+
+  // Klik header: kolom yang sama → balik arah; kolom lain → arah awalnya (judul A–Z, jadwal terdekat).
+  const sortHref = (key: SessionSort) => {
+    const params = new URLSearchParams();
+    for (const [k, v] of Object.entries(raw)) if (typeof v === "string" && k !== "deleted") params.set(k, v);
+    params.set("sort", key);
+    params.set("dir", result.sort === key ? (result.dir === "asc" ? "desc" : "asc") : key === "created" ? "desc" : "asc");
+    return `/admin/activities?${params}`;
+  };
 
   const short = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", timeZone: "Asia/Jakarta" });
   const rangeLabel = result.range ? `${short.format(new Date(result.range.from))} – ${short.format(new Date(result.range.to))}` : "Semua tanggal";
@@ -60,14 +71,6 @@ export default async function AdminActivitiesPage({ searchParams }: PageProps<"/
             ))}
           </nav>
           <div className={styles.actions}>
-            <span className={styles.viewToggle} aria-label="Tampilan">
-              <span className={styles.viewActive} title="Tampilan daftar">
-                <AdminIcon name="list-bullets" size={18} />
-              </span>
-              <span className={styles.viewDisabled} title="Tampilan kalender — segera">
-                <AdminIcon name="calendar-dots" size={18} />
-              </span>
-            </span>
             <AdminButton href="/admin/activities/new" variant="primary" icon="plus-bold">
               Buat sesi
             </AdminButton>
@@ -75,6 +78,7 @@ export default async function AdminActivitiesPage({ searchParams }: PageProps<"/
         </div>
 
         <ActivitiesFilters
+          sort={`${result.sort}:${result.dir}`}
           types={result.types}
           venues={result.venues}
           ranges={[
@@ -84,17 +88,13 @@ export default async function AdminActivitiesPage({ searchParams }: PageProps<"/
             { value: "all", label: "Semua tanggal" },
           ]}
         />
-        {one(raw.deleted) && (
-          <p className={styles.notice} role="status">
-            Sesi dihapus dan sudah hilang dari website.
-          </p>
-        )}
+        {one(raw.deleted) && <ToastOnMount text="Sesi dihapus dan sudah hilang dari website." />}
         <p className={pageStyles.summary}>
           {result.items.length} sesi · {rangeLabel}
         </p>
 
         <section className={cx(styles.panel, styles.panelMobile)} aria-label="Daftar sesi">
-          <SessionsTable items={result.items} />
+          <SessionsTable items={result.items} sort={result.sort} dir={result.dir} sortHrefs={{ title: sortHref("title"), schedule: sortHref("schedule") }} />
         </section>
       </div>
     </>

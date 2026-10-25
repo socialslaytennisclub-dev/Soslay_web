@@ -6,7 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { supabaseUrl } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { monthKey } from "../time";
-import type { TennisLevel } from "../types";
+import type { MatchFormat, TennisLevel } from "../types";
 import { audit, refreshPaths, requireEditor, type ActionResult } from "./common";
 
 /**
@@ -36,16 +36,38 @@ export type SessionInput = {
   /** "2026-10-18T07:00" (WIB) atau "". */
   visibleUntil: string;
   homepage: boolean;
+  /** Link event di Kuyy untuk tombol Booking di website ("" → halaman Soslay di Kuyy). */
+  kuyUrl: string;
   /** URL foto cover dari uploadSessionCover, atau null → website memakai foto venue. */
   coverPath: string | null;
   /** Hanya saat membuat sesi baru: buat juga 7 sesi mingguan berikutnya (total 8). */
   repeatWeekly: boolean;
   crew: { name: string; role: "Host" | "Coach" | "Fotografer" }[];
+  /** Member yang jadi crew sesi ini: host (akses Panel Host) atau fotografer. */
+  crewMembers: { memberId: string; role: "host" | "photographer" }[];
+  /** Foto sesi: link album Google Drive, thumbnail (URL upload), jumlah foto. */
+  photos: { albumUrl: string; coverPath: string | null; count: number | null };
+  play: { matchFormat: MatchFormat; courtCount: number; roundCount: number; targetPoints: number; leaderboardMode: "points" | "wins"; showLeaderboard: boolean };
 };
+
+/** Format yang sudah bisa dipakai (v1) — Round robin & Knockout menyusul. */
+const ENABLED_FORMATS: MatchFormat[] = ["none", "americano", "rotating"];
 
 const WEEK = 7 * 86_400_000;
 const LEVELS: TennisLevel[] = ["beginner", "beginner_intermediate", "intermediate", "intermediate_advanced", "advanced"];
 const CREW_ROLE = { Host: "host", Coach: "coach", Fotografer: "photographer" } as const;
+/** "kuy.id/soslay/x" → "https://kuy.id/soslay/x"; null kalau bukan URL http(s). */
+function normalizeBookingUrl(raw: string): string | null {
+  const value = raw.trim();
+  if (!value) return "";
+  try {
+    const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
+    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
+  } catch {
+    return null;
+  }
+}
+
 const wib = (date: string, time: string) => new Date(`${date}T${time}:00+07:00`);
 const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 
@@ -65,6 +87,18 @@ function validate(input: SessionInput): string | null {
   if (input.description.length > 500) return "Deskripsi maksimal 500 karakter.";
   if (input.levels.some((l) => !LEVELS.includes(l))) return "Level tidak dikenal.";
   if (input.coverPath && !isCoverUrl(input.coverPath)) return "Foto cover tidak valid.";
+  if (input.photos.coverPath && !isCoverUrl(input.photos.coverPath)) return "Foto thumbnail tidak valid.";
+  if (input.photos.albumUrl && !isDriveUrl(input.photos.albumUrl)) return "Link album harus link folder Google Drive (drive.google.com).";
+  if (input.photos.count !== null && (!Number.isInteger(input.photos.count) || input.photos.count < 0)) return "Jumlah foto tidak valid.";
+  if (input.crewMembers.some((c) => c.role !== "host" && c.role !== "photographer")) return "Peran crew tidak dikenal.";
+  const { matchFormat, courtCount, roundCount, targetPoints } = input.play;
+  if (!ENABLED_FORMATS.includes(matchFormat)) return "Format pertandingan ini belum tersedia.";
+  if (matchFormat !== "none") {
+    if (!Number.isInteger(courtCount) || courtCount < 1 || courtCount > 12) return "Jumlah court 1–12.";
+    if (!Number.isInteger(roundCount) || roundCount < 1 || roundCount > 40) return "Jumlah ronde 1–40.";
+    if (!Number.isInteger(targetPoints) || targetPoints < 1 || targetPoints > 99) return "Target poin 1–99.";
+    if (input.play.leaderboardMode !== "points" && input.play.leaderboardMode !== "wins") return "Format leaderboard tidak dikenal.";
+  }
   return null;
 }
 
@@ -77,6 +111,16 @@ const COVER_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": 
 const COVER_MAX_BYTES = 5 * 1024 * 1024;
 /** Hanya URL hasil uploadSessionCover: <bucket publik>/<YYYY-MM>/<uuid>.<ext> — tanpa "../" ke bucket lain. */
 const COVER_KEY = /^\d{4}-\d{2}\/[0-9a-f-]{36}\.(jpg|png|webp)$/;
+/** Link folder / file Google Drive (https). */
+const isDriveUrl = (raw: string) => {
+  try {
+    const url = new URL(raw.trim());
+    return url.protocol === "https:" && /(^|\.)drive\.google\.com$/.test(url.hostname);
+  } catch {
+    return false;
+  }
+};
+
 const isCoverUrl = (url: string) => {
   const prefix = `${supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/public/${COVER_BUCKET}/`;
   return url.startsWith(prefix) && COVER_KEY.test(url.slice(prefix.length));
@@ -126,6 +170,8 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
 
   const startsAt = wib(input.date, input.start);
   const endsAt = wib(input.date, input.end);
+  const bookingUrl = normalizeBookingUrl(input.kuyUrl);
+  if (bookingUrl === null) return { ok: false, error: "Link booking Kuy tidak valid — contoh: https://kuy.id/soslay/nama-event" };
 
   // Kapasitas tidak boleh di bawah jumlah peserta yang sudah terdaftar.
   if (input.id) {
@@ -160,6 +206,18 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
     visible_until: input.visibleUntil ? new Date(`${input.visibleUntil}:00+07:00`).toISOString() : null,
     show_on_homepage: input.homepage,
     cover_path: input.coverPath,
+    kuy_booking_url: bookingUrl || null,
+    match_format: input.play.matchFormat,
+    court_count: input.play.courtCount,
+    round_count: input.play.roundCount,
+    target_points: input.play.targetPoints,
+    // v1: skor hanya diisi host/admin.
+    score_entry: "host",
+    leaderboard_mode: input.play.leaderboardMode,
+    show_live_leaderboard: input.play.showLeaderboard,
+    photo_album_url: input.photos.albumUrl.trim() || null,
+    photo_cover_path: input.photos.coverPath,
+    photo_count: input.photos.count,
   };
 
   let id = input.id;
@@ -205,6 +263,27 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
     if (crewRows.length) await supabase.from("session_crew").insert(crewRows);
   }
 
+  // Album baru pertama kali diisi → catat waktunya (tampil "diunggah …" di halaman member).
+  if (input.id && row.photo_album_url) {
+    await supabase.from("sessions").update({ photos_posted_at: new Date().toISOString() }).eq("id", id).is("photos_posted_at", null);
+  }
+
+  // Crew member: host (hak Panel Host hanya untuk sesi ini, lihat is_session_host) / fotografer.
+  const crewMembers = [...new Map(input.crewMembers.map((c) => [c.memberId, c])).values()];
+  const hostIds = crewMembers.map((c) => c.memberId);
+  const { error: hostDelete } = await supabase
+    .from("session_hosts")
+    .delete()
+    .eq("session_id", id)
+    .not("member_id", "in", `(${hostIds.length ? hostIds.join(",") : "00000000-0000-0000-0000-000000000000"})`);
+  if (hostDelete) return { ok: false, error: `Gagal menyimpan host: ${hostDelete.message}` };
+  if (hostIds.length) {
+    const { error } = await supabase
+      .from("session_hosts")
+      .upsert(crewMembers.map((c) => ({ session_id: id, member_id: c.memberId, role: c.role, assigned_by: auth.userId })), { onConflict: "session_id,member_id" });
+    if (error) return { ok: false, error: `Gagal menyimpan host: ${error.message}` };
+  }
+
   await audit(auth.userId, input.id ? `mengubah sesi ${input.title}` : `membuat sesi ${input.title}${input.repeatWeekly ? " (8 minggu)" : ""}`, "session", id);
   refresh(id);
   if (!input.id) redirect(`/admin/activities/${id}?saved=${input.repeatWeekly ? "series" : "new"}`);
@@ -236,19 +315,30 @@ export async function deleteSession(id: string): Promise<ActionResult> {
   redirect("/admin/activities?deleted=1");
 }
 
-/** Check-in / batal check-in peserta. Poin kehadiran diberi/ditarik oleh trigger database. */
-export async function setCheckIn(sessionId: string, memberId: string, checkedIn: boolean): Promise<ActionResult> {
+/**
+ * Check-in / batal check-in peserta. Peserta import Kuyy lewat RPC (admin atau host sesi);
+ * peserta dari booking (tanpa import) langsung di bookings. Poin kehadiran diberi/ditarik
+ * oleh trigger database.
+ */
+export async function setCheckIn(sessionId: string, participant: { id: string; memberId: string | null }, checkedIn: boolean): Promise<ActionResult> {
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
-    .from("bookings")
-    .update(checkedIn ? { status: "attended", checked_in_at: new Date().toISOString(), checked_in_by: auth.userId } : { status: "registered", checked_in_at: null, checked_in_by: null })
-    .eq("session_id", sessionId)
-    .eq("member_id", memberId)
-    .neq("status", "waitlisted")
-    .select("id");
-  if (error || !data?.length) return { ok: false, error: `Check-in gagal: ${error?.message ?? "booking tidak ditemukan"}` };
+  const fromRoster = participant.id !== participant.memberId;
+  if (fromRoster) {
+    const { error } = await supabase.rpc("set_participant_check_in", { p_participant: participant.id, p_checked_in: checkedIn });
+    if (error) return { ok: false, error: `Check-in gagal: ${error.message}` };
+  } else {
+    const { data, error } = await supabase
+      .from("bookings")
+      .update(checkedIn ? { status: "attended", checked_in_at: new Date().toISOString(), checked_in_by: auth.userId } : { status: "registered", checked_in_at: null, checked_in_by: null })
+      .eq("session_id", sessionId)
+      .eq("member_id", participant.memberId!)
+      .neq("status", "waitlisted")
+      .select("id");
+    if (error || !data?.length) return { ok: false, error: `Check-in gagal: ${error?.message ?? "booking tidak ditemukan"}` };
+  }
   refresh(sessionId);
-  return { ok: true, message: checkedIn ? "Check-in tersimpan · Slay Point ditambahkan." : "Check-in dibatalkan · Slay Point ditarik." };
+  const points = participant.memberId ? (checkedIn ? " · Slay Point ditambahkan." : " · Slay Point ditarik.") : ".";
+  return { ok: true, message: (checkedIn ? "Check-in tersimpan" : "Check-in dibatalkan") + points };
 }

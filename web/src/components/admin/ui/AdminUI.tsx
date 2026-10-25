@@ -225,3 +225,28 @@ export function MobileCard({ href, title, aside, meta, leading, selected }: Mobi
     </li>
   );
 }
+
+// ── Input tanggal/jam & pencarian ───────────────────────────────────────────
+type PickerInputProps = Omit<ComponentPropsWithoutRef<"input">, "type"> & { type: "date" | "time" | "datetime-local" };
+
+/**
+ * Input tanggal / jam dengan ikon Lucide menggantikan ikon bawaan browser. Ikon picker asli
+ * tetap ada (transparan, menutupi ikon) jadi klik ikon tetap membuka kalender / jam.
+ */
+export function PickerInput({ type, className, ...rest }: PickerInputProps) {
+  return (
+    <span className={styles.picker}>
+      <input type={type} className={className} {...rest} />
+      <AdminIcon name={type === "time" ? "clock" : "calendar-dots"} size={16} className={styles.pickerIcon} />
+    </span>
+  );
+}
+
+/** Tombol hapus isi kolom pencarian (pengganti tombol × bawaan browser). */
+export function SearchClear({ onClear, className }: { onClear: () => void; className?: string }) {
+  return (
+    <button type="button" className={cx(styles.searchClear, className)} onClick={onClear} aria-label="Hapus pencarian">
+      <AdminIcon name="x" size={14} />
+    </button>
+  );
+}

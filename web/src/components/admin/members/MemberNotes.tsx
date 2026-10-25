@@ -4,6 +4,7 @@ import { useState, useTransition, type FormEvent } from "react";
 import { addMemberNote, deleteMemberNote } from "@/server/admin/actions/members";
 import type { MemberNote } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
+import { toast } from "../ui/Toaster";
 import styles from "./MemberDetail.module.css";
 
 const stamp = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", timeZone: "Asia/Jakarta" });
@@ -11,7 +12,6 @@ const stamp = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short",
 /** Catatan internal tim (tabel member_notes) — tersimpan lewat server action. */
 export function MemberNotes({ memberId, initial }: { memberId: string; initial: MemberNote[] }) {
   const [draft, setDraft] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
   function submit(event: FormEvent) {
@@ -21,15 +21,14 @@ export function MemberNotes({ memberId, initial }: { memberId: string; initial: 
     start(async () => {
       const result = await addMemberNote(memberId, body);
       if (result.ok) setDraft("");
-      setError(result.ok ? null : result.error);
+      toast.result(result);
     });
   }
 
   const remove = (id: string) => {
     if (!window.confirm("Hapus catatan ini?")) return;
     start(async () => {
-      const result = await deleteMemberNote(memberId, id);
-      setError(result.ok ? null : result.error);
+      toast.result(await deleteMemberNote(memberId, id));
     });
   };
 
@@ -46,11 +45,6 @@ export function MemberNotes({ memberId, initial }: { memberId: string; initial: 
           </p>
         </div>
       ))}
-      {error && (
-        <p className={styles.noteError} role="alert">
-          {error}
-        </p>
-      )}
       <form onSubmit={submit} className={styles.noteForm}>
         <label className="visually-hidden" htmlFor="note-input">
           Tulis catatan

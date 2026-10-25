@@ -444,12 +444,6 @@
   color: var(--color-pink-500);
 }
 
-.noteError {
-  font-family: var(--font-ui);
-  font-size: 12px;
-  color: var(--color-pink-500);
-}
-
 .bookForm {
   display: flex;
   flex-wrap: wrap;
@@ -495,10 +489,3 @@
   border-radius: var(--radius-md);
 }
 
-.bookDone {
-  flex-basis: 100%;
-  font-family: var(--font-ui);
-  font-size: 12px;
-  text-align: right;
-  color: var(--color-navy-900);
-}

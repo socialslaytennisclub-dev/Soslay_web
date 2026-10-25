@@ -459,10 +459,6 @@
   }
 }
 
-.noticeError {
-  background: rgb(253 236 245);
-}
-
 .textButton {
   font-family: var(--font-ui);
   font-size: 12px;

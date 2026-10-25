@@ -38,6 +38,7 @@
 }
 
 .item {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-16);
@@ -102,4 +103,15 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   color: var(--color-indigo-muted);
+}
+
+/* Seluruh baris bisa diklik lewat link nama sesi. */
+.nameLink::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+}
+
+.nameLink:hover {
+  text-decoration: underline;
 }

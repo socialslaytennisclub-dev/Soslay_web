@@ -10,6 +10,7 @@ import { TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon, type AdminIconName } from "../ui/AdminIcon";
 import { AdminButton, Badge } from "../ui/AdminUI";
 import styles from "./Content.module.css";
+import { toast } from "../ui/Toaster";
 
 const clock = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
 
@@ -22,7 +23,6 @@ export function HomepageEditor({ initial, tabs }: { initial: ContentSection[]; t
   const [selectedKey, setSelectedKey] = useState<string | null>(initial[0]?.key ?? null);
   const [dragKey, setDragKey] = useState<string | null>(null);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const [publishing, startPublish] = useTransition();
   const pendingFromDb = initial.some((s) => s.unpublished);
 
@@ -33,7 +33,7 @@ export function HomepageEditor({ initial, tabs }: { initial: ContentSection[]; t
     startPublish(async () => {
       const result = await publishHomepage(sections);
       if (result.ok) setSavedAt(null);
-      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
     });
 
   // Di HP panel ada di bawah daftar: bawa ke layar saat section dipilih.
@@ -89,15 +89,6 @@ export function HomepageEditor({ initial, tabs }: { initial: ContentSection[]; t
         </div>
       </div>
 
-      {notice && (
-        <p className={cx(styles.notice, notice.error && styles.noticeError)} role={notice.error ? "alert" : "status"}>
-          <AdminIcon name={notice.error ? "warning-circle" : "check-circle"} size={18} />
-          {notice.text}
-          <button type="button" className={styles.noticeClose} aria-label="Tutup" onClick={() => setNotice(null)}>
-            <AdminIcon name="x" size={14} />
-          </button>
-        </p>
-      )}
 
       <div className={styles.homeGrid}>
         <section className={styles.card}>

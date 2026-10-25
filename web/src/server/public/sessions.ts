@@ -1,7 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { isActivityType, sessions as contentSessions, type Session, type TennisLevel } from "@/content/activity";
-import { CITY_TIMEZONE, type City } from "@/lib/format";
+import { CITY_TIMEZONE, cityOf, type City } from "@/lib/format";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabasePublicClient } from "@/lib/supabase/public";
 
@@ -34,7 +34,7 @@ type Row = {
 };
 
 /** Tanggal & jam lokal venue ("2026-10-18", "07:00"). */
-function localParts(iso: string, city: City) {
+export function localParts(iso: string, city: City) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: CITY_TIMEZONE[city],
     year: "numeric",
@@ -75,7 +75,7 @@ export const getWebsiteSessions = cache(async (): Promise<Session[]> => {
   return (data as unknown as Row[]).flatMap((s): Session[] => {
     if (!s.venues || !isActivityType(s.type_slug)) return [];
     if (s.visible_until && new Date(s.visible_until).getTime() < now && new Date(s.starts_at).getTime() > now) return [];
-    const city: City = s.venues.city === "Bali" ? "Bali" : "Jakarta";
+    const city = cityOf(s.venues.city);
     const start = localParts(s.starts_at, city);
     const end = localParts(s.ends_at, city);
     return [

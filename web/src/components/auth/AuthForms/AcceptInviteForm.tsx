@@ -24,10 +24,12 @@ export function AcceptInviteForm() {
   const [isMember, setIsMember] = useState(false);
 
   useEffect(() => {
-    const supabase = createSupabaseBrowserClient();
     const hash = new URLSearchParams(window.location.hash.slice(1));
     const access_token = hash.get("access_token");
     const refresh_token = hash.get("refresh_token");
+    // Undangan member → sesi website; undangan tim → sesi admin (cookie terpisah, lihat lib/supabase/scope).
+    const member = access_token ? tokenSignup(access_token) === "member" : true;
+    const supabase = createSupabaseBrowserClient(member ? "member" : "admin");
     const start = access_token && refresh_token ? supabase.auth.setSession({ access_token, refresh_token }) : supabase.auth.getSession();
     start.then(({ data }) => {
       // Token jangan tertinggal di address bar / riwayat.
@@ -42,7 +44,7 @@ export function AcceptInviteForm() {
     if (password.length < 8) return setError("Password minimal 8 karakter.");
     if (password !== confirm) return setError("Konfirmasi password belum sama.");
     setState("saving");
-    const supabase = createSupabaseBrowserClient();
+    const supabase = createSupabaseBrowserClient(isMember ? "member" : "admin");
     const { error: updateError } = await supabase.auth.updateUser({ password });
     if (updateError) {
       setError("Gagal menyimpan password. Coba lagi atau minta undangan baru.");
@@ -73,4 +75,14 @@ export function AcceptInviteForm() {
       </Button>
     </form>
   );
+}
+
+/** `signup` dari metadata access token undangan (hanya untuk memilih cookie; validasi tetap di Supabase). */
+function tokenSignup(token: string): string | undefined {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
+    return payload?.user_metadata?.signup;
+  } catch {
+    return undefined;
+  }
 }

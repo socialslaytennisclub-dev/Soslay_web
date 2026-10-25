@@ -4,6 +4,7 @@ import { useTransition } from "react";
 import { deleteSegment, saveSegment } from "@/server/admin/actions/members";
 import type { MembersQuery } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
+import { toast } from "../ui/Toaster";
 import styles from "./Members.module.css";
 
 /** "Simpan segmen" — menyimpan filter aktif ke member_segments. */
@@ -14,8 +15,7 @@ export function SaveSegmentButton({ query }: { query: MembersQuery }) {
     const name = window.prompt("Nama segmen (filter yang aktif sekarang akan disimpan):");
     if (!name?.trim()) return;
     start(async () => {
-      const result = await saveSegment(name, query);
-      if (!result.ok) window.alert(result.error);
+      toast.result(await saveSegment(name, query));
     });
   };
   return (
@@ -37,8 +37,7 @@ export function DeleteSegmentButton({ id, name }: { id: string; name: string }) 
       onClick={() => {
         if (!window.confirm(`Hapus segmen "${name}"?`)) return;
         start(async () => {
-          const result = await deleteSegment(id);
-          if (!result.ok) window.alert(result.error);
+          toast.result(await deleteSegment(id));
         });
       }}
     >

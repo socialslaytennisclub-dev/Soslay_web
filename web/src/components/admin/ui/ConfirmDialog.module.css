@@ -1,0 +1,118 @@
+/* Popup konfirmasi hapus — modal di tengah (dialog native). */
+
+.dialog {
+  width: min(440px, calc(100vw - 2 * var(--space-16)));
+  max-width: none;
+  margin: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 24px;
+  background: var(--color-white);
+  color: var(--color-navy-900);
+  box-shadow: 0 24px 64px rgb(10 8 74 / 0.24);
+}
+
+.dialog[open] {
+  animation: confirm-in var(--duration-base) var(--ease-out);
+}
+
+.dialog::backdrop {
+  background: rgb(10 8 74 / 0.45);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  padding: var(--space-24);
+}
+
+.icon {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  background: var(--color-pink-100);
+  color: var(--color-pink-500);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 18px;
+  line-height: 1.3;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-indigo-muted);
+}
+
+.body strong {
+  color: var(--color-navy-900);
+}
+
+.typeField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.typeField input {
+  min-height: 44px;
+  padding: var(--space-10) var(--space-14);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+
+.typeField input:focus {
+  border-color: var(--color-pink-500);
+  outline: none;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  margin-top: var(--space-8);
+}
+
+/* Tombol konfirmasi hapus: pink, bukan lime (aksi merusak). */
+.danger,
+.danger:hover {
+  border-color: var(--color-pink-500);
+  background: var(--color-pink-500);
+  color: var(--color-white);
+}
+
+.danger:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+@keyframes confirm-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open] {
+    animation: none;
+  }
+}

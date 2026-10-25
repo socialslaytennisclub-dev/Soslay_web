@@ -100,11 +100,15 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
   redirect(AFTER_AUTH);
 }
 
-/** Keluar → halaman Masuk member, atau login admin bila form mengirim `to=admin`. */
+/**
+ * Keluar → halaman Masuk member, atau login admin bila form mengirim `to=admin`. Hanya sesi
+ * area itu yang diakhiri (scope "local") — login di area lain (admin ↔ member) tetap jalan.
+ */
 export async function signOut(formData?: FormData) {
+  const admin = formData?.get("to") === "admin";
   if (isSupabaseConfigured) {
-    const supabase = await createSupabaseServerClient();
-    await supabase.auth.signOut();
+    const supabase = await createSupabaseServerClient(admin ? "admin" : "member");
+    await supabase.auth.signOut({ scope: "local" });
   }
-  redirect(formData?.get("to") === "admin" ? ADMIN_LOGIN : "/masuk");
+  redirect(admin ? ADMIN_LOGIN : "/masuk");
 }

@@ -5,6 +5,7 @@ import { useEffect, useState, useTransition } from "react";
 import { PAYMENT_LABEL } from "@/lib/admin-labels";
 import styles from "../activities/Activities.module.css";
 import { AdminIcon } from "../ui/AdminIcon";
+import { SearchClear } from "../ui/AdminUI";
 
 /** Filter Orders (cari, pembayaran, bulan) — tersimpan di URL. */
 export function OrdersFilters({ months }: { months: { value: string; label: string }[] }) {
@@ -35,6 +36,7 @@ export function OrdersFilters({ months }: { months: { value: string; label: stri
         <AdminIcon name="magnifying-glass" size={18} />
         <span className="visually-hidden">Cari order</span>
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari no. order atau customer…" />
+        {q && <SearchClear onClear={() => setQ("")} />}
       </label>
       <label className={styles.select}>
         <AdminIcon name="coins" size={16} />

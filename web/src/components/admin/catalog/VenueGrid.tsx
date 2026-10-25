@@ -9,6 +9,7 @@ import type { AdminVenue } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge } from "../ui/AdminUI";
 import styles from "./Catalog.module.css";
+import { toast } from "../ui/Toaster";
 
 const SORTS = [
   { value: "popular", label: "Terpopuler" },
@@ -22,7 +23,6 @@ export function VenueGrid({ initial, monthLabel }: { initial: AdminVenue[]; mont
   const [venues, setVenues] = useState(initial);
   const [city, setCity] = useState<string>("all");
   const [sort, setSort] = useState<Sort>("popular");
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const [pending, startToggle] = useTransition();
 
   const toggleVisible = (v: AdminVenue) => {
@@ -32,7 +32,7 @@ export function VenueGrid({ initial, monthLabel }: { initial: AdminVenue[]; mont
     startToggle(async () => {
       const result = await setVenueVisible(v.slug, next);
       if (!result.ok) apply(!next);
-      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
     });
   };
 
@@ -73,11 +73,6 @@ export function VenueGrid({ initial, monthLabel }: { initial: AdminVenue[]; mont
         </div>
       </div>
 
-      {notice && (
-        <p className={cx(styles.notice, notice.error && styles.noticeError)} role={notice.error ? "alert" : "status"}>
-          {notice.text}
-        </p>
-      )}
 
       <ul className={styles.venueGrid}>
         {shown.map((v) => (

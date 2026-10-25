@@ -4,13 +4,13 @@ import { useState, useTransition } from "react";
 import { bookMemberIntoSession } from "@/server/admin/actions/members";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton } from "../ui/AdminUI";
+import { toast } from "../ui/Toaster";
 import styles from "./MemberDetail.module.css";
 
 /** "Booking-kan sesi": pilih sesi mendatang → booking dengan sumber Admin (bayar menyusul). */
 export function BookSessionForm({ memberId, sessions }: { memberId: string; sessions: { id: string; label: string }[] }) {
   const [open, setOpen] = useState(false);
   const [sessionId, setSessionId] = useState("");
-  const [message, setMessage] = useState<{ text: string; error?: boolean } | null>(null);
   const [pending, start] = useTransition();
 
   if (!open) {
@@ -24,7 +24,7 @@ export function BookSessionForm({ memberId, sessions }: { memberId: string; sess
   const submit = () =>
     start(async () => {
       const result = await bookMemberIntoSession(memberId, sessionId);
-      setMessage(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
       if (result.ok) setSessionId("");
     });
 
@@ -48,11 +48,6 @@ export function BookSessionForm({ memberId, sessions }: { memberId: string; sess
       <button type="button" className={styles.bookCancel} onClick={() => setOpen(false)} aria-label="Tutup">
         <AdminIcon name="x" size={14} />
       </button>
-      {message && (
-        <p className={message.error ? styles.noteError : styles.bookDone} role={message.error ? "alert" : "status"}>
-          {message.text}
-        </p>
-      )}
     </div>
   );
 }

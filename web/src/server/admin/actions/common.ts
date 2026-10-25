@@ -26,7 +26,15 @@ const MODULE_LABEL: Record<AdminModule, string> = {
 export async function requireEditor(module: AdminModule): Promise<{ userId: string; name: string } | { error: string }> {
   const session = await getAdminSession();
   if (session.mode === "demo") return { error: "Mode demo: sambungkan Supabase untuk menyimpan." };
-  if (session.mode !== "live" || !canAccess(session, module, "edit")) return { error: `Role kamu tidak punya izin mengubah ${MODULE_LABEL[module]}.` };
+  // Login member & admin memakai sesi browser yang sama → login sebagai member di tab lain mengeluarkan akun admin.
+  if (session.mode === "denied") {
+    return {
+      error: session.email
+        ? `Sesi admin berakhir — browser ini sekarang login sebagai ${session.email} (bukan akun tim). Masuk lagi lewat /masuk/admin.`
+        : "Sesi admin berakhir — masuk lagi lewat /masuk/admin.",
+    };
+  }
+  if (!canAccess(session, module, "edit")) return { error: `Role kamu tidak punya izin mengubah ${MODULE_LABEL[module]}.` };
   return { userId: session.userId, name: session.name };
 }
 

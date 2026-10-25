@@ -61,15 +61,6 @@
   background: rgb(253 236 245);
 }
 
-.noticeClose {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  margin-left: auto;
-  border-radius: var(--radius-md);
-}
-
 .grid {
   display: grid;
   gap: var(--space-16);
@@ -318,6 +309,16 @@
   color: var(--color-navy-900);
 }
 
+.iconButton:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.iconButton:disabled:hover {
+  background: none;
+  color: var(--color-indigo-muted);
+}
+
 /* ── Peserta ── */
 .stats {
   display: grid;
@@ -371,11 +372,48 @@
   vertical-align: middle;
 }
 
+/* ── Pilih banyak peserta (hapus massal) ── */
+.selectCell {
+  width: 44px;
+  padding-right: 0 !important;
+}
+
+.selectBox,
+.selectCell input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-indigo-600);
+  cursor: pointer;
+}
+
+.selectBox:disabled,
+.selectCell input:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.rowSelected td {
+  background: var(--color-indigo-50);
+}
+
 .person {
   display: flex;
   align-items: center;
   gap: var(--space-10);
   min-width: 0;
+}
+
+/* Username Soslay + badge member terverifikasi */
+.username {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Badge member terverifikasi — hijau lime seperti Figma. */
+.verified {
+  color: var(--color-lime-600);
 }
 
 .personText {

@@ -8,10 +8,10 @@ import { useDialog } from "@/hooks/useDialog";
 import { LEVEL_LABEL } from "@/lib/admin-labels";
 import { addMember, type NewMemberInput } from "@/server/admin/actions/members";
 import type { TennisLevel } from "@/server/admin/types";
-import { ActionNotice, type Notice } from "../ui/ActionNotice";
 import { AdminButton } from "../ui/AdminUI";
 import { Drawer } from "../ui/Drawer";
 import styles from "./Members.module.css";
+import { toast } from "../ui/Toaster";
 
 const EMPTY: NewMemberInput = { fullName: "", email: "", phone: "", kuyId: "", city: "", level: "" };
 const LEVELS = Object.entries(LEVEL_LABEL) as [TennisLevel, string][];
@@ -21,7 +21,6 @@ export function AddMemberButton() {
   const router = useRouter();
   const dialog = useDialog();
   const [form, setForm] = useState(EMPTY);
-  const [notice, setNotice] = useState<Notice>(null);
   const [pending, startTransition] = useTransition();
   const formId = useId();
   const set = (key: keyof NewMemberInput, value: string) => setForm((f) => ({ ...f, [key]: value }));
@@ -30,8 +29,8 @@ export function AddMemberButton() {
     event.preventDefault();
     startTransition(async () => {
       const result = await addMember(form);
-      if (!result.ok) return setNotice({ text: result.error, error: true });
-      setNotice({ text: result.message });
+      if (!result.ok) return toast.error(result.error);
+      toast.success(result.message);
       setForm(EMPTY);
       router.refresh();
     });
@@ -43,7 +42,6 @@ export function AddMemberButton() {
         variant="primary"
         icon="user-plus"
         onClick={() => {
-          setNotice(null);
           dialog.open();
         }}
       >
@@ -79,7 +77,7 @@ export function AddMemberButton() {
               onChange={(label) => set("level", LEVELS.find(([, l]) => l === label)?.[0] ?? "")}
             />
           </div>
-          <ActionNotice notice={notice} />
+          
         </form>
       </Drawer>
     </>

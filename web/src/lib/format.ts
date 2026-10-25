@@ -21,6 +21,9 @@ export const CITY_TIMEZONE = {
 
 export type City = keyof typeof CITY_TIMEZONE;
 
+/** Kota venue dari database ("Bali" / lainnya → Jakarta). */
+export const cityOf = (city: string): City => (city === "Bali" ? "Bali" : "Jakarta");
+
 const dateFormatters = new Map<string, Intl.DateTimeFormat>();
 
 function dateFormatter(timeZone: string) {
@@ -53,6 +56,36 @@ export function formatJamRange(start: string, end: string, separator = " - "): s
 export function formatTanggalISO(date: string, city: City): string {
   const offset = city === "Bali" ? "+08:00" : "+07:00";
   return formatTanggal(new Date(`${date}T12:00:00${offset}`), CITY_TIMEZONE[city]);
+}
+
+/** Label zona waktu tiap kota venue. */
+export const CITY_TZ_LABEL: Record<City, string> = { Jakarta: "WIB", Bali: "WITA" };
+
+const shortFormatters = new Map<City, Intl.DateTimeFormat>();
+
+/**
+ * ISO → format pendek Indonesia di zona waktu kota venue:
+ * "date" = "Sab, 31 Okt 2026" · "dateTime" = "31 Okt, 17.30" · "time" = "17.30".
+ */
+export function formatTanggalPendek(iso: string, city: City, part: "date" | "dateTime" | "time" = "date"): string {
+  let formatter = shortFormatters.get(city);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat("id-ID", {
+      timeZone: CITY_TIMEZONE[city],
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    });
+    shortFormatters.set(city, formatter);
+  }
+  const p = Object.fromEntries(formatter.formatToParts(new Date(iso)).map((x) => [x.type, x.value]));
+  const time = `${p.hour}.${p.minute}`;
+  if (part === "time") return time;
+  return part === "dateTime" ? `${p.day} ${p.month}, ${time}` : `${p.weekday}, ${p.day} ${p.month} ${p.year}`;
 }
 
 const shortMonth = new Intl.DateTimeFormat("id-ID", { month: "short", timeZone: "UTC" });

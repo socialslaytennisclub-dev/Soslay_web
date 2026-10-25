@@ -6,6 +6,7 @@ import { changeStaffRole, createRole, inviteStaff, savePermissions, setStaffActi
 import type { AdminModule, ModuleAccess, RolePermissions, StaffMember } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge, desktopOnlyClass, MemberAvatar, MobileCard, MobileCardList } from "../ui/AdminUI";
+import { toast } from "../ui/Toaster";
 import styles from "./Settings.module.css";
 
 const rtf = new Intl.RelativeTimeFormat("id-ID", { numeric: "auto" });
@@ -29,7 +30,6 @@ const STATUS = {
 
 /** Anggota tim (staff_members): ganti role, aktif/nonaktif, undang anggota baru. */
 export function TeamTable({ staff, roles, now, currentUserId }: { staff: StaffMember[]; roles: string[]; now: string; currentUserId?: string }) {
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const [inviting, setInviting] = useState(false);
   const [invite, setInvite] = useState({ name: "", email: "", role: roles.find((r) => r !== "Super Admin") ?? roles[0] ?? "" });
   const [pending, start] = useTransition();
@@ -38,7 +38,7 @@ export function TeamTable({ staff, roles, now, currentUserId }: { staff: StaffMe
   const run = (action: () => Promise<{ ok: true; message: string } | { ok: false; error: string }>, after?: () => void) =>
     start(async () => {
       const result = await action();
-      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
       if (result.ok) after?.();
     });
 
@@ -132,12 +132,6 @@ export function TeamTable({ staff, roles, now, currentUserId }: { staff: StaffMe
         </form>
       )}
 
-      {notice && (
-        <p className={cx(styles.notice, notice.error && styles.noticeError)} role={notice.error ? "alert" : "status"}>
-          {notice.text}
-        </p>
-      )}
-
       <MobileCardList label="Anggota tim">
         {staff.map((s) => (
           <MobileCard
@@ -196,7 +190,6 @@ const SHORT: Record<string, string> = { "Community Manager": "Community", "Kasir
 /** Matriks izin role × modul. Klik sel untuk mengganti Ubah → Lihat → tidak ada, lalu Simpan. */
 export function RolesMatrix({ roles, modules }: { roles: RolePermissions[]; modules: { key: AdminModule; label: string }[] }) {
   const [matrix, setMatrix] = useState(roles);
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const [pending, start] = useTransition();
   const changes = matrix.flatMap((r) => {
     const before = roles.find((x) => x.name === r.name);
@@ -207,14 +200,14 @@ export function RolesMatrix({ roles, modules }: { roles: RolePermissions[]; modu
   const save = () =>
     start(async () => {
       const result = await savePermissions(changes);
-      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
     });
   const addRole = () => {
     const name = window.prompt("Nama role baru (mis. Event Crew):");
     if (!name?.trim()) return;
     start(async () => {
       const result = await createRole(name);
-      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
     });
   };
 
@@ -258,11 +251,6 @@ export function RolesMatrix({ roles, modules }: { roles: RolePermissions[]; modu
           <AdminButton size="sm" variant="primary" onClick={save} disabled={pending}>
             {pending ? "Menyimpan…" : "Simpan izin"}
           </AdminButton>
-        </p>
-      )}
-      {notice && !changed && (
-        <p className={cx(styles.notice, notice.error && styles.noticeError)} role={notice.error ? "alert" : "status"}>
-          {notice.text}
         </p>
       )}
 

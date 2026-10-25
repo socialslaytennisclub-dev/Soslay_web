@@ -22,6 +22,7 @@ import {
 import { gsap, useGSAP } from "@/lib/gsap";
 import { todayIso } from "@/lib/auth";
 import { profileCompletion, validateProfile } from "@/lib/profile";
+import { saveMyProfile } from "@/server/member/actions";
 import { ProfileSummary } from "./ProfileSummary";
 import styles from "./ProfileForm.module.css";
 
@@ -32,9 +33,12 @@ const [basic, tennis, community] = profileSections;
  * Figma 25:2275 — form profil 3 section + panel kelengkapan.
  * Belum ada backend: "Simpan" memvalidasi lalu menyimpan ke state (siap diganti PATCH /api/me).
  */
-export function ProfileForm() {
-  const [saved, setSaved] = useState<MemberProfile>(memberProfile);
-  const [profile, setProfile] = useState<MemberProfile>(memberProfile);
+/** `initial` = profil member yang login (disimpan ke Supabase); tanpa itu form memakai data contoh. */
+export function ProfileForm({ initial }: { initial?: MemberProfile }) {
+  const live = Boolean(initial);
+  const [saved, setSaved] = useState<MemberProfile>(initial ?? memberProfile);
+  const [profile, setProfile] = useState<MemberProfile>(initial ?? memberProfile);
+  const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<ProfileField, string>>>({});
   const [photoError, setPhotoError] = useState<string>();
   const [status, setStatus] = useState<string>();
@@ -101,9 +105,24 @@ export function ProfileForm() {
       layoutRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus();
       return;
     }
-    setSaved(profile);
-    setChangingPassword(false);
-    setStatus(profilePage.saved);
+    if (!live) {
+      setSaved(profile);
+      setChangingPassword(false);
+      setStatus(profilePage.saved);
+      return;
+    }
+    setSaving(true);
+    saveMyProfile(profile).then((result) => {
+      setSaving(false);
+      if (!result.ok) {
+        if (result.field) setErrors((current) => ({ ...current, [result.field!]: result.error }));
+        setStatus(result.error);
+        return;
+      }
+      setSaved(profile);
+      setChangingPassword(false);
+      setStatus(profilePage.saved);
+    });
   }
 
   function cancel() {
@@ -157,7 +176,8 @@ export function ProfileForm() {
             <TextField label="Kuy ID" required value={profile.kuyId} error={errors.kuyId} onChange={(e) => update("kuyId", e.target.value)} />
             <TextField label="Reclub ID" value={profile.reclubId} placeholder="Masukkan Reclub ID kamu" onChange={(e) => update("reclubId", e.target.value)} />
             <TextField label="Instagram" required prefix="@" value={profile.instagram} error={errors.instagram} onChange={(e) => update("instagram", e.target.value.replace(/^@/, ""))} />
-            <TextField label="Email" required type="email" autoComplete="email" value={profile.email} error={errors.email} onChange={(e) => update("email", e.target.value)} />
+            {/* Email = login akun → tidak diganti dari form ini saat tersambung ke akun. */}
+            <TextField label="Email" required type="email" autoComplete="email" value={profile.email} error={errors.email} readOnly={live} onChange={(e) => update("email", e.target.value)} />
             {changingPassword ? (
               <TextField label="Password baru" required type="password" autoComplete="new-password" minLength={8} placeholder="Minimal 8 karakter" />
             ) : (
@@ -201,8 +221,8 @@ export function ProfileForm() {
             <Button variant="outline" onClick={cancel} disabled={!dirty}>
               Batal
             </Button>
-            <Button type="submit" variant="primary">
-              Simpan Perubahan
+            <Button type="submit" variant="primary" disabled={saving}>
+              {saving ? "Menyimpan…" : "Simpan Perubahan"}
             </Button>
           </div>
         </div>

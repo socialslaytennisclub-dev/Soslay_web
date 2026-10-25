@@ -9,6 +9,7 @@ import styles from "../activities/SessionEditor.module.css";
 import { FormCard, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton } from "../ui/AdminUI";
+import { toast } from "../ui/Toaster";
 
 const LEVELS = [
   ["beginner", "Beginner"],
@@ -40,12 +41,9 @@ const GENDERS = [
   ["undisclosed", "Tidak disebutkan"],
 ];
 
-type Notice = { text: string; tone: "ok" | "error" } | null;
-
 /** Edit data member + penyesuaian Slay Point manual. */
 export function MemberEditor({ initial }: { initial: MemberForm }) {
   const [m, setM] = useState(initial);
-  const [notice, setNotice] = useState<Notice>(null);
   const [delta, setDelta] = useState("");
   const [reason, setReason] = useState("");
   const [saving, start] = useTransition();
@@ -54,7 +52,7 @@ export function MemberEditor({ initial }: { initial: MemberForm }) {
   const save = () =>
     start(async () => {
       const result = await updateMember(m);
-      setNotice(result.ok ? { text: result.message, tone: "ok" } : { text: result.error, tone: "error" });
+      toast.result(result);
     });
 
   const savePoints = () =>
@@ -65,7 +63,7 @@ export function MemberEditor({ initial }: { initial: MemberForm }) {
         setReason("");
         set("pointsBalance", m.pointsBalance + Number(delta));
       }
-      setNotice(result.ok ? { text: result.message, tone: "ok" } : { text: result.error, tone: "error" });
+      toast.result(result);
     });
 
   const text = (label: string, key: keyof MemberForm, props: { type?: string; placeholder?: string } = {}) => (
@@ -107,15 +105,6 @@ export function MemberEditor({ initial }: { initial: MemberForm }) {
         </div>
       </div>
 
-      {notice && (
-        <p className={cx(styles.notice, notice.tone === "error" && styles.noticeError)} role={notice.tone === "error" ? "alert" : "status"}>
-          <AdminIcon name={notice.tone === "error" ? "warning-circle" : "check-circle"} size={18} />
-          {notice.text}
-          <button type="button" className={styles.noticeClose} aria-label="Tutup" onClick={() => setNotice(null)}>
-            <AdminIcon name="x" size={14} />
-          </button>
-        </p>
-      )}
 
       <div className={styles.grid}>
         <div className={styles.main}>

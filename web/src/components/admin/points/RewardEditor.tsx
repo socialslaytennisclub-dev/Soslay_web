@@ -11,9 +11,9 @@ import settingsStyles from "../settings/Settings.module.css";
 import { TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton } from "../ui/AdminUI";
-import { ActionNotice, type Notice } from "../ui/ActionNotice";
 import styles from "./Points.module.css";
 import { RewardThumb } from "./RewardCatalog";
+import { toast } from "../ui/Toaster";
 
 const digits = (v: string) => v.replace(/\D/g, "");
 
@@ -31,7 +31,6 @@ export function RewardEditor({ reward, imageOptions, closeHref }: { reward: Admi
     stock: reward.stock === null ? "" : String(reward.stock),
     active: reward.active,
   });
-  const [notice, setNotice] = useState<Notice>(null);
   const [saving, start] = useTransition();
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
 
@@ -49,7 +48,7 @@ export function RewardEditor({ reward, imageOptions, closeHref }: { reward: Admi
   const save = () =>
     start(async () => {
       const result = await saveReward(reward.id, input());
-      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
       if (result.ok && isNew && result.id) router.replace(`/admin/points?reward=${result.id}`, { scroll: false });
     });
 
@@ -58,7 +57,7 @@ export function RewardEditor({ reward, imageOptions, closeHref }: { reward: Admi
     start(async () => {
       const result = await deleteReward(reward.id);
       if (result.ok) router.replace(closeHref, { scroll: false });
-      else setNotice({ text: result.error, error: true });
+      else toast.error(result.error);
     });
   };
 
@@ -138,7 +137,7 @@ export function RewardEditor({ reward, imageOptions, closeHref }: { reward: Admi
         <Toggle label="Tampil di katalog member" hint="Matikan untuk menyembunyikan tanpa menghapus" checked={form.active} onChange={(v) => set("active", v)} />
       </div>
 
-      <ActionNotice notice={notice} />
+      
 
       <div className={styles.buttons}>
         {!isNew && (

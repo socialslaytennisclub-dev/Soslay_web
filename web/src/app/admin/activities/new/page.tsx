@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { SessionEditor } from "@/components/admin/activities/SessionEditor";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { attendancePointDefaults } from "@/server/admin/points-repo";
+import { memberChoices } from "@/server/admin/repo";
 import { activityTypeOptions, getSessionDraft, venueOptions } from "@/server/admin/sessions-repo";
 import pageStyles from "../../page.module.css";
 
@@ -19,7 +20,7 @@ export default async function AdminNewSessionPage({ searchParams }: PageProps<"/
     <>
       <AdminTopbar breadcrumb="CMS / Activities / Buat sesi" title={fromId ? "Duplikat sesi" : "Buat sesi"} />
       <div className={pageStyles.content}>
-        <SessionEditor key={fromId ?? "new"} session={draft} types={activityTypeOptions()} venues={await venueOptions()} mode="new" pointDefaults={pointDefaults} />
+        <SessionEditor key={fromId ?? "new"} session={draft} types={activityTypeOptions()} venues={await venueOptions()} mode="new" pointDefaults={pointDefaults} members={await memberChoices()} />
       </div>
     </>
   );

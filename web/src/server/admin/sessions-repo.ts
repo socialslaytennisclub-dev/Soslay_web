@@ -1,10 +1,12 @@
 import "server-only";
+import { generateLineup, usesLineup } from "@/lib/americano";
 import { venueList } from "@/content/venues";
 import { venueChoices } from "./catalog-repo";
 import { getDataset, type DataSession, type Dataset } from "./dataset";
 import { activityTypeLabels } from "./demo-data";
+import { DEFAULT_PLAY, loadSessionPlay, NO_PHOTOS } from "./play-repo";
 import { DAY } from "./time";
-import type { SessionDetail, SessionDisplayStatus, SessionRow, SessionsQuery, SessionsResult } from "./types";
+import type { SessionDetail, SessionDisplayStatus, SessionParticipant, SessionRow, SessionSort, SessionsQuery, SessionsResult } from "./types";
 
 /**
  * Data Activities (tabel sessions + session_fill). Sama seperti repo.ts: data demo sampai
@@ -69,6 +71,15 @@ function inTab(s: DataSession, tab: SessionsQuery["tab"], now: Date) {
   return future && s.status !== "cancelled";
 }
 
+/** Mode demo tidak menyimpan waktu dibuat → anggap dibuat 3 minggu sebelum sesi. */
+const createdAt = (s: DataSession) => s.createdAt ?? new Date(s.startsAt.getTime() - 21 * DAY);
+
+const SORT_KEY: Record<SessionSort, (a: DataSession, b: DataSession) => number> = {
+  schedule: (a, b) => a.startsAt.getTime() - b.startsAt.getTime(),
+  title: (a, b) => a.title.localeCompare(b.title, "id") || a.startsAt.getTime() - b.startsAt.getTime(),
+  created: (a, b) => createdAt(a).getTime() - createdAt(b).getTime(),
+};
+
 export async function listSessions(query: SessionsQuery): Promise<SessionsResult> {
   const d = await getDataset();
   const { sessions, now } = d;
@@ -77,6 +88,10 @@ export async function listSessions(query: SessionsQuery): Promise<SessionsResult
   const days = query.range && query.range !== "all" ? Number(query.range) : tab === "upcoming" && query.range !== "all" ? 30 : 0;
   const range = days ? { from: isoDay(now), to: isoDay(new Date(now.getTime() + days * DAY)) } : null;
   const q = query.q?.trim().toLowerCase();
+  // Default: mendatang & draft dari jadwal terdekat; selesai & arsip dari yang terbaru.
+  const sort = query.sort ?? "schedule";
+  const dir = query.dir ?? (query.sort ? (sort === "title" ? "asc" : "desc") : tab === "upcoming" || tab === "draft" ? "asc" : "desc");
+  const sign = dir === "asc" ? 1 : -1;
 
   const items = sessions
     .filter((s) => inTab(s, tab, now))
@@ -84,8 +99,7 @@ export async function listSessions(query: SessionsQuery): Promise<SessionsResult
     .filter((s) => !q || s.title.toLowerCase().includes(q) || s.venueName.toLowerCase().includes(q))
     .filter((s) => !query.type || s.typeSlug === query.type)
     .filter((s) => !query.venue || s.venueName === query.venue)
-    .filter((s) => !query.city || venueMeta(s.venueName).city === query.city)
-    .sort((a, b) => (tab === "upcoming" || tab === "draft" ? a.startsAt.getTime() - b.startsAt.getTime() : b.startsAt.getTime() - a.startsAt.getTime()))
+    .sort((a, b) => sign * SORT_KEY[sort](a, b))
     .slice(0, 60)
     .map((s) => toRow(d, s));
 
@@ -100,7 +114,20 @@ export async function listSessions(query: SessionsQuery): Promise<SessionsResult
     venues: [...new Set(sessions.map((s) => s.venueName))].sort(),
     types: Object.entries(activityTypeLabels).map(([slug, label]) => ({ slug, label })),
     range,
+    sort,
+    dir,
   };
+}
+
+/** Mode demo: line-up contoh (acak tetap per sesi), dua ronde pertama sudah berskor. */
+function demoLineup(sessionId: string, participants: SessionParticipant[], play: SessionDetail["play"]): SessionDetail["matches"] {
+  let seed = [...sessionId].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+  const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
+  const players = participants.filter((p) => p.status !== "waitlisted").map((p) => p.id);
+  return generateLineup({ players, courts: play.courtCount, rounds: play.roundCount }, { rand, attempts: 8 }).map((m) => {
+    const a = m.round <= 2 ? Math.floor(rand() * (play.targetPoints + 1)) : null;
+    return { ...m, id: `${sessionId}-r${m.round}-c${m.court}`, scoreA: a, scoreB: a === null ? null : play.targetPoints - a };
+  });
 }
 
 const CREW_POOL = ["Rara Anindya", "Bima Pratama", "Lia Oktaviani", "Gilang Hermawan", "Putri Saraswati"];
@@ -110,16 +137,20 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
   const s = d.sessionById.get(id);
   if (!s) return null;
   const row = toRow(d, s);
-  const participants = d
+  const fromBookings = d
     .bookingsOfSession(id)
     .filter((b) => b.status !== "cancelled" && d.memberById.has(b.memberId))
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
-    .map((b, i) => {
+    .map((b, i): SessionParticipant => {
       const m = d.memberById.get(b.memberId)!;
       return {
+        id: m.id,
         memberId: m.id,
         name: m.fullName,
-        handle: m.instagram,
+        kuyId: m.kuyId,
+        memberCode: m.memberCode,
+        ghostActivities: null,
+        phone: m.phone,
         level: m.level,
         payment: b.payment,
         status: b.status,
@@ -128,6 +159,10 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
         guests: b.guests ?? (i % 9 === 3 ? 1 : 0),
       };
     });
+  const { play, roster, hosts, matches, photos } = await loadSessionPlay(s, d.live);
+  // Peserta hasil import Kuyy menggantikan daftar booking begitu ada.
+  const participants = roster ?? fromBookings;
+  if (!d.live && usesLineup(play.matchFormat)) matches.push(...demoLineup(id, participants, play));
   const seed = Number(id.replace(/\D/g, "")) || 0;
   return {
     ...row,
@@ -154,6 +189,10 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
     participants,
     paid: participants.filter((p) => p.payment === "paid" && p.status !== "waitlisted").length,
     checkedIn: participants.filter((p) => p.checkedIn).length,
+    play,
+    hosts,
+    matches,
+    photos,
   };
 }
 
@@ -180,6 +219,8 @@ export async function getSessionDraft(fromId?: string): Promise<SessionDetail> {
       ...source,
       id: "",
       title: `${source.title} (salinan)`,
+      // Tiap event Kuyy punya link sendiri — jangan ikut tersalin ke sesi baru.
+      kuyUrl: "",
       startsAt: shift(source.startsAt),
       endsAt: shift(source.endsAt),
       status: "draft",
@@ -191,6 +232,10 @@ export async function getSessionDraft(fromId?: string): Promise<SessionDetail> {
       participants: [],
       paid: 0,
       checkedIn: 0,
+      play: { ...source.play, liveStartedAt: null, endedAt: null },
+      hosts: [],
+      matches: [],
+      photos: NO_PHOTOS,
     };
   }
   // Sabtu berikutnya 07.00 WIB (00.00 UTC).
@@ -233,6 +278,10 @@ export async function getSessionDraft(fromId?: string): Promise<SessionDetail> {
     participants: [],
     paid: 0,
     checkedIn: 0,
+    play: DEFAULT_PLAY,
+    hosts: [],
+    matches: [],
+    photos: NO_PHOTOS,
   };
 }
 

@@ -9,8 +9,8 @@ import settingsStyles from "../settings/Settings.module.css";
 import { FormCard } from "../ui/AdminForm";
 import formStyles from "../ui/AdminForm.module.css";
 import { AdminButton, Badge } from "../ui/AdminUI";
-import { ActionNotice, type Notice } from "../ui/ActionNotice";
 import styles from "./Points.module.css";
+import { toast } from "../ui/Toaster";
 
 const digits = (v: string) => Number(v.replace(/\D/g, "")) || 0;
 
@@ -53,7 +53,6 @@ function Switch({ label, checked, onChange }: { label: string; checked: boolean;
 /** Aturan poin (Figma 317:482). Semua angka bisa diisi bebas. */
 export function RulesForm({ initial, types }: { initial: PointRules; types: { slug: string; label: string }[] }) {
   const [r, setR] = useState(initial);
-  const [notice, setNotice] = useState<Notice>(null);
   const [saving, start] = useTransition();
   const dirty = JSON.stringify(r) !== JSON.stringify(initial);
   const set = <K extends keyof PointRules>(key: K, value: PointRules[K]) => setR((prev) => ({ ...prev, [key]: value }));
@@ -61,7 +60,7 @@ export function RulesForm({ initial, types }: { initial: PointRules; types: { sl
   const save = () =>
     start(async () => {
       const result = await savePointRules(r);
-      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
     });
 
   return (
@@ -129,13 +128,12 @@ export function RulesForm({ initial, types }: { initial: PointRules; types: { sl
       </div>
 
       <div className={styles.footer}>
-        <ActionNotice notice={notice} />
+        
         <span className={styles.hint}>Perubahan berlaku untuk poin berikutnya</span>
         <AdminButton
           disabled={!dirty || saving}
           onClick={() => {
             setR(initial);
-            setNotice(null);
           }}
         >
           Batalkan
@@ -153,7 +151,6 @@ export function BulkBonus({ segments }: { segments: { id: string; name: string; 
   const [segmentId, setSegmentId] = useState(segments[0]?.id ?? "");
   const [points, setPoints] = useState(100);
   const [reason, setReason] = useState("");
-  const [notice, setNotice] = useState<Notice>(null);
   const [saving, start] = useTransition();
   const segment = segments.find((s) => s.id === segmentId);
 
@@ -161,7 +158,7 @@ export function BulkBonus({ segments }: { segments: { id: string; name: string; 
     if (!segment || !window.confirm(`Kirim +${points.toLocaleString("id-ID")} pts ke ${segment.count} member "${segment.name}"?`)) return;
     start(async () => {
       const result = await sendBulkBonus(segmentId, points, reason);
-      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
       if (result.ok) setReason("");
     });
   };
@@ -195,7 +192,7 @@ export function BulkBonus({ segments }: { segments: { id: string; name: string; 
           {saving ? "Mengirim…" : `Kirim ke ${segment?.count ?? 0} member`}
         </AdminButton>
       </div>
-      <ActionNotice notice={notice} />
+      
     </FormCard>
   );
 }

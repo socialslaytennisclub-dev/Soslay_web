@@ -148,9 +148,9 @@ Skala inti yang direkomendasikan untuk kode: **4 · 8 · 12 · 16 · 20 · 24 ·
 
 ### 2.6 Ikon
 
-**Phosphor Icons** (regular 24px, beberapa `-bold`). Sheet ikon resmi ada di `25:3057`:
+**Admin: Lucide** (`lucide-react`, grid 24, stroke 1.75; nama berakhiran `-bold` = stroke 2.5). Nama ikon tetap mengikuti sheet Figma `25:3057` — pemetaannya ke Lucide ada di `src/components/admin/ui/AdminIcon.tsx` (logo Instagram & bola tenis digambar sendiri bergaya Lucide; WhatsApp memakai `MessageCircle`):
 `squares-four, users-three, user, calendar-dots, map-pin, t-shirt, receipt, layout, images, gear-six, magnifying-glass, bell-simple, funnel-simple, download-simple, caret-down/right/left, pencil-simple, eye, upload-simple, dots-six-vertical, trend-up/down, clock, whatsapp-logo, instagram-logo, envelope-simple, phone, image, tag, sign-out, star, x, coins, shopping-bag-open, tennis-ball, qr-code, copy, trash, arrows-down-up, crown-simple, package, truck, link-simple, globe-simple, question, arrow-up-right, check-circle, warning-circle, note-pencil, user-plus, calendar-plus, sliders-horizontal, text-t, list-bullets, map-trifold, storefront, chat-circle-text, shield-check, key, plus-bold, check-bold, dots-three(-vertical)-bold`.
-→ Pakai paket `@phosphor-icons/react`.
+→ Ikon baru: tambahkan nama + komponen Lucide di `AdminIcon.tsx`.
 
 ---
 

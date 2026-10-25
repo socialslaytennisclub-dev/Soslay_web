@@ -3,6 +3,12 @@
   background: var(--color-indigo-50);
 }
 
+/* Tombol × bawaan di kolom pencarian diganti SearchClear (ikon Lucide). */
+.shell input[type="search"]::-webkit-search-cancel-button,
+.shell input[type="search"]::-webkit-search-decoration {
+  appearance: none;
+}
+
 .main {
   min-width: 0;
 }

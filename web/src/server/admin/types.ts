@@ -168,10 +168,14 @@ export type SessionsQuery = {
   q?: string;
   type?: string;
   venue?: string;
-  city?: string;
   /** Rentang tanggal: "7" / "30" / "90" hari dari hari ini, atau "all". Default tab Mendatang = 30. */
   range?: "7" | "30" | "90" | "all";
+  /** Urutan: jadwal sesi, judul, atau waktu dibuat. Kosong = default per tab. */
+  sort?: SessionSort;
+  dir?: "asc" | "desc";
 };
+
+export type SessionSort = "schedule" | "title" | "created";
 
 export type SessionsResult = {
   items: SessionRow[];
@@ -179,13 +183,27 @@ export type SessionsResult = {
   venues: string[];
   types: { slug: string; label: string }[];
   range: { from: string; to: string } | null;
+  /** Urutan yang benar-benar dipakai (default per tab kalau query kosong). */
+  sort: SessionSort;
+  dir: "asc" | "desc";
 };
 
 export type SessionParticipant = {
-  memberId: string;
+  /** session_participants.id (import Kuyy); mode demo = id member. */
+  id: string;
+  /** Member Soslay yang cocok — null untuk tamu tanpa akun. */
+  memberId: string | null;
   name: string;
-  handle: string;
-  level: TennisLevel;
+  /** Username yang ditampilkan: member → username Soslay (Kuy ID di profilnya, bisa beda dengan
+   *  username di file Kuyy); belum member → username Kuyy dari file (tidak ditampilkan di UI). */
+  kuyId: string;
+  /** ID Soslay (nomor member, mis. "SOS 0541 2610") — ID utama member; kosong untuk ghost. */
+  memberCode: string;
+  /** Belum member → ghost member; jumlah aktivitas Soslay yang sudah dia ikuti (termasuk sesi ini). */
+  ghostActivities: number | null;
+  /** Nomor WhatsApp tanpa +62/0 (dari Kuyy / profil) — untuk undangan daftar member. */
+  phone: string;
+  level: TennisLevel | null;
   payment: PaymentStatus;
   status: BookingStatus;
   source: "website" | "kuy" | "admin";
@@ -214,7 +232,72 @@ export type SessionDetail = SessionRow & {
   participants: SessionParticipant[];
   paid: number;
   checkedIn: number;
+  play: SessionPlay;
+  /** Member yang ditunjuk host khusus sesi ini (hak berakhir saat sesi diakhiri). */
+  hosts: SessionHost[];
+  matches: SessionMatch[];
+  photos: SessionPhotos;
 };
+
+/** rotating = Rotating Partner (partner berganti tiap ronde, tim diseimbangkan per level). */
+export type MatchFormat = "none" | "americano" | "rotating" | "round_robin" | "knockout";
+
+export type SessionPlay = {
+  matchFormat: MatchFormat;
+  courtCount: number;
+  roundCount: number;
+  targetPoints: number;
+  scoreEntry: "host" | "participants";
+  /** Peringkat dari total poin atau jumlah menang. */
+  leaderboardMode: "points" | "wins";
+  showLeaderboard: boolean;
+  liveStartedAt: string | null;
+  endedAt: string | null;
+};
+
+/** Member yang jadi crew sesi: host (akses Panel Host) atau fotografer. */
+export type SessionHost = { memberId: string; name: string; code: string; role: "host" | "photographer" };
+
+/** Foto sesi: album Google Drive + 1 thumbnail, tampil di halaman Sesi Selesai member. */
+export type SessionPhotos = { albumUrl: string; coverPath: string | null; count: number | null; postedAt: string | null };
+
+/** Pemain = SessionParticipant.id. Skor null = belum dimainkan. */
+export type SessionMatch = {
+  /** session_matches.id — kosong untuk line-up yang belum disimpan. */
+  id?: string;
+  round: number;
+  court: number;
+  a: [string, string];
+  b: [string, string];
+  scoreA: number | null;
+  scoreB: number | null;
+};
+
+/** Hasil baca XLSX Kuyy + kecocokan dengan member Soslay (preview sebelum impor). */
+export type KuyImportPreviewRow = {
+  regNo: string;
+  name: string;
+  email: string;
+  phone: string;
+  instagram: string;
+  level: TennisLevel | null;
+  levelRaw: string;
+  username: string;
+  amount: number;
+  paymentMethod: string;
+  ticket: string;
+  ticketPrice: number;
+  skipReason: string | null;
+  member: { id: string; name: string; code: string; username: string; by: "email" | "telepon" | "Kuy ID" } | null;
+  /** Sudah ada di sesi ini (import sebelumnya) → akan diperbarui. */
+  existing: boolean;
+  /** Belum jadi member: "whatsapp" = bisa diundang daftar lewat link wa.me; "none" = tanpa nomor, tetap tamu. */
+  invite: "whatsapp" | "none" | null;
+  /** Belum member tapi sudah tercatat sebagai ghost dari aktivitas sebelumnya (jumlah aktivitasnya). */
+  ghost: { activities: number } | null;
+};
+
+export type KuyImportPreview = { fileName: string; fileSize: number; eventTitle: string; rows: KuyImportPreviewRow[] };
 
 // ── Orders ──────────────────────────────────────────────────────────────────
 

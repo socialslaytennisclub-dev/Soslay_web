@@ -84,3 +84,18 @@
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
+
+.cardLink {
+  display: block;
+  border-radius: var(--radius-xl);
+  transition: transform var(--duration-base) var(--ease-out);
+}
+
+.cardLink:hover {
+  transform: translateY(-4px);
+}
+
+.cardLink:focus-visible {
+  outline: 3px solid var(--color-indigo-600);
+  outline-offset: 3px;
+}

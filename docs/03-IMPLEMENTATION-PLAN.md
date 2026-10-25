@@ -11,7 +11,7 @@
 | Framework | **Next.js 15 (App Router) + TypeScript** | Satu codebase untuk website (SSG/ISR, SEO), member area, dan admin. |
 | Styling | **Tailwind CSS v4** dengan token dari Figma (`@theme`) | Token langsung jadi utility (`bg-navy-900`, `text-lime-500`). |
 | Komponen admin | **shadcn/ui** (Radix) di-theme ulang ke token Soslay | Tabel, dialog, dropdown, command palette (`⌘K`) siap pakai & aksesibel. |
-| Ikon | `@phosphor-icons/react` | Sesuai sheet ikon Figma. |
+| Ikon | `lucide-react` (admin) | Nama sesuai sheet ikon Figma, dipetakan di `AdminIcon.tsx`. |
 | Font | `next/font/google` — Poppins (500–800), Inter (400–700) | Self-hosted, tanpa CLS. |
 | Chart | Recharts (bar, ring) + komponen heatmap custom | |
 | Form & validasi | React Hook Form + Zod (schema dipakai bersama client/server) | |

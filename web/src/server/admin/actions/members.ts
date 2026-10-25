@@ -1,9 +1,8 @@
 "use server";
 
-import { headers } from "next/headers";
 import { isEmail } from "@/lib/auth";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { inviteMemberByEmail, requestOrigin } from "../invite";
 import type { MemberForm, MembersQuery } from "../types";
 import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } from "./common";
 
@@ -40,9 +39,6 @@ export async function addMember(input: NewMemberInput): Promise<ActionResult> {
   if (!isEmail(email)) return fail("Email tidak valid.");
   if (phone && phone.length < 9) return fail("Nomor WhatsApp terlalu pendek.");
 
-  const admin = createSupabaseAdminClient();
-  if (!admin) return fail("Tambah member belum aktif: SUPABASE_SERVICE_ROLE_KEY belum dipasang di server.");
-
   const supabase = await createSupabaseServerClient();
   const [{ data: existing }, kuy] = await Promise.all([
     supabase.from("profiles").select("full_name").eq("email", email).maybeSingle(),
@@ -51,17 +47,17 @@ export async function addMember(input: NewMemberInput): Promise<ActionResult> {
   if (existing) return fail(`Email ini sudah terdaftar sebagai member (${existing.full_name}).`);
   if (kuy.data === false) return fail(`Kuy ID @${kuyId} sudah dipakai member lain.`);
 
-  const h = await headers();
-  const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("x-forwarded-host") ?? h.get("host")}`;
-  const { data, error } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${origin}/auth/undangan`,
-    data: { signup: "member", full_name: fullName, phone, kuy_id: kuyId, city: input.city.trim(), tennis_level: orNull(input.level, ENUMS.level) ?? "" },
-  });
-  if (error || !data.user) {
-    const taken = /already|registered|exists/i.test(error?.message ?? "");
-    return fail(taken ? "Email ini sudah punya akun Soslay (mis. akun tim) — minta dia daftar sendiri atau hubungi Super Admin." : `Gagal membuat akun: ${error?.message ?? "coba lagi"}`);
+  const invite = await inviteMemberByEmail(
+    { fullName, email, phone, kuyId, city: input.city.trim(), level: orNull(input.level, ENUMS.level) ?? "" },
+    await requestOrigin(),
+  );
+  if (!invite.ok) {
+    if (invite.reason === "no_service_key") return fail("Tambah member belum aktif: SUPABASE_SERVICE_ROLE_KEY belum dipasang di server.");
+    if (invite.reason === "taken") return fail("Email ini sudah punya akun Soslay (mis. akun tim) — minta dia daftar sendiri atau hubungi Super Admin.");
+    if (invite.reason === "rate_limited") return fail("Batas kirim email Supabase tercapai — coba lagi beberapa saat lagi.");
+    return fail(`Gagal membuat akun: ${invite.error}`);
   }
-  await audit(auth.userId, `menambah member ${fullName}`, "member", data.user.id);
+  await audit(auth.userId, `menambah member ${fullName}`, "member", invite.userId);
   refreshPaths("/admin/members");
   return done(`${fullName} ditambahkan. Undangan terkirim ke ${email} — dia tinggal klik link di email dan membuat password.`);
 }

@@ -183,3 +183,97 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert(pa?.city === "Bandung" && pa?.tennis_level === "intermediate", `tambah member admin ${JSON.stringify(pa)}`);
   console.log("✓ daftar member: profil otomatis dari metadata (+ kota/level dari admin), staf tidak, cek Kuy ID");
 }
+
+// Sesi Americano: peserta import Kuyy, host per sesi (berakhir saat sesi diakhiri), skor host.
+{
+  const newMember = async (name, email) => {
+    const { id } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, name, email]);
+    return id;
+  };
+  const venueId = (await one(`select id from venues limit 1`)).id;
+  const s = (
+    await one(
+      `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, match_format, points_per_attendance)
+       values ('slay-am', 'Slaymericano', 'weekly-mabar', $1, now(), now() + interval '4 hours', 18, 'published', 'americano', 50) returning id`,
+      [venueId],
+    )
+  ).id;
+  const hostId = await newMember("Host Arya", "host@mail.com");
+  const player = await newMember("Pemain Member", "pemain@mail.com");
+  const outsider = await newMember("Bukan Host", "lain@mail.com");
+  await db.query(`insert into session_hosts (session_id, member_id) values ($1, $2)`, [s, hostId]);
+  const ids = [];
+  for (const [i, name] of ["Gavin", "Lucky", "Nadya", "Pemain Member"].entries()) {
+    const row = await one(
+      `insert into session_participants (session_id, full_name, kuy_reg_no, member_id, amount) values ($1, $2, $3, $4, 255000) returning id`,
+      [s, name, `U${i + 1}`, name === "Pemain Member" ? player : null],
+    );
+    ids.push(row.id);
+  }
+  const booking = await one(`select status, source, payment_status from bookings where session_id = $1 and member_id = $2`, [s, player]);
+  console.assert(booking?.source === "kuy" && booking.payment_status === "paid", `booking import ${JSON.stringify(booking)}`);
+  const match = (await one(`insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2) values ($1, 1, 1, $2, $3, $4, $5) returning id`, [s, ...ids])).id;
+
+  const fails = async (sql, params) => {
+    try {
+      await db.query(sql, params);
+      return false;
+    } catch {
+      return true;
+    }
+  };
+  const ptsBefore = Number((await one(`select points_balance from member_stats where member_id = $1`, [player])).points_balance);
+  await as(outsider);
+  console.assert(await fails(`select save_match_score($1, 12::smallint, 9::smallint)`, [match]), "member biasa bisa input skor!");
+  console.assert(!(await one(`select is_session_host($1) ok`, [s])).ok, "member biasa dianggap host");
+  await as(hostId);
+  console.assert((await one(`select is_session_host($1) ok`, [s])).ok, "host tidak dikenali");
+  console.assert(await fails(`select save_match_score($1, 12::smallint, 8::smallint)`, [match]), "total ≠ 21 diterima!");
+  await db.query(`select save_match_score($1, 12::smallint, 9::smallint)`, [match]);
+  await db.query(`select set_participant_check_in($1, true)`, [ids[3]]);
+  await as(null);
+  const scored = await one(`select score_a, score_b, scored_by from session_matches where id = $1`, [match]);
+  console.assert(scored.score_a === 12 && scored.score_b === 9 && scored.scored_by === hostId, `skor host ${JSON.stringify(scored)}`);
+  const attended = await one(`select status from bookings where session_id = $1 and member_id = $2`, [s, player]);
+  const pts = Number((await one(`select points_balance from member_stats where member_id = $1`, [player])).points_balance);
+  console.assert(attended.status === "attended" && pts - ptsBefore === 50, `check-in host → booking ${attended.status}, poin ${pts}`);
+
+  // Sesi diakhiri → hak host berakhir, kembali member biasa.
+  await db.query(`update sessions set ended_at = now(), status = 'completed' where id = $1`, [s]);
+  await as(hostId);
+  console.assert(!(await one(`select is_session_host($1) ok`, [s])).ok, "host masih aktif setelah sesi diakhiri!");
+  console.assert(await fails(`select save_match_score($1, 10::smallint, 11::smallint)`, [match]), "host bisa ubah skor setelah sesi diakhiri!");
+  await as(null);
+  console.log("✓ americano: import Kuyy → booking member, host input skor (total 21) & check-in (+50 pts), hak host berakhir saat sesi diakhiri");
+}
+
+// Ghost member: peserta belum daftar dikumpulkan per Kuy ID; saat daftar → riwayat & poin pindah ke akunnya.
+{
+  const venueId = (await one(`select id from venues limit 1`)).id;
+  const mkSession = async (slug, startsAt) =>
+    (await one(
+      `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, points_per_attendance)
+       values ($1, 'Mabar Ghost', 'weekly-mabar', $2, $3::timestamptz, $3::timestamptz + interval '3 hours', 20, 'published', 50) returning id`,
+      [slug, venueId, startsAt],
+    )).id;
+  const s1 = await mkSession("ghost-1", "2026-09-01T00:00:00Z");
+  const s2 = await mkSession("ghost-2", "2026-09-08T00:00:00Z");
+  const ghost = (await one(`insert into ghost_members (kuy_id, full_name, email, phone) values ('dindatest', 'Dinda P', 'dinda@ghost.test', '81200000102') returning id`)).id;
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, ghost_id, checked_in_at) values ($1, 'Dinda P', 'U1', $2, now())`, [s1, ghost]);
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, ghost_id) values ($1, 'Dinda P', 'U3', $2)`, [s2, ghost]);
+  const before = await one(`select count(*)::int n from bookings b join profiles p on p.id = b.member_id where p.email = 'dinda@ghost.test'`);
+  console.assert(before.n === 0, "ghost belum punya booking");
+
+  // Daftar lewat website (email beda, Kuy ID sama) → ghost diklaim.
+  const u = await one(`insert into auth.users (email, raw_user_meta_data) values ('dinda.baru@mail.com', $1) returning id`, [{ signup: "member", full_name: "Dinda Prameswari", kuy_id: "DindaTest" }]);
+  const claimed = await one(`select claimed_by from ghost_members where id = $1`, [ghost]);
+  const linked = await one(`select count(*)::int n from session_participants where ghost_id = $1 and member_id = $2`, [ghost, u.id]);
+  const bookings = await db.query(`select status::text from bookings where member_id = $1 order by status::text`, [u.id]);
+  const pts = Number((await one(`select points_balance from member_stats where member_id = $1`, [u.id])).points_balance);
+  console.assert(claimed.claimed_by === u.id, "ghost tidak diklaim saat daftar");
+  console.assert(linked.n === 2, `riwayat ghost tertaut ${linked.n}`);
+  console.assert(bookings.rows.map((r) => r.status).join() === "attended,registered", `booking ghost ${JSON.stringify(bookings.rows)}`);
+  console.assert(pts >= 50, `poin kehadiran ghost ${pts}`);
+  console.log(`✓ ghost member: 2 aktivitas dikenali via Kuy ID, daftar → riwayat pindah + poin hadir (${pts} pts)`);
+}

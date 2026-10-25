@@ -9,11 +9,11 @@ import { deleteTestimonial, saveTestimonial, setTestimonialVisible, type Testimo
 import type { AdminTestimonial, MemberChoice } from "@/server/admin/types";
 import ordersStyles from "../orders/Orders.module.css";
 import settingsStyles from "../settings/Settings.module.css";
-import { ActionNotice, type Notice } from "../ui/ActionNotice";
 import { TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge } from "../ui/AdminUI";
 import styles from "./Testimonials.module.css";
+import { toast } from "../ui/Toaster";
 
 const toInput = (t: AdminTestimonial): TestimonialInput => ({
   kind: t.kind,
@@ -33,7 +33,6 @@ type Props = { initial: AdminTestimonial[]; members: MemberChoice[]; empty: Admi
 export function TestimonialManager({ initial, members, empty }: Props) {
   const [items, setItems] = useState(initial);
   const [editing, setEditing] = useState<AdminTestimonial | null>(null);
-  const [notice, setNotice] = useState<Notice>(null);
   const [pending, start] = useTransition();
   const videos = items.filter((t) => t.kind === "video").length;
 
@@ -44,7 +43,7 @@ export function TestimonialManager({ initial, members, empty }: Props) {
     start(async () => {
       const result = await setTestimonialVisible(t.id, next);
       if (!result.ok) apply(!next);
-      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
     });
   };
 
@@ -56,7 +55,7 @@ export function TestimonialManager({ initial, members, empty }: Props) {
         setItems((list) => list.filter((x) => x.id !== t.id));
         if (editing?.id === t.id) setEditing(null);
       }
-      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
     });
   };
 
@@ -82,7 +81,7 @@ export function TestimonialManager({ initial, members, empty }: Props) {
             Tambah testimoni
           </AdminButton>
         </header>
-        <ActionNotice notice={notice} />
+        
         {items.length === 0 ? (
           <p className={ordersStyles.empty}>Belum ada testimoni. Tambahkan kutipan atau video member pertama.</p>
         ) : (
@@ -157,7 +156,6 @@ function TestimonialEditor({ testimonial, members, onClose, onSaved, onDelete }:
   const isNew = !testimonial.id;
   const [form, setForm] = useState<TestimonialInput>(toInput(testimonial));
   const [source, setSource] = useState<"link" | "upload">(testimonial.videoPlatform === "upload" ? "upload" : "link");
-  const [notice, setNotice] = useState<Notice>(null);
   const [saving, start] = useTransition();
   const set = <K extends keyof TestimonialInput>(key: K, value: TestimonialInput[K]) => setForm((f) => ({ ...f, [key]: value }));
   const platform = detectVideoPlatform(form.videoUrl ?? "");
@@ -168,7 +166,7 @@ function TestimonialEditor({ testimonial, members, onClose, onSaved, onDelete }:
   const save = () =>
     start(async () => {
       const result = await saveTestimonial(testimonial.id, form);
-      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
       if (result.ok && result.id) {
         onSaved({
           ...testimonial,
@@ -322,7 +320,7 @@ function TestimonialEditor({ testimonial, members, onClose, onSaved, onDelete }:
         <Toggle label="Tampil di homepage" hint="Section “The People Make the Game”" checked={form.visible} onChange={(v) => set("visible", v)} />
       </div>
 
-      <ActionNotice notice={notice} />
+      
       <div className={styles.actions}>
         {!isNew && (
           <AdminButton variant="ghost" icon="trash" className={styles.danger} onClick={onDelete} disabled={saving}>

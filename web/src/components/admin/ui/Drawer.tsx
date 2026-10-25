@@ -1,6 +1,7 @@
 "use client";
 
 import type { MouseEvent, ReactNode, RefObject } from "react";
+import { cx } from "@/lib/cx";
 import { AdminIcon } from "./AdminIcon";
 import styles from "./Drawer.module.css";
 
@@ -12,6 +13,8 @@ type DrawerProps = {
   onBackdropClick: (event: MouseEvent<HTMLDialogElement>) => void;
   /** Tombol aksi yang menempel di bawah panel (mis. Batal / Simpan). */
   footer?: ReactNode;
+  /** "wide" untuk isi bertabel (mis. preview impor peserta). */
+  size?: "default" | "wide";
   children: ReactNode;
 };
 
@@ -19,9 +22,9 @@ type DrawerProps = {
  * Panel samping admin yang mengambang di kanan (jarak 16px dari tepi) dan meluncur masuk. Dibangun di atas <dialog> native
  * (fokus terkunci, Esc, klik latar untuk menutup) — pakai bersama hook useDialog().
  */
-export function Drawer({ dialogRef, title, subtitle, onClose, onBackdropClick, footer, children }: DrawerProps) {
+export function Drawer({ dialogRef, title, subtitle, onClose, onBackdropClick, footer, size = "default", children }: DrawerProps) {
   return (
-    <dialog ref={dialogRef} className={styles.drawer} aria-label={title} onClick={onBackdropClick}>
+    <dialog ref={dialogRef} className={cx(styles.drawer, size === "wide" && styles.wide)} aria-label={title} onClick={onBackdropClick}>
       <div className={styles.panel}>
         <header className={styles.header}>
           <div>

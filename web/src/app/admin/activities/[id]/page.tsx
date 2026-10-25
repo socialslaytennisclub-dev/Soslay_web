@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { SessionEditor } from "@/components/admin/activities/SessionEditor";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
+import { memberChoices } from "@/server/admin/repo";
 import { activityTypeOptions, getSession, venueOptions } from "@/server/admin/sessions-repo";
 import pageStyles from "../../page.module.css";
 
@@ -25,7 +26,7 @@ export default async function AdminSessionPage({ params, searchParams }: PagePro
     <>
       <AdminTopbar breadcrumb={`CMS / Activities / ${session.title}`} title="Edit sesi" />
       <div className={pageStyles.content}>
-        <SessionEditor key={session.id} session={session} types={activityTypeOptions()} venues={await venueOptions()} mode="edit" initialNotice={typeof saved === "string" ? SAVED[saved] : undefined} />
+        <SessionEditor key={session.id} session={session} types={activityTypeOptions()} venues={await venueOptions()} mode="edit" members={await memberChoices()} initialNotice={typeof saved === "string" ? SAVED[saved] : undefined} />
       </div>
     </>
   );

@@ -5,6 +5,7 @@ import { useEffect, useState, useTransition } from "react";
 import { LEVEL_LABEL, TIER_LABEL } from "@/lib/admin-labels";
 import { AdminIcon } from "../ui/AdminIcon";
 import styles from "./Members.module.css";
+import { SearchClear } from "../ui/AdminUI";
 
 const FREQUENCIES = ["First time / Rarely", "1–2x/month", "1x/week", "2–3x/week", "4x+/week"];
 const INTERESTS = ["Meet new people", "Improve my tennis", "Join tennis events", "Find tennis partners", "Travel & play tennis", "Tennis Trip / Destination", "Tennis + Dining", "Social Match"];
@@ -54,6 +55,7 @@ export function MembersFilters({ cities }: { cities: string[] }) {
         <AdminIcon name="magnifying-glass" size={18} />
         <span className="visually-hidden">Cari member</span>
         <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nama, email, Kuy ID, Instagram…" />
+        {q && <SearchClear onClear={() => setQ("")} />}
         {pending && (
           <span className={styles.searching} role="status">
             <span className={styles.spinner} aria-hidden />

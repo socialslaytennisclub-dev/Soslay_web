@@ -96,20 +96,6 @@
   color: var(--color-navy-900);
 }
 
-.noticeError {
-  border-color: rgb(236 72 153 / 0.35);
-  background: rgb(253 236 245);
-}
-
-.noticeClose {
-  display: grid;
-  place-items: center;
-  width: 24px;
-  height: 24px;
-  margin-left: auto;
-  border-radius: var(--radius-md);
-}
-
 /* ── Kartu ── */
 .card {
   display: flex;

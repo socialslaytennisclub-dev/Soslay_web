@@ -192,6 +192,14 @@ export const memberSessions: MemberSession[] = [
   },
 ];
 
+/** Mendatang (terdekat dulu) & riwayat (terbaru dulu) — Dashboard "Activity" + tab My Activities. */
+export function splitSessions(sessions: MemberSession[]) {
+  return {
+    upcoming: sessions.filter((s) => s.status !== "done").sort((a, b) => a.date.localeCompare(b.date)),
+    past: sessions.filter((s) => s.status === "done").sort((a, b) => b.date.localeCompare(a.date)),
+  };
+}
+
 export const sessionStatusLabel: Record<MemberSessionStatus, string> = {
   upcoming: "Upcoming",
   registered: "Terdaftar",

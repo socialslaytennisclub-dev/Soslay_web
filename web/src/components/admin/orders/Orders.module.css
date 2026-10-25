@@ -422,10 +422,6 @@ td.strong {
   }
 }
 
-.noticeError {
-  background: rgb(253 236 245);
-}
-
 .textAction {
   align-self: flex-start;
   font-family: var(--font-ui);

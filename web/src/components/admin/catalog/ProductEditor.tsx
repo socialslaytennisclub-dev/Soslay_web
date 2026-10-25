@@ -11,6 +11,7 @@ import { FormCard, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge } from "../ui/AdminUI";
 import own from "./Catalog.module.css";
+import { toast, ToastOnMount } from "../ui/Toaster";
 
 type Props = {
   initial: ProductForm;
@@ -36,7 +37,6 @@ const digits = (v: string) => v.replace(/\D/g, "");
 /** Tambah / edit produk Shop. Foto memakai gambar yang sudah ada sampai upload tersedia. */
 export function ProductEditor({ initial, categories, imageOptions, initialNotice }: Props) {
   const [p, setP] = useState(initial);
-  const [notice, setNotice] = useState<{ text: string; tone: "ok" | "error" } | null>(initialNotice ? { text: initialNotice, tone: "ok" } : null);
   const [saving, start] = useTransition();
   const set = <K extends keyof ProductForm>(key: K, value: ProductForm[K]) => setP((prev) => ({ ...prev, [key]: value }));
   const isNew = !initial.id && !initial.slug;
@@ -45,14 +45,14 @@ export function ProductEditor({ initial, categories, imageOptions, initialNotice
   const save = () =>
     start(async () => {
       const result = await saveProduct(p);
-      setNotice(result.ok ? { text: result.message, tone: "ok" } : { text: result.error, tone: "error" });
+      toast.result(result);
     });
 
   const remove = () => {
     if (!p.id || !window.confirm(`Hapus produk "${p.name}"? Riwayat order tetap tersimpan.`)) return;
     start(async () => {
       const result = await deleteProduct(p.id!);
-      if (!result.ok) setNotice({ text: result.error, tone: "error" });
+      if (!result.ok) toast.error(result.error);
     });
   };
 
@@ -96,15 +96,7 @@ export function ProductEditor({ initial, categories, imageOptions, initialNotice
         </div>
       </div>
 
-      {notice && (
-        <p className={cx(styles.notice, notice.tone === "error" && styles.noticeError)} role={notice.tone === "error" ? "alert" : "status"}>
-          <AdminIcon name={notice.tone === "error" ? "warning-circle" : "check-circle"} size={18} />
-          {notice.text}
-          <button type="button" className={styles.noticeClose} aria-label="Tutup" onClick={() => setNotice(null)}>
-            <AdminIcon name="x" size={14} />
-          </button>
-        </p>
-      )}
+      {initialNotice && <ToastOnMount text={initialNotice} />}
 
       <div className={styles.grid}>
         <div className={styles.main}>

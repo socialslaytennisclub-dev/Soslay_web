@@ -8,8 +8,9 @@ import { cx } from "@/lib/cx";
 import { setProductVisible } from "@/server/admin/actions/catalog";
 import type { AdminProduct } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
-import { AdminButton, Badge, desktopOnlyClass, MobileCard, MobileCardList } from "../ui/AdminUI";
+import { AdminButton, Badge, desktopOnlyClass, MobileCard, MobileCardList, SearchClear } from "../ui/AdminUI";
 import styles from "./Catalog.module.css";
+import { toast, ToastOnMount } from "../ui/Toaster";
 
 type Props = { initial: AdminProduct[]; categories: { value: string; label: string }[]; lowStock: number; initialNotice?: string };
 
@@ -20,7 +21,6 @@ export function ProductsTable({ initial, categories, lowStock, initialNotice }: 
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
   const [stock, setStock] = useState("");
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(initialNotice ? { text: initialNotice } : null);
   const [pending, startToggle] = useTransition();
 
   const toggleVisible = (p: AdminProduct) => {
@@ -30,7 +30,7 @@ export function ProductsTable({ initial, categories, lowStock, initialNotice }: 
     startToggle(async () => {
       const result = await setProductVisible(p.slug, next);
       if (!result.ok) apply(!next);
-      setNotice(result.ok ? { text: result.message } : { text: result.error, error: true });
+      toast.result(result);
     });
   };
 
@@ -121,11 +121,7 @@ export function ProductsTable({ initial, categories, lowStock, initialNotice }: 
         </div>
       )}
 
-      {notice && (
-        <p className={cx(styles.notice, notice.error && styles.noticeError)} role={notice.error ? "alert" : "status"}>
-          {notice.text}
-        </p>
-      )}
+      {initialNotice && <ToastOnMount text={initialNotice} />}
 
       <section className={styles.panel}>
         <div className={styles.filters}>
@@ -133,6 +129,7 @@ export function ProductsTable({ initial, categories, lowStock, initialNotice }: 
             <AdminIcon name="magnifying-glass" size={18} />
             <span className="visually-hidden">Cari produk</span>
             <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Cari nama produk atau SKU…" />
+        {q && <SearchClear onClear={() => setQ("")} />}
           </label>
           <label className={styles.select}>
             <AdminIcon name="eye" size={16} />

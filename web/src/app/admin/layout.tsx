@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AdminSidebar } from "@/components/admin/shell/AdminSidebar";
+import { Toaster } from "@/components/admin/ui/Toaster";
 import { pendingRedemptionCount } from "@/server/admin/points-repo";
 import { getSidebarCounts } from "@/server/admin/repo";
 import { canAccess, getAdminSession } from "@/server/admin/session";
@@ -66,6 +67,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
         canSignOut={session.mode === "live"}
       />
       <div className={styles.main}>{children}</div>
+      <Toaster />
     </div>
   );
 }
