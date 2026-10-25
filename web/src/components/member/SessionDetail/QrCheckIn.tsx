@@ -27,7 +27,8 @@ export function QrCheckIn({ qrSvg, code, holder, title, openNote }: { qrSvg: str
     const url = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
     const a = Object.assign(document.createElement("a"), { href: url, download: `e-ticket-${code}.svg` });
     a.click();
-    URL.revokeObjectURL(url);
+    // Safari / Firefox membaca blob setelah klik selesai — jangan dicabut di tick yang sama.
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
 
   return (

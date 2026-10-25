@@ -394,7 +394,13 @@ export async function removeParticipants(sessionId: string, participants: { id: 
     if (error) return { ok: false, error: `Gagal menghapus: ${error.message}` };
     const memberIds = rows!.map((r) => r.member_id as string | null).filter((id): id is string => Boolean(id));
     if (memberIds.length) {
-      await supabase.from("bookings").delete().eq("session_id", sessionId).in("source", ["kuy", "admin"]).eq("status", "registered").in("member_id", memberIds);
+      // Booking hasil impor / tambahan admin dihapus; booking yang dibuat member sendiri di website
+      // dibatalkan — keduanya supaya sesi hilang dari My Activities member itu.
+      const bookings = () => supabase.from("bookings");
+      await Promise.all([
+        bookings().delete().eq("session_id", sessionId).eq("status", "registered").in("member_id", memberIds).in("source", ["kuy", "admin"]),
+        bookings().update({ status: "cancelled" }).eq("session_id", sessionId).eq("status", "registered").in("member_id", memberIds).eq("source", "website"),
+      ]);
     }
     names.push(...rows!.map((r) => r.full_name as string));
   }

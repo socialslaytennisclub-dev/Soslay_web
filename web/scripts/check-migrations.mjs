@@ -239,6 +239,21 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const pts = Number((await one(`select points_balance from member_stats where member_id = $1`, [player])).points_balance);
   console.assert(attended.status === "attended" && pts - ptsBefore === 50, `check-in host → booking ${attended.status}, poin ${pts}`);
 
+  // Sesi visibilitas Link tetap terbaca oleh pesertanya (My Activities), tidak oleh member lain.
+  // (checker berjalan sebagai superuser → RLS diuji dengan role authenticated.)
+  await db.query(`update sessions set visibility = 'link' where id = $1`, [s]);
+  await db.exec(`grant usage on schema public to authenticated; grant select on sessions to authenticated;`);
+  const visibleTo = async (uid) => {
+    await as(uid);
+    await db.exec(`set role authenticated`);
+    const { n } = await one(`select count(*)::int n from sessions where id = $1`, [s]);
+    await db.exec(`reset role`);
+    return n;
+  };
+  console.assert((await visibleTo(player)) === 1, "peserta tidak bisa membaca sesi Link yang ia ikuti!");
+  console.assert((await visibleTo(outsider)) === 0, "sesi Link terbaca member yang bukan peserta!");
+  await as(null);
+
   // Sesi diakhiri → hak host berakhir, kembali member biasa.
   await db.query(`update sessions set ended_at = now(), status = 'completed' where id = $1`, [s]);
   await as(hostId);

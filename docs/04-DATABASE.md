@@ -84,6 +84,7 @@ erDiagram
 - **Member login**: baca/ubah `profiles` miliknya (kolom tier/status/member_code dikunci), booking sesi yang `published` & belum mulai, baca booking/poin/order/keranjang miliknya.
 - **Staf**: akses per modul lewat `has_permission()`; contoh Kasir Shop hanya `products`/`orders` (edit) + `overview`/`members` (lihat).
 - **Host sesi**: member biasa yang ditunjuk di `session_hosts`. `is_session_host(sesi)` hanya benar selama sesi itu belum diakhiri (`ended_at`) / selesai / dibatalkan — setelah itu kembali member biasa. Host tidak punya izin tulis tabel; check-in & skor lewat RPC `set_participant_check_in` dan `save_match_score` (total poin harus = `target_points`).
+- **Peserta sesi**: `is_session_member(sesi)` = punya booking aktif di sesi itu. Policy `member read booked sessions` membuka sesi tersebut (termasuk visibilitas Link) untuk My Activities & detail sesi. Daftar peserta lain tetap tertutup RLS (email/HP); halaman detail membacanya dengan service role setelah booking dicek.
 - Aksi sensitif (check-in, ubah status order, catatan) tercatat di `admin_audit_log`.
 
 ## Setup Supabase

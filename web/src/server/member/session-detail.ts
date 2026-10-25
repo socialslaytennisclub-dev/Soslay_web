@@ -13,8 +13,9 @@ import { getMemberSession } from "./user";
 /**
  * Detail sesi untuk peserta (Figma UIF-06 · Activity Detail): info sesi, e-ticket + QR,
  * info pendaftaran, daftar peserta, line-up & leaderboard. Hanya untuk member yang punya
- * booking di sesi itu — data sesi tertutup & peserta lain dibaca dengan service role
- * SETELAH kepemilikan booking dicek. Tanpa Supabase → data contoh.
+ * booking di sesi itu. Sesi dibaca lewat RLS member; daftar peserta lain dibaca dengan service
+ * role SETELAH kepemilikan booking dicek (RLS sengaja tidak membuka email / HP peserta lain).
+ * Tanpa Supabase → data contoh.
  */
 
 export type DetailPhase = "upcoming" | "live" | "done";
@@ -146,7 +147,8 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
   if (!user) return null;
   const reader = createSupabaseAdminClient() ?? supabase;
 
-  const { data: session } = await reader
+  // RLS: member boleh membaca sesi yang ia ikuti (termasuk visibilitas Link).
+  const { data: session } = await supabase
     .from("sessions")
     .select(
       "id, slug, title, description, type_slug, starts_at, ends_at, status, capacity, kuy_booking_url, recommended_levels, match_format, court_count, round_count, target_points, leaderboard_mode, show_live_leaderboard, live_started_at, ended_at, activity_types(label), venues(name, city, address, maps_url)",

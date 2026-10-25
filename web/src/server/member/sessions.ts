@@ -2,7 +2,6 @@ import "server-only";
 import { cache } from "react";
 import type { MemberSession } from "@/content/member";
 import { cityOf } from "@/lib/format";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { localParts } from "@/server/public/sessions";
 import { getMemberSession } from "./user";
@@ -35,10 +34,8 @@ export const getMySessions = cache(async (): Promise<MemberSession[] | null> => 
   ]);
   if (!bookings?.length) return [];
 
-  // Sesi tertutup (visibilitas Link / draft) tidak lolos RLS publik — member tetap berhak melihat
-  // sesi yang ia ikuti, jadi dibaca dengan service role, dibatasi ke booking miliknya sendiri.
-  const reader = createSupabaseAdminClient() ?? supabase;
-  const { data: sessions } = await reader
+  // RLS "member read booked sessions": sesi yang ia ikuti terbaca, termasuk visibilitas Link.
+  const { data: sessions } = await supabase
     .from("sessions")
     .select("id, slug, title, starts_at, ends_at, status, cover_path, venues(name, city, cover_path)")
     .in(

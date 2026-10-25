@@ -238,6 +238,8 @@ export function LineupCard({
 
   const roundMatches = matches.filter((m) => m.round === round).sort((x, y) => x.court - y.court);
   const playing = new Set(roundMatches.flatMap((m) => [...m.a, ...m.b]));
+  // Pemain di court yang skornya sudah masuk tidak bisa dipindah — jangan tawarkan di dropdown.
+  const lockedPlayers = new Set(roundMatches.filter(isLocked).flatMap((m) => [...m.a, ...m.b]));
   const resting = players.filter((p) => !playing.has(p.id));
 
   /** Ganti pemain di satu slot court lewat dropdown (Figma ADM-12): pemain terpilih bertukar tempat (pemain rest juga bisa). */
@@ -258,7 +260,7 @@ export function LineupCard({
       ) : (
         <>
           <select className={styles.slotSelect} value={id} aria-label={`Ganti ${names.get(id) ?? "pemain"}`} onChange={(e) => replaceSlot(round, id, e.target.value)}>
-            {players.map((p) => (
+            {players.filter((p) => p.id === id || !lockedPlayers.has(p.id)).map((p) => (
               <option key={p.id} value={p.id}>
                 {names.get(p.id)}
               </option>
