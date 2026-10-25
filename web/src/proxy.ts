@@ -14,7 +14,15 @@ import { cookieOptionsFor, SCOPE_HEADER, scopeForPath } from "@/lib/supabase/sco
 export async function proxy(request: NextRequest) {
   if (!isSupabaseConfigured) return NextResponse.next();
 
-  const { pathname, search } = request.nextUrl;
+  const { pathname, search, searchParams } = request.nextUrl;
+  // Link email Supabase yang gagal (kedaluwarsa / sudah dipakai) kembali dengan ?error_code=… ke
+  // halaman mana pun (biasanya beranda) → arahkan ke Lupa password untuk minta link baru.
+  if (searchParams.has("error_code") && pathname !== "/lupa-password") {
+    const retry = request.nextUrl.clone();
+    retry.pathname = "/lupa-password";
+    retry.search = `?link=${searchParams.get("error_code") === "otp_expired" ? "expired" : "invalid"}`;
+    return NextResponse.redirect(retry);
+  }
   const scope = scopeForPath(pathname);
   // Header scope selalu ditimpa di sini — nilai kiriman browser tidak dipercaya.
   const forward = () => {

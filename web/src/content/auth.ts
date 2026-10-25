@@ -34,6 +34,8 @@ export const forgotPage = {
   title: "Forgot your password?",
   description: "Enter the email you used to sign up. We'll send you a link to set a new password.",
   submit: "Send reset link",
+  /** Dari link reset yang gagal (?link=expired / invalid). */
+  linkFailed: "That reset link has expired or was already used. Only the newest link works, once — request a new one below.",
   sent: {
     title: "Check your email ✉️",
     text: (email: string) => `If ${email} is registered, a reset link is on its way. Open it on this device to set a new password.`,

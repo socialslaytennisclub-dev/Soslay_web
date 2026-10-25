@@ -1,6 +1,6 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
-import { AFTER_AUTH } from "@/content/auth";
+import { AFTER_AUTH, RESET_PASSWORD } from "@/content/auth";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
@@ -25,6 +25,6 @@ export async function GET(request: NextRequest) {
       ? await supabase.auth.verifyOtp({ token_hash: tokenHash, type })
       : { error: new Error("missing code") };
 
-  if (error) return NextResponse.redirect(new URL("/masuk?verify=failed", origin));
+  if (error) return NextResponse.redirect(new URL(next === RESET_PASSWORD ? "/lupa-password?link=expired" : "/masuk?verify=failed", origin));
   return NextResponse.redirect(new URL(next, origin));
 }
