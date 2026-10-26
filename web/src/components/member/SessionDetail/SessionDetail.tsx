@@ -476,7 +476,7 @@ function LiveTab({ detail: d }: { detail: MemberSessionDetail }) {
       )}
       {!shown && !done && <p className={styles.liveNext}>Kamu tidak punya match lagi di line-up. Cek tab Ronde untuk court lain.</p>}
       <div className={styles.liveActions}>
-        {d.isHost && !done && roundMatches.some((m) => m.id) && <HostScoreButton matches={roundMatches} target={d.format.targetPoints} />}
+        {d.isHost && !done && roundMatches.some((m) => m.id) && <HostScoreButton key={round} matches={roundMatches} target={d.format.targetPoints} />}
         <ScoreRulesButton target={d.format.targetPoints} mode={d.format.leaderboardMode} />
         <span className={styles.liveNote}>
           <Info size={14} aria-hidden />
@@ -570,13 +570,26 @@ function LeaderboardTab({ detail: d }: { detail: MemberSessionDetail }) {
   );
 }
 
-type RoundState = "done" | "live" | "next" | "later";
+type RoundState = "done" | "live" | "next" | "later" | "partial";
 const ROUND_LABEL: Record<RoundState, string> = {
   done: "Selesai",
   live: "Live",
   next: "Berikutnya",
   later: "Belum mulai",
+  partial: "Belum lengkap",
 };
+
+/**
+ * Status ronde: lengkap berskor → Selesai; ronde yang sudah lewat (atau sesi sudah selesai) tapi
+ * masih ada court tanpa skor → Belum lengkap; ronde aktif → Live (saat sesi berjalan) / Berikutnya
+ * (sebelum mulai); satu ronde setelah ronde aktif yang sedang live → Berikutnya; sisanya Belum mulai.
+ */
+function roundState(r: number, list: DetailMatch[], current: number, phase: MemberSessionDetail["phase"]): RoundState {
+  if (list.every((m) => m.scoreA !== null)) return "done";
+  if (r < current || phase === "done") return "partial";
+  if (r === current) return phase === "live" ? "live" : "next";
+  return r === current + 1 && phase === "live" ? "next" : "later";
+}
 
 function RoundsTab({ detail: d }: { detail: MemberSessionDetail }) {
   if (!d.format.lineup) {
@@ -587,7 +600,6 @@ function RoundsTab({ detail: d }: { detail: MemberSessionDetail }) {
   }
   const rounds = [...new Set(d.matches.map((m) => m.round))].sort((a, b) => a - b);
   const current = d.currentRound ?? rounds[0];
-  const stateOf = (r: number, list: DetailMatch[]): RoundState => (list.every((m) => m.scoreA !== null) ? "done" : r === current && d.phase === "live" ? "live" : r === current || r === current + 1 ? "next" : "later");
   const label = d.phase === "done" ? "Semua ronde selesai" : d.phase === "live" ? `Ronde ${current} dari ${maxRound(d)} sedang live` : `${rounds.length} ronde · mulai ${formatTanggalPendek(d.startsAt, d.city, "time")}`;
 
   return (
@@ -605,7 +617,7 @@ function RoundsTab({ detail: d }: { detail: MemberSessionDetail }) {
       </p>
       {rounds.map((r) => {
         const list = d.matches.filter((m) => m.round === r);
-        const state = stateOf(r, list);
+        const state = roundState(r, list, current, d.phase);
         const mine = list.find((m) => m.mySide);
         const courts = (
           <ul className={styles.courtList}>

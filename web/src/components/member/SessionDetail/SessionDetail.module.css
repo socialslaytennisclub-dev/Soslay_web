@@ -1333,6 +1333,11 @@ button.link {
   color: #8a5a00;
 }
 
+.roundPill_partial {
+  background: #ffe7a8;
+  color: #6b4a00;
+}
+
 .roundPill_later {
   background: var(--color-indigo-100);
   color: var(--color-indigo-muted);

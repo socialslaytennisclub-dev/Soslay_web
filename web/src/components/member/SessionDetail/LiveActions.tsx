@@ -31,6 +31,12 @@ export function HostScoreButton({ matches, target }: { matches: DetailMatch[]; t
     setScoreA(m.scoreA ?? Math.ceil(target / 2));
     setError(null);
   };
+  // Mulai dari data terbaru setiap kali dibuka: setelah router.refresh daftar match bisa sudah
+  // pindah ke ronde berikutnya, jadi pilihan court & skor lama tidak boleh terbawa.
+  const start = () => {
+    if (first) pick(first);
+    open();
+  };
   const save = () =>
     startSaving(async () => {
       const result = await submitHostScore(match.id!, scoreA, scoreB);
@@ -41,7 +47,7 @@ export function HostScoreButton({ matches, target }: { matches: DetailMatch[]; t
 
   return (
     <>
-      <button type="button" className={styles.btnNavy} onClick={open}>
+      <button type="button" className={styles.btnNavy} onClick={start}>
         <Pencil size={16} aria-hidden />
         Input Skor
       </button>

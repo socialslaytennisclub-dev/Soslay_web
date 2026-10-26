@@ -121,12 +121,27 @@ function phaseOf(s: Pick<SessionRow, "status" | "starts_at" | "ends_at" | "live_
   return "upcoming";
 }
 
+/**
+ * Ronde yang sedang dimainkan bila host/admin tidak mengisi `current_round`: ronde berskor
+ * terakhir — atau ronde setelahnya yang masih kosong bila ronde itu sudah lengkap. Court yang
+ * terlewat di ronde awal tidak menahan Live di ronde itu. null = belum ada line-up.
+ */
+function currentRoundOf(matches: MatchRow[]): number | null {
+  if (!matches.length) return null;
+  const scored = matches.filter((m) => m.score_a !== null);
+  if (!scored.length) return Math.min(...matches.map((m) => m.round_no));
+  const last = Math.max(...scored.map((m) => m.round_no));
+  if (matches.some((m) => m.round_no === last && m.score_a === null)) return last;
+  const upcoming = matches.filter((m) => m.round_no > last && m.score_a === null).map((m) => m.round_no);
+  return upcoming.length ? Math.min(...upcoming) : last;
+}
+
 /** Leaderboard dari skor yang sudah masuk: poin = skor tim di tiap match yang dimainkan. */
-function standingsOf(matches: MatchRow[], names: Map<string, string>, myId: string | null, mode: "points" | "wins"): DetailStanding[] {
+function standingsOf(matches: MatchRow[], names: Map<string, string>, myIds: Set<string>, mode: "points" | "wins"): DetailStanding[] {
   const table = new Map<string, DetailStanding>();
   const row = (id: string) => {
     let r = table.get(id);
-    if (!r) table.set(id, (r = { id, name: names.get(id) ?? "Pemain", points: 0, wins: 0, played: 0, total: 0, me: id === myId }));
+    if (!r) table.set(id, (r = { id, name: names.get(id) ?? "Pemain", points: 0, wins: 0, played: 0, total: 0, me: myIds.has(id) }));
     return r;
   };
   for (const m of matches) {
@@ -173,10 +188,11 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     .maybeSingle();
   if (!booking) return null;
 
-  const [{ data: roster }, { data: mine }, { data: matches }, { data: isHost }, qr] = await Promise.all([
+  const [{ data: myRows }, { data: roster }, { data: matches }, { data: isHost }, qr] = await Promise.all([
+    // Baris peserta milik sendiri (RLS) — untuk no. registrasi Kuyy & jumlah bayar. Bisa lebih dari
+    // satu (impor Kuyy + tambahan manual admin), jadi ambil semua: yang pertama untuk data daftar.
+    supabase.from("session_participants").select("id, full_name, kuy_reg_no, checked_in_at, amount").eq("session_id", session.id).eq("member_id", user.id).order("imported_at"),
     supabase.rpc("session_roster", { p_session: session.id }),
-    // Baris peserta milik sendiri (RLS) — untuk no. registrasi Kuyy & jumlah bayar.
-    supabase.from("session_participants").select("id, full_name, kuy_reg_no, checked_in_at, amount").eq("session_id", session.id).eq("member_id", user.id).maybeSingle(),
     supabase.from("session_matches").select("id, round_no, court_no, a1, a2, b1, b2, score_a, score_b").eq("session_id", session.id).order("round_no").order("court_no").returns<MatchRow[]>(),
     supabase.rpc("is_session_host", { p_session: session.id }),
     // Isi QR = id booking, supaya pemindai panitia nanti bisa langsung menandai check-in.
@@ -196,9 +212,10 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     .sort((x, y) => Number(y.me) - Number(x.me));
 
   const names = new Map(people.map((p) => [p.id, p.name]));
-  const myId = mine?.id ?? null;
+  const mine = myRows?.[0] ?? null;
+  const myIds = new Set((myRows ?? []).map((r) => r.id as string));
   const matchRows = matches ?? [];
-  const pending = matchRows.find((m) => m.score_a === null);
+  const side = (m: MatchRow): DetailMatch["mySide"] => (myIds.has(m.a1) || myIds.has(m.a2) ? "a" : myIds.has(m.b1) || myIds.has(m.b2) ? "b" : null);
   const city = cityOf(session.venues.city);
   const start = localParts(session.starts_at, city);
   const code = bookingCode(booking.id as string, start.date);
@@ -251,11 +268,11 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
       b: [m.b1, m.b2].map((id) => names.get(id) ?? "Pemain"),
       scoreA: m.score_a,
       scoreB: m.score_b,
-      mySide: !myId ? null : m.a1 === myId || m.a2 === myId ? "a" : m.b1 === myId || m.b2 === myId ? "b" : null,
+      mySide: side(m),
     })),
-    standings: standingsOf(matchRows, names, myId, session.leaderboard_mode),
+    standings: standingsOf(matchRows, names, myIds, session.leaderboard_mode),
     showLeaderboard: session.show_live_leaderboard,
-    currentRound: matchRows.length ? (session.current_round ?? pending?.round_no ?? matchRows[matchRows.length - 1].round_no) : null,
+    currentRound: session.current_round ?? currentRoundOf(matchRows),
     isHost: isHost === true,
   };
 });
