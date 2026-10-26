@@ -49,8 +49,13 @@
   font-family: var(--font-display);
   font-weight: var(--weight-bold);
   font-size: 20px;
-  line-height: 1;
+  line-height: 1.15;
   color: var(--color-lime-500);
+  /* Judul aktivitas bisa panjang — maksimal 2 baris. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 .date {

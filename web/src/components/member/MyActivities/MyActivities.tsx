@@ -74,12 +74,12 @@ function ActivityTicket({ session }: { session: MemberSession }) {
         )
       }
     >
-      <h3 className={styles.venue}>{session.venue}</h3>
+      <h3 className={styles.venue}>{session.title}</h3>
       <p className={styles.date}>
         <time dateTime={session.date}>{formatTanggalISO(session.date, session.city)}</time>
       </p>
       <p className={styles.time}>
-        {formatJamRange(session.start, session.end)} <span className="visually-hidden">· {session.title}</span>
+        {formatJamRange(session.start, session.end)} · {session.venue}
       </p>
     </MediaCard>
   );
