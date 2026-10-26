@@ -74,7 +74,7 @@ function ActivityTicket({ session }: { session: MemberSession }) {
         )
       }
     >
-      <h3 className={styles.venue}>{session.title}</h3>
+      <h3 className={styles.cardTitle}>{session.title}</h3>
       <p className={styles.date}>
         <time dateTime={session.date}>{formatTanggalISO(session.date, session.city)}</time>
       </p>
