@@ -1,27 +1,12 @@
 import Link from "next/link";
-import {
-  CalendarDays,
-  CalendarPlus,
-  ChartColumn,
-  ChevronLeft,
-  ChevronRight,
-  Clock,
-  CreditCard,
-  Lock,
-  Map as MapIcon,
-  MapPin,
-  MessageCircle,
-  SquareArrowOutUpRight,
-  Trophy,
-  Users,
-  Volleyball,
-} from "lucide-react";
+import { CalendarDays, CalendarPlus, ChartColumn, ChevronDown, ChevronLeft, ChevronRight, Clock, CreditCard, Info, Lock, Map as MapIcon, MapPin, MessageCircle, SquareArrowOutUpRight, Trophy, Users, Volleyball } from "lucide-react";
 import { Container } from "@/components/ui";
 import { cx } from "@/lib/cx";
 import { CITY_TZ_LABEL, formatAngka, formatJamRange, formatRupiah, formatTanggalISO, formatTanggalPendek } from "@/lib/format";
 import { initials } from "@/lib/text";
-import type { MemberSessionDetail } from "@/server/member/session-detail";
+import type { DetailMatch, DetailStanding, MemberSessionDetail } from "@/server/member/session-detail";
 import { Countdown } from "./Countdown";
+import { HostScoreButton, ScoreRulesButton } from "./LiveActions";
 import { ParticipantList } from "./ParticipantList";
 import { QrCheckIn } from "./QrCheckIn";
 import styles from "./SessionDetail.module.css";
@@ -39,12 +24,20 @@ export type DetailTab = (typeof DETAIL_TABS)[number]["key"];
 const PANITIA_WA = "62642424792";
 const BRING = ["Raket tenis", "Sepatu non-marking", "Botol minum", "Handuk & baju ganti", "QR e-ticket"];
 
-const STATUS_CHIP = { upcoming: "Terdaftar", live: "Sedang berlangsung", done: "Selesai" } as const;
+const STATUS_CHIP = {
+  upcoming: "Terdaftar",
+  live: "Live",
+  done: "Selesai",
+} as const;
 
 const wa = (text: string) => `https://wa.me/${PANITIA_WA}?text=${encodeURIComponent(text)}`;
 
 function calendarUrl(d: MemberSessionDetail) {
-  const stamp = (iso: string) => new Date(iso).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const stamp = (iso: string) =>
+    new Date(iso)
+      .toISOString()
+      .replace(/[-:]/g, "")
+      .replace(/\.\d{3}/, "");
   const params = new URLSearchParams({
     action: "TEMPLATE",
     text: d.title,
@@ -57,6 +50,8 @@ function calendarUrl(d: MemberSessionDetail) {
 
 /** Halaman detail sesi peserta (Figma UIF-06 · Activity Detail). Tab via ?tab= supaya bisa dibagikan. */
 export function SessionDetail({ detail: d, tab }: { detail: MemberSessionDetail; tab: DetailTab }) {
+  // Saat sesi berjalan / selesai, tab Live · Leaderboard · Ronde memakai lebar penuh (Figma UIF-07).
+  const wide = d.phase !== "upcoming" && (tab === "live" || tab === "leaderboard" || tab === "ronde");
   const routeUrl = d.venue.mapsUrl ?? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${d.venue.name} ${d.venue.address}`)}`;
 
   return (
@@ -85,7 +80,7 @@ export function SessionDetail({ detail: d, tab }: { detail: MemberSessionDetail;
       </header>
 
       <div className={styles.body}>
-        <Container className={styles.grid}>
+        <Container className={cx(styles.grid, wide && styles.gridWide)}>
           <div className={styles.main}>
             {tab === "info" && <InfoTab detail={d} />}
             {tab === "peserta" && (
@@ -108,101 +103,103 @@ export function SessionDetail({ detail: d, tab }: { detail: MemberSessionDetail;
             {tab === "ronde" && <RoundsTab detail={d} />}
           </div>
 
-          <aside className={styles.side}>
-            <section className={styles.ticket} aria-label="E-ticket">
-              <header className={styles.ticketHead}>
-                <span className={styles.eyebrow}>E-ticket</span>
-                <span className={styles.ticketChip}>{d.ticket.status === "attended" ? "Sudah check-in" : "Terdaftar"}</span>
-              </header>
-              <h2 className={styles.ticketTitle}>{d.title}</h2>
-              <div className={styles.qr} dangerouslySetInnerHTML={{ __html: d.ticket.qrSvg }} role="img" aria-label={`QR e-ticket ${d.ticket.code}`} />
-              <p className={styles.code}>
-                <span>Kode booking</span>
-                <strong>{d.ticket.code}</strong>
-              </p>
-              <dl className={styles.ticketMeta}>
-                <div>
-                  <dt>Nama</dt>
-                  <dd>{d.ticket.holder}</dd>
-                </div>
-                <div>
-                  <dt>Tipe tiket</dt>
-                  <dd>{d.ticket.type}</dd>
-                </div>
-              </dl>
-              {d.phase !== "done" && (
-                <QrCheckIn
-                  qrSvg={d.ticket.qrSvg}
-                  code={d.ticket.code}
-                  holder={`${d.ticket.holder} · ${d.ticket.type}`}
-                  title={d.title}
-                  openNote={`Check-in dibuka ${formatTanggalPendek(d.checkInAt, d.city)} pukul ${formatTanggalPendek(d.checkInAt, d.city, "time")} ${CITY_TZ_LABEL[d.city]}`}
-                />
-              )}
-            </section>
-
-            <section className={styles.card} aria-labelledby="daftar-title">
-              <header className={styles.cardHead}>
-                <h2 id="daftar-title" className={styles.cardTitle}>
-                  Info Pendaftaran
-                </h2>
-                <span className={cx(styles.pill, d.registration.paid ? styles.pillOk : styles.pillWarn)}>{d.registration.paid ? "Lunas" : "Menunggu"}</span>
-              </header>
-              <div className={styles.payBox}>
-                <span className={styles.payIcon}>
-                  <CreditCard size={18} aria-hidden />
-                </span>
-                <span>
-                  <small>Sumber pembayaran</small>
-                  <strong>{d.registration.sourceLabel}</strong>
-                </span>
-              </div>
-              <dl className={styles.rows}>
-                {d.registration.orderId && (
+          {!wide && (
+            <aside className={styles.side}>
+              <section className={styles.ticket} aria-label="E-ticket">
+                <header className={styles.ticketHead}>
+                  <span className={styles.eyebrow}>E-ticket</span>
+                  <span className={styles.ticketChip}>{d.ticket.status === "attended" ? "Sudah check-in" : "Terdaftar"}</span>
+                </header>
+                <h2 className={styles.ticketTitle}>{d.title}</h2>
+                <div className={styles.qr} dangerouslySetInnerHTML={{ __html: d.ticket.qrSvg }} role="img" aria-label={`QR e-ticket ${d.ticket.code}`} />
+                <p className={styles.code}>
+                  <span>Kode booking</span>
+                  <strong>{d.ticket.code}</strong>
+                </p>
+                <dl className={styles.ticketMeta}>
                   <div>
-                    <dt>No. registrasi Kuyy</dt>
-                    <dd>{d.registration.orderId}</dd>
+                    <dt>Nama</dt>
+                    <dd>{d.ticket.holder}</dd>
                   </div>
-                )}
-                {d.registration.amount > 0 && (
                   <div>
-                    <dt>Dibayar</dt>
-                    <dd>{formatRupiah(d.registration.amount)}</dd>
+                    <dt>Tipe tiket</dt>
+                    <dd>{d.ticket.type}</dd>
                   </div>
+                </dl>
+                {d.phase !== "done" && (
+                  <QrCheckIn
+                    qrSvg={d.ticket.qrSvg}
+                    code={d.ticket.code}
+                    holder={`${d.ticket.holder} · ${d.ticket.type}`}
+                    title={d.title}
+                    openNote={`Check-in dibuka ${formatTanggalPendek(d.checkInAt, d.city)} pukul ${formatTanggalPendek(d.checkInAt, d.city, "time")} ${CITY_TZ_LABEL[d.city]}`}
+                  />
                 )}
-                <div>
-                  <dt>Tanggal daftar</dt>
-                  <dd>{formatTanggalPendek(d.registration.registeredAt, d.city, "dateTime")}</dd>
-                </div>
-              </dl>
-              <p className={styles.small}>Pembayaran diproses di Kuyy · tiket non-refundable.</p>
-              {d.registration.kuyUrl && (
-                <a className={styles.link} href={d.registration.kuyUrl} target="_blank" rel="noopener noreferrer">
-                  Lihat pesanan di Kuyy
-                  <SquareArrowOutUpRight size={14} aria-hidden />
-                </a>
-              )}
-            </section>
+              </section>
 
-            <section className={styles.card} aria-labelledby="bantuan-title">
-              <h2 id="bantuan-title" className={styles.cardTitle}>
-                Butuh sesuatu?
-              </h2>
-              <ul className={styles.helpList}>
-                <HelpLink href={calendarUrl(d)} icon={<CalendarPlus size={18} />} title="Tambah ke kalender" sub="Google Calendar" />
-                <HelpLink href={routeUrl} icon={<MapIcon size={18} />} title="Buka rute ke venue" sub={`${d.venue.name}, ${d.venue.address}`} />
-                <HelpLink href={wa(`Halo panitia Soslay, aku mau tanya soal sesi "${d.title}" (${d.ticket.code}).`)} icon={<MessageCircle size={18} />} title="Hubungi panitia" sub="WhatsApp Soslay Club" />
-              </ul>
-              {d.phase === "upcoming" && (
-                <div className={styles.absent}>
-                  <a href={wa(`Halo panitia Soslay, aku ${d.ticket.holder} (${d.ticket.code}) tidak bisa hadir di sesi "${d.title}".`)} target="_blank" rel="noopener noreferrer">
-                    Tidak bisa hadir? Kabari host
+              <section className={styles.card} aria-labelledby="daftar-title">
+                <header className={styles.cardHead}>
+                  <h2 id="daftar-title" className={styles.cardTitle}>
+                    Info Pendaftaran
+                  </h2>
+                  <span className={cx(styles.pill, d.registration.paid ? styles.pillOk : styles.pillWarn)}>{d.registration.paid ? "Lunas" : "Menunggu"}</span>
+                </header>
+                <div className={styles.payBox}>
+                  <span className={styles.payIcon}>
+                    <CreditCard size={18} aria-hidden />
+                  </span>
+                  <span>
+                    <small>Sumber pembayaran</small>
+                    <strong>{d.registration.sourceLabel}</strong>
+                  </span>
+                </div>
+                <dl className={styles.rows}>
+                  {d.registration.orderId && (
+                    <div>
+                      <dt>No. registrasi Kuyy</dt>
+                      <dd>{d.registration.orderId}</dd>
+                    </div>
+                  )}
+                  {d.registration.amount > 0 && (
+                    <div>
+                      <dt>Dibayar</dt>
+                      <dd>{formatRupiah(d.registration.amount)}</dd>
+                    </div>
+                  )}
+                  <div>
+                    <dt>Tanggal daftar</dt>
+                    <dd>{formatTanggalPendek(d.registration.registeredAt, d.city, "dateTime")}</dd>
+                  </div>
+                </dl>
+                <p className={styles.small}>Pembayaran diproses di Kuyy · tiket non-refundable.</p>
+                {d.registration.kuyUrl && (
+                  <a className={styles.link} href={d.registration.kuyUrl} target="_blank" rel="noopener noreferrer">
+                    Lihat pesanan di Kuyy
+                    <SquareArrowOutUpRight size={14} aria-hidden />
                   </a>
-                  <p className={styles.small}>Tiket non-refundable. Kabari host supaya acakan pemain bisa disesuaikan sebelum sesi mulai.</p>
-                </div>
-              )}
-            </section>
-          </aside>
+                )}
+              </section>
+
+              <section className={styles.card} aria-labelledby="bantuan-title">
+                <h2 id="bantuan-title" className={styles.cardTitle}>
+                  Butuh sesuatu?
+                </h2>
+                <ul className={styles.helpList}>
+                  <HelpLink href={calendarUrl(d)} icon={<CalendarPlus size={18} />} title="Tambah ke kalender" sub="Google Calendar" />
+                  <HelpLink href={routeUrl} icon={<MapIcon size={18} />} title="Buka rute ke venue" sub={`${d.venue.name}, ${d.venue.address}`} />
+                  <HelpLink href={wa(`Halo panitia Soslay, aku mau tanya soal sesi "${d.title}" (${d.ticket.code}).`)} icon={<MessageCircle size={18} />} title="Hubungi panitia" sub="WhatsApp Soslay Club" />
+                </ul>
+                {d.phase === "upcoming" && (
+                  <div className={styles.absent}>
+                    <a href={wa(`Halo panitia Soslay, aku ${d.ticket.holder} (${d.ticket.code}) tidak bisa hadir di sesi "${d.title}".`)} target="_blank" rel="noopener noreferrer">
+                      Tidak bisa hadir? Kabari host
+                    </a>
+                    <p className={styles.small}>Tiket non-refundable. Kabari host supaya acakan pemain bisa disesuaikan sebelum sesi mulai.</p>
+                  </div>
+                )}
+              </section>
+            </aside>
+          )}
         </Container>
       </div>
     </>
@@ -228,12 +225,36 @@ function HelpLink({ href, icon, title, sub }: { href: string; icon: React.ReactN
 
 function InfoTab({ detail: d }: { detail: MemberSessionDetail }) {
   const facts = [
-    { icon: <CalendarDays size={18} />, label: "Tanggal", value: formatTanggalISO(d.date, d.city) },
-    { icon: <Clock size={18} />, label: "Waktu", value: `${formatJamRange(d.start, d.end, " – ")} ${CITY_TZ_LABEL[d.city]}` },
-    { icon: <MapPin size={18} />, label: "Lokasi", value: `${d.venue.name}, ${d.venue.address}` },
-    { icon: <Volleyball size={18} />, label: "Format", value: d.format.lineup ? `${d.format.label} · ${d.format.targetPoints} poin/match` : d.typeLabel },
-    { icon: <Users size={18} />, label: "Peserta", value: `${d.people.length} pemain${d.format.lineup ? ` · ${d.format.courts} court` : ""}` },
-    { icon: <Trophy size={18} />, label: "Level", value: d.levels.length ? d.levels.join(", ") : "Semua level" },
+    {
+      icon: <CalendarDays size={18} />,
+      label: "Tanggal",
+      value: formatTanggalISO(d.date, d.city),
+    },
+    {
+      icon: <Clock size={18} />,
+      label: "Waktu",
+      value: `${formatJamRange(d.start, d.end, " – ")} ${CITY_TZ_LABEL[d.city]}`,
+    },
+    {
+      icon: <MapPin size={18} />,
+      label: "Lokasi",
+      value: `${d.venue.name}, ${d.venue.address}`,
+    },
+    {
+      icon: <Volleyball size={18} />,
+      label: "Format",
+      value: d.format.lineup ? `${d.format.label} · ${d.format.targetPoints} poin/match` : d.typeLabel,
+    },
+    {
+      icon: <Users size={18} />,
+      label: "Peserta",
+      value: `${d.people.length} pemain${d.format.lineup ? ` · ${d.format.courts} court` : ""}`,
+    },
+    {
+      icon: <Trophy size={18} />,
+      label: "Level",
+      value: d.levels.length ? d.levels.join(", ") : "Semua level",
+    },
   ];
   const others = d.people.filter((p) => !p.me).map((p) => p.name);
   const named = others.slice(0, 3).map((n) => n.split(" ")[0]);
@@ -363,23 +384,132 @@ function Locked({ detail: d, title, text, label = "Belum bisa diakses" }: { deta
   );
 }
 
+const firstName = (name: string) => name.split(" ")[0];
+const teamName = (team: string[]) => team.map(firstName).join(" + ");
+
+/** Avatar inisial bertumpuk untuk satu tim (Figma UIF-07). */
+function TeamFaces({ team }: { team: string[] }) {
+  return (
+    <span className={styles.teamFaces} aria-hidden>
+      {team.map((n, i) => (
+        <span key={i} className={cx(styles.miniFace, styles[`face${i % 4}`])}>
+          {initials(n)}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+const maxRound = (d: MemberSessionDetail) => Math.max(d.format.rounds, ...d.matches.map((m) => m.round));
+
 function LiveTab({ detail: d }: { detail: MemberSessionDetail }) {
   if (d.phase === "upcoming") {
     return <Locked detail={d} title={`Live dimulai ${formatTanggalPendek(d.startsAt, d.city, "dateTime")}`} text="Status match kamu & court yang sedang dimainkan muncul di sini saat sesi dimulai." />;
   }
-  const myMatches = d.matches.filter((m) => m.mine);
-  const next = myMatches.find((m) => m.scoreA === null);
-  if (!d.format.lineup || !d.matches.length) {
-    return <Locked detail={d} label={d.phase === "done" ? "Sesi selesai" : "Sedang berlangsung"} title={d.phase === "done" ? "Sesi sudah selesai" : "Belum ada line-up"} text="Line-up & skor diatur host di lapangan. Skor diinput & diverifikasi oleh host." />;
+  if (!d.format.lineup || !d.matches.length || d.currentRound === null) {
+    return (
+      <Locked
+        detail={d}
+        label={d.phase === "done" ? "Sesi selesai" : "Sedang berlangsung"}
+        title={d.phase === "done" ? "Sesi sudah selesai" : "Belum ada line-up"}
+        text="Line-up & skor diatur host di lapangan. Skor diinput & diverifikasi oleh host."
+      />
+    );
   }
+
+  const round = d.currentRound;
+  const roundMatches = d.matches.filter((m) => m.round === round);
+  const now = roundMatches.find((m) => m.mySide);
+  const next = d.matches.find((m) => m.mySide && m.round > round && m.scoreA === null);
+  const shown = now ?? next;
+  const done = d.phase === "done";
+  const title = done
+    ? "Sesi sudah selesai"
+    : now
+      ? now.scoreA === null
+        ? `Kamu sedang main di Court ${now.court}`
+        : `Match kamu selesai · ${now.mySide === "a" ? now.scoreA : now.scoreB}–${now.mySide === "a" ? now.scoreB : now.scoreA}`
+      : `Kamu rest di Ronde ${round}`;
+
   return (
-    <section className={styles.card} aria-labelledby="live-title">
-      <h2 id="live-title" className={styles.cardTitle}>
-        {d.phase === "done" ? "Rekap match kamu" : next ? `Match berikutnya · Ronde ${next.round}` : "Semua match kamu sudah selesai"}
+    <section className={styles.liveCard2} aria-labelledby="live-title">
+      <header className={styles.liveHead}>
+        <span className={styles.eyebrowDark}>{done ? "Sesi selesai" : `Sedang berlangsung · Ronde ${round} dari ${maxRound(d)}`}</span>
+        {!done && <span className={styles.livePillRed}>Live</span>}
+      </header>
+      <h2 id="live-title" className={styles.bannerTitle}>
+        {title}
       </h2>
-      <p className={styles.muted}>Skor diinput & diverifikasi oleh host. Halaman ini diperbarui saat dibuka ulang.</p>
-      <MatchList matches={myMatches} />
+      {shown && (
+        <>
+          {!now && (
+            <p className={styles.liveNext}>
+              Match berikutnya: Ronde {shown.round} · Court {shown.court}
+            </p>
+          )}
+          <div className={styles.versus}>
+            <div className={styles.teamCard}>
+              <TeamFaces team={shown.mySide === "a" ? shown.a : shown.b} />
+              <span>
+                <small className={styles.teamLabelMine}>Tim kamu</small>
+                <strong>{teamName(shown.mySide === "a" ? shown.a : shown.b)}</strong>
+              </span>
+            </div>
+            <span className={styles.vsBadge}>{shown.scoreA === null ? "VS" : `${shown.mySide === "a" ? shown.scoreA : shown.scoreB}–${shown.mySide === "a" ? shown.scoreB : shown.scoreA}`}</span>
+            <div className={styles.teamCard}>
+              <TeamFaces team={shown.mySide === "a" ? shown.b : shown.a} />
+              <span>
+                <small>Lawan</small>
+                <strong>{teamName(shown.mySide === "a" ? shown.b : shown.a)}</strong>
+              </span>
+            </div>
+          </div>
+        </>
+      )}
+      {!shown && !done && <p className={styles.liveNext}>Kamu tidak punya match lagi di line-up. Cek tab Ronde untuk court lain.</p>}
+      <div className={styles.liveActions}>
+        {d.isHost && !done && roundMatches.some((m) => m.id) && <HostScoreButton matches={roundMatches} target={d.format.targetPoints} />}
+        <ScoreRulesButton target={d.format.targetPoints} mode={d.format.leaderboardMode} />
+        <span className={styles.liveNote}>
+          <Info size={14} aria-hidden />
+          {d.isHost ? "Kamu host sesi ini — skor yang kamu simpan langsung masuk leaderboard." : "Skor masuk leaderboard setelah diinput & diverifikasi host."}
+        </span>
+      </div>
     </section>
+  );
+}
+
+/** Peringkat dengan seri (Figma: "=5"): pemain dengan nilai sama berbagi nomor. */
+function ranks(d: MemberSessionDetail) {
+  const value = (s: DetailStanding) => (d.format.leaderboardMode === "wins" ? s.wins : s.points);
+  return d.standings.map((s, i, all) => {
+    const first = all.findIndex((x) => value(x) === value(s));
+    const tied = all.filter((x) => value(x) === value(s)).length > 1;
+    return {
+      s,
+      rank: `${tied ? "=" : ""}${first + 1}`,
+      value: value(s),
+      index: i,
+    };
+  });
+}
+
+function Progress({ detail: d, label }: { detail: MemberSessionDetail; label: string }) {
+  const done = d.matches.filter((m) => m.scoreA !== null).length;
+  return (
+    <div className={styles.progress}>
+      <span>{label}</span>
+      <span className={styles.progressCount}>
+        {done} / {d.matches.length} match
+      </span>
+      <span className={styles.progressBar} aria-hidden>
+        <span
+          style={{
+            width: `${d.matches.length ? (done / d.matches.length) * 100 : 0}%`,
+          }}
+        />
+      </span>
+    </div>
   );
 }
 
@@ -387,38 +517,57 @@ function LeaderboardTab({ detail: d }: { detail: MemberSessionDetail }) {
   if (!d.format.lineup || !d.showLeaderboard) {
     return <Locked detail={d} label="Tidak tersedia" title="Leaderboard tidak dipakai di sesi ini" text="Sesi ini tidak memakai format Americano / Rotating Partner." />;
   }
-  if (!d.standings.length) {
+  if (!d.standings.some((s) => s.played > 0)) {
     return <Locked detail={d} title="Leaderboard belum dimulai" text="Peringkat live muncul setelah match pertama terverifikasi host." />;
   }
-  const metric = d.format.leaderboardMode === "wins" ? "Menang" : "Poin";
+  const wins = d.format.leaderboardMode === "wins";
   return (
-    <section className={styles.card} aria-labelledby="lb-title">
-      <header className={styles.cardHead}>
-        <h2 id="lb-title" className={styles.cardTitle}>
-          Leaderboard
-        </h2>
-        <span className={styles.pill}>Urut {metric.toLowerCase()}</span>
+    <section className={styles.board2} aria-labelledby="lb-title">
+      <header className={styles.liveHead}>
+        <h2 id="lb-title">Live Leaderboard {d.phase === "live" && <span className={styles.livePillRed}>Live</span>}</h2>
+        <span className={styles.boardUpdated}>Update {formatTanggalPendek(new Date().toISOString(), d.city, "time")}</span>
       </header>
-      <ol className={styles.board}>
-        {d.standings.map((s, i) => (
-          <li key={s.id} className={cx(styles.boardRow, s.me && styles.boardMe)}>
-            <span className={styles.rank}>{i + 1}</span>
-            <span className={styles.boardName}>
-              {s.name}
-              {s.me && <small> (kamu)</small>}
-            </span>
-            <span className={styles.boardStat}>
-              <strong>{d.format.leaderboardMode === "wins" ? s.wins : s.points}</strong>
-              <small>
-                {d.format.leaderboardMode === "wins" ? `${s.points} poin` : `${s.wins} menang`} · {s.played} match
-              </small>
-            </span>
-          </li>
-        ))}
-      </ol>
+      <Progress detail={d} label="Progress Activities" />
+      <table className={styles.boardTable}>
+        <thead>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">Pemain</th>
+            <th scope="col">Match</th>
+            <th scope="col">{wins ? "Menang" : "Poin"}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {ranks(d).map(({ s, rank, value }) => (
+            <tr key={s.id} className={cx(s.me && styles.boardMe2)}>
+              <td className={styles.boardRank}>{rank}</td>
+              <td>
+                <span className={styles.boardPlayer}>
+                  <span className={styles.miniFace}>{initials(s.name)}</span>
+                  {s.name}
+                  {s.me && " (kamu)"}
+                </span>
+              </td>
+              <td className={styles.boardMatch}>
+                {s.played}/{s.total}
+              </td>
+              <td className={styles.boardValue}>{value}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className={styles.boardNote}>Nilai seri berbagi peringkat (=). Hanya match yang sudah diinput host yang dihitung.</p>
     </section>
   );
 }
+
+type RoundState = "done" | "live" | "next" | "later";
+const ROUND_LABEL: Record<RoundState, string> = {
+  done: "Selesai",
+  live: "Live",
+  next: "Berikutnya",
+  later: "Belum mulai",
+};
 
 function RoundsTab({ detail: d }: { detail: MemberSessionDetail }) {
   if (!d.format.lineup) {
@@ -427,36 +576,99 @@ function RoundsTab({ detail: d }: { detail: MemberSessionDetail }) {
   if (!d.matches.length) {
     return <Locked detail={d} title="Urutan main belum diumumkan" text="Line-up dibuat host setelah check-in — urutan pasangan muncul di sini." />;
   }
-  const rounds = [...new Set(d.matches.map((m) => m.round))];
+  const rounds = [...new Set(d.matches.map((m) => m.round))].sort((a, b) => a - b);
+  const current = d.currentRound ?? rounds[0];
+  const stateOf = (r: number, list: DetailMatch[]): RoundState => (list.every((m) => m.scoreA !== null) ? "done" : r === current && d.phase === "live" ? "live" : r === current || r === current + 1 ? "next" : "later");
+  const label = d.phase === "done" ? "Semua ronde selesai" : d.phase === "live" ? `Ronde ${current} dari ${maxRound(d)} sedang live` : `${rounds.length} ronde · mulai ${formatTanggalPendek(d.startsAt, d.city, "time")}`;
+
   return (
     <section className={styles.card} aria-labelledby="ronde-title">
-      <h2 id="ronde-title" className={styles.cardTitle}>
+      <h2 id="ronde-title" className="visually-hidden">
         Urutan main
       </h2>
-      <p className={styles.muted}>Match kamu ditandai. Line-up bisa diubah host selama ronde belum dimainkan.</p>
-      {rounds.map((r) => (
-        <div key={r} className={styles.round}>
-          <h3>Ronde {r}</h3>
-          <MatchList matches={d.matches.filter((m) => m.round === r)} />
-        </div>
-      ))}
+      <div className={styles.progressCard}>
+        <strong>Progress Activities</strong>
+        <Progress detail={d} label={label} />
+      </div>
+      <p className={styles.legend}>
+        <span className={styles.legendDot} aria-hidden />
+        Match kamu ditandai · ronde selesai bisa dibuka untuk lihat detail
+      </p>
+      {rounds.map((r) => {
+        const list = d.matches.filter((m) => m.round === r);
+        const state = stateOf(r, list);
+        const mine = list.find((m) => m.mySide);
+        const courts = (
+          <ul className={styles.courtList}>
+            {list.map((m) => (
+              <CourtRow key={m.court} match={m} />
+            ))}
+          </ul>
+        );
+        if (state === "done") {
+          const own = mine ? (mine.mySide === "a" ? mine.scoreA! : mine.scoreB!) : 0;
+          const other = mine ? (mine.mySide === "a" ? mine.scoreB! : mine.scoreA!) : 0;
+          return (
+            <details key={r} className={styles.roundDone}>
+              <summary>
+                <span className={styles.roundTitle}>
+                  Ronde {r} <span className={cx(styles.roundPill, styles.roundPill_done)}>Selesai</span>
+                </span>
+                <span className={styles.roundSummary}>
+                  {mine ? (
+                    <>
+                      <span className={styles.youChip}>Kamu</span>
+                      {teamName(mine.mySide === "a" ? mine.a : mine.b)} · {own}–{other}
+                    </>
+                  ) : (
+                    <>
+                      <span className={styles.restChip}>Kamu rest</span>
+                      {list.length} match · Court {list.map((m) => m.court).join(" & ")}
+                    </>
+                  )}
+                </span>
+                {mine && <span className={own > other ? styles.win : own < other ? styles.lose : styles.muted}>{own > other ? "Menang" : own < other ? "Kalah" : "Seri"}</span>}
+                <ChevronDown size={16} aria-hidden className={styles.roundCaret} />
+              </summary>
+              {courts}
+            </details>
+          );
+        }
+        return (
+          <div key={r} className={styles.round}>
+            <h3>
+              Ronde {r} <span className={cx(styles.roundPill, styles[`roundPill_${state}`])}>{ROUND_LABEL[state]}</span>
+              {!mine && <span className={styles.restChip}>Kamu rest</span>}
+            </h3>
+            {courts}
+          </div>
+        );
+      })}
+      <p className={styles.small}>Skor diperbarui setelah diinput host. Pasangan ronde berikutnya bisa berubah sesuai panggilan host.</p>
     </section>
   );
 }
 
-function MatchList({ matches }: { matches: MemberSessionDetail["matches"] }) {
+function CourtRow({ match: m }: { match: DetailMatch }) {
+  const line = (team: string[], score: number | null, side: "a" | "b") => (
+    <span className={cx(styles.courtLine, m.mySide === side && styles.courtLineMine)}>
+      <span>
+        {teamName(team)}
+        {m.mySide === side && <span className={styles.youChip}>Kamu</span>}
+      </span>
+      <span>{score ?? "–"}</span>
+    </span>
+  );
   return (
-    <ul className={styles.matches}>
-      {matches.map((m) => (
-        <li key={`${m.round}-${m.court}`} className={cx(styles.match, m.mine && styles.matchMine)}>
-          <span className={styles.court}>
-            <strong>C{m.court}</strong>R{m.round}
-          </span>
-          <span className={styles.team}>{m.a.join(" & ")}</span>
-          <span className={styles.score}>{m.scoreA === null ? "vs" : `${m.scoreA}–${m.scoreB}`}</span>
-          <span className={cx(styles.team, styles.teamRight)}>{m.b.join(" & ")}</span>
-        </li>
-      ))}
-    </ul>
+    <li className={cx(styles.courtRow, m.mySide && styles.courtRowMine)}>
+      <span className={styles.courtTag}>
+        <strong>C{m.court}</strong>
+        Court
+      </span>
+      <span className={styles.courtLines}>
+        {line(m.a, m.scoreA, "a")}
+        {line(m.b, m.scoreB, "b")}
+      </span>
+    </li>
   );
 }

@@ -4,7 +4,6 @@ import QRCode from "qrcode";
 import { memberSessions } from "@/content/member";
 import { LEVEL_LABEL } from "@/lib/admin-labels";
 import { cityOf, type City } from "@/lib/format";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { TennisLevel } from "@/server/admin/types";
 import { localParts } from "@/server/public/sessions";
@@ -13,18 +12,29 @@ import { getMemberSession } from "./user";
 /**
  * Detail sesi untuk peserta (Figma UIF-06 · Activity Detail): info sesi, e-ticket + QR,
  * info pendaftaran, daftar peserta, line-up & leaderboard. Hanya untuk member yang punya
- * booking di sesi itu. Sesi dibaca lewat RLS member; daftar peserta lain dibaca dengan service
- * role SETELAH kepemilikan booking dicek (RLS sengaja tidak membuka email / HP peserta lain).
- * Tanpa Supabase → data contoh.
+ * booking di sesi itu. Semua dibaca dengan klien member: sesi & line-up lewat RLS, daftar peserta
+ * lewat RPC `session_roster` (nama & level saja, tanpa email / HP). Tanpa Supabase → data contoh.
  */
 
 export type DetailPhase = "upcoming" | "live" | "done";
 
 export type DetailPerson = { id: string; name: string; level: string; source: string; me: boolean; checkedIn: boolean };
 
-export type DetailMatch = { round: number; court: number; a: string[]; b: string[]; scoreA: number | null; scoreB: number | null; mine: boolean };
+export type DetailMatch = {
+  /** null di mode demo. */
+  id: string | null;
+  round: number;
+  court: number;
+  a: string[];
+  b: string[];
+  scoreA: number | null;
+  scoreB: number | null;
+  /** Tim member yang login di match ini (null = tidak main). */
+  mySide: "a" | "b" | null;
+};
 
-export type DetailStanding = { id: string; name: string; points: number; wins: number; played: number; me: boolean };
+/** `played` = match berskor, `total` = match yang dijadwalkan untuk pemain itu. */
+export type DetailStanding = { id: string; name: string; points: number; wins: number; played: number; total: number; me: boolean };
 
 export type MemberSessionDetail = {
   slug: string;
@@ -50,6 +60,10 @@ export type MemberSessionDetail = {
   matches: DetailMatch[];
   standings: DetailStanding[];
   showLeaderboard: boolean;
+  /** Ronde yang sedang dimainkan (null = belum ada line-up). */
+  currentRound: number | null;
+  /** Host sesi ini (member web) — hanya host yang melihat tombol Input Skor. */
+  isHost: boolean;
 };
 
 const FORMAT_LABEL: Record<string, string> = {
@@ -84,22 +98,14 @@ type SessionRow = {
   show_live_leaderboard: boolean;
   live_started_at: string | null;
   ended_at: string | null;
+  current_round: number | null;
   activity_types: { label: string } | null;
   venues: { name: string; city: string; address: string | null; maps_url: string | null } | null;
 };
 
-type ParticipantRow = {
-  id: string;
-  member_id: string | null;
-  full_name: string;
-  tennis_level: TennisLevel | null;
-  source: string | null;
-  kuy_reg_no: string | null;
-  checked_in_at: string | null;
-  amount: number;
-};
+type RosterRow = { id: string; member_id: string | null; name: string; tennis_level: TennisLevel | null; source: string; checked_in: boolean };
 
-type MatchRow = { round_no: number; court_no: number; a1: string; a2: string; b1: string; b2: string; score_a: number | null; score_b: number | null };
+type MatchRow = { id: string; round_no: number; court_no: number; a1: string; a2: string; b1: string; b2: string; score_a: number | null; score_b: number | null };
 
 /** Kode booking yang dibaca panitia: "SLY-3110-9F2A1C" (tanggal sesi + potongan id booking). */
 function bookingCode(bookingId: string, date: string) {
@@ -120,10 +126,11 @@ function standingsOf(matches: MatchRow[], names: Map<string, string>, myId: stri
   const table = new Map<string, DetailStanding>();
   const row = (id: string) => {
     let r = table.get(id);
-    if (!r) table.set(id, (r = { id, name: names.get(id) ?? "Pemain", points: 0, wins: 0, played: 0, me: id === myId }));
+    if (!r) table.set(id, (r = { id, name: names.get(id) ?? "Pemain", points: 0, wins: 0, played: 0, total: 0, me: id === myId }));
     return r;
   };
   for (const m of matches) {
+    for (const id of [m.a1, m.a2, m.b1, m.b2]) row(id).total += 1;
     if (m.score_a === null || m.score_b === null) continue;
     for (const [team, own, other] of [
       [[m.a1, m.a2], m.score_a, m.score_b],
@@ -145,13 +152,12 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
 
   const { supabase, user } = await getMemberSession();
   if (!user) return null;
-  const reader = createSupabaseAdminClient() ?? supabase;
 
   // RLS: member boleh membaca sesi yang ia ikuti (termasuk visibilitas Link).
   const { data: session } = await supabase
     .from("sessions")
     .select(
-      "id, slug, title, description, type_slug, starts_at, ends_at, status, capacity, kuy_booking_url, recommended_levels, match_format, court_count, round_count, target_points, leaderboard_mode, show_live_leaderboard, live_started_at, ended_at, activity_types(label), venues(name, city, address, maps_url)",
+      "id, slug, title, description, type_slug, starts_at, ends_at, status, capacity, kuy_booking_url, recommended_levels, match_format, court_count, round_count, target_points, leaderboard_mode, show_live_leaderboard, live_started_at, ended_at, current_round, activity_types(label), venues(name, city, address, maps_url)",
     )
     .eq("slug", slug)
     .maybeSingle<SessionRow>();
@@ -167,41 +173,30 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     .maybeSingle();
   if (!booking) return null;
 
-  const [{ data: participants }, { data: bookings }, { data: matches }] = await Promise.all([
-    reader.from("session_participants").select("id, member_id, full_name, tennis_level, source, kuy_reg_no, checked_in_at, amount").eq("session_id", session.id).order("imported_at"),
-    reader.from("bookings").select("member_id, source, status, profiles(full_name, tennis_level)").eq("session_id", session.id).neq("status", "cancelled"),
-    reader.from("session_matches").select("round_no, court_no, a1, a2, b1, b2, score_a, score_b").eq("session_id", session.id).order("round_no").order("court_no"),
+  const [{ data: roster }, { data: mine }, { data: matches }, { data: isHost }] = await Promise.all([
+    supabase.rpc("session_roster", { p_session: session.id }),
+    // Baris peserta milik sendiri (RLS) — untuk no. registrasi Kuyy & jumlah bayar.
+    supabase.from("session_participants").select("id, full_name, kuy_reg_no, checked_in_at, amount").eq("session_id", session.id).eq("member_id", user.id).maybeSingle(),
+    supabase.from("session_matches").select("id, round_no, court_no, a1, a2, b1, b2, score_a, score_b").eq("session_id", session.id).order("round_no").order("court_no").returns<MatchRow[]>(),
+    supabase.rpc("is_session_host", { p_session: session.id }),
   ]);
 
-  type BookingRow = { member_id: string; source: string; status: string; profiles: { full_name: string; tennis_level: TennisLevel | null } | null };
-  const bookingRows = (bookings ?? []) as unknown as BookingRow[];
-  const profileOf = new Map(bookingRows.map((b) => [b.member_id, b.profiles]));
-  const rows = (participants ?? []) as ParticipantRow[];
-  const mine = rows.find((p) => p.member_id === user.id) ?? null;
-
-  const toPerson = (id: string, memberId: string | null, name: string, level: TennisLevel | null, source: string, checkedIn: boolean): DetailPerson => ({
-    id,
-    name,
-    level: level ? LEVEL_LABEL[level] : "Level belum diisi",
-    source: SOURCE_LABEL[source] ?? "Website",
-    me: memberId === user.id,
-    checkedIn,
-  });
-
-  // Member tampil dengan nama Soslay; booking website tanpa baris peserta ikut didaftar.
-  const people = rows.map((p) => {
-    const profile = p.member_id ? profileOf.get(p.member_id) : null;
-    return toPerson(p.id, p.member_id, profile?.full_name ?? p.full_name, profile?.tennis_level ?? p.tennis_level, p.source ?? "kuy", Boolean(p.checked_in_at));
-  });
-  const listed = new Set(rows.map((p) => p.member_id).filter(Boolean));
-  for (const b of bookingRows) {
-    if (!listed.has(b.member_id)) people.push(toPerson(b.member_id, b.member_id, b.profiles?.full_name ?? "Member", b.profiles?.tennis_level ?? null, b.source, b.status === "attended"));
-  }
-  people.sort((x, y) => Number(y.me) - Number(x.me));
+  // Member tampil dengan nama Soslay (RPC sudah memilih nama profil bila terhubung).
+  const people: DetailPerson[] = ((roster ?? []) as RosterRow[])
+    .map((p) => ({
+      id: p.id,
+      name: p.name,
+      level: p.tennis_level ? LEVEL_LABEL[p.tennis_level] : "Level belum diisi",
+      source: SOURCE_LABEL[p.source] ?? "Website",
+      me: p.member_id === user.id,
+      checkedIn: p.checked_in,
+    }))
+    .sort((x, y) => Number(y.me) - Number(x.me));
 
   const names = new Map(people.map((p) => [p.id, p.name]));
   const myId = mine?.id ?? null;
-  const matchRows = (matches ?? []) as MatchRow[];
+  const matchRows = matches ?? [];
+  const pending = matchRows.find((m) => m.score_a === null);
   const city = cityOf(session.venues.city);
   const start = localParts(session.starts_at, city);
   const code = bookingCode(booking.id as string, start.date);
@@ -234,7 +229,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
       code,
       // Isi QR = id booking, supaya pemindai panitia nanti bisa langsung menandai check-in.
       qrSvg: await qrSvg(`soslay:booking:${booking.id}`),
-      holder: profileOf.get(user.id)?.full_name ?? mine?.full_name ?? "Member",
+      holder: people.find((p) => p.me)?.name ?? mine?.full_name ?? "Member",
       type: "Player",
       status: booking.status === "attended" || mine?.checked_in_at ? "attended" : "registered",
     },
@@ -248,16 +243,19 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     },
     people,
     matches: matchRows.map((m) => ({
+      id: m.id,
       round: m.round_no,
       court: m.court_no,
       a: [m.a1, m.a2].map((id) => names.get(id) ?? "Pemain"),
       b: [m.b1, m.b2].map((id) => names.get(id) ?? "Pemain"),
       scoreA: m.score_a,
       scoreB: m.score_b,
-      mine: Boolean(myId) && [m.a1, m.a2, m.b1, m.b2].includes(myId!),
+      mySide: !myId ? null : m.a1 === myId || m.a2 === myId ? "a" : m.b1 === myId || m.b2 === myId ? "b" : null,
     })),
     standings: standingsOf(matchRows, names, myId, session.leaderboard_mode),
     showLeaderboard: session.show_live_leaderboard,
+    currentRound: matchRows.length ? (session.current_round ?? pending?.round_no ?? matchRows[matchRows.length - 1].round_no) : null,
+    isHost: isHost === true,
   };
 });
 
@@ -292,5 +290,7 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     matches: [],
     standings: [],
     showLeaderboard: true,
+    currentRound: null,
+    isHost: false,
   };
 }

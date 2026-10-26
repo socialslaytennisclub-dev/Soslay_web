@@ -53,3 +53,21 @@ export async function saveMyProfile(profile: MemberProfile): Promise<SaveProfile
   revalidatePath("/akun", "layout");
   return { ok: true };
 }
+
+export type HostScoreResult = { ok: true } | { ok: false; error: string };
+
+/**
+ * Host sesi menginput skor court dari member web. Hak host & total poin = target divalidasi
+ * di database (RPC `save_match_score`: hanya admin / host aktif sesi itu).
+ */
+export async function submitHostScore(matchId: string, scoreA: number, scoreB: number): Promise<HostScoreResult> {
+  const supabase = await createSupabaseServerClient("member");
+  const { error } = await supabase.rpc("save_match_score", { p_match: matchId, p_score_a: scoreA, p_score_b: scoreB });
+  if (error) {
+    if (/Hanya admin atau host/.test(error.message)) return { ok: false, error: "Hanya host sesi ini yang bisa input skor." };
+    if (/Total poin/.test(error.message)) return { ok: false, error: error.message.replace("Total poin harus", "Total skor kedua tim harus") + " poin." };
+    if (/terkunci/.test(error.message)) return { ok: false, error: "Sesi sudah diakhiri — skor terkunci." };
+    return { ok: false, error: "Skor gagal disimpan. Coba lagi." };
+  }
+  return { ok: true };
+}

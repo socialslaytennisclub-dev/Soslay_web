@@ -252,6 +252,12 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   };
   console.assert((await visibleTo(player)) === 1, "peserta tidak bisa membaca sesi Link yang ia ikuti!");
   console.assert((await visibleTo(outsider)) === 0, "sesi Link terbaca member yang bukan peserta!");
+  // Roster: peserta melihat semua nama di sesinya, member lain tidak melihat apa pun.
+  await as(player);
+  const roster = (await db.query(`select name from session_roster($1)`, [s])).rows.map((r) => r.name);
+  console.assert(roster.length === 4 && roster.includes("Gavin") && roster.includes("Pemain Member"), `roster peserta ${JSON.stringify(roster)}`);
+  await as(outsider);
+  console.assert((await db.query(`select 1 from session_roster($1)`, [s])).rows.length === 0, "roster terbaca member yang bukan peserta!");
   await as(null);
 
   // Sesi diakhiri → hak host berakhir, kembali member biasa.
