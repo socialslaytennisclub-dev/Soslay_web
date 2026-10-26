@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useDialog } from "@/hooks/useDialog";
 import { cx } from "@/lib/cx";
+import { teamName } from "@/lib/text";
 import type { DetailMatch } from "@/server/member/session-detail";
 import { submitHostScore } from "@/server/member/actions";
 import styles from "./SessionDetail.module.css";
@@ -67,7 +68,7 @@ export function HostScoreButton({ matches, target }: { matches: DetailMatch[]; t
             { team: match.b, value: scoreB, set: (v: number) => setScoreA(target - v) },
           ].map(({ team, value, set }) => (
             <div key={team.join()} className={styles.stepRow}>
-              <span className={styles.stepTeam}>{team.join(" + ")}</span>
+              <span className={styles.stepTeam}>{teamName(team)}</span>
               <span className={styles.stepper}>
                 <button type="button" aria-label="Kurangi" disabled={value <= 0} onClick={() => set(value - 1)}>
                   <Minus size={16} />

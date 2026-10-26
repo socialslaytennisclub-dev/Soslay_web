@@ -173,12 +173,14 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     .maybeSingle();
   if (!booking) return null;
 
-  const [{ data: roster }, { data: mine }, { data: matches }, { data: isHost }] = await Promise.all([
+  const [{ data: roster }, { data: mine }, { data: matches }, { data: isHost }, qr] = await Promise.all([
     supabase.rpc("session_roster", { p_session: session.id }),
     // Baris peserta milik sendiri (RLS) — untuk no. registrasi Kuyy & jumlah bayar.
     supabase.from("session_participants").select("id, full_name, kuy_reg_no, checked_in_at, amount").eq("session_id", session.id).eq("member_id", user.id).maybeSingle(),
     supabase.from("session_matches").select("id, round_no, court_no, a1, a2, b1, b2, score_a, score_b").eq("session_id", session.id).order("round_no").order("court_no").returns<MatchRow[]>(),
     supabase.rpc("is_session_host", { p_session: session.id }),
+    // Isi QR = id booking, supaya pemindai panitia nanti bisa langsung menandai check-in.
+    qrSvg(`soslay:booking:${booking.id}`),
   ]);
 
   // Member tampil dengan nama Soslay (RPC sudah memilih nama profil bila terhubung).
@@ -227,8 +229,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     levels: (session.recommended_levels ?? []).map((l) => LEVEL_LABEL[l]),
     ticket: {
       code,
-      // Isi QR = id booking, supaya pemindai panitia nanti bisa langsung menandai check-in.
-      qrSvg: await qrSvg(`soslay:booking:${booking.id}`),
+      qrSvg: qr,
       holder: people.find((p) => p.me)?.name ?? mine?.full_name ?? "Member",
       type: "Player",
       status: booking.status === "attended" || mine?.checked_in_at ? "attended" : "registered",

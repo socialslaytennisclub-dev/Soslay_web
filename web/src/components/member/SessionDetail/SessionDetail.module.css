@@ -126,6 +126,11 @@
     gap: var(--space-32);
   }
 
+  /* Tab Live · Leaderboard · Ronde saat sesi berjalan: tanpa sidebar e-ticket. */
+  .gridWide {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .side {
     position: sticky;
     top: var(--space-24);
@@ -935,10 +940,6 @@ button.link {
 }
 
 /* ── Tab Live · Leaderboard · Ronde saat sesi berjalan (Figma UIF-07) ── */
-
-.gridWide {
-  grid-template-columns: minmax(0, 1fr) !important;
-}
 
 .liveHead {
   display: flex;

@@ -3,7 +3,7 @@ import { CalendarDays, CalendarPlus, ChartColumn, ChevronDown, ChevronLeft, Chev
 import { Container } from "@/components/ui";
 import { cx } from "@/lib/cx";
 import { CITY_TZ_LABEL, formatAngka, formatJamRange, formatRupiah, formatTanggalISO, formatTanggalPendek } from "@/lib/format";
-import { initials } from "@/lib/text";
+import { initials, teamName } from "@/lib/text";
 import type { DetailMatch, DetailStanding, MemberSessionDetail } from "@/server/member/session-detail";
 import { Countdown } from "./Countdown";
 import { HostScoreButton, ScoreRulesButton } from "./LiveActions";
@@ -384,8 +384,15 @@ function Locked({ detail: d, title, text, label = "Belum bisa diakses" }: { deta
   );
 }
 
-const firstName = (name: string) => name.split(" ")[0];
-const teamName = (team: string[]) => team.map(firstName).join(" + ");
+/** Match dari sisi member yang login: tim sendiri vs lawan (rest → sisi A). */
+function perspective(m: DetailMatch) {
+  const a = m.mySide !== "b";
+  const own = a ? m.scoreA : m.scoreB;
+  const opp = a ? m.scoreB : m.scoreA;
+  return { own: a ? m.a : m.b, opp: a ? m.b : m.a, score: own === null || opp === null ? null : { own, opp } };
+}
+
+const RESULT = { win: "Menang", lose: "Kalah", draw: "Seri" } as const;
 
 /** Avatar inisial bertumpuk untuk satu tim (Figma UIF-07). */
 function TeamFaces({ team }: { team: string[] }) {
@@ -422,13 +429,14 @@ function LiveTab({ detail: d }: { detail: MemberSessionDetail }) {
   const now = roundMatches.find((m) => m.mySide);
   const next = d.matches.find((m) => m.mySide && m.round > round && m.scoreA === null);
   const shown = now ?? next;
+  const view = shown ? perspective(shown) : null;
   const done = d.phase === "done";
   const title = done
     ? "Sesi sudah selesai"
     : now
       ? now.scoreA === null
         ? `Kamu sedang main di Court ${now.court}`
-        : `Match kamu selesai · ${now.mySide === "a" ? now.scoreA : now.scoreB}–${now.mySide === "a" ? now.scoreB : now.scoreA}`
+        : `Match kamu selesai · ${perspective(now).score?.own}–${perspective(now).score?.opp}`
       : `Kamu rest di Ronde ${round}`;
 
   return (
@@ -440,7 +448,7 @@ function LiveTab({ detail: d }: { detail: MemberSessionDetail }) {
       <h2 id="live-title" className={styles.bannerTitle}>
         {title}
       </h2>
-      {shown && (
+      {shown && view && (
         <>
           {!now && (
             <p className={styles.liveNext}>
@@ -449,18 +457,18 @@ function LiveTab({ detail: d }: { detail: MemberSessionDetail }) {
           )}
           <div className={styles.versus}>
             <div className={styles.teamCard}>
-              <TeamFaces team={shown.mySide === "a" ? shown.a : shown.b} />
+              <TeamFaces team={view.own} />
               <span>
                 <small className={styles.teamLabelMine}>Tim kamu</small>
-                <strong>{teamName(shown.mySide === "a" ? shown.a : shown.b)}</strong>
+                <strong>{teamName(view.own)}</strong>
               </span>
             </div>
-            <span className={styles.vsBadge}>{shown.scoreA === null ? "VS" : `${shown.mySide === "a" ? shown.scoreA : shown.scoreB}–${shown.mySide === "a" ? shown.scoreB : shown.scoreA}`}</span>
+            <span className={styles.vsBadge}>{view.score ? `${view.score.own}–${view.score.opp}` : "VS"}</span>
             <div className={styles.teamCard}>
-              <TeamFaces team={shown.mySide === "a" ? shown.b : shown.a} />
+              <TeamFaces team={view.opp} />
               <span>
                 <small>Lawan</small>
-                <strong>{teamName(shown.mySide === "a" ? shown.b : shown.a)}</strong>
+                <strong>{teamName(view.opp)}</strong>
               </span>
             </div>
           </div>
@@ -482,15 +490,16 @@ function LiveTab({ detail: d }: { detail: MemberSessionDetail }) {
 /** Peringkat dengan seri (Figma: "=5"): pemain dengan nilai sama berbagi nomor. */
 function ranks(d: MemberSessionDetail) {
   const value = (s: DetailStanding) => (d.format.leaderboardMode === "wins" ? s.wins : s.points);
-  return d.standings.map((s, i, all) => {
-    const first = all.findIndex((x) => value(x) === value(s));
-    const tied = all.filter((x) => value(x) === value(s)).length > 1;
-    return {
-      s,
-      rank: `${tied ? "=" : ""}${first + 1}`,
-      value: value(s),
-      index: i,
-    };
+  // Standings sudah terurut → nilai sama selalu berdampingan: hitung posisi pertama & jumlahnya sekali jalan.
+  const groups = new Map<number, { first: number; count: number }>();
+  d.standings.forEach((s, i) => {
+    const g = groups.get(value(s));
+    if (g) g.count += 1;
+    else groups.set(value(s), { first: i + 1, count: 1 });
+  });
+  return d.standings.map((s) => {
+    const g = groups.get(value(s))!;
+    return { s, rank: `${g.count > 1 ? "=" : ""}${g.first}`, value: value(s) };
   });
 }
 
@@ -606,8 +615,8 @@ function RoundsTab({ detail: d }: { detail: MemberSessionDetail }) {
           </ul>
         );
         if (state === "done") {
-          const own = mine ? (mine.mySide === "a" ? mine.scoreA! : mine.scoreB!) : 0;
-          const other = mine ? (mine.mySide === "a" ? mine.scoreB! : mine.scoreA!) : 0;
+          const view = mine ? perspective(mine) : null;
+          const result = view?.score ? (view.score.own > view.score.opp ? "win" : view.score.own < view.score.opp ? "lose" : "draw") : null;
           return (
             <details key={r} className={styles.roundDone}>
               <summary>
@@ -615,10 +624,10 @@ function RoundsTab({ detail: d }: { detail: MemberSessionDetail }) {
                   Ronde {r} <span className={cx(styles.roundPill, styles.roundPill_done)}>Selesai</span>
                 </span>
                 <span className={styles.roundSummary}>
-                  {mine ? (
+                  {view ? (
                     <>
                       <span className={styles.youChip}>Kamu</span>
-                      {teamName(mine.mySide === "a" ? mine.a : mine.b)} · {own}–{other}
+                      {teamName(view.own)} · {view.score?.own}–{view.score?.opp}
                     </>
                   ) : (
                     <>
@@ -627,7 +636,7 @@ function RoundsTab({ detail: d }: { detail: MemberSessionDetail }) {
                     </>
                   )}
                 </span>
-                {mine && <span className={own > other ? styles.win : own < other ? styles.lose : styles.muted}>{own > other ? "Menang" : own < other ? "Kalah" : "Seri"}</span>}
+                {result && <span className={styles[result === "draw" ? "muted" : result]}>{RESULT[result]}</span>}
                 <ChevronDown size={16} aria-hidden className={styles.roundCaret} />
               </summary>
               {courts}
