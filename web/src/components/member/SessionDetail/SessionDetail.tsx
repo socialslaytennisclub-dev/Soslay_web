@@ -526,9 +526,12 @@ function LeaderboardTab({ detail: d }: { detail: MemberSessionDetail }) {
   if (!d.format.lineup || !d.showLeaderboard) {
     return <Locked detail={d} label="Tidak tersedia" title="Leaderboard tidak dipakai di sesi ini" text="Sesi ini tidak memakai format Americano / Rotating Partner." />;
   }
-  if (!d.standings.some((s) => s.played > 0)) {
-    return <Locked detail={d} title="Leaderboard belum dimulai" text="Peringkat live muncul setelah match pertama terverifikasi host." />;
+  // Sebelum sesi mulai / tanpa line-up → terkunci. Begitu sesi berjalan tabel langsung tampil
+  // (semua 0) supaya pemain melihat daftar lengkap; peringkat bergerak setelah skor pertama masuk.
+  if (d.phase === "upcoming" || !d.standings.length) {
+    return <Locked detail={d} title="Leaderboard belum dimulai" text="Peringkat live tampil di sini begitu sesi dimulai dan line-up dibuat host." />;
   }
+  const started = d.standings.some((s) => s.played > 0);
   const wins = d.format.leaderboardMode === "wins";
   return (
     <section className={styles.board2} aria-labelledby="lb-title">
@@ -549,7 +552,7 @@ function LeaderboardTab({ detail: d }: { detail: MemberSessionDetail }) {
         <tbody>
           {ranks(d).map(({ s, rank, value }) => (
             <tr key={s.id} className={cx(s.me && styles.boardMe2)}>
-              <td className={styles.boardRank}>{rank}</td>
+              <td className={styles.boardRank}>{started ? rank : "–"}</td>
               <td>
                 <span className={styles.boardPlayer}>
                   <span className={styles.miniFace}>{initials(s.name)}</span>
@@ -565,7 +568,7 @@ function LeaderboardTab({ detail: d }: { detail: MemberSessionDetail }) {
           ))}
         </tbody>
       </table>
-      <p className={styles.boardNote}>Nilai seri berbagi peringkat (=). Hanya match yang sudah diinput host yang dihitung.</p>
+      <p className={styles.boardNote}>{started ? "Nilai seri berbagi peringkat (=). Hanya match yang sudah diinput host yang dihitung." : "Belum ada skor masuk — peringkat bergerak setelah host menginput skor match pertama."}</p>
     </section>
   );
 }
