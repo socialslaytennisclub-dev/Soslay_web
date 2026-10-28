@@ -54,16 +54,19 @@ export type MemberSessionDetail = {
   format: { label: string; targetPoints: number; courts: number; rounds: number; lineup: boolean; leaderboardMode: "points" | "wins" };
   capacity: number;
   levels: string[];
-  ticket: { code: string; qrSvg: string; holder: string; type: string; status: "registered" | "attended" };
-  registration: { sourceLabel: string; paid: boolean; amount: number; orderId: string | null; registeredAt: string; kuyUrl: string | null };
+  /** null = host yang tidak ikut main (tanpa booking) — tanpa e-ticket & info pendaftaran. */
+  ticket: { code: string; qrSvg: string; holder: string; type: string; status: "registered" | "attended" } | null;
+  registration: { sourceLabel: string; paid: boolean; amount: number; orderId: string | null; registeredAt: string; kuyUrl: string | null } | null;
   people: DetailPerson[];
   matches: DetailMatch[];
   standings: DetailStanding[];
   showLeaderboard: boolean;
   /** Ronde yang sedang dimainkan (null = belum ada line-up). */
   currentRound: number | null;
-  /** Host sesi ini (member web) — hanya host yang melihat tombol Input Skor. */
+  /** Ditunjuk sebagai host sesi ini (chip "Kamu host" + Panel Host). */
   isHost: boolean;
+  /** Host & sesi masih berjalan → boleh input / ubah skor (dicek ulang di database). */
+  canScore: boolean;
 };
 
 const FORMAT_LABEL: Record<string, string> = {
@@ -168,7 +171,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
   const { supabase, user } = await getMemberSession();
   if (!user) return null;
 
-  // RLS: member boleh membaca sesi yang ia ikuti (termasuk visibilitas Link).
+  // RLS: member boleh membaca sesi yang ia ikuti / yang ia host (termasuk visibilitas Link).
   const { data: session } = await supabase
     .from("sessions")
     .select(
@@ -178,17 +181,14 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     .maybeSingle<SessionRow>();
   if (!session?.venues || session.status === "draft" || session.status === "cancelled") return null;
 
-  // Kepemilikan dicek dengan klien member (RLS: booking milik sendiri) sebelum data lain dibaca.
-  const { data: booking } = await supabase
-    .from("bookings")
-    .select("id, status, payment_status, source, amount, created_at")
-    .eq("session_id", session.id)
-    .eq("member_id", user.id)
-    .neq("status", "cancelled")
-    .maybeSingle();
-  if (!booking) return null;
+  // Akses: punya booking aktif (peserta) atau ditunjuk sebagai host sesi ini.
+  const [{ data: booking }, { data: assigned }] = await Promise.all([
+    supabase.from("bookings").select("id, status, payment_status, source, amount, created_at").eq("session_id", session.id).eq("member_id", user.id).neq("status", "cancelled").maybeSingle(),
+    supabase.rpc("is_assigned_host", { p_session: session.id }),
+  ]);
+  if (!booking && assigned !== true) return null;
 
-  const [{ data: myRows }, { data: roster }, { data: matches }, { data: isHost }, qr] = await Promise.all([
+  const [{ data: myRows }, { data: roster }, { data: matches }, { data: canScore }, qr] = await Promise.all([
     // Baris peserta milik sendiri (RLS) — untuk no. registrasi Kuyy & jumlah bayar. Bisa lebih dari
     // satu (impor Kuyy + tambahan manual admin), jadi ambil semua: yang pertama untuk data daftar.
     supabase.from("session_participants").select("id, full_name, kuy_reg_no, checked_in_at, amount").eq("session_id", session.id).eq("member_id", user.id).order("imported_at"),
@@ -196,7 +196,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     supabase.from("session_matches").select("id, round_no, court_no, a1, a2, b1, b2, score_a, score_b").eq("session_id", session.id).order("round_no").order("court_no").returns<MatchRow[]>(),
     supabase.rpc("is_session_host", { p_session: session.id }),
     // Isi QR = id booking, supaya pemindai panitia nanti bisa langsung menandai check-in.
-    qrSvg(`soslay:booking:${booking.id}`),
+    booking ? qrSvg(`soslay:booking:${booking.id}`) : null,
   ]);
 
   // Member tampil dengan nama Soslay (RPC sudah memilih nama profil bila terhubung).
@@ -218,7 +218,6 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
   const side = (m: MatchRow): DetailMatch["mySide"] => (myIds.has(m.a1) || myIds.has(m.a2) ? "a" : myIds.has(m.b1) || myIds.has(m.b2) ? "b" : null);
   const city = cityOf(session.venues.city);
   const start = localParts(session.starts_at, city);
-  const code = bookingCode(booking.id as string, start.date);
 
   return {
     slug: session.slug,
@@ -244,21 +243,26 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     },
     capacity: session.capacity,
     levels: (session.recommended_levels ?? []).map((l) => LEVEL_LABEL[l]),
-    ticket: {
-      code,
-      qrSvg: qr,
-      holder: people.find((p) => p.me)?.name ?? mine?.full_name ?? "Member",
-      type: "Player",
-      status: booking.status === "attended" || mine?.checked_in_at ? "attended" : "registered",
-    },
-    registration: {
-      sourceLabel: booking.source === "kuy" ? "Dibayar via Kuyy" : booking.source === "admin" ? "Didaftarkan admin" : "Daftar via website",
-      paid: booking.payment_status === "paid",
-      amount: mine?.amount || (booking.amount as number) || 0,
-      orderId: mine?.kuy_reg_no && !mine.kuy_reg_no.startsWith("ROW") && !mine.kuy_reg_no.startsWith("ADM") ? mine.kuy_reg_no : null,
-      registeredAt: booking.created_at as string,
-      kuyUrl: session.kuy_booking_url,
-    },
+    ticket:
+      booking && qr
+        ? {
+            code: bookingCode(booking.id as string, start.date),
+            qrSvg: qr,
+            holder: people.find((p) => p.me)?.name ?? mine?.full_name ?? "Member",
+            type: "Player",
+            status: booking.status === "attended" || mine?.checked_in_at ? "attended" : "registered",
+          }
+        : null,
+    registration: booking
+      ? {
+          sourceLabel: booking.source === "kuy" ? "Dibayar via Kuyy" : booking.source === "admin" ? "Didaftarkan admin" : "Daftar via website",
+          paid: booking.payment_status === "paid",
+          amount: mine?.amount || (booking.amount as number) || 0,
+          orderId: mine?.kuy_reg_no && !mine.kuy_reg_no.startsWith("ROW") && !mine.kuy_reg_no.startsWith("ADM") ? mine.kuy_reg_no : null,
+          registeredAt: booking.created_at as string,
+          kuyUrl: session.kuy_booking_url,
+        }
+      : null,
     people,
     matches: matchRows.map((m) => ({
       id: m.id,
@@ -273,7 +277,8 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     standings: standingsOf(matchRows, names, myIds, session.leaderboard_mode),
     showLeaderboard: session.show_live_leaderboard,
     currentRound: session.current_round ?? currentRoundOf(matchRows),
-    isHost: isHost === true,
+    isHost: assigned === true,
+    canScore: canScore === true,
   };
 });
 
@@ -310,5 +315,6 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     showLeaderboard: true,
     currentRound: null,
     isHost: false,
+    canScore: false,
   };
 }

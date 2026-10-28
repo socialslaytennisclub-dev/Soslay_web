@@ -43,7 +43,7 @@ export function ActivityListCard({ sessions }: { sessions: MemberSession[] }) {
                   {session.venue} · {formatJamRange(session.start, session.end, "–")}
                 </p>
               </div>
-              <Chip tone={statusTone[session.status]}>{sessionStatusLabel[session.status]}</Chip>
+              {session.hostOnly ? <Chip tone="navy">Host</Chip> : <Chip tone={statusTone[session.status]}>{sessionStatusLabel[session.status]}</Chip>}
             </li>
           );
         })}

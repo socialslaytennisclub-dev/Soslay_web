@@ -71,3 +71,11 @@ export async function submitHostScore(matchId: string, scoreA: number, scoreB: n
   }
   return { ok: true };
 }
+
+/** "Urungkan" dari Panel Host: kosongkan skor match (hak host dicek di database). */
+export async function clearHostScore(matchId: string): Promise<HostScoreResult> {
+  const supabase = await createSupabaseServerClient("member");
+  const { error } = await supabase.rpc("clear_match_score", { p_match: matchId });
+  if (error) return { ok: false, error: /Hanya admin atau host/.test(error.message) ? "Hanya host sesi ini yang bisa mengubah skor." : /terkunci/.test(error.message) ? "Sesi sudah diakhiri — skor terkunci." : "Gagal mengurungkan skor. Coba lagi." };
+  return { ok: true };
+}

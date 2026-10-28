@@ -28,19 +28,23 @@ export const getMySessions = cache(async (): Promise<MemberSession[] | null> => 
   const { supabase, user } = await getMemberSession();
   if (!user) return null;
 
-  const [{ data: bookings }, { data: points }] = await Promise.all([
+  const [{ data: booked }, { data: points }, { data: hosted }] = await Promise.all([
     supabase.from("bookings").select("id, session_id, status").eq("member_id", user.id).neq("status", "cancelled"),
     supabase.from("points_ledger").select("booking_id, delta").eq("member_id", user.id).eq("reason", "attendance"),
+    supabase.from("session_hosts").select("session_id").eq("member_id", user.id).eq("role", "host"),
   ]);
-  if (!bookings?.length) return [];
+  // Sesi yang ia host ikut tampil (chip HOST) walau ia tidak ikut main.
+  const hostOf = new Set((hosted ?? []).map((h) => h.session_id as string));
+  const bookings = [...(booked ?? []).map((b) => ({ id: b.id as string | null, session_id: b.session_id as string })), ...[...hostOf].filter((id) => !booked?.some((b) => b.session_id === id)).map((id) => ({ id: null, session_id: id }))];
+  if (!bookings.length) return [];
 
-  // RLS "member read booked sessions": sesi yang ia ikuti terbaca, termasuk visibilitas Link.
+  // RLS "member read booked sessions" / "host read hosted sessions": termasuk visibilitas Link.
   const { data: sessions } = await supabase
     .from("sessions")
     .select("id, slug, title, starts_at, ends_at, status, cover_path, venues(name, city, cover_path)")
     .in(
       "id",
-      bookings.map((b) => b.session_id as string),
+      bookings.map((b) => b.session_id),
     );
 
   const byId = new Map(((sessions ?? []) as unknown as SessionRow[]).map((s) => [s.id, s]));
@@ -48,7 +52,7 @@ export const getMySessions = cache(async (): Promise<MemberSession[] | null> => 
   const now = Date.now();
 
   return bookings.flatMap((b): MemberSession[] => {
-    const s = byId.get(b.session_id as string);
+    const s = byId.get(b.session_id);
     if (!s || !s.venues || s.status === "cancelled" || s.status === "draft") return [];
     const city = cityOf(s.venues.city);
     const start = localParts(s.starts_at, city);
@@ -64,7 +68,9 @@ export const getMySessions = cache(async (): Promise<MemberSession[] | null> => 
         end: localParts(s.ends_at, city).time,
         image: s.cover_path || s.venues.cover_path || "/images/home/activity-weekly-mabar.webp",
         status: done ? "done" : "registered",
-        points: earned.get(b.id as string),
+        points: b.id ? earned.get(b.id) : undefined,
+        host: hostOf.has(s.id),
+        hostOnly: !b.id,
       },
     ];
   });

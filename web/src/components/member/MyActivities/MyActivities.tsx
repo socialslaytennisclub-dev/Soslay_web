@@ -68,9 +68,13 @@ function ActivityTicket({ session }: { session: MemberSession }) {
           <>
             <Chip tone="white">Selesai</Chip>
             {session.points ? <Chip tone="navy">+{session.points} pts</Chip> : null}
+            {session.host ? <Chip tone="navy">Host</Chip> : null}
           </>
         ) : (
-          <Chip tone="lime">Terdaftar</Chip>
+          <>
+            {!session.hostOnly && <Chip tone="lime">Terdaftar</Chip>}
+            {session.host ? <Chip tone="navy">Host</Chip> : null}
+          </>
         )
       }
     >

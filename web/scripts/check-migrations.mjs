@@ -231,6 +231,10 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await one(`select is_session_host($1) ok`, [s])).ok, "host tidak dikenali");
   console.assert(await fails(`select save_match_score($1, 12::smallint, 8::smallint)`, [match]), "total ≠ 21 diterima!");
   await db.query(`select save_match_score($1, 12::smallint, 9::smallint)`, [match]);
+  // Urungkan dari Panel Host: kosongkan lalu simpan lagi; member biasa tidak boleh.
+  await db.query(`select clear_match_score($1)`, [match]);
+  console.assert((await one(`select score_a from session_matches where id = $1`, [match])).score_a === null, "urungkan skor gagal");
+  await db.query(`select save_match_score($1, 12::smallint, 9::smallint)`, [match]);
   await db.query(`select set_participant_check_in($1, true)`, [ids[3]]);
   await as(null);
   const scored = await one(`select score_a, score_b, scored_by from session_matches where id = $1`, [match]);
@@ -258,6 +262,12 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert(roster.length === 4 && roster.includes("Gavin") && roster.includes("Pemain Member"), `roster peserta ${JSON.stringify(roster)}`);
   await as(outsider);
   console.assert((await db.query(`select 1 from session_roster($1)`, [s])).rows.length === 0, "roster terbaca member yang bukan peserta!");
+  // Host yang ditunjuk (bukan peserta) membaca sesi Link-nya + roster.
+  console.assert((await visibleTo(hostId)) === 1, "host tidak bisa membaca sesi yang ia pegang!");
+  await as(hostId);
+  console.assert((await db.query(`select 1 from session_roster($1)`, [s])).rows.length === 4, "roster tidak terbaca host");
+  await as(outsider);
+  console.assert(await fails(`select clear_match_score($1)`, [match]), "member biasa bisa mengurungkan skor!");
   await as(null);
 
   // Sesi diakhiri → hak host berakhir, kembali member biasa.
