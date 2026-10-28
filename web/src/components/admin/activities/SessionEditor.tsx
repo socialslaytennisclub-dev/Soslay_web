@@ -932,8 +932,16 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                   <MemberAvatar name={h.name} size={32} />
                   <span className={styles.personText}>
                     <span className={styles.personName}>{h.name}</span>
-                    <span className={styles.muted}>
-                      {h.role === "host" ? "Host" : "Fotografer"} · member {h.code}
+                    <span className={styles.crewMeta}>
+                      <label className={styles.roleSelect}>
+                        <span className="visually-hidden">Peran {h.name}</span>
+                        <select value={h.role} onChange={(e) => setHosts((list) => list.map((x) => (x.memberId === h.memberId ? { ...x, role: e.target.value as SessionHost["role"] } : x)))}>
+                          <option value="host">Host</option>
+                          <option value="photographer">Fotografer</option>
+                        </select>
+                        <AdminIcon name="caret-down" size={12} />
+                      </label>
+                      <span className={styles.muted}>member {h.code}</span>
                     </span>
                   </span>
                   <button type="button" className={styles.iconButton} aria-label={`Hapus ${h.name}`} onClick={() => setHosts((list) => list.filter((x) => x.memberId !== h.memberId))}>
