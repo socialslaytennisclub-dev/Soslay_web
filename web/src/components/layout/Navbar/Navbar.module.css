@@ -186,6 +186,102 @@
   display: none;
 }
 
+/* ── Akun member (sudah login, Figma): pill avatar + nama depan ── */
+.account {
+  position: relative;
+  display: none;
+}
+
+.accountButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  padding: 4px var(--space-12) 4px 4px;
+  border-radius: var(--radius-full);
+  background: rgb(255 255 255 / 0.1);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 14px;
+  color: var(--color-white);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.accountButton:hover {
+  background: rgb(255 255 255 / 0.18);
+}
+
+.accountAvatar {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-lime-500);
+  font-size: 12px;
+  font-weight: var(--weight-bold);
+  color: var(--color-navy-900);
+}
+
+.accountName {
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.accountMenu {
+  position: absolute;
+  top: calc(100% + var(--space-8));
+  right: 0;
+  z-index: 10;
+  min-width: 200px;
+  padding: var(--space-8);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  box-shadow: 0 16px 40px rgb(10 8 74 / 0.18);
+  list-style: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-6px);
+  transition:
+    opacity var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out),
+    visibility var(--duration-fast);
+}
+
+.accountMenuOpen {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.signOut {
+  width: 100%;
+  margin-top: var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  text-align: left;
+  color: #d92d20;
+  cursor: pointer;
+}
+
+.mobileAccount {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.mobileSignOut {
+  width: 100%;
+  padding: var(--space-12);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 16px;
+  color: var(--color-white);
+  cursor: pointer;
+}
+
 /* ── Burger (mobile) ─────────────────────────────────────── */
 .burger {
   display: inline-flex;
@@ -286,7 +382,8 @@
 /* ── ≥ 768px: navigasi inline ────────────────────────────── */
 @media (min-width: 768px) {
   .desktopNav,
-  .login {
+  .login,
+  .account {
     display: inline-flex;
   }
 

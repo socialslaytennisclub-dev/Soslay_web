@@ -6,10 +6,21 @@ import { Button, Container, Icon, Logo } from "@/components/ui";
 import { authLinks, primaryNav } from "@/content/site";
 import { useCart } from "@/hooks/useCart";
 import { useClickOutside } from "@/hooks/useClickOutside";
+import { useMemberUser } from "@/hooks/useMemberUser";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { useScrolled } from "@/hooks/useScrolled";
 import { cx } from "@/lib/cx";
+import { firstName, initials } from "@/lib/text";
+import { signOut } from "@/server/auth/actions";
 import styles from "./Navbar.module.css";
+
+/** Menu akun member di navbar (sesudah login). */
+const ACCOUNT_LINKS = [
+  { label: "Dashboard", href: "/akun" },
+  { label: "My Activities", href: "/akun/aktivitas" },
+  { label: "Order", href: "/akun/order" },
+  { label: "Edit Profil", href: "/akun/profil" },
+];
 
 type NavbarProps = {
   /** `overlay` = transparan di atas hero foto, jadi solid saat scroll. */
@@ -21,8 +32,12 @@ export function Navbar({ variant = "solid" }: NavbarProps) {
   const menu = useDisclosure({ lockScroll: true });
   const dropdown = useDisclosure();
   const dropdownRef = useRef<HTMLLIElement>(null);
+  const account = useDisclosure();
+  const accountRef = useRef<HTMLDivElement>(null);
   const cart = useCart();
+  const member = useMemberUser();
   useClickOutside(dropdownRef, dropdown.close, dropdown.isOpen);
+  useClickOutside(accountRef, account.close, account.isOpen);
 
   const { activity, links } = primaryNav;
   const isSolid = variant === "solid" || scrolled || menu.isOpen;
@@ -94,9 +109,38 @@ export function Navbar({ variant = "solid" }: NavbarProps) {
             )}
           </Link>
           <span className={styles.divider} aria-hidden />
-          <Button href={authLinks.login.href} variant="primary" size="sm" className={styles.login}>
-            {authLinks.login.label}
-          </Button>
+          {member ? (
+            // Sudah login (Figma): pill avatar inisial + nama depan, menu akun.
+            <div ref={accountRef} className={styles.account}>
+              <button type="button" className={styles.accountButton} aria-expanded={account.isOpen} aria-controls="nav-account-menu" onClick={account.toggle}>
+                <span className={styles.accountAvatar} aria-hidden>
+                  {initials(member.name)}
+                </span>
+                <span className={styles.accountName}>{firstName(member.name)}</span>
+                <Icon name="caret-down-bold" size={14} className={cx(styles.caret, account.isOpen && styles.caretOpen)} />
+              </button>
+              <ul id="nav-account-menu" className={cx(styles.accountMenu, account.isOpen && styles.accountMenuOpen)}>
+                {ACCOUNT_LINKS.map((item) => (
+                  <li key={item.href}>
+                    <Link href={item.href} className={styles.dropdownLink} onClick={account.close}>
+                      {item.label}
+                    </Link>
+                  </li>
+                ))}
+                <li>
+                  <form action={signOut}>
+                    <button type="submit" className={cx(styles.dropdownLink, styles.signOut)}>
+                      Keluar
+                    </button>
+                  </form>
+                </li>
+              </ul>
+            </div>
+          ) : (
+            <Button href={authLinks.login.href} variant="primary" size="sm" className={styles.login}>
+              {authLinks.login.label}
+            </Button>
+          )}
           <button
             type="button"
             className={cx(styles.burger, menu.isOpen && styles.burgerOpen)}
@@ -138,9 +182,22 @@ export function Navbar({ variant = "solid" }: NavbarProps) {
               </li>
             ))}
           </ul>
-          <Button href={authLinks.login.href} variant="primary" onClick={menu.close}>
-            {authLinks.login.label}
-          </Button>
+          {member ? (
+            <div className={styles.mobileAccount}>
+              <Button href="/akun" variant="primary" onClick={menu.close}>
+                Akun {firstName(member.name)}
+              </Button>
+              <form action={signOut}>
+                <button type="submit" className={styles.mobileSignOut}>
+                  Keluar
+                </button>
+              </form>
+            </div>
+          ) : (
+            <Button href={authLinks.login.href} variant="primary" onClick={menu.close}>
+              {authLinks.login.label}
+            </Button>
+          )}
         </Container>
       </nav>
     </header>
