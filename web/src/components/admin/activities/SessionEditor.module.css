@@ -552,6 +552,8 @@ a.personName:hover {
 }
 
 .roleSelect select {
+  width: auto;
+  min-width: 0;
   height: 26px;
   padding: 0 22px 0 10px;
   border: 1px solid var(--color-indigo-200);
@@ -570,9 +572,12 @@ a.personName:hover {
   outline-offset: 1px;
 }
 
-.roleSelect svg {
+/* AdminIcon membungkus svg dengan <span> — posisikan pembungkusnya, bukan svg-nya. */
+.roleCaret {
   position: absolute;
-  right: 8px;
+  top: 50%;
+  right: 9px;
+  transform: translateY(-50%);
   pointer-events: none;
 }
 

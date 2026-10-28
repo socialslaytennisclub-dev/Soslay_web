@@ -939,7 +939,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                           <option value="host">Host</option>
                           <option value="photographer">Fotografer</option>
                         </select>
-                        <AdminIcon name="caret-down" size={12} />
+                        <AdminIcon name="caret-down" size={12} className={styles.roleCaret} />
                       </label>
                       <span className={styles.muted}>member {h.code}</span>
                     </span>
