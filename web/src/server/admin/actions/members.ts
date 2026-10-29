@@ -1,6 +1,6 @@
 "use server";
 
-import { isEmail } from "@/lib/auth";
+import { isEmail, isKuyId, KUY_ID_FORMAT_ERROR, normalizeKuyId } from "@/lib/auth";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { changedPhoneError, localPhone, phoneFormatError } from "@/lib/wa-invite";
@@ -39,12 +39,13 @@ export async function addMember(input: NewMemberInput): Promise<AddMemberResult>
   if ("error" in auth) return fail(auth.error);
   const fullName = input.fullName.trim();
   const email = input.email.trim().toLowerCase();
-  const kuyId = input.kuyId.trim();
+  const kuyId = normalizeKuyId(input.kuyId);
   const phone = localPhone(input.phone);
   if (!fullName) return fail("Isi nama lengkap member.");
   if (!isEmail(email)) return fail("Email tidak valid.");
   const phoneError = phoneFormatError(input.phone);
   if (phoneError) return fail(phoneError);
+  if (kuyId && !isKuyId(kuyId)) return fail(KUY_ID_FORMAT_ERROR);
 
   // Tanpa service key member tidak bisa ditambah — tetap beri tahu kalau emailnya ternyata sudah member.
   if (!createSupabaseAdminClient()) {
@@ -117,11 +118,13 @@ export async function updateMember(input: MemberForm): Promise<ActionResult> {
   if (!input.fullName.trim()) return fail("Nama wajib diisi.");
   if (input.birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(input.birthDate)) return fail("Tanggal lahir tidak valid.");
   const supabase = await createSupabaseServerClient();
-  // Nomor lama yang tidak diubah tetap boleh disimpan — data tersimpan hanya dibaca kalau format nomornya ditolak.
-  if (phoneFormatError(input.phone)) {
-    const { data: stored } = await supabase.from("profiles").select("phone").eq("id", input.id).maybeSingle();
+  // Nomor / Kuy ID lama yang tidak diubah tetap boleh disimpan — data tersimpan hanya dibaca kalau formatnya ditolak.
+  const kuyId = normalizeKuyId(input.kuyId);
+  if (phoneFormatError(input.phone) || (kuyId && !isKuyId(kuyId))) {
+    const { data: stored } = await supabase.from("profiles").select("phone, kuy_id").eq("id", input.id).maybeSingle();
     const phoneError = changedPhoneError(input.phone, stored?.phone as string | null | undefined);
     if (phoneError) return fail(phoneError);
+    if (kuyId && !isKuyId(kuyId) && kuyId !== stored?.kuy_id) return fail(KUY_ID_FORMAT_ERROR);
   }
 
   const { error } = await supabase
@@ -132,7 +135,7 @@ export async function updateMember(input: MemberForm): Promise<ActionResult> {
       city: input.city.trim() || null,
       birth_date: input.birthDate || null,
       gender: orNull(input.gender, ENUMS.gender),
-      kuy_id: input.kuyId.trim() || null,
+      kuy_id: kuyId || null,
       instagram: input.instagram.trim().replace(/^@/, "") || null,
       tennis_level: orNull(input.level, ENUMS.level),
       play_frequency: orNull(input.playFrequency, ENUMS.frequency),

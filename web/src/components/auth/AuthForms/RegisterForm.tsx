@@ -3,7 +3,7 @@
 import { useRef, useState, useTransition, type FormEvent } from "react";
 import { Button, Checkbox, DateField, TextField } from "@/components/ui";
 import { registerPage } from "@/content/auth";
-import { compact, MIN_PASSWORD, required, todayIso, validateBirthDate, validateEmail, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
+import { compact, MIN_PASSWORD, required, todayIso, validateBirthDate, validateEmail, validateKuyId, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
 import { signUp } from "@/server/auth/actions";
 import { PasswordField } from "./PasswordField";
 import styles from "./AuthForms.module.css";
@@ -36,7 +36,7 @@ export function RegisterForm() {
     event.preventDefault();
     const next = compact<Field>({
       fullName: required(values.fullName, "Full name"),
-      kuyId: required(values.kuyId, "Kuy ID"),
+      kuyId: validateKuyId(values.kuyId),
       birthDate: validateBirthDate(values.birthDate),
       phone: validatePhone(values.phone),
       email: validateEmail(values.email),

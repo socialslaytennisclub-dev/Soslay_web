@@ -59,6 +59,17 @@ export function passwordStrength(value: string): PasswordStrength {
   return { level, label, hint: level < 4 ? checks.find((c) => !c.ok)?.hint : undefined };
 }
 
+/** Kuy ID = username Kuyy (mis. "andrekurn48-423"): huruf, angka, ".", "_", "-", 3–30 karakter; "@" di depan dibuang. */
+const KUY_ID = /^[A-Za-z0-9._-]{3,30}$/;
+export const normalizeKuyId = (value: string) => value.trim().replace(/^@/, "");
+export const isKuyId = (value: string) => KUY_ID.test(normalizeKuyId(value));
+export const KUY_ID_FORMAT_ERROR = "Kuy ID hanya boleh huruf, angka, titik, garis bawah, atau tanda hubung (3–30 karakter, tanpa spasi).";
+
+export function validateKuyId(value: string): string | undefined {
+  if (!normalizeKuyId(value)) return "Kuy ID is required";
+  if (!isKuyId(value)) return "Kuy ID: 3–30 letters, numbers, dots, underscores or hyphens — no spaces";
+}
+
 /** Sama dengan aturan form admin & profil (phoneFormatError) — nomor Indonesia 8xx. */
 export function validatePhone(value: string): string | undefined {
   if (!value.replace(/\D/g, "")) return "WhatsApp number is required";

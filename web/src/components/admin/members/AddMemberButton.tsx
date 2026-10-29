@@ -6,6 +6,7 @@ import { SelectField, TextField } from "@/components/ui";
 import { cityOptions } from "@/content/member";
 import { useDialog } from "@/hooks/useDialog";
 import { LEVEL_LABEL } from "@/lib/admin-labels";
+import { isKuyId, KUY_ID_FORMAT_ERROR } from "@/lib/auth";
 import { phoneFormatError, PUBLIC_SITE_URL, signupWaLink } from "@/lib/wa-invite";
 import { addMember, type NewMemberInput } from "@/server/admin/actions/members";
 import type { TennisLevel } from "@/server/admin/types";
@@ -28,13 +29,16 @@ export function AddMemberButton() {
   /** Error nomor tampil setelah kolom ditinggalkan (blur) atau saat submit — bukan di setiap ketikan. */
   const [phoneTouched, setPhoneTouched] = useState(false);
   const phoneError = phoneFormatError(form.phone) ?? undefined;
+  const [kuyTouched, setKuyTouched] = useState(false);
+  const kuyError = form.kuyId.trim() && !isKuyId(form.kuyId) ? KUY_ID_FORMAT_ERROR : undefined;
   const formId = useId();
   const set = (key: keyof NewMemberInput, value: string) => setForm((f) => ({ ...f, [key]: value }));
 
   function submit(event: FormEvent) {
     event.preventDefault();
     setPhoneTouched(true);
-    if (phoneError) return;
+    setKuyTouched(true);
+    if (phoneError || kuyError) return;
     startTransition(async () => {
       const result = await addMember(form);
       if (!result.ok) return toast.error(result.error);
@@ -42,6 +46,7 @@ export function AddMemberButton() {
       toast.success(result.message);
       setForm(EMPTY);
       setPhoneTouched(false);
+      setKuyTouched(false);
       router.refresh();
     });
   }
@@ -78,7 +83,7 @@ export function AddMemberButton() {
           <TextField label="Email" required type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="nama@email.com" autoComplete="off" />
           <div className={styles.addGrid}>
             <TextField label="No. WhatsApp" prefix="+62" type="tel" inputMode="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="812 3456 7890" onBlur={() => setPhoneTouched(true)} error={phoneTouched ? phoneError : undefined} />
-            <TextField label="Kuy ID" value={form.kuyId} onChange={(e) => set("kuyId", e.target.value)} placeholder="username Kuy" />
+            <TextField label="Kuy ID" value={form.kuyId} onChange={(e) => set("kuyId", e.target.value)} placeholder="username Kuy" onBlur={() => setKuyTouched(true)} error={kuyTouched ? kuyError : undefined} />
             <SelectField label="Kota" options={cityOptions} value={form.city} placeholder="Pilih kota" onChange={(v) => set("city", v)} />
             <SelectField
               label="Level"

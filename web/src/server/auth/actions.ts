@@ -3,7 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ADMIN_LOGIN, AFTER_AUTH, RESET_PASSWORD } from "@/content/auth";
-import { compact, required, todayIso, validateBirthDate, validateEmail, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
+import { compact, normalizeKuyId, required, todayIso, validateBirthDate, validateEmail, validateKuyId, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { localPhone } from "@/lib/wa-invite";
@@ -53,7 +53,7 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
   const values = Object.fromEntries(Object.entries(input).map(([k, v]) => [k, k === "password" ? String(v ?? "") : String(v ?? "").trim()])) as SignUpInput;
   const fieldErrors = compact<SignUpField>({
     fullName: required(values.fullName, "Full name"),
-    kuyId: required(values.kuyId, "Kuy ID"),
+    kuyId: validateKuyId(values.kuyId),
     phone: validatePhone(values.phone),
     email: validateEmail(values.email),
     password: validatePassword(values.password, true),
@@ -61,9 +61,10 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
     birthDate: validateBirthDate(values.birthDate, todayIso(new Date(Date.now() + 86_400_000))),
   });
   if (Object.keys(fieldErrors).length) return { fieldErrors };
+  const kuyId = normalizeKuyId(values.kuyId);
 
   const supabase = await createSupabaseServerClient();
-  const { data: kuyFree } = await supabase.rpc("kuy_id_available", { p_kuy_id: values.kuyId });
+  const { data: kuyFree } = await supabase.rpc("kuy_id_available", { p_kuy_id: kuyId });
   if (kuyFree === false) return { fieldErrors: { kuyId: "This Kuy ID is already registered" } };
 
   const { data, error } = await supabase.auth.signUp({
@@ -75,7 +76,7 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
         signup: "member",
         full_name: values.fullName,
         display_name: values.displayName,
-        kuy_id: values.kuyId,
+        kuy_id: kuyId,
         // Format pembanding yang sama dengan form lain → klaim ghost member lewat nomor HP cocok.
         phone: localPhone(values.phone),
         birth_date: values.birthDate,
@@ -88,7 +89,7 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
     if (error.code === "weak_password") return { fieldErrors: { password: "Password is too weak — try a longer one" } };
     if (error.code === "over_email_send_rate_limit") return { error: "Too many sign-ups right now. Please try again in a few minutes." };
     // Trigger profil gagal (biasanya Kuy ID baru saja dipakai orang lain di antara cek & daftar).
-    const { data: stillFree } = await supabase.rpc("kuy_id_available", { p_kuy_id: values.kuyId });
+    const { data: stillFree } = await supabase.rpc("kuy_id_available", { p_kuy_id: kuyId });
     if (stillFree === false) return { fieldErrors: { kuyId: "This Kuy ID is already registered" } };
     return { error: "Couldn't create your account. Please try again in a moment." };
   }

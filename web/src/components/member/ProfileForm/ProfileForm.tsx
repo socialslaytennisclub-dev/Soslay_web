@@ -100,8 +100,8 @@ export function ProfileForm({ initial }: { initial?: MemberProfile }) {
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    // Nomor yang sudah tersimpan tidak dicek ulang (data lama tetap bisa disimpan) — sama seperti server.
-    const nextErrors = validateProfile(profile, live ? saved.phone : undefined);
+    // Nomor & Kuy ID yang sudah tersimpan tidak dicek ulang (data lama tetap bisa disimpan) — sama seperti server.
+    const nextErrors = validateProfile(profile, live ? { phone: saved.phone, kuyId: saved.kuyId } : {});
     setErrors(nextErrors);
     const firstInvalid = Object.keys(nextErrors)[0];
     if (firstInvalid) {

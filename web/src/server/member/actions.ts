@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { genderOptions, handOptions, playingFormatOptions, playingFrequencyOptions, tennisLevelOptions, type MemberProfile } from "@/content/member";
+import { normalizeKuyId } from "@/lib/auth";
 import { validateProfile } from "@/lib/profile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { localPhone } from "@/lib/wa-invite";
@@ -23,8 +24,8 @@ export async function saveMyProfile(profile: MemberProfile): Promise<SaveProfile
   } = await supabase.auth.getUser();
   if (!user) return { ok: false, error: "Sesi kamu berakhir — masuk lagi untuk menyimpan." };
 
-  const { data: stored } = await supabase.from("profiles").select("phone, avatar_path").eq("id", user.id).maybeSingle();
-  const errors = validateProfile(profile, stored?.phone as string | null | undefined);
+  const { data: stored } = await supabase.from("profiles").select("phone, kuy_id, avatar_path").eq("id", user.id).maybeSingle();
+  const errors = validateProfile(profile, { phone: stored?.phone as string | null | undefined, kuyId: stored?.kuy_id as string | null | undefined });
   const first = Object.keys(errors)[0] as keyof MemberProfile | undefined;
   if (first) return { ok: false, error: errors[first] ?? "Periksa kembali isian kamu.", field: first };
 
@@ -37,7 +38,7 @@ export async function saveMyProfile(profile: MemberProfile): Promise<SaveProfile
       gender: toEnum(GENDER, genderOptions, profile.gender),
       phone: localPhone(profile.phone) || null,
       city: profile.city.trim() || null,
-      kuy_id: profile.kuyId.trim().replace(/^@/, "") || null,
+      kuy_id: normalizeKuyId(profile.kuyId) || null,
       reclub_id: profile.reclubId.trim().replace(/^@/, "") || null,
       instagram: profile.instagram.trim().replace(/^@/, "") || null,
       tennis_level: toEnum(LEVEL, tennisLevelOptions, profile.tennisLevel),

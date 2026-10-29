@@ -1,4 +1,4 @@
-import { isEmail, validateBirthDate } from "@/lib/auth";
+import { isEmail, isKuyId, KUY_ID_FORMAT_ERROR, normalizeKuyId, validateBirthDate } from "@/lib/auth";
 import { changedPhoneError } from "@/lib/wa-invite";
 import { profileSections, requiredProfileFields, type MemberProfile, type ProfileField } from "@/content/member";
 
@@ -21,8 +21,11 @@ export function profileCompletion(profile: MemberProfile) {
 }
 
 
-/** Validasi sebelum simpan. Kunci = field, nilai = pesan error. `storedPhone` = nomor yang sudah tersimpan (tidak dicek ulang). */
-export function validateProfile(profile: MemberProfile, storedPhone?: string | null): Partial<Record<ProfileField, string>> {
+/**
+ * Validasi sebelum simpan. Kunci = field, nilai = pesan error. `stored` = nomor & Kuy ID yang sudah
+ * tersimpan — tidak dicek ulang kalau tidak diubah (data lama tetap bisa disimpan).
+ */
+export function validateProfile(profile: MemberProfile, stored: { phone?: string | null; kuyId?: string | null } = {}): Partial<Record<ProfileField, string>> {
   const errors: Partial<Record<ProfileField, string>> = {};
 
   for (const field of requiredProfileFields) {
@@ -30,9 +33,10 @@ export function validateProfile(profile: MemberProfile, storedPhone?: string | n
   }
   if (!errors.email && !isEmail(profile.email)) errors.email = "Please enter a valid email";
   if (!errors.phone) {
-    const phone = changedPhoneError(profile.phone, storedPhone);
+    const phone = changedPhoneError(profile.phone, stored.phone);
     if (phone) errors.phone = phone;
   }
+  if (!errors.kuyId && normalizeKuyId(profile.kuyId) !== (stored.kuyId ?? "") && !isKuyId(profile.kuyId)) errors.kuyId = KUY_ID_FORMAT_ERROR;
   if (!errors.instagram && /\s/.test(profile.instagram)) errors.instagram = "Username tanpa spasi";
   if (!errors.birthDate) {
     const birthDate = validateBirthDate(profile.birthDate);
