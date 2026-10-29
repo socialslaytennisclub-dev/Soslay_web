@@ -1310,11 +1310,7 @@ button.link {
   color: #fff;
 }
 
-.roundPill_next {
-  background: #fff1d1;
-  color: #8a5a00;
-}
-
+.roundPill_next,
 .roundPill_partial {
   background: #ffe7a8;
   color: #6b4a00;
@@ -1323,6 +1319,11 @@ button.link {
 .roundPill_later {
   background: var(--color-indigo-100);
   color: var(--color-indigo-muted);
+}
+
+.roundPill_skipped {
+  background: #fff1d1;
+  color: #8a5a00;
 }
 
 .youChip,
@@ -1579,17 +1580,155 @@ button.link {
   text-transform: uppercase;
 }
 
-.roundSelect select {
+/* ── Pilih & mulai ronde (Figma UIF-13) ── */
+
+.hostActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.roundPicker {
+  position: relative;
+}
+
+.roundPickerBtn,
+.btnStart {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
   height: 40px;
   padding: 0 var(--space-16);
-  border: 1.5px solid var(--color-navy-900);
   border-radius: var(--radius-full);
-  background: #fff;
-  font: inherit;
+  font-family: var(--font-display);
   font-size: 14px;
   font-weight: var(--weight-semibold);
   color: var(--color-navy-900);
   cursor: pointer;
+}
+
+.roundPickerBtn {
+  border: 1.5px solid #a9cc00;
+  background: #fbffe8;
+}
+
+.caretUp {
+  transform: rotate(180deg);
+}
+
+.btnStart {
+  border: 0;
+  background: var(--color-lime-500);
+}
+
+.btnStart:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.roundMenu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: min(320px, calc(100vw - 32px));
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid #e3e4f2;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 12px 32px rgba(10, 8, 74, 0.14);
+}
+
+.roundMenu ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  list-style: none;
+}
+
+.roundMenuStart {
+  right: auto;
+  left: 0;
+}
+
+.roundMenuLabel,
+.roundMenuHint {
+  padding: 4px 8px;
+  font-size: 11px;
+  color: var(--color-indigo-muted);
+}
+
+.roundMenuLabel {
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.roundItem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  width: 100%;
+  padding: 9px 12px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: none;
+  font: inherit;
+  text-align: left;
+  color: var(--color-navy-900);
+  cursor: pointer;
+}
+
+.roundItem:hover {
+  background: var(--color-indigo-50);
+}
+
+.roundItem small {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--color-indigo-muted);
+}
+
+.roundItemRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: var(--weight-semibold);
+}
+
+.roundItemPast .roundItemRow {
+  color: var(--color-indigo-muted);
+}
+
+.roundItemOn,
+.roundItemOn:hover {
+  border-color: #a9cc00;
+  background: #fbffe8;
+}
+
+.skipBanner {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-10) var(--space-16);
+  border-radius: var(--radius-md);
+  background: #fff8e1;
+  font-size: 13px;
+  color: var(--color-indigo-muted);
+}
+
+.skipBanner strong {
+  font-size: 14px;
+  color: #6b4a00;
 }
 
 .hostSaved {
@@ -1598,7 +1737,7 @@ button.link {
   align-items: center;
   justify-content: space-between;
   gap: var(--space-8);
-  padding: var(--space-10, 10px) var(--space-16);
+  padding: var(--space-10) var(--space-16);
   border-radius: var(--radius-md);
   background: #e2f6e7;
   font-size: 14px;

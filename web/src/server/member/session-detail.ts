@@ -27,6 +27,8 @@ export type DetailMatch = {
   court: number;
   a: string[];
   b: string[];
+  /** Id roster keempat pemain (sama dengan DetailPerson.id) — untuk hitung yang sudah hadir. */
+  playerIds: string[];
   scoreA: number | null;
   scoreB: number | null;
   /** Tim member yang login di match ini (null = tidak main). */
@@ -37,6 +39,7 @@ export type DetailMatch = {
 export type DetailStanding = { id: string; name: string; points: number; wins: number; played: number; total: number; me: boolean };
 
 export type MemberSessionDetail = {
+  id: string;
   slug: string;
   title: string;
   description: string;
@@ -63,6 +66,8 @@ export type MemberSessionDetail = {
   showLeaderboard: boolean;
   /** Ronde yang sedang dimainkan (null = belum ada line-up). */
   currentRound: number | null;
+  /** Ronde yang sudah dimulai host lewat "Mulai Ronde" (Figma UIF-13). */
+  startedRounds: number[];
   /** Ditunjuk sebagai host sesi ini (chip "Kamu host" + Panel Host). */
   isHost: boolean;
   /** Host & sesi masih berjalan → boleh input / ubah skor (dicek ulang di database). */
@@ -102,6 +107,7 @@ type SessionRow = {
   live_started_at: string | null;
   ended_at: string | null;
   current_round: number | null;
+  started_rounds: number[] | null;
   activity_types: { label: string } | null;
   venues: { name: string; city: string; address: string | null; maps_url: string | null } | null;
 };
@@ -175,7 +181,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
   const { data: session } = await supabase
     .from("sessions")
     .select(
-      "id, slug, title, description, type_slug, starts_at, ends_at, status, capacity, kuy_booking_url, recommended_levels, match_format, court_count, round_count, target_points, leaderboard_mode, show_live_leaderboard, live_started_at, ended_at, current_round, activity_types(label), venues(name, city, address, maps_url)",
+      "id, slug, title, description, type_slug, starts_at, ends_at, status, capacity, kuy_booking_url, recommended_levels, match_format, court_count, round_count, target_points, leaderboard_mode, show_live_leaderboard, live_started_at, ended_at, current_round, started_rounds, activity_types(label), venues(name, city, address, maps_url)",
     )
     .eq("slug", slug)
     .maybeSingle<SessionRow>();
@@ -220,6 +226,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
   const start = localParts(session.starts_at, city);
 
   return {
+    id: session.id,
     slug: session.slug,
     title: session.title,
     description: session.description ?? "",
@@ -270,6 +277,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
       court: m.court_no,
       a: [m.a1, m.a2].map((id) => names.get(id) ?? "Pemain"),
       b: [m.b1, m.b2].map((id) => names.get(id) ?? "Pemain"),
+      playerIds: [m.a1, m.a2, m.b1, m.b2],
       scoreA: m.score_a,
       scoreB: m.score_b,
       mySide: side(m),
@@ -277,6 +285,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     standings: standingsOf(matchRows, names, myIds, session.leaderboard_mode),
     showLeaderboard: session.show_live_leaderboard,
     currentRound: session.current_round ?? currentRoundOf(matchRows),
+    startedRounds: session.started_rounds ?? [],
     isHost: assigned === true,
     canScore: canScore === true,
   };
@@ -291,6 +300,7 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
   const endsAt = new Date(`${s.date}T${s.end}:00${offset}`).toISOString();
   const names = ["Arya Putra Dewangga", "Kevin Wijaya", "Anitya Ayu Silfia", "Nadia Salsabila", "Yudi Sadewa", "Agatha Putri", "Ardi Nugroho", "Fadil Rahman"];
   return {
+    id: s.slug,
     slug: s.slug,
     title: s.title,
     description: "Di format Americano, kamu berganti partner setiap ronde. Poin individu dihitung dari skor tim di setiap match yang kamu mainkan.",
@@ -314,6 +324,7 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     standings: [],
     showLeaderboard: true,
     currentRound: null,
+    startedRounds: [],
     isHost: false,
     canScore: false,
   };

@@ -3,6 +3,7 @@ import { CalendarDays, CalendarPlus, ChartColumn, ChevronDown, ChevronLeft, Chev
 import { Container } from "@/components/ui";
 import { cx } from "@/lib/cx";
 import { CITY_TZ_LABEL, formatAngka, formatJamRange, formatRupiah, formatTanggalISO, formatTanggalPendek } from "@/lib/format";
+import { isUnstarted, planRounds, ROUND_STATUS_LABEL, skippedLabel } from "@/lib/rounds";
 import { initials, teamName } from "@/lib/text";
 import type { DetailMatch, DetailStanding, MemberSessionDetail } from "@/server/member/session-detail";
 import { Countdown } from "./Countdown";
@@ -442,11 +443,14 @@ function LiveTab({ detail: d }: { detail: MemberSessionDetail }) {
 
   const round = d.currentRound;
   const roundMatches = d.matches.filter((m) => m.round === round);
-  const panel = d.isHost ? <HostPanel matches={d.matches} currentRound={round} maxRound={maxRound(d)} target={d.format.targetPoints} canScore={d.canScore} isPlayer={d.matches.some((m) => m.mySide)} /> : null;
+  const panel = d.isHost ? <HostPanel detail={d} maxRound={maxRound(d)} isPlayer={d.matches.some((m) => m.mySide)} /> : null;
   // Host yang tidak ikut main (Figma UIF-09 · B): hanya Panel Host, tanpa status match.
   if (d.isHost && !d.ticket && !d.matches.some((m) => m.mySide)) return panel;
+  const plan = planRounds(d.matches, round, d.startedRounds, d.phase);
+  const skipped = skippedLabel(plan.skipped);
   const now = roundMatches.find((m) => m.mySide);
-  const next = d.matches.find((m) => m.mySide && m.round > round && m.scoreA === null);
+  // Match berikutnya mengikuti urutan main: ronde terkecil yang belum dimulai (termasuk yang dilewati).
+  const next = d.matches.find((m) => m.mySide && m.scoreA === null && isUnstarted(plan.statusOf(m.round)));
   const shown = now ?? next;
   const view = shown ? perspective(shown) : null;
   const done = d.phase === "done";
@@ -462,7 +466,7 @@ function LiveTab({ detail: d }: { detail: MemberSessionDetail }) {
     <>
     <section className={styles.liveCard2} aria-labelledby="live-title">
       <header className={styles.liveHead}>
-        <span className={styles.eyebrowDark}>{done ? "Sesi selesai" : `Sedang berlangsung · Ronde ${round} dari ${maxRound(d)}`}</span>
+        <span className={styles.eyebrowDark}>{done ? "Sesi selesai" : `Sedang berlangsung · Ronde ${round} dari ${maxRound(d)}${skipped ? ` · ${skipped}` : ""}`}</span>
         {!done && <span className={styles.livePillRed}>Live</span>}
       </header>
       <h2 id="live-title" className={styles.bannerTitle}>
@@ -594,27 +598,6 @@ function LeaderboardTab({ detail: d }: { detail: MemberSessionDetail }) {
   );
 }
 
-type RoundState = "done" | "live" | "next" | "later" | "partial";
-const ROUND_LABEL: Record<RoundState, string> = {
-  done: "Selesai",
-  live: "Live",
-  next: "Berikutnya",
-  later: "Belum mulai",
-  partial: "Belum lengkap",
-};
-
-/**
- * Status ronde: lengkap berskor → Selesai; ronde yang sudah lewat (atau sesi sudah selesai) tapi
- * masih ada court tanpa skor → Belum lengkap; ronde aktif → Live (saat sesi berjalan) / Berikutnya
- * (sebelum mulai); satu ronde setelah ronde aktif yang sedang live → Berikutnya; sisanya Belum mulai.
- */
-function roundState(r: number, list: DetailMatch[], current: number, phase: MemberSessionDetail["phase"]): RoundState {
-  if (list.every((m) => m.scoreA !== null)) return "done";
-  if (r < current || phase === "done") return "partial";
-  if (r === current) return phase === "live" ? "live" : "next";
-  return r === current + 1 && phase === "live" ? "next" : "later";
-}
-
 function RoundsTab({ detail: d }: { detail: MemberSessionDetail }) {
   if (!d.format.lineup) {
     return <Locked detail={d} label="Tidak tersedia" title="Sesi ini tanpa urutan main" text="Pembagian court diatur langsung oleh host di lapangan." />;
@@ -622,9 +605,16 @@ function RoundsTab({ detail: d }: { detail: MemberSessionDetail }) {
   if (!d.matches.length) {
     return <Locked detail={d} title="Urutan main belum diumumkan" text="Line-up dibuat host setelah check-in — urutan pasangan muncul di sini." />;
   }
-  const rounds = [...new Set(d.matches.map((m) => m.round))].sort((a, b) => a - b);
+  const plan = planRounds(d.matches, d.currentRound, d.startedRounds, d.phase);
+  const { rounds } = plan;
   const current = d.currentRound ?? rounds[0];
-  const label = d.phase === "done" ? "Semua ronde selesai" : d.phase === "live" ? `Ronde ${current} dari ${maxRound(d)} sedang live` : `${rounds.length} ronde · mulai ${formatTanggalPendek(d.startsAt, d.city, "time")}`;
+  const skipped = skippedLabel(plan.skipped);
+  const label =
+    d.phase === "done"
+      ? "Semua ronde selesai"
+      : d.phase === "live"
+        ? `Ronde ${current} dari ${maxRound(d)} sedang live${skipped ? ` · ${skipped}` : ""}`
+        : `${rounds.length} ronde · mulai ${formatTanggalPendek(d.startsAt, d.city, "time")}`;
 
   return (
     <section className={styles.card} aria-labelledby="ronde-title">
@@ -641,7 +631,7 @@ function RoundsTab({ detail: d }: { detail: MemberSessionDetail }) {
       </p>
       {rounds.map((r) => {
         const list = d.matches.filter((m) => m.round === r);
-        const state = roundState(r, list, current, d.phase);
+        const state = plan.statusOf(r);
         const mine = list.find((m) => m.mySide);
         const courts = (
           <ul className={styles.courtList}>
@@ -682,7 +672,7 @@ function RoundsTab({ detail: d }: { detail: MemberSessionDetail }) {
         return (
           <div key={r} className={styles.round}>
             <h3>
-              Ronde {r} <span className={cx(styles.roundPill, styles[`roundPill_${state}`])}>{ROUND_LABEL[state]}</span>
+              Ronde {r} <span className={cx(styles.roundPill, styles[`roundPill_${state}`])}>{state === "skipped" ? "Dilewati · dimainkan nanti" : ROUND_STATUS_LABEL[state]}</span>
               {!mine && <span className={styles.restChip}>Kamu rest</span>}
             </h3>
             {courts}

@@ -119,6 +119,21 @@ export async function submitHostScore(matchId: string, scoreA: number, scoreB: n
   return { ok: true };
 }
 
+/** "Mulai Ronde" dari Panel Host (Figma UIF-13): ronde terpilih jadi live; hak host dicek di database. */
+export async function startHostRound(sessionId: string, round: number): Promise<HostScoreResult> {
+  const supabase = await createSupabaseServerClient("member");
+  const { error } = await supabase.rpc("start_session_round", { p_session: sessionId, p_round: round });
+  if (error) {
+    if (/tidak ditemukan/.test(error.message)) return { ok: false, error: "Sesi tidak ditemukan." };
+    if (/Hanya admin atau host/.test(error.message)) return { ok: false, error: "Hanya host sesi ini yang bisa memulai ronde." };
+    if (/diakhiri/.test(error.message)) return { ok: false, error: "Sesi sudah diakhiri." };
+    if (/belum dimulai/.test(error.message)) return { ok: false, error: "Sesi belum dimulai — ronde bisa dimulai saat sesi berjalan." };
+    if (/line-up/.test(error.message)) return { ok: false, error: `Ronde ${round} belum ada di line-up.` };
+    return { ok: false, error: "Ronde gagal dimulai. Coba lagi." };
+  }
+  return { ok: true };
+}
+
 /** "Urungkan" dari Panel Host: kosongkan skor match (hak host dicek di database). */
 export async function clearHostScore(matchId: string): Promise<HostScoreResult> {
   const supabase = await createSupabaseServerClient("member");
