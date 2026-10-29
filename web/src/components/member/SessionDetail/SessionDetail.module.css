@@ -9,7 +9,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-12);
-  padding-top: var(--space-32);
+  /* Navbar fixed → header mulai di bawahnya (sama seperti MemberHeader di tab /akun). */
+  padding-top: calc(var(--nav-height) + var(--space-32));
 }
 
 .back {
