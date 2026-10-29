@@ -523,3 +523,83 @@ button.saveSegment:disabled {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Email undangan gagal → undang daftar lewat WhatsApp */
+.activation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+  padding: var(--space-12);
+  border-radius: var(--radius-md);
+  background: var(--color-indigo-50);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.activationActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+/* Calon member (ghost member yang belum daftar) */
+.pendingHeader {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-16) var(--space-20);
+  border-bottom: 1px solid var(--color-indigo-border);
+}
+
+.pendingTitle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: var(--weight-semibold);
+  color: var(--color-navy-900);
+}
+
+.pendingHint {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-indigo-muted);
+}
+
+.pendingList > .pendingRow + .pendingRow {
+  border-top: 1px solid var(--color-indigo-border);
+}
+
+.pendingRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+  padding: var(--space-12) var(--space-20);
+}
+
+.pendingName {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+  overflow-wrap: anywhere;
+}
+
+.pendingName span {
+  color: var(--color-indigo-muted);
+}
+
+.pendingName strong {
+  font-weight: var(--weight-semibold);
+}
+
+.panel > .pendingHint {
+  padding: var(--space-12) var(--space-20);
+}

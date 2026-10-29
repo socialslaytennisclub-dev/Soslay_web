@@ -2,9 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { isActivityType } from "@/content/activity";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { supabaseUrl } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { discardUploads, isOwnUpload, uploadPublicImage } from "../../storage";
 import { monthKey } from "../time";
 import type { MatchFormat, TennisLevel } from "../types";
 import { audit, refreshPaths, requireEditor, type ActionResult } from "./common";
@@ -103,14 +102,9 @@ function validate(input: SessionInput): string | null {
 }
 
 // ── Foto cover ──────────────────────────────────────────────────────────────
-// Bucket publik di Supabase Storage; dibuat otomatis saat upload pertama (tanpa migrasi,
-// karena skema `storage` tidak ada di PGlite check-migrations). Upload lewat service role
-// setelah requireEditor, jadi tidak perlu policy RLS di storage.objects.
+// Bucket publik di Supabase Storage (lihat server/storage — dibuat otomatis saat upload pertama).
 const COVER_BUCKET = "session-covers";
-const COVER_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 const COVER_MAX_BYTES = 5 * 1024 * 1024;
-/** Hanya URL hasil uploadSessionCover: <bucket publik>/<YYYY-MM>/<uuid>.<ext> — tanpa "../" ke bucket lain. */
-const COVER_KEY = /^\d{4}-\d{2}\/[0-9a-f-]{36}\.(jpg|png|webp)$/;
 /** Link folder / file Google Drive (https). */
 const isDriveUrl = (raw: string) => {
   try {
@@ -121,41 +115,25 @@ const isDriveUrl = (raw: string) => {
   }
 };
 
-const isCoverUrl = (url: string) => {
-  const prefix = `${supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/public/${COVER_BUCKET}/`;
-  return url.startsWith(prefix) && COVER_KEY.test(url.slice(prefix.length));
-};
+/** Hanya URL hasil uploadSessionCover di bucket ini — tanpa "../" ke bucket lain. */
+const isCoverUrl = (url: string) => isOwnUpload(COVER_BUCKET, url);
 
 export async function uploadSessionCover(formData: FormData): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
 
-  const file = formData.get("file");
-  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Pilih file foto dulu." };
-  const ext = COVER_TYPES[file.type];
-  if (!ext) return { ok: false, error: "Format harus JPG, PNG, atau WebP." };
-  if (file.size > COVER_MAX_BYTES) return { ok: false, error: "Ukuran foto maksimal 5 MB." };
+  const result = await uploadPublicImage({ bucket: COVER_BUCKET, file: formData.get("file"), folder: monthKey(new Date()), maxBytes: COVER_MAX_BYTES });
+  if (!result.ok) return result;
 
-  const admin = createSupabaseAdminClient();
-  if (!admin) return { ok: false, error: "Upload belum aktif: SUPABASE_SERVICE_ROLE_KEY belum dipasang." };
+  await audit(auth.userId, "session.cover_upload", "session_cover", result.path);
+  return { ok: true, url: result.url };
+}
 
-  const path = `${monthKey(new Date())}/${crypto.randomUUID()}.${ext}`;
-  const upload = () => admin.storage.from(COVER_BUCKET).upload(path, file, { contentType: file.type, cacheControl: "31536000" });
-  let { error } = await upload();
-  // Upload pertama di project baru: bucket belum ada → buat sekali, lalu ulangi.
-  if (error && /bucket not found/i.test(error.message)) {
-    const created = await admin.storage.createBucket(COVER_BUCKET, {
-      public: true,
-      fileSizeLimit: COVER_MAX_BYTES,
-      allowedMimeTypes: Object.keys(COVER_TYPES),
-    });
-    if (created.error && !/already exists/i.test(created.error.message)) return { ok: false, error: `Gagal menyiapkan Storage: ${created.error.message}` };
-    ({ error } = await upload());
-  }
-  if (error) return { ok: false, error: `Gagal upload: ${error.message}` };
-
-  await audit(auth.userId, "session.cover_upload", "session_cover", path);
-  return { ok: true, url: admin.storage.from(COVER_BUCKET).getPublicUrl(path).data.publicUrl };
+/** Upload cover / thumbnail sesi yang diganti sebelum Simpan → hapus dari Storage (yang masih dipakai sesi mana pun aman). */
+export async function discardSessionUploads(urls: string[]): Promise<void> {
+  const auth = await requireEditor("activities");
+  if ("error" in auth) return;
+  await discardUploads(COVER_BUCKET, urls, { table: "sessions", columns: ["cover_path", "photo_cover_path"] });
 }
 
 export async function saveSession(input: SessionInput): Promise<ActionResult> {
@@ -173,14 +151,19 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
   const bookingUrl = normalizeBookingUrl(input.kuyUrl);
   if (bookingUrl === null) return { ok: false, error: "Link booking Kuy tidak valid — contoh: https://kuy.id/soslay/nama-event" };
 
-  // Kapasitas tidak boleh di bawah jumlah peserta yang sudah terdaftar.
   if (input.id) {
-    const { count } = await supabase
-      .from("bookings")
-      .select("id", { count: "exact", head: true })
-      .eq("session_id", input.id)
-      .in("status", ["registered", "attended", "no_show"]);
+    const [{ count }, { data: stored }] = await Promise.all([
+      supabase.from("bookings").select("id", { count: "exact", head: true }).eq("session_id", input.id).in("status", ["registered", "attended", "no_show"]),
+      supabase.from("sessions").select("photo_cover_path, photo_count").eq("id", input.id).maybeSingle(),
+    ]);
+    // Kapasitas tidak boleh di bawah jumlah peserta yang sudah terdaftar.
     if ((count ?? 0) > input.capacity) return { ok: false, error: `Sudah ada ${count} peserta terdaftar — kapasitas minimal ${count}.` };
+    // Foto sesi = album Drive + thumbnail: thumbnail / jumlah foto baru tanpa link album ditolak (member butuh
+    // link-nya). Hanya saat foto diubah — sesi lama yang sudah begitu tetap bisa disimpan.
+    const photosChanged = input.photos.coverPath !== (stored?.photo_cover_path ?? null) || input.photos.count !== (stored?.photo_count ?? null);
+    if (photosChanged && !input.photos.albumUrl.trim() && (input.photos.coverPath || input.photos.count !== null)) {
+      return { ok: false, error: "Link album Google Drive wajib diisi untuk menyimpan foto sesi." };
+    }
   }
 
   // "Terjadwal" = published tapi baru tampil di website 2 minggu sebelum sesi.

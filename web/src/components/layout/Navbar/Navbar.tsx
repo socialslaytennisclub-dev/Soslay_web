@@ -6,7 +6,7 @@ import { Button, Container, Icon, Logo } from "@/components/ui";
 import { authLinks, primaryNav } from "@/content/site";
 import { useCart } from "@/hooks/useCart";
 import { useClickOutside } from "@/hooks/useClickOutside";
-import { useMemberUser } from "@/hooks/useMemberUser";
+import { useMemberUser, type MemberUser } from "@/hooks/useMemberUser";
 import { useDisclosure } from "@/hooks/useDisclosure";
 import { useScrolled } from "@/hooks/useScrolled";
 import { cx } from "@/lib/cx";
@@ -25,9 +25,11 @@ const ACCOUNT_LINKS = [
 type NavbarProps = {
   /** `overlay` = transparan di atas hero foto, jadi solid saat scroll. */
   variant?: "overlay" | "solid";
+  /** Member yang login, dari server (area /akun) — tanpa itu dibaca dari cookie sesi di browser. */
+  member?: MemberUser | null;
 };
 
-export function Navbar({ variant = "solid" }: NavbarProps) {
+export function Navbar({ variant = "solid", member: initialMember }: NavbarProps) {
   const scrolled = useScrolled();
   const menu = useDisclosure({ lockScroll: true });
   const dropdown = useDisclosure();
@@ -35,7 +37,7 @@ export function Navbar({ variant = "solid" }: NavbarProps) {
   const account = useDisclosure();
   const accountRef = useRef<HTMLDivElement>(null);
   const cart = useCart();
-  const member = useMemberUser();
+  const member = useMemberUser(initialMember);
   useClickOutside(dropdownRef, dropdown.close, dropdown.isOpen);
   useClickOutside(accountRef, account.close, account.isOpen);
 
@@ -114,7 +116,12 @@ export function Navbar({ variant = "solid" }: NavbarProps) {
             <div ref={accountRef} className={styles.account}>
               <button type="button" className={styles.accountButton} aria-expanded={account.isOpen} aria-controls="nav-account-menu" onClick={account.toggle}>
                 <span className={styles.accountAvatar} aria-hidden>
-                  {initials(member.name)}
+                  {member.photo ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- avatar kecil dari Storage
+                    <img src={member.photo} alt="" className={styles.accountPhoto} />
+                  ) : (
+                    initials(member.name)
+                  )}
                 </span>
                 <span className={styles.accountName}>{firstName(member.name)}</span>
                 <Icon name="caret-down-bold" size={14} className={cx(styles.caret, account.isOpen && styles.caretOpen)} />

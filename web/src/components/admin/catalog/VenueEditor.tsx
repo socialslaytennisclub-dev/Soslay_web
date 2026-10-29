@@ -4,12 +4,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { cx } from "@/lib/cx";
-import { saveVenue } from "@/server/admin/actions/catalog";
+import { deleteVenue, discardVenueUploads, saveVenue, uploadVenuePhoto } from "@/server/admin/actions/catalog";
 import type { VenueForm } from "@/server/admin/types";
 import styles from "../activities/SessionEditor.module.css";
 import { FormCard, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge } from "../ui/AdminUI";
+import { useConfirm } from "../ui/ConfirmDialog";
+import { useUploadCleanup } from "../ui/useUploadCleanup";
 import own from "./Catalog.module.css";
 import { toast, ToastOnMount } from "../ui/Toaster";
 
@@ -19,31 +21,81 @@ const TYPES = ["Indoor", "Outdoor", "Rooftop", "Premium", "Tropical"];
 export function VenueEditor({ initial, imageOptions, initialNotice }: { initial: VenueForm; imageOptions: string[]; initialNotice?: string }) {
   const [v, setV] = useState(initial);
   const [saving, start] = useTransition();
+  const [uploading, setUploading] = useState<"coverPath" | "heroPath" | null>(null);
+  const [confirm, confirmDialog] = useConfirm();
+  const uploads = useUploadCleanup(discardVenueUploads);
   const set = <K extends keyof VenueForm>(key: K, value: VenueForm[K]) => setV((prev) => ({ ...prev, [key]: value }));
   const isNew = !initial.id && !initial.slug;
 
-  const save = () =>
+  const save = () => {
+    // Tunggu upload selesai — kalau tidak, venue tersimpan dengan foto lama.
+    if (uploading) return;
     start(async () => {
-      const result = await saveVenue(v);
+      const result = await uploads.save(() => saveVenue(v), { isNew, stored: [initial.coverPath, initial.heroPath], current: [v.coverPath, v.heroPath] });
       toast.result(result);
     });
+  };
+
+  /** Upload langsung ke Storage; URL baru tersimpan ke venue saat admin menekan Simpan. */
+  const upload = async (key: "coverPath" | "heroPath", file: File | undefined) => {
+    if (!file || uploading) return;
+    const body = new FormData();
+    body.append("file", file);
+    setUploading(key);
+    const result = await uploadVenuePhoto(body).catch(() => ({ ok: false as const, error: "Upload gagal — coba lagi." }));
+    setUploading(null);
+    if (!result.ok) return toast.error(result.error);
+    uploads.track(result.url);
+    set(key, result.url);
+    toast.success(`Foto terupload — tekan ${isNew ? "Simpan venue" : "Simpan perubahan"} untuk menerapkannya.`);
+  };
+
+  const remove = async () => {
+    const ok = await confirm({
+      title: `Hapus venue ${v.name}?`,
+      body: <p>Venue hilang dari website dan pilihan venue saat membuat sesi. Venue yang masih punya sesi tidak bisa dihapus — sembunyikan saja dari website.</p>,
+      confirmLabel: "Hapus venue",
+    });
+    if (!ok) return;
+    const id = v.id;
+    if (!id) return toast.error("Venue ini belum tersimpan di database.");
+    start(async () => {
+      const result = await deleteVenue(id);
+      if (!result.ok) toast.error(result.error);
+    });
+  };
 
   const imageSelect = (label: string, key: "coverPath" | "heroPath", hint?: string) => (
-    <label className={styles.field}>
+    <div className={styles.field}>
       <span className={styles.label}>{label}</span>
       <span className={styles.selectWrap}>
-        <select className={cx(styles.input, styles.select)} value={v[key]} onChange={(e) => set(key, e.target.value)}>
+        <select aria-label={label} className={cx(styles.input, styles.select)} value={v[key]} onChange={(e) => set(key, e.target.value)}>
           <option value="">{key === "heroPath" ? "Sama dengan cover" : "Pilih foto…"}</option>
           {[...new Set([v[key], ...imageOptions].filter(Boolean))].map((src) => (
             <option key={src} value={src}>
-              {src.replace("/images/", "")}
+              {src.startsWith("https://") ? `Upload: ${src.split("/").pop()}` : src.replace("/images/", "")}
             </option>
           ))}
         </select>
         <AdminIcon name="caret-down" size={14} />
       </span>
+      <label className={cx(styles.dropzone, uploading === key && styles.dropzoneBusy)}>
+        <input
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          className="visually-hidden"
+          disabled={uploading !== null}
+          onChange={(e) => {
+            upload(key, e.target.files?.[0]);
+            e.target.value = "";
+          }}
+        />
+        <AdminIcon name="upload-simple" size={20} />
+        <strong>{uploading === key ? "Mengupload…" : "Upload foto sendiri"}</strong>
+        <span className={styles.muted}>JPG/PNG/WebP · maks 5 MB</span>
+      </label>
       {hint && <span className={styles.muted}>{hint}</span>}
-    </label>
+    </div>
   );
 
   return (
@@ -60,17 +112,23 @@ export function VenueEditor({ initial, imageOptions, initialNotice }: { initial:
         </div>
         <div className={styles.barActions}>
           {!isNew && (
+            <AdminButton size="sm" icon="trash" onClick={remove} disabled={saving}>
+              Hapus venue
+            </AdminButton>
+          )}
+          {!isNew && (
             <AdminButton href={`/venue/${v.slug}`} target="_blank" size="sm" icon="eye">
               Lihat di website
             </AdminButton>
           )}
-          <AdminButton variant="primary" size="sm" icon="check-bold" onClick={save} disabled={saving}>
-            {saving ? "Menyimpan…" : isNew ? "Simpan venue" : "Simpan perubahan"}
+          <AdminButton variant="primary" size="sm" icon="check-bold" onClick={save} disabled={saving || uploading !== null}>
+            {saving ? "Menyimpan…" : uploading ? "Menunggu upload…" : isNew ? "Simpan venue" : "Simpan perubahan"}
           </AdminButton>
         </div>
       </div>
 
       {initialNotice && <ToastOnMount text={initialNotice} />}
+      {confirmDialog}
 
       <div className={styles.grid}>
         <div className={styles.main}>
@@ -149,7 +207,7 @@ export function VenueEditor({ initial, imageOptions, initialNotice }: { initial:
             <Toggle label="Tampil di website" hint="Halaman Venue & detail venue" checked={v.active} onChange={(x) => set("active", x)} />
             <Toggle label="Tampil di homepage" hint='Section "Kami Hanya Bermain di Tempat…"' checked={v.homepage} onChange={(x) => set("homepage", x)} />
           </FormCard>
-          <FormCard title="Foto" subtitle="Upload foto baru aktif setelah Supabase Storage disiapkan">
+          <FormCard title="Foto" subtitle="Pilih foto yang sudah ada di website, atau upload foto sendiri">
             {imageSelect("Foto cover", "coverPath")}
             {imageSelect("Foto hero (detail venue)", "heroPath")}
             {v.coverPath && (

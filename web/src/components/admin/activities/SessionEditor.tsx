@@ -9,7 +9,7 @@ import { cx } from "@/lib/cx";
 import { participantsLockReason } from "@/lib/session-lock";
 import { memberInviteWaLink } from "@/lib/wa-invite";
 import { clearParticipants, removeParticipants } from "@/server/admin/actions/play";
-import { deleteSession, saveSession, setCheckIn, uploadSessionCover, type SessionInput } from "@/server/admin/actions/sessions";
+import { deleteSession, discardSessionUploads, saveSession, setCheckIn, uploadSessionCover, type SessionInput } from "@/server/admin/actions/sessions";
 import { usesLineup } from "@/lib/americano";
 import type { MemberChoice, SessionDetail, SessionHost, SessionParticipant, TennisLevel } from "@/server/admin/types";
 import { FormCard, MultiChips, TextArea, Toggle } from "../ui/AdminForm";
@@ -23,6 +23,7 @@ import styles from "./SessionEditor.module.css";
 import playStyles from "./Play.module.css";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { toast, ToastOnMount } from "../ui/Toaster";
+import { useUploadCleanup } from "../ui/useUploadCleanup";
 
 type SessionEditorProps = {
   session: SessionDetail;
@@ -74,6 +75,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   const [description, setDescription] = useState(session.description);
   // null = belum ada foto sendiri → website memakai foto venue.
   const [cover, setCover] = useState<string | null>(session.coverPath);
+  const uploads = useUploadCleanup(discardSessionUploads);
   const [date, setDate] = useState(toDate(session.startsAt));
   const [start, setStart] = useState(toTime(session.startsAt));
   const [end, setEnd] = useState(toTime(session.endsAt));
@@ -198,7 +200,11 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     if (publish) setStatus("published");
     startSaving(async () => {
       // Sesi baru → server mengarahkan ke halaman editnya; edit → kembalikan hasil.
-      const result = await saveSession(input);
+      const result = await uploads.save(() => saveSession(input), {
+        isNew: mode === "new",
+        stored: [session.coverPath, session.photos.coverPath],
+        current: [cover, photoCover],
+      });
       toast.result(result);
     });
   };
@@ -211,6 +217,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     startUploading(async () => {
       const result = await uploadSessionCover(body).catch(() => ({ ok: false as const, error: "Upload gagal — coba lagi." }));
       if (result.ok) {
+        uploads.track(result.url);
         setCover(result.url);
         toast.success("Foto cover terupload — tekan Simpan untuk menerapkannya.");
       } else toast.error(result.error);
@@ -227,6 +234,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     startUploadingPhoto(async () => {
       const result = await uploadSessionCover(body).catch(() => ({ ok: false as const, error: "Upload gagal — coba lagi." }));
       if (result.ok) {
+        uploads.track(result.url);
         setPhotoCover(result.url);
         toast.success("Thumbnail terupload — tekan Simpan untuk menerapkannya.");
       } else toast.error(result.error);
@@ -819,7 +827,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
             >
               <div className={styles.field}>
                 <label className={styles.label} htmlFor="album-url">
-                  Link album Google Drive
+                  Link album Google Drive *
                 </label>
                 <span className={cx(styles.affix, albumUrl.trim() && !/^https:\/\/([\w-]+\.)?drive\.google\.com\//i.test(albumUrl.trim()) && styles.invalid)}>
                   <AdminIcon name="link-simple" size={16} />

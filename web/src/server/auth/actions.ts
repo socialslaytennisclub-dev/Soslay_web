@@ -6,6 +6,7 @@ import { ADMIN_LOGIN, AFTER_AUTH, RESET_PASSWORD } from "@/content/auth";
 import { compact, required, todayIso, validateBirthDate, validateEmail, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { localPhone } from "@/lib/wa-invite";
 
 /** Hanya path internal ("/admin", "/akun?x=1") — cegah open redirect lewat ?next=. */
 function safeNext(next: string | undefined) {
@@ -75,7 +76,8 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
         full_name: values.fullName,
         display_name: values.displayName,
         kuy_id: values.kuyId,
-        phone: values.phone.replace(/\D/g, ""),
+        // Format pembanding yang sama dengan form lain → klaim ghost member lewat nomor HP cocok.
+        phone: localPhone(values.phone),
         birth_date: values.birthDate,
       },
     },

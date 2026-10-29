@@ -1,5 +1,7 @@
 /** Validasi form Masuk/Daftar (client). Kunci = nama field, nilai = pesan error. */
 
+import { phoneFormatError } from "@/lib/wa-invite";
+
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export const isEmail = (value: string) => EMAIL.test(value.trim());
 export const MIN_PASSWORD = 8;
@@ -57,10 +59,10 @@ export function passwordStrength(value: string): PasswordStrength {
   return { level, label, hint: level < 4 ? checks.find((c) => !c.ok)?.hint : undefined };
 }
 
+/** Sama dengan aturan form admin & profil (phoneFormatError) — nomor Indonesia 8xx. */
 export function validatePhone(value: string): string | undefined {
-  const digits = value.replace(/\D/g, "");
-  if (!digits) return "WhatsApp number is required";
-  if (digits.length < 9) return "Number is too short";
+  if (!value.replace(/\D/g, "")) return "WhatsApp number is required";
+  if (phoneFormatError(value)) return "Enter a valid Indonesian WhatsApp number, e.g. 0812 3456 7890";
 }
 
 export function required(value: string, label: string): string | undefined {

@@ -22,7 +22,7 @@ import {
 import { gsap, useGSAP } from "@/lib/gsap";
 import { todayIso } from "@/lib/auth";
 import { profileCompletion, validateProfile } from "@/lib/profile";
-import { saveMyProfile } from "@/server/member/actions";
+import { saveMyProfile, uploadMyAvatar } from "@/server/member/actions";
 import { ProfileSummary } from "./ProfileSummary";
 import styles from "./ProfileForm.module.css";
 
@@ -46,6 +46,8 @@ export function ProfileForm({ initial }: { initial?: MemberProfile }) {
   const layoutRef = useRef<HTMLDivElement>(null);
   const asideRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  /** Foto baru yang dipilih (preview blob:) — diupload saat Simpan. */
+  const photoFile = useRef<File | null>(null);
 
   const completion = profileCompletion(profile);
   const dirty = JSON.stringify(profile) !== JSON.stringify(saved);
@@ -92,12 +94,14 @@ export function ProfileForm({ initial }: { initial?: MemberProfile }) {
     if (!["image/jpeg", "image/png"].includes(file.type)) return setPhotoError("Format harus JPG atau PNG.");
     if (file.size > MAX_PHOTO_BYTES) return setPhotoError("Ukuran foto maksimal 2 MB.");
     setPhotoError(undefined);
+    photoFile.current = file;
     update("photo", URL.createObjectURL(file));
   }
 
   function submit(event: FormEvent) {
     event.preventDefault();
-    const nextErrors = validateProfile(profile);
+    // Nomor yang sudah tersimpan tidak dicek ulang (data lama tetap bisa disimpan) — sama seperti server.
+    const nextErrors = validateProfile(profile, live ? saved.phone : undefined);
     setErrors(nextErrors);
     const firstInvalid = Object.keys(nextErrors)[0];
     if (firstInvalid) {
@@ -112,20 +116,40 @@ export function ProfileForm({ initial }: { initial?: MemberProfile }) {
       return;
     }
     setSaving(true);
-    saveMyProfile(profile).then((result) => {
-      setSaving(false);
-      if (!result.ok) {
-        if (result.field) setErrors((current) => ({ ...current, [result.field!]: result.error }));
-        setStatus(result.error);
+    save().finally(() => setSaving(false));
+  }
+
+  async function save() {
+    let next = profile;
+    const file = photoFile.current;
+    if (file) {
+      const body = new FormData();
+      body.append("file", file);
+      const upload = await uploadMyAvatar(body).catch(() => ({ ok: false as const, error: "Upload foto gagal — coba lagi." }));
+      if (!upload.ok) {
+        setPhotoError(upload.error);
+        setStatus(upload.error);
         return;
       }
-      setSaved(profile);
-      setChangingPassword(false);
-      setStatus(profilePage.saved);
-    });
+      photoFile.current = null;
+      next = { ...profile, photo: upload.url };
+      setProfile(next);
+    }
+    const result = await saveMyProfile(next);
+    if (!result.ok) {
+      if (result.field) setErrors((current) => ({ ...current, [result.field!]: result.error }));
+      setStatus(result.error);
+      // Foto sudah tersimpan walau field lain gagal — jangan minta upload ulang.
+      if (file) setSaved((current) => ({ ...current, photo: next.photo }));
+      return;
+    }
+    setSaved(next);
+    setChangingPassword(false);
+    setStatus(profilePage.saved);
   }
 
   function cancel() {
+    photoFile.current = null;
     setProfile(saved);
     setErrors({});
     setPhotoError(undefined);
@@ -158,7 +182,10 @@ export function ProfileForm({ initial }: { initial?: MemberProfile }) {
                   Ganti foto
                 </button>
                 {profile.photo && (
-                  <button type="button" className={styles.textButton} onClick={() => update("photo", null)}>
+                  <button type="button" className={styles.textButton} onClick={() => {
+                      photoFile.current = null;
+                      update("photo", null);
+                    }}>
                     Hapus
                   </button>
                 )}

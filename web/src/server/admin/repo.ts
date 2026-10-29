@@ -117,6 +117,49 @@ export async function exportMembers(query: MembersQuery): Promise<MemberListItem
 }
 
 /** Segmen tersimpan (tabel member_segments) — filter disimpan sebagai query. */
+/** Calon member: ghost member yang belum daftar (dari impor Kuyy & "Tambah member" saat email gagal). */
+export type PendingMember = { id: string; name: string; email: string | null; phone: string | null };
+export type PendingMembers = {
+  /** Ditambahkan admin (Tambah member / tamu manual), bukan dari impor Kuyy — 50 terbaru. */
+  added: PendingMember[];
+  /** Jumlah seluruhnya (bisa > added.length). */
+  addedTotal: number;
+  /** Peserta impor Kuyy yang belum daftar — cukup jumlahnya. */
+  fromKuyy: number;
+  error?: string;
+};
+
+export const listPendingMembers = cache(async (): Promise<PendingMembers> => {
+  if (!isSupabaseConfigured) return { added: [], addedTotal: 0, fromKuyy: 0 };
+  const supabase = await createSupabaseServerClient();
+  const [added, all] = await Promise.all([
+    // Anti-join: ghost tanpa baris peserta dari impor Kuyy = ditambahkan admin (Tambah member saat email
+    // gagal, atau tamu manual di panel peserta — source "admin").
+    supabase
+      .from("ghost_members")
+      .select("id, full_name, email, phone, last_seen_at, session_participants!left(id)", { count: "exact" })
+      .is("claimed_by", null)
+      .eq("session_participants.source", "kuy")
+      .is("session_participants", null)
+      .order("last_seen_at", { ascending: false })
+      .limit(50),
+    supabase.from("ghost_members").select("id", { count: "exact", head: true }).is("claimed_by", null),
+  ]);
+  const error = added.error ?? all.error;
+  if (error) {
+    console.error(`[listPendingMembers] ${error.message}`);
+    return { added: [], addedTotal: 0, fromKuyy: 0, error: error.message };
+  }
+  const rows = added.data ?? [];
+  const addedTotal = added.count ?? rows.length;
+  return {
+    added: rows.map((g) => ({ id: g.id as string, name: g.full_name as string, email: g.email as string | null, phone: g.phone as string | null })),
+    // Total tambahan manual (bukan hanya 50 yang dimuat) → sisanya benar-benar dari impor Kuyy.
+    addedTotal,
+    fromKuyy: Math.max(0, (all.count ?? 0) - addedTotal),
+  };
+});
+
 export const listSegments = cache(async (): Promise<Segment[]> => {
   const defs: Omit<Segment, "count">[] = [
     { id: "gold-jakarta", name: "Gold+ di Jakarta", query: { tier: "gold", city: "Jakarta" } },

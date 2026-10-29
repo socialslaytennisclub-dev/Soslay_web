@@ -1,4 +1,5 @@
 import { isEmail, validateBirthDate } from "@/lib/auth";
+import { changedPhoneError } from "@/lib/wa-invite";
 import { profileSections, requiredProfileFields, type MemberProfile, type ProfileField } from "@/content/member";
 
 function isFilled(value: MemberProfile[ProfileField]): boolean {
@@ -20,15 +21,18 @@ export function profileCompletion(profile: MemberProfile) {
 }
 
 
-/** Validasi sebelum simpan. Kunci = field, nilai = pesan error. */
-export function validateProfile(profile: MemberProfile): Partial<Record<ProfileField, string>> {
+/** Validasi sebelum simpan. Kunci = field, nilai = pesan error. `storedPhone` = nomor yang sudah tersimpan (tidak dicek ulang). */
+export function validateProfile(profile: MemberProfile, storedPhone?: string | null): Partial<Record<ProfileField, string>> {
   const errors: Partial<Record<ProfileField, string>> = {};
 
   for (const field of requiredProfileFields) {
     if (!isFilled(profile[field])) errors[field] = "Required";
   }
   if (!errors.email && !isEmail(profile.email)) errors.email = "Please enter a valid email";
-  if (!errors.phone && profile.phone.replace(/\D/g, "").length < 9) errors.phone = "Nomor terlalu pendek";
+  if (!errors.phone) {
+    const phone = changedPhoneError(profile.phone, storedPhone);
+    if (phone) errors.phone = phone;
+  }
   if (!errors.instagram && /\s/.test(profile.instagram)) errors.instagram = "Username tanpa spasi";
   if (!errors.birthDate) {
     const birthDate = validateBirthDate(profile.birthDate);

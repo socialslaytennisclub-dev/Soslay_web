@@ -1,3 +1,4 @@
+import { shiftDemoDates } from "@/lib/demo-dates";
 import type { City } from "@/lib/format";
 
 /**
@@ -16,6 +17,8 @@ export type MemberTier = "Basic" | "Silver" | "Gold" | "Platinum";
 
 export const member = {
   name: "Arya Putra Dewangga",
+  /** Foto profil (URL); null = inisial. */
+  photo: null as string | null,
   username: "aryasoslay67",
   email: "aryaputradewangga@gmail.com",
   tier: "Gold" as MemberTier,
@@ -135,13 +138,14 @@ export type MemberSession = {
 
 const HOME = "/images/home";
 
-export const memberSessions: MemberSession[] = [
+/** Riwayat & jadwal contoh (mode demo) — tanggalnya digeser ke depan supaya sesi "upcoming" tidak lewat. */
+export const memberSessions: MemberSession[] = shiftDemoDates([
   {
-    slug: "weekly-mabar-ayana-03-okt",
+    slug: "weekly-mabar-ayana-3-jam",
     title: "Mabar Session",
     venue: "AYANA Midplaza Jakarta",
     city: "Jakarta",
-    date: "2026-10-03",
+    date: "2026-11-22",
     start: "07:00",
     end: "11:00",
     image: `${HOME}/venue-ayana.webp`,
@@ -152,7 +156,7 @@ export const memberSessions: MemberSession[] = [
     title: "Mabar di Bali",
     venue: "Altitude Kintamani",
     city: "Bali",
-    date: "2026-10-04",
+    date: "2026-11-08",
     start: "07:00",
     end: "11:00",
     image: "/images/activity/featured-altitude.webp",
@@ -194,7 +198,7 @@ export const memberSessions: MemberSession[] = [
     status: "done",
     points: 50,
   },
-];
+]);
 
 /** Mendatang (terdekat dulu) & riwayat (terbaru dulu) — Dashboard "Activity" + tab My Activities. */
 export function splitSessions(sessions: MemberSession[]) {

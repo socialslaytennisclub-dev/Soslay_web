@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Avatar } from "@/components/ui";
+import { displayPhone, waNumber } from "@/lib/wa-invite";
 import { LEVEL_LABEL, MEMBER_STATUS_LABEL, formatRupiahShort, formatShortDate } from "@/lib/admin-labels";
 import type { MemberDetail, MemberTimelineItem } from "@/server/admin/types";
 import { AdminIcon, type AdminIconName } from "../ui/AdminIcon";
@@ -31,7 +32,8 @@ export function MemberDetailView({ member, bookable }: { member: MemberDetail; b
     { label: "Total belanja", value: formatRupiahShort(member.totalSpent) },
     { label: "Terakhir main", value: formatShortDate(member.lastPlayedAt) },
   ];
-  const phone = `+62 ${member.phone.replace(/(\d{3})(\d{4})(\d+)/, "$1 $2 $3")}`;
+  const phone = displayPhone(member.phone);
+  const wa = waNumber(member.phone);
 
   return (
     <div className={styles.page}>
@@ -41,9 +43,11 @@ export function MemberDetailView({ member, bookable }: { member: MemberDetail; b
           Kembali ke Members
         </Link>
         <div className={styles.actions}>
-          <AdminButton href={`https://wa.me/62${member.phone}`} target="_blank" rel="noopener noreferrer" icon="whatsapp-logo">
-            WhatsApp
-          </AdminButton>
+          {wa && (
+            <AdminButton href={`https://wa.me/${wa}`} target="_blank" rel="noopener noreferrer" icon="whatsapp-logo">
+              WhatsApp
+            </AdminButton>
+          )}
           <AdminButton href={`mailto:${member.email}`} icon="envelope-simple">
             Email
           </AdminButton>
@@ -77,7 +81,7 @@ export function MemberDetailView({ member, bookable }: { member: MemberDetail; b
               </li>
               <li>
                 <AdminIcon name="whatsapp-logo" size={16} />
-                {phone}
+                {phone || "—"}
               </li>
               <li>
                 <AdminIcon name="map-pin" size={16} />

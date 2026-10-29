@@ -1,6 +1,7 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { localPhone } from "@/lib/wa-invite";
 import type { TennisLevel } from "./types";
 
 /**
@@ -54,7 +55,7 @@ export function normalizeIndoPhone(input: string): string | null {
   const digits = input.replace(/\D/g, "");
   // Nomor Indonesia: diawali 0 / 62 / +62, atau langsung 8… (tanpa awalan).
   if (!/^(0|62|8)/.test(digits) && !input.trim().startsWith("+")) return null;
-  const local = digits.replace(/^(62|0)/, "");
+  const local = localPhone(input);
   return local.length >= 9 && local.length <= 13 ? local : null;
 }
 

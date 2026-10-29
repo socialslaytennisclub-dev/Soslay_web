@@ -9,8 +9,9 @@ import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { AdminIcon } from "@/components/admin/ui/AdminIcon";
 import { AdminButton } from "@/components/admin/ui/AdminUI";
 import { cx } from "@/lib/cx";
+import { displayPhone, signupWaLink } from "@/lib/wa-invite";
 import { membersHref, parseMembersQuery } from "@/server/admin/query";
-import { listMembers, listSegments } from "@/server/admin/repo";
+import { listMembers, listPendingMembers, listSegments } from "@/server/admin/repo";
 import type { MembersQuery } from "@/server/admin/types";
 import pageStyles from "../page.module.css";
 
@@ -19,7 +20,7 @@ export const metadata: Metadata = { title: "Members" };
 /** Admin / 02 Members (Figma 25:3767). Semua filter, sort & halaman ada di URL. */
 export default async function AdminMembersPage({ searchParams }: PageProps<"/admin/members">) {
   const query = parseMembersQuery(await searchParams);
-  const [result, segments] = await Promise.all([listMembers(query), listSegments()]);
+  const [result, segments, pending] = await Promise.all([listMembers(query), listSegments(), listPendingMembers()]);
 
   const tabs: { value: NonNullable<MembersQuery["tab"]>; label: string; count: number }[] = [
     { value: "all", label: "Semua", count: result.counts.all },
@@ -110,6 +111,46 @@ export default async function AdminMembersPage({ searchParams }: PageProps<"/adm
             </nav>
           </div>
         </section>
+
+        {(pending.added.length > 0 || pending.fromKuyy > 0 || pending.error) && (
+          <section className={styles.panel} aria-labelledby="pending-title">
+            <header className={styles.pendingHeader}>
+              <h2 id="pending-title" className={styles.pendingTitle}>
+                Calon member <span className={styles.tabCount}>{pending.addedTotal.toLocaleString("id-ID")}</span>
+              </h2>
+              <p className={styles.pendingHint}>
+                Ditambahkan admin (&ldquo;Tambah member&rdquo; saat email undangan gagal, atau tamu manual di daftar peserta) — belum punya akun. Datanya otomatis tersambung saat dia daftar dengan email / nomor yang sama.
+              </p>
+            </header>
+            {pending.error ? (
+              <p className={styles.pendingHint}>Daftar calon member gagal dimuat: {pending.error}</p>
+            ) : (
+              <ul className={styles.pendingList}>
+                {pending.added.map((p) => {
+                  const wa = p.phone ? signupWaLink({ name: p.name, phone: p.phone }) : null;
+                  return (
+                    <li key={p.id} className={styles.pendingRow}>
+                      <span className={styles.pendingName}>
+                        <strong>{p.name}</strong>
+                        <span>{[p.email, p.phone && displayPhone(p.phone)].filter(Boolean).join(" · ") || "Tanpa kontak"}</span>
+                      </span>
+                      {wa && (
+                        <AdminButton size="sm" icon="whatsapp-logo" href={wa} target="_blank">
+                          Undang daftar
+                        </AdminButton>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {pending.fromKuyy > 0 && (
+              <p className={styles.pendingHint}>
+                + {pending.fromKuyy.toLocaleString("id-ID")} peserta impor Kuyy yang belum daftar — undang dari daftar peserta di halaman sesinya.
+              </p>
+            )}
+          </section>
+        )}
       </div>
     </>
   );

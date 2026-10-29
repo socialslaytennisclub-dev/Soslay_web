@@ -1,7 +1,10 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { discardUploads, uploadPublicImage } from "../../storage";
+import { monthKey } from "../time";
 import type { ProductForm, VenueForm } from "../types";
 import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } from "./common";
 
@@ -173,6 +176,53 @@ export async function saveVenue(input: VenueForm): Promise<ActionResult> {
   refreshVenues(slug);
   if (!input.id) redirect(`/admin/venues/${slug}?saved=1`);
   return done(input.active ? "Venue tersimpan dan tampil di website." : "Venue tersimpan (disembunyikan dari website).");
+}
+
+const VENUE_BUCKET = "venue-photos";
+
+/** Upload foto cover / hero venue ke Storage; URL tersimpan ke venue saat admin menekan Simpan. */
+export async function uploadVenuePhoto(formData: FormData): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const auth = await requireEditor("venues");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const result = await uploadPublicImage({ bucket: VENUE_BUCKET, file: formData.get("file"), folder: monthKey(new Date()), maxBytes: 5 * 1024 * 1024 });
+  if (!result.ok) return result;
+  await audit(auth.userId, "venue.photo_upload", "venue_photo", result.path);
+  return { ok: true, url: result.url };
+}
+
+/** Upload foto venue yang diganti sebelum Simpan → hapus dari Storage (yang masih dipakai venue mana pun aman). */
+export async function discardVenueUploads(urls: string[]): Promise<void> {
+  const auth = await requireEditor("venues");
+  if ("error" in auth) return;
+  await discardUploads(VENUE_BUCKET, urls, { table: "venues", columns: ["cover_path", "hero_path"] });
+}
+
+/**
+ * Hapus venue. Ditolak bila masih ada sesi mendatang (pindahkan / batalkan dulu) atau riwayat
+ * sesi (sesi lama tetap menunjuk venue ini — sembunyikan saja dari website).
+ */
+export async function deleteVenue(id: string): Promise<ActionResult> {
+  const auth = await requireEditor("venues");
+  if ("error" in auth) return fail(auth.error);
+  const supabase = await createSupabaseServerClient();
+  // Hitung lewat service role (bila ada): admin Venues tanpa izin Activities tidak melihat sesi draft lewat RLS.
+  const reader = createSupabaseAdminClient() ?? supabase;
+  const sessions = () => reader.from("sessions").select("id", { count: "exact", head: true }).eq("venue_id", id);
+  const [{ data: venue }, upcoming, all] = await Promise.all([
+    supabase.from("venues").select("name, slug").eq("id", id).maybeSingle(),
+    sessions().gte("ends_at", new Date().toISOString()).neq("status", "cancelled"),
+    sessions(),
+  ]);
+  if (!venue) return fail("Venue tidak ditemukan.");
+  if (upcoming.count) return fail(`${venue.name} masih punya ${upcoming.count} sesi mendatang — pindahkan ke venue lain atau batalkan sesinya dulu.`);
+  // Sesi lama / dibatalkan tetap menunjuk venue ini (riwayat member) → tidak bisa dihapus.
+  if (all.count) return fail(`${venue.name} punya riwayat ${all.count} sesi, jadi tidak bisa dihapus. Matikan "Tampil di website" untuk menyembunyikannya.`);
+
+  const { error } = await supabase.from("venues").delete().eq("id", id);
+  if (error) return fail(error.code === "23503" ? `${venue.name} masih dipakai sesi lain — sembunyikan saja dari website.` : `Gagal menghapus: ${error.message}`);
+  await audit(auth.userId, `menghapus venue ${venue.name}`, "venue", venue.slug);
+  refreshVenues(venue.slug);
+  redirect("/admin/venues?deleted=1");
 }
 
 export async function setVenueVisible(slug: string, visible: boolean): Promise<ActionResult> {

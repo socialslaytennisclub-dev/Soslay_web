@@ -222,6 +222,13 @@
   color: var(--color-navy-900);
 }
 
+.accountPhoto {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 .accountName {
   max-width: 120px;
   overflow: hidden;

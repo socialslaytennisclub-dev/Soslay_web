@@ -1,7 +1,9 @@
 "use server";
 
 import { isEmail } from "@/lib/auth";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { changedPhoneError, localPhone, phoneFormatError } from "@/lib/wa-invite";
 import { inviteMemberByEmail, requestOrigin } from "../invite";
 import type { MemberForm, MembersQuery } from "../types";
 import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } from "./common";
@@ -23,38 +25,60 @@ function refreshMember(id: string) {
 
 export type NewMemberInput = { fullName: string; email: string; phone: string; kuyId: string; city: string; level: string };
 
+/** Email undangan gagal → data disimpan sebagai ghost member; admin mengundang daftar lewat WhatsApp. */
+export type AddMemberResult = ActionResult | { ok: true; message: string; signupInvite: { name: string; phone: string } };
+
 /**
  * Tambah member dari admin: buat akun Auth lewat email undangan (butuh SUPABASE_SERVICE_ROLE_KEY).
  * Metadata `signup: "member"` → trigger handle_member_signup membuat profilnya, sama seperti daftar
  * di website. Member membuka link di email, membuat password, lalu masuk ke /akun.
+ * Email gagal terkirim → akun tidak dibuat; data jadi calon member (ghost) + undangan daftar via WhatsApp.
  */
-export async function addMember(input: NewMemberInput): Promise<ActionResult> {
+export async function addMember(input: NewMemberInput): Promise<AddMemberResult> {
   const auth = await requireEditor("members");
   if ("error" in auth) return fail(auth.error);
   const fullName = input.fullName.trim();
   const email = input.email.trim().toLowerCase();
   const kuyId = input.kuyId.trim();
-  const phone = input.phone.replace(/\D/g, "").replace(/^62/, "").replace(/^0/, "");
+  const phone = localPhone(input.phone);
   if (!fullName) return fail("Isi nama lengkap member.");
   if (!isEmail(email)) return fail("Email tidak valid.");
-  if (phone && phone.length < 9) return fail("Nomor WhatsApp terlalu pendek.");
+  const phoneError = phoneFormatError(input.phone);
+  if (phoneError) return fail(phoneError);
 
-  const supabase = await createSupabaseServerClient();
-  const [{ data: existing }, kuy] = await Promise.all([
-    supabase.from("profiles").select("full_name").eq("email", email).maybeSingle(),
-    kuyId ? supabase.rpc("kuy_id_available", { p_kuy_id: kuyId }) : Promise.resolve({ data: true }),
-  ]);
-  if (existing) return fail(`Email ini sudah terdaftar sebagai member (${existing.full_name}).`);
-  if (kuy.data === false) return fail(`Kuy ID @${kuyId} sudah dipakai member lain.`);
+  // Tanpa service key member tidak bisa ditambah — tetap beri tahu kalau emailnya ternyata sudah member.
+  if (!createSupabaseAdminClient()) {
+    const supabase = await createSupabaseServerClient();
+    const { data: existing } = await supabase.from("profiles").select("full_name").eq("email", email).maybeSingle();
+    return fail(existing ? `Email ini sudah terdaftar sebagai member (${existing.full_name}).` : "Tambah member belum aktif: SUPABASE_SERVICE_ROLE_KEY belum dipasang di server.");
+  }
+  if (kuyId) {
+    const supabase = await createSupabaseServerClient();
+    const { data: kuyFree } = await supabase.rpc("kuy_id_available", { p_kuy_id: kuyId });
+    if (kuyFree === false) return fail(`Kuy ID @${kuyId} sudah dipakai member lain.`);
+  }
 
   const invite = await inviteMemberByEmail(
     { fullName, email, phone, kuyId, city: input.city.trim(), level: orNull(input.level, ENUMS.level) ?? "" },
     await requestOrigin(),
   );
   if (!invite.ok) {
-    if (invite.reason === "no_service_key") return fail("Tambah member belum aktif: SUPABASE_SERVICE_ROLE_KEY belum dipasang di server.");
+    // Profil dengan email ini dicek di inviteMemberByEmail (service role — juga melihat profil di luar RLS admin).
+    if (invite.reason === "member") return fail(`Email ini sudah terdaftar sebagai member (${invite.error}).`);
     if (invite.reason === "taken") return fail("Email ini sudah punya akun Soslay (mis. akun tim) — minta dia daftar sendiri atau hubungi Super Admin.");
-    if (invite.reason === "rate_limited") return fail("Batas kirim email Supabase tercapai — coba lagi beberapa saat lagi.");
+    if (invite.reason === "email_failed") {
+      // Akun TIDAK dibuat (link login tidak pernah dipegang admin). Data disimpan sebagai ghost member →
+      // trigger claim_ghost_member menautkannya otomatis saat dia daftar sendiri (email / telepon / Kuy ID).
+      console.warn(`[addMember] email undangan gagal: ${invite.error}`);
+      const saved = await saveGhost({ fullName, email, phone, kuyId, level: orNull(input.level, ENUMS.level) });
+      if (!saved.ok) return fail(`Email undangan gagal terkirim (${invite.error}) dan data belum tersimpan: ${saved.error}`);
+      await audit(auth.userId, `mencatat calon member ${fullName} (email undangan gagal)`, "ghost_member", saved.id);
+      return {
+        ok: true,
+        message: `Email undangan ke ${email} gagal terkirim. Data ${fullName} disimpan — undang dia daftar lewat WhatsApp; akunnya otomatis tersambung saat dia daftar.`,
+        signupInvite: { name: fullName, phone },
+      };
+    }
     return fail(`Gagal membuat akun: ${invite.error}`);
   }
   await audit(auth.userId, `menambah member ${fullName}`, "member", invite.userId);
@@ -62,18 +86,49 @@ export async function addMember(input: NewMemberInput): Promise<ActionResult> {
   return done(`${fullName} ditambahkan. Undangan terkirim ke ${email} — dia tinggal klik link di email dan membuat password.`);
 }
 
+/** Simpan / perbarui ghost member (belum punya akun) — lewat service role karena izin tulis ghost = activities. */
+async function saveGhost(g: { fullName: string; email: string; phone: string; kuyId: string; level: string | null }): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return { ok: false, error: "SUPABASE_SERVICE_ROLE_KEY belum dipasang" };
+  // Dicocokkan lewat email saja: nomor HP bisa dipakai bersama (pembeli Kuyy yang membelikan tiket
+  // pasangannya) — mencocokkan nomor akan menimpa data calon member orang lain.
+  const [{ data: known }, { data: kuyOwner }] = await Promise.all([
+    admin.from("ghost_members").select("id").is("claimed_by", null).eq("email", g.email).order("last_seen_at", { ascending: false }).limit(1).maybeSingle(),
+    g.kuyId ? admin.from("ghost_members").select("id").eq("kuy_id", g.kuyId).maybeSingle() : Promise.resolve({ data: null }),
+  ]);
+  const row = {
+    full_name: g.fullName,
+    email: g.email,
+    phone: g.phone || null,
+    tennis_level: g.level,
+    last_seen_at: new Date().toISOString(),
+    // Kuy ID unik di ghost_members — lewati bila sudah dipakai ghost lain.
+    ...(g.kuyId && (!kuyOwner || kuyOwner.id === known?.id) ? { kuy_id: g.kuyId } : {}),
+  };
+  const { data, error } = known
+    ? await admin.from("ghost_members").update(row).eq("id", known.id).select("id").single()
+    : await admin.from("ghost_members").insert(row).select("id").single();
+  return error ? { ok: false, error: error.message } : { ok: true, id: data.id as string };
+}
+
 export async function updateMember(input: MemberForm): Promise<ActionResult> {
   const auth = await requireEditor("members");
   if ("error" in auth) return fail(auth.error);
   if (!input.fullName.trim()) return fail("Nama wajib diisi.");
   if (input.birthDate && !/^\d{4}-\d{2}-\d{2}$/.test(input.birthDate)) return fail("Tanggal lahir tidak valid.");
-
   const supabase = await createSupabaseServerClient();
+  // Nomor lama yang tidak diubah tetap boleh disimpan — data tersimpan hanya dibaca kalau format nomornya ditolak.
+  if (phoneFormatError(input.phone)) {
+    const { data: stored } = await supabase.from("profiles").select("phone").eq("id", input.id).maybeSingle();
+    const phoneError = changedPhoneError(input.phone, stored?.phone as string | null | undefined);
+    if (phoneError) return fail(phoneError);
+  }
+
   const { error } = await supabase
     .from("profiles")
     .update({
       full_name: input.fullName.trim(),
-      phone: input.phone.replace(/\D/g, "").replace(/^(62|0)/, "") || null,
+      phone: localPhone(input.phone) || null,
       city: input.city.trim() || null,
       birth_date: input.birthDate || null,
       gender: orNull(input.gender, ENUMS.gender),

@@ -15,7 +15,7 @@ export function AlbumGrid({ albums }: { albums: PhotoAlbum[] }) {
         <li key={a.id}>
           <Link href={`/admin/activities/${a.sessionId}`} className={styles.album}>
             {a.status === "empty" ? (
-              <span className={styles.albumEmpty} title="Upload aktif setelah Supabase Storage tersambung">
+              <span className={styles.albumEmpty} title="Upload foto di kartu Foto sesi">
                 <AdminIcon name="upload-simple" size={22} />
               </span>
             ) : (

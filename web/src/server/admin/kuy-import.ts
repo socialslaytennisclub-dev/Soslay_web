@@ -1,4 +1,5 @@
 import "server-only";
+import { localPhone } from "@/lib/wa-invite";
 import type { TennisLevel } from "./types";
 import { readFirstSheet } from "./xlsx";
 
@@ -45,7 +46,6 @@ const HEADERS = {
   ticketPrice: "pass revenue",
 } as const;
 
-export const normalizePhone = (raw: string) => raw.replace(/\D/g, "").replace(/^(62|0)/, "");
 
 export function parseLevel(raw: string): TennisLevel | null {
   const t = raw.toLowerCase();
@@ -95,7 +95,7 @@ export function parseKuyExport(data: ArrayBuffer): { eventTitle: string; rows: K
       regNo,
       name,
       email: cell(r, "email").toLowerCase(),
-      phone: normalizePhone(cell(r, "phone")),
+      phone: localPhone(cell(r, "phone")),
       instagram: cell(r, "instagram").replace(/^@/, ""),
       level: parseLevel(levelRaw),
       levelRaw,

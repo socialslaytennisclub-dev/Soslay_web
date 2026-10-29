@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { genderOptions, handOptions, playingFormatOptions, playingFrequencyOptions, tennisLevelOptions, type MemberProfile, type MemberTier } from "@/content/member";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { localPhone } from "@/lib/wa-invite";
 import { getMemberSession } from "./user";
 
 /**
@@ -21,7 +22,7 @@ export const toLabel = (values: readonly string[], labels: string[], value: stri
 export const toEnum = (values: readonly string[], labels: string[], label: string) => (label ? (values[labels.indexOf(label)] ?? null) : null);
 
 export type MyMember = {
-  header: { name: string; username: string; email: string; tier: MemberTier; memberSince: string; memberId: string };
+  header: { name: string; username: string; email: string; tier: MemberTier; memberSince: string; memberId: string; photo: string | null };
   profile: MemberProfile;
 };
 
@@ -46,6 +47,7 @@ type ProfileRow = {
   looking_for: string[];
   event_types: string[];
   joined_at: string;
+  avatar_path: string | null;
 };
 
 const since = new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric", timeZone: "Asia/Jakarta" });
@@ -65,14 +67,15 @@ export const getMyMember = cache(async (): Promise<MyMember | null> => {
       tier: (p.tier.charAt(0).toUpperCase() + p.tier.slice(1)) as MemberTier,
       memberSince: since.format(new Date(p.joined_at)),
       memberId: p.member_code,
+      photo: p.avatar_path,
     },
     profile: {
-      photo: null,
+      photo: p.avatar_path,
       fullName: p.full_name,
       displayName: p.display_name ?? "",
       birthDate: p.birth_date ?? "",
       gender: toLabel(GENDER, genderOptions, p.gender),
-      phone: (p.phone ?? "").replace(/^(62|0)/, ""),
+      phone: localPhone(p.phone ?? ""),
       city: p.city ?? "",
       kuyId: p.kuy_id ?? "",
       reclubId: p.reclub_id ?? "",

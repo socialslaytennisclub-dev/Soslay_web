@@ -5,7 +5,7 @@ import { useRef, useState, useTransition, type FormEvent, type ReactNode } from 
 import { useDialog } from "@/hooks/useDialog";
 import { formatRupiahPlain, LEVEL_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
-import { memberInviteWaLink } from "@/lib/wa-invite";
+import { memberInviteWaLink, phoneFormatError } from "@/lib/wa-invite";
 import { addParticipantManual, importKuyParticipants, lookupParticipant, previewKuyImport, type ParticipantLookup } from "@/server/admin/actions/play";
 import type { KuyImportPreview } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
@@ -55,6 +55,7 @@ export function ParticipantsDrawer({ sessionId, sessionTitle, sessionWhen, addLo
     setQuery("");
     setLookup(null);
     setGuest({ fullName: "", phone: "", email: "" });
+    setGuestPhoneTouched(false);
     fileRef.current = null;
     setFileName(null);
     setPreview(null);
@@ -84,7 +85,9 @@ export function ParticipantsDrawer({ sessionId, sessionTitle, sessionWhen, addLo
   };
   const member = lookup?.found === "member" ? lookup.member : null;
   const alreadyIn = lookup?.found === "member" && lookup.alreadyIn;
-  const canAddManual = member ? !alreadyIn : lookup?.found === "none" && guest.fullName.trim() !== "" && guest.phone.replace(/\D/g, "").length >= 9;
+  const [guestPhoneTouched, setGuestPhoneTouched] = useState(false);
+  const guestPhoneError = phoneFormatError(guest.phone);
+  const canAddManual = member ? !alreadyIn : lookup?.found === "none" && guest.fullName.trim() !== "" && guest.phone.trim() !== "" && !guestPhoneError;
   const addManual = () =>
     startSaving(async () => {
       const res = await addParticipantManual(sessionId, member ? { memberId: member.id } : guest);
@@ -261,7 +264,17 @@ export function ParticipantsDrawer({ sessionId, sessionTitle, sessionWhen, addLo
                   </label>
                   <label className={editor.field}>
                     <span className={editor.label}>Nomor HP (WhatsApp) *</span>
-                    <input className={editor.input} inputMode="tel" value={guest.phone} onChange={(e) => setGuest({ ...guest, phone: e.target.value })} placeholder="0812…" autoComplete="off" />
+                    <input
+                      className={cx(editor.input, guestPhoneTouched && guestPhoneError && editor.invalid)}
+                      inputMode="tel"
+                      value={guest.phone}
+                      onChange={(e) => setGuest({ ...guest, phone: e.target.value })}
+                      placeholder="0812…"
+                      autoComplete="off"
+                      onBlur={() => setGuestPhoneTouched(true)}
+                      aria-invalid={guestPhoneTouched && Boolean(guestPhoneError)}
+                    />
+                    {guestPhoneTouched && guestPhoneError && <span className={editor.error}>{guestPhoneError}</span>}
                   </label>
                   <label className={editor.field}>
                     <span className={editor.label}>Email (opsional)</span>

@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { isActivityType, sessions as contentSessions, type Session, type TennisLevel } from "@/content/activity";
+import { shiftDemoDates } from "@/lib/demo-dates";
 import { CITY_TIMEZONE, cityOf, type City } from "@/lib/format";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabasePublicClient } from "@/lib/supabase/public";
@@ -48,8 +49,15 @@ export function localParts(iso: string, city: City) {
   return { date: `${get("year")}-${get("month")}-${get("day")}`, time: `${get("hour")}:${get("minute")}` };
 }
 
+/**
+ * Mode demo (tanpa Supabase): jadwal contoh digeser ke depan supaya halaman Activity tidak kosong.
+ * Fallback saat database error tetap memakai tanggal asli (sesi contoh tidak boleh tampil seolah
+ * bisa dibooking di website production).
+ */
+const demoSessions = () => shiftDemoDates(contentSessions);
+
 export const getWebsiteSessions = cache(async (): Promise<Session[]> => {
-  if (!isSupabaseConfigured) return contentSessions;
+  if (!isSupabaseConfigured) return demoSessions();
 
   const since = new Date(Date.now() - PAST_WINDOW_DAYS * 86_400_000).toISOString();
   const client = createSupabasePublicClient();

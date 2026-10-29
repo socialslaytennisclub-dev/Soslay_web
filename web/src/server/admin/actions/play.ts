@@ -4,9 +4,10 @@ import { isEmail } from "@/lib/auth";
 import { participantsLockReason } from "@/lib/session-lock";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { localPhone, phoneFormatError } from "@/lib/wa-invite";
 import { getDataset } from "../dataset";
-import { normalizePhone, parseKuyExport, type KuyRow } from "../kuy-import";
-import { findMemberById, findMemberByIdentifier, findMemberByPhone, normalizeIndoPhone, type MemberIdentity } from "../identity";
+import { parseKuyExport, type KuyRow } from "../kuy-import";
+import { findMemberById, findMemberByIdentifier, findMemberByPhone, type MemberIdentity } from "../identity";
 import { getAdminSession } from "../session";
 import type { KuyImportPreview, KuyImportPreviewRow, SessionMatch } from "../types";
 import { audit, refreshPaths, requireEditor, type ActionResult } from "./common";
@@ -40,7 +41,7 @@ async function readUpload(formData: FormData): Promise<{ name: string; size: num
 async function matchMembers(rows: KuyRow[]): Promise<Map<string, KuyImportPreviewRow["member"]>> {
   const d = await getDataset();
   const byEmail = new Map(d.members.map((m) => [m.email.toLowerCase(), m]));
-  const byPhone = new Map(d.members.filter((m) => m.phone).map((m) => [normalizePhone(m.phone), m]));
+  const byPhone = new Map(d.members.filter((m) => m.phone).map((m) => [localPhone(m.phone), m]));
   const byKuy = new Map(d.members.filter((m) => m.kuyId).map((m) => [m.kuyId.toLowerCase(), m]));
   const usernameCount = new Map<string, number>();
   for (const r of rows) usernameCount.set(r.username.toLowerCase(), (usernameCount.get(r.username.toLowerCase()) ?? 0) + 1);
@@ -510,12 +511,14 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
 
   const fullName = input.fullName.trim();
   const email = input.email.trim().toLowerCase();
-  const phone = normalizePhone(input.phone);
+  const phone = localPhone(input.phone);
   if (!fullName) return { ok: false, error: "Isi nama lengkap peserta." };
-  if (phone.length < 9) return { ok: false, error: "Isi nomor HP (WhatsApp) yang valid — dipakai untuk mengenali & mengundang peserta." };
+  if (!phone) return { ok: false, error: "Isi nomor HP (WhatsApp) — dipakai untuk mengenali & mengundang peserta." };
+  const phoneError = phoneFormatError(input.phone);
+  if (phoneError) return { ok: false, error: phoneError };
   if (email && !isEmail(email)) return { ok: false, error: "Email tidak valid." };
   // Ternyata sudah member (nomor HP terdaftar) → pakai data member.
-  const existing = await findMemberByPhone(normalizeIndoPhone(input.phone) ?? phone);
+  const existing = await findMemberByPhone(phone);
   if (existing) return addParticipantManual(sessionId, { memberId: existing.id });
 
   const row: KuyRow = { regNo, name: fullName, email, phone, instagram: "", level: null, levelRaw: "", username: "", status: "going", amount: 0, paymentMethod: "", ticket: "", ticketPrice: 0, skipReason: null };

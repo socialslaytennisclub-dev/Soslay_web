@@ -57,7 +57,8 @@ export default async function AdminContentPage({ searchParams }: PageProps<"/adm
             {num.format(gallery.totalPhotos)} foto · {gallery.totalAlbums} album · tampil di member dashboard & halaman venue
           </p>
         </div>
-        <AdminButton variant="primary" size="sm" icon="upload-simple" disabled title="Upload aktif setelah Supabase Storage tersambung">
+        {/* Foto diunggah per sesi (album Google Drive + thumbnail) di kartu "Foto sesi" editor sesi. */}
+        <AdminButton href="/admin/activities?tab=completed" variant="primary" size="sm" icon="upload-simple" title="Pilih sesi yang sudah selesai, lalu isi kartu Foto sesi">
           Upload foto
         </AdminButton>
       </header>
