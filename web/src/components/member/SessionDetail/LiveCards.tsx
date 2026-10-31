@@ -11,6 +11,9 @@ import styles from "./SessionDetail.module.css";
  * host bisa memilih ronde di Panel Host, dan kartu ini ikut menampilkan ronde yang dipilih.
  */
 
+/** Peserta terdaftar yang belum dijadwalkan di line-up (mis. diimpor setelah line-up disimpan). */
+export const NOT_IN_LINEUP = "Kamu belum masuk line-up — hubungi host untuk dimasukkan ke ronde berikutnya.";
+
 export const maxRound = (d: MemberSessionDetail) => Math.max(d.format.rounds, ...d.matches.map((m) => m.round));
 
 export const planOf = (d: MemberSessionDetail) => planRounds(d.matches, d.currentRound, d.startedRounds, d.phase);
@@ -78,7 +81,11 @@ export function PlayerLiveCard({ detail: d, round, plan = planOf(d), total = max
   // Word joiner (U+2060) di sekitar "–": skor tidak terpotong ke baris baru di judul.
   const scoreText = view?.score ? `${view.score.own}⁠–⁠${view.score.opp}` : null;
 
-  const title = isLive
+  const title = !d.plays
+    ? d.phase === "done"
+      ? "Sesi sudah selesai"
+      : "Kamu belum masuk line-up"
+    : isLive
     ? now
       ? scoreText
         ? `Match kamu selesai · ${scoreText}`
@@ -120,7 +127,8 @@ export function PlayerLiveCard({ detail: d, round, plan = planOf(d), total = max
           <Versus left={{ label: "Tim kamu", team: view.own }} right={{ label: "Lawan", team: view.opp }} badge={scoreText ?? "VS"} />
         </>
       )}
-      {!shown && isLive && <p className={styles.liveNext}>Kamu tidak punya match lagi di line-up. Cek tab Ronde untuk court lain.</p>}
+      {!d.plays && d.phase !== "done" && <p className={styles.liveNext}>{NOT_IN_LINEUP}</p>}
+      {d.plays && !shown && isLive && <p className={styles.liveNext}>Kamu tidak punya match lagi di line-up. Cek tab Ronde untuk court lain.</p>}
       <div className={styles.liveActions}>
         <ScoreRulesButton target={d.format.targetPoints} mode={d.format.leaderboardMode} />
         <span className={styles.liveNote}>

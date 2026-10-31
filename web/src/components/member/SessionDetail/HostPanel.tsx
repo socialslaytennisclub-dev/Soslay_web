@@ -37,7 +37,7 @@ export function HostLive({ detail: d }: { detail: MemberSessionDetail }) {
   // Ronde pilihan yang hilang dari line-up (mis. setelah Atur line-up) → kembali ke ronde live.
   const valid = picked && picked.at === d.currentRound && plan.rounds.includes(picked.round) ? picked.round : null;
   const selected = valid ?? d.currentRound ?? plan.rounds[0];
-  const isPlayer = d.matches.some((m) => m.mySide);
+  const isPlayer = d.plays;
   const total = maxRound(d);
   return (
     <>

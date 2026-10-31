@@ -71,6 +71,8 @@ export type MemberSessionDetail = {
   startedRounds: number[];
   /** Ditunjuk sebagai host sesi ini (chip "Kamu host" + Panel Host). */
   isHost: boolean;
+  /** Member yang login punya match di line-up (bukan sekadar peserta / host). */
+  plays: boolean;
   /** Host & sesi masih berjalan → boleh input / ubah skor (dicek ulang di database). */
   canScore: boolean;
   /** Host / admin sudah menekan "Mulai Activity" (sesi live sebelum jam jadwal). */
@@ -335,6 +337,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     currentRound: session.current_round ?? currentRoundOf(matchRows),
     startedRounds: session.started_rounds ?? [],
     isHost: assigned === true,
+    plays: matchRows.some((m) => side(m) !== null),
     canScore: canScore === true,
     liveStarted: !!session.live_started_at,
     ended: session.ended_at ? { at: session.ended_at, byMe: session.ended_by === user.id } : null,
@@ -397,6 +400,7 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     currentRound: null,
     startedRounds: [],
     isHost: false,
+    plays: false,
     canScore: false,
     liveStarted: false,
     ended: null,

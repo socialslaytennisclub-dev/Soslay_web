@@ -10,7 +10,7 @@ import { SelfCheckIn } from "@/components/member/CheckIn/SelfCheckIn";
 import { Countdown } from "./Countdown";
 import { HostLive } from "./HostPanel";
 import { HostStartCard } from "./HostStart";
-import { maxRound, perspective, PlayerLiveCard } from "./LiveCards";
+import { maxRound, NOT_IN_LINEUP, perspective, PlayerLiveCard } from "./LiveCards";
 import { ParticipantList } from "./ParticipantList";
 import { QrCheckIn } from "./QrCheckIn";
 import { DoneSide, HostResults, PhotosTab, ResultsTab } from "./Results";
@@ -40,7 +40,7 @@ export function detailTabs(d: Pick<MemberSessionDetail, "phase" | "ticket">): De
 }
 
 /** Host yang tidak ikut main (Figma Simplify "Host (bukan peserta)"). */
-const hostOnly = (d: MemberSessionDetail) => d.isHost && !d.ticket && !d.matches.some((m) => m.mySide);
+const hostOnly = (d: MemberSessionDetail) => d.isHost && !d.ticket && !d.plays;
 
 const PANITIA_WA = "62642424792";
 const BRING = ["Raket tenis", "Sepatu non-marking", "Botol minum", "Handuk & baju ganti", "QR e-ticket"];
@@ -580,6 +580,8 @@ function RoundsTab({ detail: d }: { detail: MemberSessionDetail }) {
   const { rounds } = plan;
   const current = d.currentRound ?? rounds[0];
   const skipped = skippedLabel(plan.skipped);
+  // "Kamu rest" hanya untuk yang ikut main — host yang tidak bermain tidak pernah "rest".
+  const { plays } = d;
   const label =
     d.phase === "done"
       ? "Semua ronde selesai"
@@ -598,8 +600,9 @@ function RoundsTab({ detail: d }: { detail: MemberSessionDetail }) {
       </div>
       <p className={styles.legend}>
         <span className={styles.legendDot} aria-hidden />
-        Match kamu ditandai · ronde selesai bisa dibuka untuk lihat detail
+        {plays ? "Match kamu ditandai · ronde selesai bisa dibuka untuk lihat detail" : "Ronde selesai bisa dibuka untuk lihat detail"}
       </p>
+      {!plays && d.ticket && d.matches.length > 0 && <p className={styles.notInLineup}>{NOT_IN_LINEUP}</p>}
       {rounds.map((r) => {
         const list = d.matches.filter((m) => m.round === r);
         const state = plan.statusOf(r);
@@ -628,7 +631,7 @@ function RoundsTab({ detail: d }: { detail: MemberSessionDetail }) {
                     </>
                   ) : (
                     <>
-                      <span className={styles.restChip}>Kamu rest</span>
+                      {plays && <span className={styles.restChip}>Kamu rest</span>}
                       {list.length} match · Court {list.map((m) => m.court).join(" & ")}
                     </>
                   )}
@@ -644,7 +647,7 @@ function RoundsTab({ detail: d }: { detail: MemberSessionDetail }) {
           <div key={r} className={styles.round}>
             <h3>
               Ronde {r} <span className={cx(styles.roundPill, styles[`roundPill_${state}`])}>{state === "skipped" ? "Dilewati · dimainkan nanti" : ROUND_STATUS_LABEL[state]}</span>
-              {!mine && <span className={styles.restChip}>Kamu rest</span>}
+              {plays && !mine && <span className={styles.restChip}>Kamu rest</span>}
             </h3>
             {courts}
           </div>
