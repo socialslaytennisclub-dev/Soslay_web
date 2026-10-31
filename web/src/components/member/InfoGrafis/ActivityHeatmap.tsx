@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { activityHeatmap } from "@/content/member";
 import { cx } from "@/lib/cx";
 import { formatTanggalISO } from "@/lib/format";
 import type { HeatmapData } from "@/lib/heatmap";
@@ -11,12 +10,15 @@ import styles from "./InfoGrafis.module.css";
 const DAY_LABELS = ["Sen", "", "Rab", "", "Jum", "", "Min"];
 
 type ActivityHeatmapProps = {
+  title: string;
   data: HeatmapData;
   weekCount: number;
+  /** YYYY-MM-DD sesi berikutnya yang sudah dibooking (null = belum ada). */
+  nextSession: string | null;
 };
 
 /** Figma: panel/heatmap — kolom = minggu, baris = hari; sel 20px, gap 4, lime = sesi berikutnya. */
-export function ActivityHeatmap({ data, weekCount }: ActivityHeatmapProps) {
+export function ActivityHeatmap({ title, data, weekCount, nextSession }: ActivityHeatmapProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Periode panjang (1 Thn) bisa di-scroll; selalu mulai dari minggu terbaru di kanan.
@@ -29,7 +31,7 @@ export function ActivityHeatmap({ data, weekCount }: ActivityHeatmapProps) {
     <section className={cx(styles.panel, styles.heatmapPanel)} aria-labelledby="heatmap-title">
       <div className={styles.panelHead}>
         <h3 id="heatmap-title" className={styles.panelTitle}>
-          {activityHeatmap.title}
+          {title}
         </h3>
         <p className={styles.panelSubtitle}>
           {data.total} sesi dalam {weekCount} minggu
@@ -53,7 +55,7 @@ export function ActivityHeatmap({ data, weekCount }: ActivityHeatmapProps) {
           <div
             className={styles.weeks}
             role="img"
-            aria-label={`Peta sesi per hari, ${weekCount} minggu terakhir. Sesi berikutnya ${formatTanggalISO(activityHeatmap.nextSession, "Jakarta")}.`}
+            aria-label={`Peta sesi per hari, ${weekCount} minggu terakhir.${nextSession ? ` Sesi berikutnya ${formatTanggalISO(nextSession, "Jakarta")}.` : ""}`}
           >
             {data.weeks.map((week) => (
               <div key={week[0].date} className={styles.week}>

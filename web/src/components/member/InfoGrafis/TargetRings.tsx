@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { annualTargets } from "@/content/member";
+import type { MemberDashboard } from "@/content/member";
 import { formatAngka } from "@/lib/format";
 import styles from "./InfoGrafis.module.css";
 
@@ -8,8 +8,8 @@ const SIZE = 150;
 const STROKE = 14;
 const RADII = [61, 42, 23];
 
-export function TargetRings() {
-  const { title, subtitle, rings } = annualTargets;
+export function TargetRings({ data }: { data: MemberDashboard["targets"] }) {
+  const { title, subtitle, rings } = data;
 
   return (
     <section className={styles.panel} aria-labelledby="target-rings-title">

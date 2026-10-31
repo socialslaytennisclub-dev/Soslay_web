@@ -1,13 +1,14 @@
 import { Chip } from "@/components/ui";
-import { slayPoint } from "@/content/member";
+import type { MemberDashboard } from "@/content/member";
 import { formatAngka } from "@/lib/format";
 import { SummaryCard, SummaryProgress } from "../SummaryCard/SummaryCard";
 import styles from "./SlayPointCard.module.css";
 
 /** Figma 25:2699 — saldo poin, progress ke tier berikutnya, tombol Tukar. */
-export function SlayPointCard() {
-  const { balance, earnedThisWeek, nextTier, redeemCopy } = slayPoint;
-  const remaining = Math.max(nextTier.threshold - balance, 0);
+export function SlayPointCard({ data }: { data: MemberDashboard["points"] }) {
+  const { balance, earned, earnedThisWeek, nextTier, redeemCopy } = data;
+  // Tier naik dari poin kumulatif (lifetime earned), bukan saldo yang bisa berkurang saat ditukar.
+  const remaining = nextTier ? Math.max(nextTier.threshold - earned, 0) : 0;
 
   return (
     <SummaryCard
@@ -18,10 +19,10 @@ export function SlayPointCard() {
       unit="pts"
     >
       <SummaryProgress
-        label={`${formatAngka(remaining)} pts lagi ke ${nextTier.name}`}
-        valueLabel={`${formatAngka(balance)}/${formatAngka(nextTier.threshold)}`}
-        value={balance}
-        max={nextTier.threshold}
+        label={nextTier ? `${formatAngka(remaining)} pts lagi ke ${nextTier.name}` : "Tier tertinggi tercapai"}
+        valueLabel={nextTier ? `${formatAngka(earned)}/${formatAngka(nextTier.threshold)}` : formatAngka(earned)}
+        value={nextTier ? earned : 1}
+        max={nextTier ? nextTier.threshold : 1}
         tone="navy"
       />
       <div className={styles.footer}>

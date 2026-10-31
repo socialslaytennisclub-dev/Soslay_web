@@ -114,6 +114,25 @@ export const favorites = {
   venue: "AYANA Midplaza",
 };
 
+/** Data Dashboard (Slay Activity, Slay Point, Info Grafis) — dari server untuk member yang login. */
+export type MemberDashboard = {
+  activity: { period: string; sessions: number; unit: string; monthlyTarget: number; stats: { value: string; label: string }[] };
+  /** nextTier null = sudah di tier tertinggi. Progress tier memakai poin kumulatif (`earned`). */
+  points: { balance: number; earned: number; earnedThisWeek: number; nextTier: { name: MemberTier; threshold: number } | null; redeemCopy: string };
+  targets: { title: string; subtitle: string; rings: TargetRing[] };
+  heatmap: { title: string; weeks: number[][]; lastWeekStart: string; nextSession: string | null };
+  favorites: { time: string; venue: string };
+};
+
+/** Mode demo (tanpa Supabase): angka contoh di atas. */
+export const demoDashboard: MemberDashboard = {
+  activity: slayActivity,
+  points: { ...slayPoint, earned: slayPoint.balance },
+  targets: annualTargets,
+  heatmap: activityHeatmap,
+  favorites,
+};
+
 /* ── Sesi member (Dashboard "Activity" + tab My Activities) ── */
 
 export type MemberSessionStatus = "upcoming" | "registered" | "done";

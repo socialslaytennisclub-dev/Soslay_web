@@ -2,20 +2,21 @@
 
 import { useMemo, useState } from "react";
 import { Icon, SegmentedControl, type IconName } from "@/components/ui";
-import { activityHeatmap, favorites, insightPeriods, type InsightPeriod } from "@/content/member";
+import { insightPeriods, type InsightPeriod, type MemberDashboard } from "@/content/member";
 import { buildHeatmap } from "@/lib/heatmap";
 import { ActivityHeatmap } from "./ActivityHeatmap";
 import { TargetRings } from "./TargetRings";
 import styles from "./InfoGrafis.module.css";
 
 /** Figma 25:2718 — toggle periode, ring target tahunan, heatmap hari aktif, kartu insight. */
-export function InfoGrafis() {
+export function InfoGrafis({ data }: { data: Pick<MemberDashboard, "targets" | "heatmap" | "favorites"> }) {
+  const { heatmap: source, favorites } = data;
   const [period, setPeriod] = useState<InsightPeriod>("3m");
   const active = insightPeriods.find((option) => option.value === period) ?? insightPeriods[1];
 
   const heatmap = useMemo(
-    () => buildHeatmap(activityHeatmap.weeks, activityHeatmap.lastWeekStart, active.weeks, activityHeatmap.nextSession),
-    [active.weeks],
+    () => buildHeatmap(source.weeks, source.lastWeekStart, active.weeks, source.nextSession ?? undefined),
+    [source, active.weeks],
   );
 
   const insights: { icon: IconName; label: string; value: string }[] = [
@@ -35,8 +36,8 @@ export function InfoGrafis() {
       </header>
 
       <div className={styles.panels}>
-        <TargetRings />
-        <ActivityHeatmap data={heatmap} weekCount={active.weeks} />
+        <TargetRings data={data.targets} />
+        <ActivityHeatmap title={source.title} data={heatmap} weekCount={active.weeks} nextSession={source.nextSession} />
       </div>
 
       <ul className={styles.insights}>
