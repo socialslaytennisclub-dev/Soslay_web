@@ -1,13 +1,17 @@
 import Image from "next/image";
 import { Icon } from "@/components/ui";
-import { member } from "@/content/member";
+import { member as demo, type MemberTier } from "@/content/member";
 import styles from "./MemberCard.module.css";
 
 /**
  * Figma 25:2638 — Official Member Card: navy, garis lapangan putih 20%, blob indigo,
  * emblem bunga lime + bola + segel tier holografik, Member ID & masa berlaku.
  */
-export function MemberCard() {
+export type MemberCardData = { name: string; tier: MemberTier; memberId: string; validThru?: string };
+
+/** `data` = member yang login; tanpa data (mode demo) memakai member contoh. */
+export function MemberCard({ data }: { data?: MemberCardData | null }) {
+  const member = data ?? demo;
   return (
     <article className={styles.card} aria-label={`Kartu member ${member.tier} ${member.name}`}>
       {/* eslint-disable-next-line @next/next/no-img-element -- ornamen SVG statis */}
@@ -43,7 +47,7 @@ export function MemberCard() {
         </p>
         <p className={styles.meta}>
           <span>{member.name}</span>
-          <span>Valid thru {member.validThru}</span>
+          {member.validThru && <span>Valid thru {member.validThru}</span>}
         </p>
       </footer>
     </article>
