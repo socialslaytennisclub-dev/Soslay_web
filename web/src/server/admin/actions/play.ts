@@ -6,7 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { localPhone, phoneFormatError } from "@/lib/wa-invite";
 import { getDataset } from "../dataset";
-import { parseKuyExport, type KuyRow } from "../kuy-import";
+import { ownContacts, parseKuyExport, type KuyRow } from "../kuy-import";
 import { findMemberById, findMemberByIdentifier, findMemberByPhone, type MemberIdentity } from "../identity";
 import { getAdminSession } from "../session";
 import type { KuyImportPreview, KuyImportPreviewRow, SessionMatch } from "../types";
@@ -40,6 +40,7 @@ async function readUpload(formData: FormData): Promise<{ name: string; size: num
 
 async function matchMembers(rows: KuyRow[]): Promise<Map<string, KuyImportPreviewRow["member"]>> {
   const d = await getDataset();
+  const contact = ownContacts(rows);
   const byEmail = new Map(d.members.map((m) => [m.email.toLowerCase(), m]));
   const byPhone = new Map(d.members.filter((m) => m.phone).map((m) => [localPhone(m.phone), m]));
   const byKuy = new Map(d.members.filter((m) => m.kuyId).map((m) => [m.kuyId.toLowerCase(), m]));
@@ -48,9 +49,10 @@ async function matchMembers(rows: KuyRow[]): Promise<Map<string, KuyImportPrevie
 
   const result = new Map<string, KuyImportPreviewRow["member"]>();
   for (const r of rows) {
+    const { email, phone } = contact.get(r.regNo)!;
     const hit =
-      (r.email && byEmail.get(r.email) && { m: byEmail.get(r.email)!, by: "email" as const }) ||
-      (r.phone && byPhone.get(r.phone) && { m: byPhone.get(r.phone)!, by: "telepon" as const }) ||
+      (email && byEmail.get(email) && { m: byEmail.get(email)!, by: "email" as const }) ||
+      (phone && byPhone.get(phone) && { m: byPhone.get(phone)!, by: "telepon" as const }) ||
       (r.username && usernameCount.get(r.username.toLowerCase()) === 1 && byKuy.get(r.username.toLowerCase()) && { m: byKuy.get(r.username.toLowerCase())!, by: "Kuy ID" as const }) ||
       null;
     result.set(r.regNo, hit ? { id: hit.m.id, name: hit.m.fullName, code: hit.m.memberCode, username: hit.m.kuyId, by: hit.by } : null);
@@ -74,9 +76,10 @@ function ownKuyIds(rows: KuyRow[]) {
  */
 async function findGhosts(supabase: Supabase, rows: KuyRow[]): Promise<Map<string, GhostRow>> {
   const own = ownKuyIds(rows);
+  const contact = ownContacts(rows);
   const kuy = [...new Set([...own.values()].filter(Boolean))];
-  const emails = [...new Set(rows.map((r) => r.email).filter(Boolean))];
-  const phones = [...new Set(rows.map((r) => r.phone).filter((p) => p.length >= 9))];
+  const emails = [...new Set([...contact.values()].map((c) => c.email).filter(Boolean))];
+  const phones = [...new Set([...contact.values()].map((c) => c.phone).filter((p) => p.length >= 9))];
   const filters = [kuy.length && `kuy_id.in.(${kuy.map((k) => `"${k}"`).join(",")})`, emails.length && `email.in.(${emails.map((e) => `"${e}"`).join(",")})`, phones.length && `phone.in.(${phones.join(",")})`].filter(Boolean);
   if (!filters.length) return new Map();
   const { data } = await supabase.from("ghost_members").select("id, kuy_id, email, phone, full_name, tennis_level").is("claimed_by", null).or(filters.join(","));
@@ -84,10 +87,11 @@ async function findGhosts(supabase: Supabase, rows: KuyRow[]): Promise<Map<strin
   const result = new Map<string, GhostRow>();
   for (const r of rows) {
     const k = own.get(r.regNo);
+    const { email, phone } = contact.get(r.regNo)!;
     const hit =
       (k && ghosts.find((g) => g.kuy_id?.toLowerCase() === k)) ||
-      (r.email && ghosts.find((g) => g.email?.toLowerCase() === r.email)) ||
-      (r.phone.length >= 9 && ghosts.find((g) => g.phone === r.phone)) ||
+      (email && ghosts.find((g) => g.email?.toLowerCase() === email)) ||
+      (phone.length >= 9 && ghosts.find((g) => g.phone === phone)) ||
       null;
     if (hit) result.set(r.regNo, hit);
   }
@@ -179,9 +183,11 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
   if (guests.length) {
     const known = await findGhosts(supabase, guests);
     const own = ownKuyIds(rows);
+    const contact = ownContacts(rows);
     const now = new Date().toISOString();
     for (const r of guests) {
       const g = known.get(r.regNo);
+      const { email, phone } = contact.get(r.regNo)!;
       if (g) {
         await supabase
           .from("ghost_members")
@@ -189,24 +195,26 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
             full_name: r.name,
             last_seen_at: now,
             kuy_id: g.kuy_id ?? (own.get(r.regNo) || null),
-            email: g.email ?? (r.email || null),
-            phone: g.phone ?? (r.phone || null),
+            email: g.email ?? (email || null),
+            phone: g.phone ?? (phone || null),
             tennis_level: r.level ?? g.tennis_level,
           })
           .eq("id", g.id);
         ghostOf.set(r.regNo, g.id);
         continue;
       }
-      const ghostRow = { kuy_id: own.get(r.regNo) || null, full_name: r.name, email: r.email || null, phone: r.phone || null, tennis_level: r.level };
+      const ghostRow = { kuy_id: own.get(r.regNo) || null, full_name: r.name, email: email || null, phone: phone || null, tennis_level: r.level };
       let { data: created, error: ghostError } = await supabase.from("ghost_members").insert(ghostRow).select("id").single();
       // Kuy ID sudah dipakai ghost yang telah diklaim member lain → simpan tanpa Kuy ID.
       if (ghostError?.code === "23505") ({ data: created, error: ghostError } = await supabase.from("ghost_members").insert({ ...ghostRow, kuy_id: null }).select("id").single());
       if (ghostError || !created) return { ok: false, error: `Gagal mencatat peserta ${r.name}: ${ghostError?.message ?? "coba lagi"}` };
       ghostOf.set(r.regNo, created.id as string);
-      // Baris berikutnya di file yang sama orangnya (email/telepon sama) memakai ghost ini juga.
+      // Baris berikutnya di file yang sama orangnya (nomor registrasi sama, atau kontak miliknya
+      // sendiri sama) memakai ghost ini juga — tiket tamu dengan kontak pembeli tidak.
       for (const other of guests) {
-        if (other !== r && !known.has(other.regNo) && ((r.email && other.email === r.email) || (r.phone.length >= 9 && other.phone === r.phone))) {
-          known.set(other.regNo, { id: created.id as string, kuy_id: own.get(r.regNo) || null, email: r.email || null, phone: r.phone || null, full_name: r.name, tennis_level: r.level });
+        const o = contact.get(other.regNo)!;
+        if (other !== r && !known.has(other.regNo) && (other.regNo === r.regNo || (email && o.email === email) || (phone.length >= 9 && o.phone === phone))) {
+          known.set(other.regNo, { id: created.id as string, kuy_id: own.get(r.regNo) || null, email: email || null, phone: phone || null, full_name: r.name, tennis_level: r.level });
         }
       }
     }

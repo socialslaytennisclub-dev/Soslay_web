@@ -110,3 +110,26 @@ export function parseKuyExport(data: ArrayBuffer): { eventTitle: string; rows: K
   }
   return { eventTitle, rows };
 }
+
+/**
+ * Email / telepon yang benar-benar milik peserta. Di Kuyy satu pembeli bisa membelikan tiket tamu
+ * dengan kontaknya sendiri: kontak yang dipakai beberapa nomor registrasi hanya milik baris yang
+ * membayar (tamu Rp0 tanpa kontak); bila lebih dari satu yang membayar, kontak itu tidak dipakai.
+ * Tanpa ini tamu ikut tersambung ke akun / ghost pembeli dan tampil dobel setelah ia daftar.
+ */
+export function ownContacts(rows: KuyRow[]) {
+  const paid = new Set(rows.filter((r) => r.amount > 0).map((r) => r.regNo));
+  const owner = (key: "email" | "phone") => {
+    const regs = new Map<string, Set<string>>();
+    for (const r of rows) if (r[key]) regs.set(r[key], (regs.get(r[key]) ?? new Set()).add(r.regNo));
+    return (r: KuyRow) => {
+      const all = r[key] ? [...regs.get(r[key])!] : [];
+      if (all.length === 1) return r[key];
+      const payers = all.filter((reg) => paid.has(reg));
+      return payers.length === 1 && payers[0] === r.regNo ? r[key] : "";
+    };
+  };
+  const email = owner("email");
+  const phone = owner("phone");
+  return new Map(rows.map((r) => [r.regNo, { email: email(r), phone: phone(r) }]));
+}
