@@ -18,7 +18,7 @@ import { getMemberSession } from "./user";
 
 export type DetailPhase = "upcoming" | "live" | "done";
 
-export type DetailPerson = { id: string; name: string; level: string; source: string; me: boolean; checkedIn: boolean };
+export type DetailPerson = { id: string; name: string; level: string; source: string; me: boolean; checkedIn: boolean; /** Punya akun Soslay → dapat Slay Point. */ member: boolean };
 
 export type DetailMatch = {
   /** null di mode demo. */
@@ -54,7 +54,7 @@ export type MemberSessionDetail = {
   checkInAt: string;
   phase: DetailPhase;
   venue: { name: string; address: string; mapsUrl: string | null };
-  format: { label: string; targetPoints: number; courts: number; rounds: number; lineup: boolean; leaderboardMode: "points" | "wins" };
+  format: { label: string; targetPoints: number; courts: number; rounds: number; lineup: boolean; leaderboardMode: "points" | "wins"; attendancePoints: number };
   capacity: number;
   levels: string[];
   /** null = host yang tidak ikut main (tanpa booking) — tanpa e-ticket & info pendaftaran. */
@@ -72,7 +72,34 @@ export type MemberSessionDetail = {
   isHost: boolean;
   /** Host & sesi masih berjalan → boleh input / ubah skor (dicek ulang di database). */
   canScore: boolean;
+  /** Host / admin sudah menekan "Mulai Activity" (sesi live sebelum jam jadwal). */
+  liveStarted: boolean;
+  /** Sesi diakhiri lewat "Akhiri Activity" (null = selesai karena jadwal lewat / belum selesai). */
+  ended: { at: string; byMe: boolean } | null;
+  /** Foto sesi dari admin (Figma S3 · tab Foto); null = belum diunggah. */
+  photos: { albumUrl: string; coverUrl: string | null; count: number | null; postedAt: string | null } | null;
+  /** Review milik member ini (S3-P · tab Review). */
+  myReview: MyReview | null;
+  /** Review bisa dikirim / diubah sampai saat ini (7 hari setelah sesi). */
+  reviewUntil: string;
+  /** Slay Point dari sesi ini untuk member yang login (hadir, bonus juara, review). */
+  myPoints: { label: string; delta: number }[];
+  /** Waktu data dibaca (ms) — patokan "sekarang" untuk tampilan (tombol Mulai Activity, kunci review). */
+  fetchedAt: number;
 };
+
+export type MyReview = {
+  rating: number;
+  highlights: string[];
+  host: number | null;
+  venue: number | null;
+  format: number | null;
+  comment: string;
+  testimonial: boolean;
+  updatedAt: string;
+};
+
+const REVIEW_WINDOW_MS = 7 * 86_400_000;
 
 const FORMAT_LABEL: Record<string, string> = {
   none: "Fun game",
@@ -103,11 +130,17 @@ type SessionRow = {
   round_count: number;
   target_points: number;
   leaderboard_mode: "points" | "wins";
+  points_per_attendance: number;
   show_live_leaderboard: boolean;
   live_started_at: string | null;
   ended_at: string | null;
+  ended_by: string | null;
   current_round: number | null;
   started_rounds: number[] | null;
+  photo_album_url: string | null;
+  photo_cover_path: string | null;
+  photo_count: number | null;
+  photos_posted_at: string | null;
   activity_types: { label: string } | null;
   venues: { name: string; city: string; address: string | null; maps_url: string | null } | null;
 };
@@ -181,7 +214,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
   const { data: session } = await supabase
     .from("sessions")
     .select(
-      "id, slug, title, description, type_slug, starts_at, ends_at, status, capacity, kuy_booking_url, recommended_levels, match_format, court_count, round_count, target_points, leaderboard_mode, show_live_leaderboard, live_started_at, ended_at, current_round, started_rounds, activity_types(label), venues(name, city, address, maps_url)",
+      "id, slug, title, description, type_slug, starts_at, ends_at, status, capacity, kuy_booking_url, recommended_levels, match_format, court_count, round_count, target_points, leaderboard_mode, points_per_attendance, show_live_leaderboard, live_started_at, ended_at, ended_by, current_round, started_rounds, photo_album_url, photo_cover_path, photo_count, photos_posted_at, activity_types(label), venues(name, city, address, maps_url)",
     )
     .eq("slug", slug)
     .maybeSingle<SessionRow>();
@@ -194,7 +227,11 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
   ]);
   if (!booking && assigned !== true) return null;
 
-  const [{ data: myRows }, { data: roster }, { data: matches }, { data: canScore }, qr] = await Promise.all([
+  // Review & Slay Point sesi hanya dipakai setelah sesi selesai (tab Hasil / Review) — sebelum itu
+  // tidak di-query, karena halaman live dimuat ulang setiap host menyimpan skor / check-in.
+  const fetchedAt = Date.now();
+  const done = phaseOf(session, fetchedAt) === "done";
+  const [{ data: myRows }, { data: roster }, { data: matches }, { data: canScore }, qr, { data: review }, { data: ledger }] = await Promise.all([
     // Baris peserta milik sendiri (RLS) — untuk no. registrasi Kuyy & jumlah bayar. Bisa lebih dari
     // satu (impor Kuyy + tambahan manual admin), jadi ambil semua: yang pertama untuk data daftar.
     supabase.from("session_participants").select("id, full_name, kuy_reg_no, checked_in_at, amount").eq("session_id", session.id).eq("member_id", user.id).order("imported_at"),
@@ -203,6 +240,15 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     supabase.rpc("is_session_host", { p_session: session.id }),
     // Isi QR = id booking, supaya pemindai panitia nanti bisa langsung menandai check-in.
     booking ? qrSvg(`soslay:booking:${booking.id}`) : null,
+    done && booking
+      ? supabase
+          .from("session_reviews")
+          .select("rating, highlights, host_rating, venue_rating, format_rating, comment, testimonial, updated_at")
+          .eq("session_id", session.id)
+          .eq("member_id", user.id)
+          .maybeSingle()
+      : { data: null },
+    done && booking ? supabase.from("points_ledger").select("delta, reason, note").eq("member_id", user.id).eq("booking_id", booking.id).order("created_at") : { data: [] },
   ]);
 
   // Member tampil dengan nama Soslay (RPC sudah memilih nama profil bila terhubung).
@@ -214,6 +260,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
       source: SOURCE_LABEL[p.source] ?? "Website",
       me: p.member_id === user.id,
       checkedIn: p.checked_in,
+      member: p.member_id !== null,
     }))
     .sort((x, y) => Number(y.me) - Number(x.me));
 
@@ -238,7 +285,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     startsAt: session.starts_at,
     endsAt: session.ends_at,
     checkInAt: new Date(new Date(session.starts_at).getTime() - CHECK_IN_LEAD_MS).toISOString(),
-    phase: phaseOf(session, Date.now()),
+    phase: phaseOf(session, fetchedAt),
     venue: { name: session.venues.name, address: session.venues.address ?? session.venues.city, mapsUrl: session.venues.maps_url },
     format: {
       label: FORMAT_LABEL[session.match_format] ?? "Fun game",
@@ -247,6 +294,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
       rounds: session.round_count,
       lineup: session.match_format === "americano" || session.match_format === "rotating",
       leaderboardMode: session.leaderboard_mode,
+      attendancePoints: session.points_per_attendance,
     },
     capacity: session.capacity,
     levels: (session.recommended_levels ?? []).map((l) => LEVEL_LABEL[l]),
@@ -288,6 +336,29 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     startedRounds: session.started_rounds ?? [],
     isHost: assigned === true,
     canScore: canScore === true,
+    liveStarted: !!session.live_started_at,
+    ended: session.ended_at ? { at: session.ended_at, byMe: session.ended_by === user.id } : null,
+    photos: session.photo_album_url
+      ? { albumUrl: session.photo_album_url, coverUrl: session.photo_cover_path, count: session.photo_count, postedAt: session.photos_posted_at }
+      : null,
+    myReview: review
+      ? {
+          rating: review.rating as number,
+          highlights: (review.highlights as string[]) ?? [],
+          host: review.host_rating as number | null,
+          venue: review.venue_rating as number | null,
+          format: review.format_rating as number | null,
+          comment: (review.comment as string | null) ?? "",
+          testimonial: review.testimonial as boolean,
+          updatedAt: review.updated_at as string,
+        }
+      : null,
+    reviewUntil: new Date(new Date(session.ended_at ?? session.ends_at).getTime() + REVIEW_WINDOW_MS).toISOString(),
+    fetchedAt,
+    myPoints: ((ledger ?? []) as { delta: number; reason: string; note: string | null }[]).map((r) => ({
+      label: r.reason === "attendance" ? "Hadir" : /^Bonus juara/.test(r.note ?? "") ? "Bonus juara" : /^Review/.test(r.note ?? "") ? "Review" : "Bonus",
+      delta: r.delta,
+    })),
   };
 });
 
@@ -314,12 +385,12 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     checkInAt: new Date(new Date(startsAt).getTime() - CHECK_IN_LEAD_MS).toISOString(),
     phase: s.status === "done" ? "done" : "upcoming",
     venue: { name: s.venue, address: s.city, mapsUrl: null },
-    format: { label: "Americano Doubles", targetPoints: 21, courts: 2, rounds: 7, lineup: true, leaderboardMode: "points" },
+    format: { label: "Americano Doubles", targetPoints: 21, courts: 2, rounds: 7, lineup: true, leaderboardMode: "points", attendancePoints: 50 },
     capacity: 8,
     levels: ["Beginner", "Intermediate"],
     ticket: { code: bookingCode("9f2a1c00", s.date), qrSvg: await qrSvg(`soslay:booking:demo-${s.slug}`), holder: names[0], type: "Player", status: s.status === "done" ? "attended" : "registered" },
     registration: { sourceLabel: "Dibayar via Kuyy", paid: true, amount: 150_000, orderId: "U1", registeredAt: new Date(new Date(startsAt).getTime() - 14 * 86_400_000).toISOString(), kuyUrl: "https://kuy.id/soslay" },
-    people: names.map((name, i) => ({ id: String(i), name, level: ["Intermediate", "Advanced", "Beginner"][i % 3], source: i % 2 ? "Kuy" : "Website", me: i === 0, checkedIn: s.status === "done" })),
+    people: names.map((name, i) => ({ id: String(i), name, level: ["Intermediate", "Advanced", "Beginner"][i % 3], source: i % 2 ? "Kuy" : "Website", me: i === 0, checkedIn: s.status === "done", member: true })),
     matches: [],
     standings: [],
     showLeaderboard: true,
@@ -327,5 +398,12 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     startedRounds: [],
     isHost: false,
     canScore: false,
+    liveStarted: false,
+    ended: null,
+    photos: null,
+    myReview: null,
+    reviewUntil: new Date(new Date(endsAt).getTime() + REVIEW_WINDOW_MS).toISOString(),
+    myPoints: [],
+    fetchedAt: Date.now(),
   };
 }

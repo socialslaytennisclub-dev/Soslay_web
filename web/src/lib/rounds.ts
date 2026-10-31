@@ -21,6 +21,10 @@ export const ROUND_STATUS_LABEL: Record<RoundStatus, string> = {
 /** Ronde yang belum pernah dimulai (Berikutnya / Belum mulai / Dilewati) — bisa di-"Mulai Ronde". */
 export const isUnstarted = (status: RoundStatus) => status === "next" || status === "later" || status === "skipped";
 
+/** Status ronde dalam kalimat ("Melihat Ronde 3 · belum dimulai"), lebih ringkas dari ROUND_STATUS_LABEL. */
+export const roundStatusWord = (status: RoundStatus) =>
+  status === "live" ? "live" : isUnstarted(status) ? "belum dimulai" : status === "done" ? "selesai" : "belum lengkap";
+
 type RoundMatch = { round: number; scoreA: number | null };
 
 export type RoundPlan = {

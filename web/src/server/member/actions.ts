@@ -134,6 +134,72 @@ export async function startHostRound(sessionId: string, round: number): Promise<
   return { ok: true };
 }
 
+/** Pesan error RPC host → teks untuk host; urutan = prioritas, selain itu `fallback`. */
+const HOST_ERRORS: [RegExp, (message: string) => string][] = [
+  [/Hanya admin atau host/, () => "Hanya host sesi ini yang bisa melakukan ini."],
+  [/diakhiri|terkunci/, () => "Sesi sudah diakhiri."],
+  [/belum dimulai|30 menit/, (m) => m.replace("Sesi belum dimulai", "Sesi belum dimulai.")],
+  [/dua kali|bukan peserta|di luar format/, (m) => `${m}.`],
+];
+
+const hostError = (message: string, fallback: string) => {
+  const hit = HOST_ERRORS.find(([re]) => re.test(message));
+  return hit ? hit[1](message) : fallback;
+};
+
+/** "Mulai Activity" (Figma S1-H): sesi live sekarang, ronde pertama langsung jalan. */
+export async function startHostActivity(sessionId: string): Promise<HostScoreResult> {
+  const supabase = await createSupabaseServerClient("member");
+  const { error } = await supabase.rpc("start_session_activity", { p_session: sessionId });
+  return error ? { ok: false, error: hostError(error.message, "Activity gagal dimulai. Coba lagi.") } : { ok: true };
+}
+
+export type HostLineupMatch = { round_no: number; court_no: number; a1: string; a2: string; b1: string; b2: string };
+
+/** "Atur line-up" / "Acak ulang" dari Panel Host: ganti match tanpa skor mulai `fromRound`. */
+export async function saveHostLineup(sessionId: string, fromRound: number, matches: HostLineupMatch[]): Promise<HostScoreResult> {
+  const supabase = await createSupabaseServerClient("member");
+  const { error } = await supabase.rpc("host_save_lineup", { p_session: sessionId, p_from_round: fromRound, p_matches: matches });
+  return error ? { ok: false, error: hostError(error.message, "Line-up gagal disimpan. Coba lagi.") } : { ok: true };
+}
+
+/** "Akhiri Activity" (HL-5a): skor terkunci, bonus juara dibagikan (database). */
+export async function endHostActivity(sessionId: string): Promise<HostScoreResult> {
+  const supabase = await createSupabaseServerClient("member");
+  const { error } = await supabase.rpc("end_session_activity", { p_session: sessionId });
+  return error ? { ok: false, error: hostError(error.message, "Activity gagal diakhiri. Coba lagi.") } : { ok: true };
+}
+
+/** Check-in peserta oleh host dari tab Peserta (id roster: baris peserta, atau member_id booking website). */
+export async function setHostCheckIn(sessionId: string, personId: string, checkedIn: boolean): Promise<HostScoreResult> {
+  const supabase = await createSupabaseServerClient("member");
+  const { error } = await supabase.rpc("host_set_check_in", { p_session: sessionId, p_id: personId, p_checked_in: checkedIn });
+  if (!error) return { ok: true };
+  if (/bukan peserta|Peserta tidak ditemukan/.test(error.message)) return { ok: false, error: "Peserta ini sudah tidak terdaftar di sesi ini. Muat ulang halaman." };
+  return { ok: false, error: hostError(error.message, "Check-in gagal disimpan. Coba lagi.") };
+}
+
+export type ReviewInput = { rating: number; highlights: string[]; host: number | null; venue: number | null; format: number | null; comment: string; testimonial: boolean };
+
+/** Review sesi oleh peserta (S3-P): +10 Slay Point sekali, bisa diubah 7 hari setelah sesi. */
+export async function submitSessionReview(sessionId: string, input: ReviewInput): Promise<HostScoreResult> {
+  if (input.rating < 1 || input.rating > 5) return { ok: false, error: "Pilih bintang dulu." };
+  if (input.comment.length > 500) return { ok: false, error: "Ulasan maksimal 500 karakter." };
+  const supabase = await createSupabaseServerClient("member");
+  const { error } = await supabase.rpc("submit_session_review", {
+    p_session: sessionId,
+    p_rating: input.rating,
+    p_highlights: input.highlights,
+    p_host: input.host,
+    p_venue: input.venue,
+    p_format: input.format,
+    p_comment: input.comment,
+    p_testimonial: input.testimonial,
+  });
+  if (error) return { ok: false, error: /terkunci|dibuka|Hanya peserta/.test(error.message) ? `${error.message}.` : "Review gagal dikirim. Coba lagi." };
+  return { ok: true };
+}
+
 /** "Urungkan" dari Panel Host: kosongkan skor match (hak host dicek di database). */
 export async function clearHostScore(matchId: string): Promise<HostScoreResult> {
   const supabase = await createSupabaseServerClient("member");

@@ -1,26 +1,45 @@
 import Link from "next/link";
-import { CalendarDays, CalendarPlus, ChartColumn, ChevronDown, ChevronLeft, ChevronRight, Clock, CreditCard, Info, Lock, Map as MapIcon, MapPin, MessageCircle, SquareArrowOutUpRight, Trophy, Users, Volleyball } from "lucide-react";
+import { CalendarDays, CalendarPlus, ChartColumn, ChevronDown, ChevronLeft, ChevronRight, Clock, CreditCard, Lock, Map as MapIcon, MapPin, MessageCircle, SquareArrowOutUpRight, Trophy, Users, Volleyball } from "lucide-react";
 import { Container } from "@/components/ui";
 import { cx } from "@/lib/cx";
 import { CITY_TZ_LABEL, formatAngka, formatJamRange, formatRupiah, formatTanggalISO, formatTanggalPendek } from "@/lib/format";
-import { isUnstarted, planRounds, ROUND_STATUS_LABEL, skippedLabel } from "@/lib/rounds";
+import { planRounds, ROUND_STATUS_LABEL, skippedLabel } from "@/lib/rounds";
 import { initials, teamName } from "@/lib/text";
 import type { DetailMatch, DetailStanding, MemberSessionDetail } from "@/server/member/session-detail";
 import { Countdown } from "./Countdown";
-import { HostPanel, ScoreRulesButton } from "./LiveActions";
+import { HostLive } from "./HostPanel";
+import { HostStartCard } from "./HostStart";
+import { maxRound, perspective, PlayerLiveCard } from "./LiveCards";
 import { ParticipantList } from "./ParticipantList";
 import { QrCheckIn } from "./QrCheckIn";
+import { DoneSide, HostResults, PhotosTab, ResultsTab } from "./Results";
+import { ReviewTab } from "./ReviewForm";
 import styles from "./SessionDetail.module.css";
 
-export const DETAIL_TABS = [
-  { key: "info", label: "Info" },
-  { key: "peserta", label: "Peserta" },
-  { key: "live", label: "Live" },
-  { key: "leaderboard", label: "Leaderboard" },
-  { key: "ronde", label: "Ronde" },
-] as const;
+const TAB_LABEL = {
+  hasil: "Hasil",
+  info: "Info",
+  peserta: "Peserta",
+  live: "Live",
+  leaderboard: "Leaderboard",
+  ronde: "Ronde",
+  foto: "Foto",
+  review: "Review",
+} as const;
 
-export type DetailTab = (typeof DETAIL_TABS)[number]["key"];
+export type DetailTab = keyof typeof TAB_LABEL;
+
+/**
+ * Tab per kondisi (Figma Simplify): sebelum mulai & live → Info · Peserta · Live · Leaderboard ·
+ * Ronde; selesai → Hasil · Ronde · Foto · Review · Info (host yang tidak ikut main tanpa Review).
+ */
+export function detailTabs(d: Pick<MemberSessionDetail, "phase" | "ticket">): DetailTab[] {
+  if (d.phase !== "done") return ["info", "peserta", "live", "leaderboard", "ronde"];
+  return d.ticket ? ["hasil", "ronde", "foto", "review", "info"] : ["hasil", "ronde", "foto", "info"];
+}
+
+/** Host yang tidak ikut main (Figma Simplify "Host (bukan peserta)"). */
+const hostOnly = (d: MemberSessionDetail) => d.isHost && !d.ticket && !d.matches.some((m) => m.mySide);
 
 const PANITIA_WA = "62642424792";
 const BRING = ["Raket tenis", "Sepatu non-marking", "Botol minum", "Handuk & baju ganti", "QR e-ticket"];
@@ -50,9 +69,12 @@ function calendarUrl(d: MemberSessionDetail) {
 }
 
 /** Halaman detail sesi peserta (Figma UIF-06 · Activity Detail). Tab via ?tab= supaya bisa dibagikan. */
-export function SessionDetail({ detail: d, tab }: { detail: MemberSessionDetail; tab: DetailTab }) {
-  // Saat sesi berjalan / selesai, tab Live · Leaderboard · Ronde memakai lebar penuh (Figma UIF-07).
-  const wide = d.phase !== "upcoming" && (tab === "live" || tab === "leaderboard" || tab === "ronde");
+export function SessionDetail({ detail: d, tab, endedNotice = null }: { detail: MemberSessionDetail; tab: DetailTab; endedNotice?: number | null }) {
+  const tabs = detailTabs(d);
+  // Saat sesi berjalan / selesai, tab Live · Leaderboard · Ronde memakai lebar penuh (Figma UIF-07);
+  // hasil sesi tampilan host juga penuh (HL-5b).
+  const wide = (d.phase !== "upcoming" && (tab === "live" || tab === "leaderboard" || tab === "ronde")) || (tab === "hasil" && hostOnly(d));
+  const doneSide = d.phase === "done" && (tab === "hasil" || tab === "foto" || tab === "review");
   const routeUrl = d.venue.mapsUrl ?? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${d.venue.name} ${d.venue.address}`)}`;
 
   return (
@@ -72,9 +94,9 @@ export function SessionDetail({ detail: d, tab }: { detail: MemberSessionDetail;
             {formatTanggalPendek(d.startsAt, d.city)} · {formatJamRange(d.start, d.end, "–")} · {d.venue.name}
           </p>
           <nav className={styles.tabs} aria-label="Bagian detail sesi">
-            {DETAIL_TABS.map((t) => (
-              <Link key={t.key} href={t.key === "info" ? "?" : `?tab=${t.key}`} scroll={false} replace className={cx(styles.tab, tab === t.key && styles.tabOn)} aria-current={tab === t.key ? "page" : undefined}>
-                {t.label}
+            {tabs.map((t) => (
+              <Link key={t} href={t === tabs[0] ? "?" : `?tab=${t}`} scroll={false} replace className={cx(styles.tab, tab === t && styles.tabOn)} aria-current={tab === t ? "page" : undefined}>
+                {TAB_LABEL[t]}
               </Link>
             ))}
           </nav>
@@ -97,17 +119,26 @@ export function SessionDetail({ detail: d, tab }: { detail: MemberSessionDetail;
                     </p>
                   </div>
                 </header>
-                <ParticipantList people={d.people} />
+                <ParticipantList people={d.people} checkIn={d.canScore && d.phase !== "done"} sessionId={d.id} />
               </section>
             )}
             {tab === "live" && <LiveTab detail={d} />}
             {tab === "leaderboard" && <LeaderboardTab detail={d} />}
             {tab === "ronde" && <RoundsTab detail={d} />}
+            {tab === "hasil" && (hostOnly(d) ? <HostResults detail={d} endedNotice={endedNotice} /> : <ResultsTab detail={d} />)}
+            {tab === "foto" && <PhotosTab detail={d} />}
+            {tab === "review" && <ReviewTab detail={d} />}
           </div>
 
-          {!wide && (
+          {!wide && doneSide && (
+            <aside className={styles.side}>
+              <DoneSide detail={d} tab={tab} />
+            </aside>
+          )}
+          {!wide && !doneSide && (
             <aside className={styles.side}>
               {d.ticket && <Ticket detail={d} ticket={d.ticket} />}
+              {!d.ticket && d.isHost && d.phase !== "done" && <HostCard detail={d} />}
 
               {d.registration && <Registration detail={d} registration={d.registration} />}
 
@@ -401,33 +432,11 @@ function Locked({ detail: d, title, text, label = "Belum bisa diakses" }: { deta
   );
 }
 
-/** Match dari sisi member yang login: tim sendiri vs lawan (rest → sisi A). */
-function perspective(m: DetailMatch) {
-  const a = m.mySide !== "b";
-  const own = a ? m.scoreA : m.scoreB;
-  const opp = a ? m.scoreB : m.scoreA;
-  return { own: a ? m.a : m.b, opp: a ? m.b : m.a, score: own === null || opp === null ? null : { own, opp } };
-}
-
 const RESULT = { win: "Menang", lose: "Kalah", draw: "Seri" } as const;
-
-/** Avatar inisial bertumpuk untuk satu tim (Figma UIF-07). */
-function TeamFaces({ team }: { team: string[] }) {
-  return (
-    <span className={styles.teamFaces} aria-hidden>
-      {team.map((n, i) => (
-        <span key={i} className={cx(styles.miniFace, styles[`face${i % 4}`])}>
-          {initials(n)}
-        </span>
-      ))}
-    </span>
-  );
-}
-
-const maxRound = (d: MemberSessionDetail) => Math.max(d.format.rounds, ...d.matches.map((m) => m.round));
 
 function LiveTab({ detail: d }: { detail: MemberSessionDetail }) {
   if (d.phase === "upcoming") {
+    if (d.isHost && d.canScore) return <HostStartCard detail={d} />;
     return <Locked detail={d} title={`Live dimulai ${formatTanggalPendek(d.startsAt, d.city, "dateTime")}`} text="Status match kamu & court yang sedang dimainkan muncul di sini saat sesi dimulai." />;
   }
   if (!d.format.lineup || !d.matches.length || d.currentRound === null) {
@@ -440,75 +449,33 @@ function LiveTab({ detail: d }: { detail: MemberSessionDetail }) {
       />
     );
   }
+  // Host: kartu atas mengikuti ronde yang dipilih di Panel Host.
+  if (d.isHost) return <HostLive detail={d} />;
+  return <PlayerLiveCard detail={d} round={d.currentRound} />;
+}
 
-  const round = d.currentRound;
-  const roundMatches = d.matches.filter((m) => m.round === round);
-  const panel = d.isHost ? <HostPanel detail={d} maxRound={maxRound(d)} isPlayer={d.matches.some((m) => m.mySide)} /> : null;
-  // Host yang tidak ikut main (Figma UIF-09 · B): hanya Panel Host, tanpa status match.
-  if (d.isHost && !d.ticket && !d.matches.some((m) => m.mySide)) return panel;
-  const plan = planRounds(d.matches, round, d.startedRounds, d.phase);
-  const skipped = skippedLabel(plan.skipped);
-  const now = roundMatches.find((m) => m.mySide);
-  // Match berikutnya mengikuti urutan main: ronde terkecil yang belum dimulai (termasuk yang dilewati).
-  const next = d.matches.find((m) => m.mySide && m.scoreA === null && isUnstarted(plan.statusOf(m.round)));
-  const shown = now ?? next;
-  const view = shown ? perspective(shown) : null;
-  const done = d.phase === "done";
-  const title = done
-    ? "Sesi sudah selesai"
-    : now
-      ? now.scoreA === null
-        ? `Kamu sedang main di Court ${now.court}`
-        : `Match kamu selesai · ${perspective(now).score?.own}–${perspective(now).score?.opp}`
-      : `Kamu rest di Ronde ${round}`;
-
+/** Kartu host di kolom samping (Figma S1-H): pengganti e-ticket untuk host yang tidak ikut main. */
+function HostCard({ detail: d }: { detail: MemberSessionDetail }) {
+  const present = d.people.filter((p) => p.checkedIn).length;
   return (
-    <>
-    <section className={styles.liveCard2} aria-labelledby="live-title">
-      <header className={styles.liveHead}>
-        <span className={styles.eyebrowDark}>{done ? "Sesi selesai" : `Sedang berlangsung · Ronde ${round} dari ${maxRound(d)}${skipped ? ` · ${skipped}` : ""}`}</span>
-        {!done && <span className={styles.livePillRed}>Live</span>}
+    <section className={styles.hostCard} aria-labelledby="host-card-title">
+      <header>
+        <span>Kartu host</span>
+        <span className={styles.hostBadge}>Host</span>
       </header>
-      <h2 id="live-title" className={styles.bannerTitle}>
-        {title}
-      </h2>
-      {shown && view && (
-        <>
-          {!now && (
-            <p className={styles.liveNext}>
-              Match berikutnya: Ronde {shown.round} · Court {shown.court}
-            </p>
-          )}
-          <div className={styles.versus}>
-            <div className={styles.teamCard}>
-              <TeamFaces team={view.own} />
-              <span>
-                <small className={styles.teamLabelMine}>Tim kamu</small>
-                <strong>{teamName(view.own)}</strong>
-              </span>
-            </div>
-            <span className={styles.vsBadge}>{view.score ? `${view.score.own}–${view.score.opp}` : "VS"}</span>
-            <div className={styles.teamCard}>
-              <TeamFaces team={view.opp} />
-              <span>
-                <small>Lawan</small>
-                <strong>{teamName(view.opp)}</strong>
-              </span>
-            </div>
-          </div>
-        </>
-      )}
-      {!shown && !done && <p className={styles.liveNext}>Kamu tidak punya match lagi di line-up. Cek tab Ronde untuk court lain.</p>}
-      <div className={styles.liveActions}>
-        <ScoreRulesButton target={d.format.targetPoints} mode={d.format.leaderboardMode} />
-        <span className={styles.liveNote}>
-          <Info size={14} aria-hidden />
-          {d.isHost ? "Sebagai host, input skor match-mu lewat Panel Host di bawah." : "Skor masuk leaderboard setelah diinput & diverifikasi host."}
-        </span>
+      <h2 id="host-card-title">{d.title}</h2>
+      <p>Kamu ditunjuk admin sebagai host — check-in peserta, mulai activity, atur line-up & input skor.</p>
+      <div className={styles.hostCardStat}>
+        <small>Sudah check-in</small>
+        <strong>
+          {present}/{d.people.length} peserta
+        </strong>
       </div>
+      <Link href="?tab=peserta" scroll={false} replace className={styles.btnLime}>
+        <Users size={16} aria-hidden />
+        Check-in peserta
+      </Link>
     </section>
-    {panel}
-    </>
   );
 }
 

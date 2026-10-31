@@ -250,6 +250,22 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.query(`select start_session_round($1, 3::smallint)`, [s]);
   const jumped = await one(`select current_round, started_rounds from sessions where id = $1`, [s]);
   console.assert(jumped.current_round === 3 && jumped.started_rounds.join() === "2,3", `lompat ronde ${JSON.stringify(jumped)}`);
+  // Mulai Activity (S1-H): sesi yang sudah live tidak berubah rondenya; dari awal → ronde pertama live.
+  await db.query(`select start_session_activity($1)`, [s]);
+  console.assert((await one(`select current_round from sessions where id = $1`, [s])).current_round === 3, "Mulai Activity mengubah ronde live!");
+  await as(null);
+  await db.query(`update sessions set current_round = null, started_rounds = '{}', live_started_at = null, starts_at = now() + interval '20 minutes' where id = $1`, [s]);
+  await as(hostId);
+  await db.query(`select start_session_activity($1)`, [s]);
+  const begun = await one(`select current_round, started_rounds, live_started_at from sessions where id = $1`, [s]);
+  console.assert(begun.current_round === 1 && begun.started_rounds.join() === "1" && begun.live_started_at, `mulai activity ${JSON.stringify(begun)}`);
+  await as(null);
+  await db.query(`update sessions set starts_at = now() + interval '2 hours', live_started_at = null where id = $1`, [s]);
+  await as(hostId);
+  console.assert(await fails(`select start_session_activity($1)`, [s]), "host bisa mulai activity 2 jam sebelum jadwal!");
+  await as(null);
+  await db.query(`update sessions set starts_at = now(), current_round = 3, started_rounds = '{2,3}' where id = $1`, [s]);
+  await as(hostId);
   // Host hanya bisa mulai ronde selama jadwal sesi berjalan (sebelum mulai / setelah selesai → ditolak).
   await as(null);
   await db.query(`update sessions set starts_at = now() + interval '1 day', ends_at = now() + interval '2 days', live_started_at = null where id = $1`, [s]);
@@ -297,8 +313,66 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert(await fails(`select start_session_round($1, 1::smallint)`, [s]), "member biasa bisa memulai ronde!");
   await as(null);
 
+  // Line-up dari Panel Host (Atur line-up / Acak ulang): match tanpa skor mulai ronde 2 diganti; pemain dobel ditolak.
+  await as(hostId);
+  const swap = (round) => ({ round_no: round, court_no: 1, a1: ids[0], a2: ids[2], b1: ids[1], b2: ids[3] });
+  await db.query(`select host_save_lineup($1, 2::smallint, $2::jsonb)`, [s, JSON.stringify([swap(2), swap(3)])]);
+  const r2 = await one(`select a2, count(*) over () n from session_matches where session_id = $1 and round_no = 2`, [s]);
+  console.assert(r2.a2 === ids[2] && Number(r2.n) === 1, `line-up host ${JSON.stringify(r2)}`);
+  console.assert(await fails(`select host_save_lineup($1, 2::smallint, $2::jsonb)`, [s, JSON.stringify([swap(2), { ...swap(2), court_no: 2 }])]), "pemain dobel dalam satu ronde diterima!");
+  console.assert(
+    (await one(`select score_a from session_matches where session_id = $1 and round_no = 1`, [s])).score_a === 12,
+    "match berskor ikut terganti line-up host!",
+  );
+  await as(outsider);
+  console.assert(await fails(`select host_save_lineup($1, 2::smallint, '[]'::jsonb)`, [s]), "member biasa bisa mengubah line-up!");
+  console.assert(await fails(`select end_session_activity($1)`, [s]), "member biasa bisa mengakhiri sesi!");
+  console.assert(await fails(`select host_set_check_in($1, $2, true)`, [s, ids[0]]), "member biasa bisa check-in peserta!");
+  for (const role of ["anon", "authenticated"]) {
+    const ok = (await one(`select has_function_privilege($1, 'session_participant_for(uuid, uuid)', 'execute') ok`, [role])).ok;
+    console.assert(!ok, `${role} bisa memanggil session_participant_for langsung!`);
+  }
+
+  // Member yang daftar lewat website (id roster = member_id): host check-in → baris peserta + booking hadir (+50), lalu bisa masuk line-up.
+  await as(null);
+  const web = await newMember("Daftar Web", "web@mail.com");
+  await db.query(`insert into bookings (session_id, member_id) values ($1, $2)`, [s, web]);
+  const webPtsBefore = Number((await one(`select points_balance from member_stats where member_id = $1`, [web])).points_balance);
+  await as(hostId);
+  await db.query(`select host_set_check_in($1, $2, true)`, [s, web]);
+  await as(null);
+  const webRow = await one(`select id, source, checked_in_at from session_participants where session_id = $1 and member_id = $2`, [s, web]);
+  const webBooking = await one(`select status from bookings where session_id = $1 and member_id = $2`, [s, web]);
+  const webPts = Number((await one(`select points_balance from member_stats where member_id = $1`, [web])).points_balance) - webPtsBefore;
+  console.assert(webRow?.source === "website" && webRow.checked_in_at && webBooking.status === "attended" && webPts === 50, `check-in member website ${JSON.stringify({ webRow, webBooking, webPts })}`);
+  await as(hostId);
+  await db.query(`select host_save_lineup($1, 3::smallint, $2::jsonb)`, [s, JSON.stringify([{ round_no: 3, court_no: 1, a1: ids[0], a2: ids[1], b1: ids[2], b2: web }])]);
+  console.assert((await one(`select b2 from session_matches where session_id = $1 and round_no = 3`, [s])).b2 === webRow.id, "member website tidak masuk line-up host!");
+  console.assert(await fails(`select host_save_lineup($1, 3::smallint, $2::jsonb)`, [s, JSON.stringify([{ round_no: 3, court_no: 1, a1: ids[0], a2: ids[1], b1: ids[2], b2: outsider }])]), "bukan peserta masuk line-up host!");
+
+  // Akhiri Activity oleh host → sesi selesai + bonus juara (R1 12–9: tim B peringkat 3 → Pemain Member +50).
+  await as(hostId);
+  const ptsBeforeEnd = Number((await one(`select points_balance from member_stats where member_id = $1`, [player])).points_balance);
+  await db.query(`select end_session_activity($1)`, [s]);
+  const ended = await one(`select status, ended_at, ended_by from sessions where id = $1`, [s]);
+  console.assert(ended.status === "completed" && ended.ended_at && ended.ended_by === hostId, `akhiri activity ${JSON.stringify(ended)}`);
+  const ptsAfterEnd = Number((await one(`select points_balance from member_stats where member_id = $1`, [player])).points_balance);
+  console.assert(ptsAfterEnd - ptsBeforeEnd === 50, `bonus juara #3 → +${ptsAfterEnd - ptsBeforeEnd} (harusnya +50)`);
+  console.assert(await fails(`select end_session_activity($1)`, [s]), "sesi bisa diakhiri dua kali!");
+
+  // Review peserta: +10 sekali, bisa diubah; bukan peserta ditolak.
+  await as(player);
+  await db.query(`select submit_session_review($1, 4::smallint, '{Host ramah}', 5::smallint, 4::smallint, 4::smallint, 'Seru!', true)`, [s]);
+  await db.query(`select submit_session_review($1, 5::smallint, '{}', null, null, null, 'Seru banget', false)`, [s]);
+  const review = await one(`select rating, comment from session_reviews where session_id = $1 and member_id = $2`, [s, player]);
+  console.assert(review.rating === 5 && review.comment === "Seru banget", `review ${JSON.stringify(review)}`);
+  await as(null);
+  const ptsAfterReview = Number((await one(`select points_balance from member_stats where member_id = $1`, [player])).points_balance);
+  console.assert(ptsAfterReview - ptsAfterEnd === 10, `review → +${ptsAfterReview - ptsAfterEnd} (harusnya +10 sekali)`);
+  await as(outsider);
+  console.assert(await fails(`select submit_session_review($1, 5::smallint, '{}', null, null, null, null, false)`, [s]), "bukan peserta bisa memberi review!");
+
   // Sesi diakhiri → hak host berakhir, kembali member biasa.
-  await db.query(`update sessions set ended_at = now(), status = 'completed' where id = $1`, [s]);
   await as(hostId);
   console.assert(!(await one(`select is_session_host($1) ok`, [s])).ok, "host masih aktif setelah sesi diakhiri!");
   console.assert(await fails(`select save_match_score($1, 10::smallint, 11::smallint)`, [match]), "host bisa ubah skor setelah sesi diakhiri!");
