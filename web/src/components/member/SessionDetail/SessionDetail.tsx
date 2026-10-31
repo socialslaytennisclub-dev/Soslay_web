@@ -10,6 +10,7 @@ import { SelfCheckIn } from "@/components/member/CheckIn/SelfCheckIn";
 import { Countdown } from "./Countdown";
 import { HostLive } from "./HostPanel";
 import { HostStartCard } from "./HostStart";
+import { LiveRefresh } from "./LiveRefresh";
 import { maxRound, NOT_IN_LINEUP, perspective, PlayerLiveCard } from "./LiveCards";
 import { ParticipantList } from "./ParticipantList";
 import { QrCheckIn } from "./QrCheckIn";
@@ -80,6 +81,7 @@ export function SessionDetail({ detail: d, tab, endedNotice = null }: { detail: 
 
   return (
     <>
+      {d.phase === "live" && <LiveRefresh />}
       <header className={styles.top}>
         <Container className={styles.topInner}>
           <p className={styles.back}>
