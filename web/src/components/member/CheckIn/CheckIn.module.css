@@ -1,0 +1,226 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-24);
+  max-width: 720px;
+  padding-top: calc(var(--nav-height) + var(--space-32));
+  padding-bottom: var(--space-48);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.eyebrow {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-indigo-600);
+}
+
+.title {
+  font-family: var(--font-display);
+  font-size: clamp(24px, 4vw, 32px);
+  font-weight: var(--weight-bold);
+  line-height: 1.2;
+  color: var(--color-navy-900);
+}
+
+.lead {
+  font-family: var(--font-ui);
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-indigo-muted);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+  list-style: none;
+}
+
+.card,
+.empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+  padding: var(--space-24);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+  font-family: var(--font-ui);
+  color: var(--color-navy-900);
+}
+
+.cardDone {
+  border-color: var(--color-lime-600);
+  background: var(--color-lime-50);
+}
+
+.info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.info h2,
+.empty h2 {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: var(--weight-bold);
+}
+
+.info span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--color-indigo-muted);
+}
+
+.action {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--space-8);
+}
+
+.self {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.self_card {
+  align-items: flex-end;
+}
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  min-width: 160px;
+  padding: 12px 24px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-500);
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: var(--weight-semibold);
+  color: var(--color-navy-900);
+  cursor: pointer;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--color-lime-550);
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.done {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  color: var(--color-lime-800);
+}
+
+.wait {
+  padding: 10px 16px;
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-50);
+  font-size: 14px;
+  font-weight: var(--weight-medium);
+  color: var(--color-indigo-muted);
+}
+
+.link {
+  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  color: var(--color-indigo-600);
+}
+
+.link:hover {
+  text-decoration: underline;
+}
+
+.error {
+  flex-basis: 100%;
+  font-size: 14px;
+  color: #c62828;
+}
+
+.empty {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+/* Kartu e-ticket navy (detail sesi): tombol putih di atas "Tampilkan QR Check-in" yang lime. */
+.self_ticket .button {
+  width: 100%;
+  height: 52px;
+  background: var(--color-white);
+  font-size: 16px;
+}
+
+.self_ticket .button:hover:not(:disabled) {
+  background: var(--color-indigo-100);
+}
+
+.self_ticket .done {
+  justify-content: center;
+  padding: 14px;
+  border-radius: var(--radius-full);
+  background: rgb(212 239 31 / 0.14);
+  color: var(--color-lime-500);
+}
+
+.self_ticket .wait {
+  text-align: center;
+  background: rgb(255 255 255 / 0.08);
+  color: var(--color-indigo-200);
+}
+
+.self_ticket .error {
+  text-align: center;
+  color: #ffb4b4;
+}
+
+.empty p {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-indigo-muted);
+}
+
+@media (max-width: 560px) {
+  .card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .action,
+  .self_card {
+    align-items: stretch;
+  }
+
+  .button {
+    width: 100%;
+  }
+
+  .link {
+    align-self: flex-start;
+  }
+}

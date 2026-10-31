@@ -300,7 +300,7 @@ export function activityTypeLabel(slug: ActivityTypeSlug): string {
 /** Copy statis halaman Activity. */
 export const activityPage = {
   eyebrow: "Upcoming activity",
-  absensi: { label: "Check-in Attendance", href: "/absensi" },
+  absensi: { label: "Check-in Attendance", href: "/akun/absensi" },
   booking: { label: "Book a Session on Kuyy" },
   upcoming: {
     title: "The Court Is Waiting. Are You?",

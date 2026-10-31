@@ -380,6 +380,65 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.log("✓ americano: import Kuyy → booking member, host input skor (total 21) & check-in (+50 pts), hak host berakhir saat sesi diakhiri");
 }
 
+// Check-in mandiri member (/akun/absensi): hanya peserta sendiri, hanya di jendela check-in.
+{
+  const venueId = (await one(`select id from venues limit 1`)).id;
+  const mkSession = async (slug, startOffset) =>
+    (await one(
+      `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, points_per_attendance)
+       values ($1, 'Mabar Absen', 'weekly-mabar', $2, now() + $3::interval, now() + $3::interval + interval '2 hours', 20, 'published', 50) returning id`,
+      [slug, venueId, startOffset],
+    )).id;
+  const mkMember = async (name, email) => {
+    const { id } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, name, email]);
+    return id;
+  };
+  const fails = async (sql, params) => db.query(sql, params).then(() => false, () => true);
+  const balance = async (m) => Number((await one(`select points_balance from member_stats where member_id = $1`, [m])).points_balance);
+
+  const open = await mkSession("absen-open", "10 minutes");
+  const later = await mkSession("absen-later", "2 hours");
+  const past = await mkSession("absen-past", "-3 hours");
+  const kuy = await mkMember("Peserta Kuy", "absen-kuy@mail.com");
+  const web = await mkMember("Peserta Web", "absen-web@mail.com");
+  const outsider = await mkMember("Bukan Peserta", "absen-lain@mail.com");
+  for (const s of [open, later, past]) {
+    await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, member_id, amount) values ($1, 'Peserta Kuy', 'U1', $2, 150000)`, [s, kuy]);
+  }
+  await db.query(`insert into bookings (session_id, member_id) values ($1, $2)`, [open, web]);
+
+  await as(null);
+  console.assert(await fails(`select member_self_check_in($1)`, [open]), "anon bisa check-in!");
+  await as(outsider);
+  console.assert(await fails(`select member_self_check_in($1)`, [open]), "bukan peserta bisa check-in!");
+  await as(kuy);
+  console.assert(await fails(`select member_self_check_in($1)`, [later]), "check-in sebelum jendela dibuka diterima!");
+  // Admin me-live-kan sesi lebih awal → check-in mandiri ikut terbuka.
+  await db.query(`update sessions set live_started_at = now() where id = $1`, [later]);
+  console.assert(!(await fails(`select member_self_check_in($1)`, [later])), "check-in sesi yang sudah di-live-kan lebih awal ditolak!");
+  console.assert(await fails(`select member_self_check_in($1)`, [past]), "check-in sesi yang sudah lewat diterima!");
+
+  await as(null);
+  const kuyBefore = await balance(kuy);
+  await as(kuy);
+  const first = (await one(`select member_self_check_in($1) at`, [open])).at;
+  const again = (await one(`select member_self_check_in($1) at`, [open])).at;
+  await as(null);
+  const kuyBooking = await one(`select status from bookings where session_id = $1 and member_id = $2`, [open, kuy]);
+  console.assert(first && String(first) === String(again), `check-in ulang mengubah waktu ${first} → ${again}`);
+  console.assert(kuyBooking.status === "attended" && (await balance(kuy)) - kuyBefore === 50, `check-in mandiri peserta Kuyy ${JSON.stringify(kuyBooking)} Δ${(await balance(kuy)) - kuyBefore}`);
+
+  const webBefore = await balance(web);
+  await as(web);
+  await db.query(`select member_self_check_in($1)`, [open]);
+  await as(null);
+  const webRow = await one(`select source, checked_in_at, checked_in_by from session_participants where session_id = $1 and member_id = $2`, [open, web]);
+  console.assert(webRow?.source === "website" && webRow.checked_in_at && webRow.checked_in_by === web && (await balance(web)) - webBefore === 50, `check-in mandiri booking website ${JSON.stringify(webRow)}`);
+  console.assert(!(await one(`select has_function_privilege('anon', 'member_self_check_in(uuid)', 'execute') ok`)).ok, "anon punya akses member_self_check_in");
+  console.log("✓ check-in mandiri: peserta sendiri, jendela 30 menit sebelum s.d. selesai, +50 pts sekali");
+}
+
 // Ghost member: peserta belum daftar dikumpulkan per Kuy ID; saat daftar → riwayat & poin pindah ke akunnya.
 {
   const venueId = (await one(`select id from venues limit 1`)).id;

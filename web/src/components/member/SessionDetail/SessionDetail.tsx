@@ -6,6 +6,7 @@ import { CITY_TZ_LABEL, formatAngka, formatJamRange, formatRupiah, formatTanggal
 import { planRounds, ROUND_STATUS_LABEL, skippedLabel } from "@/lib/rounds";
 import { initials, teamName } from "@/lib/text";
 import type { DetailMatch, DetailStanding, MemberSessionDetail } from "@/server/member/session-detail";
+import { SelfCheckIn } from "@/components/member/CheckIn/SelfCheckIn";
 import { Countdown } from "./Countdown";
 import { HostLive } from "./HostPanel";
 import { HostStartCard } from "./HostStart";
@@ -211,6 +212,9 @@ function Ticket({ detail: d, ticket }: { detail: MemberSessionDetail; ticket: Ti
           <dd>{ticket.type}</dd>
         </div>
       </dl>
+      {d.phase !== "done" && (
+        <SelfCheckIn sessionId={d.id} city={d.city} opensAt={d.checkInAt} endsAt={d.endsAt} checkedIn={ticket.status === "attended"} checkedInAt={ticket.checkedInAt} fetchedAt={d.fetchedAt} variant="ticket" />
+      )}
       {d.phase !== "done" && (
         <QrCheckIn
           qrSvg={ticket.qrSvg}

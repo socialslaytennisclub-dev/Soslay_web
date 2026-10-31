@@ -21,12 +21,14 @@ import styles from "./SessionDetail.module.css";
 export function HostStartCard({ detail: d }: { detail: MemberSessionDetail }) {
   // Tombol aktif sendiri saat check-in dibuka (halaman yang dibiarkan terbuka tidak perlu dimuat ulang).
   const checkInAt = new Date(d.checkInAt).getTime();
-  const [canStart, setCanStart] = useState(d.fetchedAt >= checkInAt);
+  const [now, setNow] = useState(d.fetchedAt);
+  const canStart = now >= checkInAt;
   useEffect(() => {
     if (canStart) return;
-    const timer = setTimeout(() => setCanStart(true), Math.max(0, checkInAt - Date.now()));
+    // setTimeout meluap di atas ±24,8 hari (2^31 ms) dan langsung jalan → cek ulang paling lama tiap 6 jam.
+    const timer = setTimeout(() => setNow(Date.now()), Math.min(Math.max(0, checkInAt - Date.now()), 6 * 3_600_000));
     return () => clearTimeout(timer);
-  }, [canStart, checkInAt]);
+  }, [canStart, checkInAt, now]);
   const router = useRouter();
   const { dialogRef, open: openDialog, close, onBackdropClick } = useDialog();
   const [mode, setMode] = useState<"present" | "original">("present");

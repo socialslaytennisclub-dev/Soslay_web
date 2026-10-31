@@ -7,6 +7,7 @@ import { cityOf, type City } from "@/lib/format";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { TennisLevel } from "@/server/admin/types";
 import { localParts } from "@/server/public/sessions";
+import { checkInOpensAt } from "./check-in";
 import { getMemberSession } from "./user";
 
 /**
@@ -58,7 +59,7 @@ export type MemberSessionDetail = {
   capacity: number;
   levels: string[];
   /** null = host yang tidak ikut main (tanpa booking) — tanpa e-ticket & info pendaftaran. */
-  ticket: { code: string; qrSvg: string; holder: string; type: string; status: "registered" | "attended" } | null;
+  ticket: { code: string; qrSvg: string; holder: string; type: string; status: "registered" | "attended"; /** null = belum check-in / waktunya tidak tercatat. */ checkedInAt: string | null } | null;
   registration: { sourceLabel: string; paid: boolean; amount: number; orderId: string | null; registeredAt: string; kuyUrl: string | null } | null;
   people: DetailPerson[];
   matches: DetailMatch[];
@@ -110,8 +111,6 @@ const FORMAT_LABEL: Record<string, string> = {
 };
 
 const SOURCE_LABEL: Record<string, string> = { kuy: "Kuy", admin: "Admin", website: "Website" };
-
-const CHECK_IN_LEAD_MS = 30 * 60_000;
 
 type SessionRow = {
   id: string;
@@ -222,7 +221,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
 
   // Akses: punya booking aktif (peserta) atau ditunjuk sebagai host sesi ini.
   const [{ data: booking }, { data: assigned }] = await Promise.all([
-    supabase.from("bookings").select("id, status, payment_status, source, amount, created_at").eq("session_id", session.id).eq("member_id", user.id).neq("status", "cancelled").maybeSingle(),
+    supabase.from("bookings").select("id, status, payment_status, source, amount, created_at, checked_in_at").eq("session_id", session.id).eq("member_id", user.id).neq("status", "cancelled").maybeSingle(),
     supabase.rpc("is_assigned_host", { p_session: session.id }),
   ]);
   if (!booking && assigned !== true) return null;
@@ -284,7 +283,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     end: localParts(session.ends_at, city).time,
     startsAt: session.starts_at,
     endsAt: session.ends_at,
-    checkInAt: new Date(new Date(session.starts_at).getTime() - CHECK_IN_LEAD_MS).toISOString(),
+    checkInAt: checkInOpensAt(session.starts_at, session.live_started_at),
     phase: phaseOf(session, fetchedAt),
     venue: { name: session.venues.name, address: session.venues.address ?? session.venues.city, mapsUrl: session.venues.maps_url },
     format: {
@@ -306,6 +305,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
             holder: people.find((p) => p.me)?.name ?? mine?.full_name ?? "Member",
             type: "Player",
             status: booking.status === "attended" || mine?.checked_in_at ? "attended" : "registered",
+            checkedInAt: mine?.checked_in_at ?? booking.checked_in_at ?? null,
           }
         : null,
     registration: booking
@@ -382,13 +382,13 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     end: s.end,
     startsAt,
     endsAt,
-    checkInAt: new Date(new Date(startsAt).getTime() - CHECK_IN_LEAD_MS).toISOString(),
+    checkInAt: checkInOpensAt(startsAt, null),
     phase: s.status === "done" ? "done" : "upcoming",
     venue: { name: s.venue, address: s.city, mapsUrl: null },
     format: { label: "Americano Doubles", targetPoints: 21, courts: 2, rounds: 7, lineup: true, leaderboardMode: "points", attendancePoints: 50 },
     capacity: 8,
     levels: ["Beginner", "Intermediate"],
-    ticket: { code: bookingCode("9f2a1c00", s.date), qrSvg: await qrSvg(`soslay:booking:demo-${s.slug}`), holder: names[0], type: "Player", status: s.status === "done" ? "attended" : "registered" },
+    ticket: { code: bookingCode("9f2a1c00", s.date), qrSvg: await qrSvg(`soslay:booking:demo-${s.slug}`), holder: names[0], type: "Player", status: s.status === "done" ? "attended" : "registered", checkedInAt: null },
     registration: { sourceLabel: "Dibayar via Kuyy", paid: true, amount: 150_000, orderId: "U1", registeredAt: new Date(new Date(startsAt).getTime() - 14 * 86_400_000).toISOString(), kuyUrl: "https://kuy.id/soslay" },
     people: names.map((name, i) => ({ id: String(i), name, level: ["Intermediate", "Advanced", "Beginner"][i % 3], source: i % 2 ? "Kuy" : "Website", me: i === 0, checkedIn: s.status === "done", member: true })),
     matches: [],

@@ -179,7 +179,19 @@ export async function setHostCheckIn(sessionId: string, personId: string, checke
   return { ok: false, error: hostError(error.message, "Check-in gagal disimpan. Coba lagi.") };
 }
 
-export type ReviewInput = { rating: number; highlights: string[]; host: number | null; venue: number | null; format: number | null; comment: string; testimonial: boolean };
+/** Check-in mandiri peserta (/akun/absensi): hanya diri sendiri, selama jendela check-in. */
+export async function selfCheckIn(sessionId: string): Promise<HostScoreResult> {
+  const supabase = await createSupabaseServerClient("member");
+  const { error } = await supabase.rpc("member_self_check_in", { p_session: sessionId });
+  if (!error) return { ok: true };
+  // PGRST202 = RPC belum ada di database (migrasi belum dipasang).
+  if (error.code === "PGRST202") return { ok: false, error: "Check-in mandiri belum aktif. Minta host meng-check-in kamu." };
+  if (/bukan peserta/.test(error.message)) return { ok: false, error: "Kamu belum terdaftar di sesi ini. Minta host meng-check-in kamu." };
+  if (/Masuk dulu|30 menit|sudah selesai|tidak ditemukan/.test(error.message)) return { ok: false, error: `${error.message}.` };
+  return { ok: false, error: "Check-in gagal. Coba lagi." };
+}
+
+export type ReviewInput ={ rating: number; highlights: string[]; host: number | null; venue: number | null; format: number | null; comment: string; testimonial: boolean };
 
 /** Review sesi oleh peserta (S3-P): +10 Slay Point sekali, bisa diubah 7 hari setelah sesi. */
 export async function submitSessionReview(sessionId: string, input: ReviewInput): Promise<HostScoreResult> {
