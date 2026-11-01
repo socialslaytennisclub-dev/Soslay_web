@@ -55,7 +55,8 @@ function toRow(d: Dataset, s: DataSession): SessionRow {
     title: s.title,
     typeSlug: s.typeSlug,
     typeLabel: activityTypeLabels[s.typeSlug] ?? s.typeSlug,
-    image: meta.image,
+    // Foto milik sesi lebih dulu (thumbnail album Foto, lalu cover sesi); tanpa itu → foto venue.
+    image: s.photoCoverPath || s.coverPath || meta.image,
     startsAt: s.startsAt.toISOString(),
     endsAt: s.endsAt.toISOString(),
     venueName: s.venueName,

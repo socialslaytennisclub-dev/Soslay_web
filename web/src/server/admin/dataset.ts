@@ -25,6 +25,8 @@ export type DataSession = demo.DemoSession & {
   kuyUrl?: string | null;
   /** URL foto cover dari Storage (null → foto venue). */
   coverPath?: string | null;
+  /** Thumbnail album Foto sesi (tab Foto member) — diupload setelah sesi selesai. */
+  photoCoverPath?: string | null;
   visibleUntil?: Date | null;
   crew?: { name: string; role: "Host" | "Coach" | "Fotografer" }[];
   courts?: string[];
@@ -159,7 +161,7 @@ type SessionRow = {
   id: string; title: string; type_slug: string; description: string | null; court_label: string | null; starts_at: string; ends_at: string;
   capacity: number; price: number; points_per_attendance: number; status: demo.SessionStatus; publish_at: string | null;
   visibility: "public" | "members" | "link"; waitlist_enabled: boolean; members_only: boolean; show_on_homepage: boolean;
-  recommended_levels: TennisLevel[]; series_id: string | null; kuy_booking_url: string | null; visible_until: string | null; cover_path: string | null; created_at: string;
+  recommended_levels: TennisLevel[]; series_id: string | null; kuy_booking_url: string | null; visible_until: string | null; cover_path: string | null; photo_cover_path: string | null; created_at: string;
   venues: { name: string; courts: string[] } | null;
   session_crew: { role: string; staff_members: { full_name: string } | null }[];
 };
@@ -182,7 +184,7 @@ async function loadLive(): Promise<Dataset> {
     fetchAll<SessionRow>(
       client,
       "sessions",
-      "id, title, type_slug, description, court_label, starts_at, ends_at, capacity, price, points_per_attendance, status, publish_at, visibility, waitlist_enabled, members_only, show_on_homepage, recommended_levels, series_id, kuy_booking_url, visible_until, cover_path, created_at, venues(name, courts), session_crew(role, staff_members(full_name))",
+      "id, title, type_slug, description, court_label, starts_at, ends_at, capacity, price, points_per_attendance, status, publish_at, visibility, waitlist_enabled, members_only, show_on_homepage, recommended_levels, series_id, kuy_booking_url, visible_until, cover_path, photo_cover_path, created_at, venues(name, courts), session_crew(role, staff_members(full_name))",
       "starts_at",
     ),
     fetchAll<BookingRow>(client, "bookings", "session_id, member_id, status, payment_status, source, guests, checked_in_at, created_at", "created_at"),
@@ -243,6 +245,7 @@ async function loadLive(): Promise<Dataset> {
     repeatWeekly: Boolean(s.series_id),
     kuyUrl: s.kuy_booking_url,
     coverPath: s.cover_path,
+    photoCoverPath: s.photo_cover_path,
     visibleUntil: s.visible_until ? new Date(s.visible_until) : null,
     createdAt: new Date(s.created_at),
     crew: s.session_crew.filter((c) => c.staff_members).map((c) => ({ name: c.staff_members!.full_name, role: CREW[c.role] ?? "Host" })),
