@@ -49,7 +49,13 @@ const firstHref = (html, prefix) =>
 
 console.log(`Smoke test ${base} (${demo ? "demo" : "live"})\n── Website`);
 await check("/", { includes: ["SOSLAY"] });
-const activity = await check("/activity", { includes: ["Book a Session"] });
+// Data demo selalu punya sesi mendatang. Di data live bisa kosong (antar jadwal): halaman wajib
+// menampilkan tombol booking ATAU pesan "belum ada jadwal" — tidak boleh dua-duanya hilang.
+const activity = await check("/activity", { includes: demo ? ["Book a Session"] : [] });
+if (activity && !demo && !/Book a Session|No upcoming sessions yet|No sessions in this category yet/.test(activity)) {
+  failures.push("/activity → tidak ada tombol booking maupun pesan jadwal kosong");
+  console.log(`✗ ${"/activity (booking / jadwal kosong)".padEnd(48)} keduanya tidak ada`);
+}
 await check("/activity?type=weekly-mabar");
 for (const type of ["mabar", "event", "escape", "coaching"]) await check(`/activity/${type}`, { includes: ["Soslay Activities"] });
 await check("/activity/tidak-ada", { status: 404 });

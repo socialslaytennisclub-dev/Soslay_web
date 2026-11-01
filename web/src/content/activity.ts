@@ -318,4 +318,9 @@ export const activityPage = {
     title: "No sessions in this category yet.",
     description: "Try another category, or follow our Instagram for the latest schedule.",
   },
+  /** Ada sesi lama, tapi belum ada jadwal mendatang (antar jadwal). */
+  noUpcoming: {
+    title: "No upcoming sessions yet.",
+    description: "The next schedule is on its way — follow our Instagram to be the first to book.",
+  },
 };

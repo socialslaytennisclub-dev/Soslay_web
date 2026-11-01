@@ -8,6 +8,9 @@ import { supabaseUrl } from "./env";
  * Kunci dibaca dari SUPABASE_SERVICE_ROLE_KEY (server env), tidak pernah dikirim ke browser.
  * Mengembalikan null bila kunci belum dipasang.
  */
+/** Kunci service role terpasang? Tanpanya upload foto, tambah member & undang tim nonaktif. */
+export const hasServiceRoleKey = () => !!process.env.SUPABASE_SERVICE_ROLE_KEY;
+
 export function createSupabaseAdminClient() {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!supabaseUrl || !key) return null;

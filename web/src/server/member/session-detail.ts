@@ -156,7 +156,23 @@ function bookingCode(bookingId: string, date: string) {
   return `SLY-${day}${month}-${bookingId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
 }
 
-const qrSvg = (value: string) => QRCode.toString(value, { type: "svg", margin: 0, errorCorrectionLevel: "M", color: { dark: "#0a084a", light: "#ffffff" } });
+/**
+ * SVG QR per isi — isinya tetap (id booking), jadi disimpan di memori server: halaman sesi live
+ * dimuat ulang tiap 20 detik oleh setiap peserta. Dibatasi supaya cache tidak tumbuh tanpa batas.
+ */
+const QR_CACHE_LIMIT = 500;
+const qrCache = new Map<string, Promise<string>>();
+
+function qrSvg(value: string) {
+  let svg = qrCache.get(value);
+  if (!svg) {
+    svg = QRCode.toString(value, { type: "svg", margin: 0, errorCorrectionLevel: "M", color: { dark: "#0a084a", light: "#ffffff" } });
+    svg.catch(() => qrCache.delete(value));
+    if (qrCache.size >= QR_CACHE_LIMIT) qrCache.delete(qrCache.keys().next().value!);
+    qrCache.set(value, svg);
+  }
+  return svg;
+}
 
 function phaseOf(s: Pick<SessionRow, "status" | "starts_at" | "ends_at" | "live_started_at" | "ended_at">, now: number): DetailPhase {
   if (s.status === "completed" || s.ended_at || new Date(s.ends_at).getTime() < now) return "done";

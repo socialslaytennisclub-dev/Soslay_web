@@ -35,7 +35,12 @@ export default async function ActivityPage({ searchParams }: PageProps<"/activit
       <MotionProvider>
         <main>
           {featured && <ActivityHero session={featured} />}
-          <SessionsSection upcoming={listed} past={past} filter={<ActivityTypeFilter activeType={activeType} />} />
+          <SessionsSection
+            upcoming={listed}
+            past={past}
+            filter={<ActivityTypeFilter activeType={activeType} />}
+            featuredShown={!!featured && filterByType([featured], activeType).length > 0}
+          />
           <InstagramFeed {...instagram} />
         </main>
         <Footer />

@@ -10,7 +10,8 @@ import { supabaseUrl } from "@/lib/supabase/env";
 
 const IMAGE_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 
-export type UploadResult = { ok: true; url: string; path: string } | { ok: false; error: string };
+/** `reason: "no_service_key"` → pemanggil di area member mengganti pesan teknisnya. */
+export type UploadResult = { ok: true; url: string; path: string } | { ok: false; error: string; reason?: "no_service_key" };
 
 export async function uploadPublicImage({
   bucket,
@@ -32,7 +33,10 @@ export async function uploadPublicImage({
   if (file.size > maxBytes) return { ok: false, error: `Ukuran foto maksimal ${Math.round(maxBytes / 1024 / 1024)} MB.` };
 
   const admin = createSupabaseAdminClient();
-  if (!admin) return { ok: false, error: "Upload belum aktif: SUPABASE_SERVICE_ROLE_KEY belum dipasang." };
+  if (!admin) {
+    console.error("[uploadPublicImage] SUPABASE_SERVICE_ROLE_KEY belum dipasang di server — upload foto nonaktif.");
+    return { ok: false, reason: "no_service_key", error: "Upload belum aktif: SUPABASE_SERVICE_ROLE_KEY belum dipasang." };
+  }
 
   const path = `${folder}/${crypto.randomUUID()}.${ext}`;
   const upload = () => admin.storage.from(bucket).upload(path, file, { contentType: file.type, cacheControl: "31536000" });

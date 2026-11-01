@@ -90,7 +90,8 @@ export async function uploadMyAvatar(formData: FormData): Promise<{ ok: true; ur
     }),
     supabase.from("profiles").select("avatar_path").eq("id", user.id).maybeSingle(),
   ]);
-  if (!upload.ok) return upload;
+  // Pesan teknis (env server) untuk tim saja — member cukup tahu upload sedang tidak tersedia.
+  if (!upload.ok) return { ok: false, error: upload.reason === "no_service_key" ? "Upload foto sedang tidak tersedia. Coba lagi nanti atau hubungi panitia Soslay." : upload.error };
   const { error } = await supabase.from("profiles").update({ avatar_path: upload.url }).eq("id", user.id);
   if (error) {
     await removePublicImage(AVATAR_BUCKET, upload.url);

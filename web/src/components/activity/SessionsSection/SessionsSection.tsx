@@ -11,11 +11,15 @@ type SessionsSectionProps = {
   past: Session[];
   /** Konten di atas daftar upcoming, mis. chip filter jenis aktivitas di /activity. */
   filter?: ReactNode;
+  /** Sesi mendatang sudah tampil di hero (tidak diulang di `upcoming`) → jangan tampilkan "belum ada jadwal". */
+  featuredShown?: boolean;
 };
 
 /** Daftar sesi: section "mendatang" (bisa booking) & section "lama" (lihat venue). */
-export function SessionsSection({ upcoming, past, filter }: SessionsSectionProps) {
-  const isEmpty = upcoming.length === 0 && past.length === 0;
+export function SessionsSection({ upcoming, past, filter, featuredShown = false }: SessionsSectionProps) {
+  // Tanpa jadwal mendatang: kosong total → copy kategori; masih ada sesi lama → "belum ada jadwal".
+  const noUpcoming = upcoming.length === 0 && !featuredShown;
+  const empty = past.length === 0 ? activityPage.empty : activityPage.noUpcoming;
 
   return (
     <>
@@ -23,13 +27,13 @@ export function SessionsSection({ upcoming, past, filter }: SessionsSectionProps
         <Container className={styles.inner}>
           {filter}
 
-          {isEmpty ? (
+          {noUpcoming ? (
             <div className={styles.empty} role="status">
               <Text variant="title-24" tone="primary">
-                {activityPage.empty.title}
+                {empty.title}
               </Text>
               <Text variant="body-16" tone="primary" muted>
-                {activityPage.empty.description}
+                {empty.description}
               </Text>
             </div>
           ) : (

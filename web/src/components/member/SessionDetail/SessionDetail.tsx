@@ -81,7 +81,7 @@ export function SessionDetail({ detail: d, tab, endedNotice = null }: { detail: 
 
   return (
     <>
-      {d.phase === "live" && <LiveRefresh />}
+      {d.phase !== "done" && <LiveRefresh from={d.checkInAt} />}
       <header className={styles.top}>
         <Container className={styles.topInner}>
           <p className={styles.back}>

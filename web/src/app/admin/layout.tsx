@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { AdminSidebar } from "@/components/admin/shell/AdminSidebar";
 import { Toaster } from "@/components/admin/ui/Toaster";
+import { hasServiceRoleKey } from "@/lib/supabase/admin";
 import { pendingRedemptionCount } from "@/server/admin/points-repo";
 import { getSidebarCounts } from "@/server/admin/repo";
 import { canAccess, getAdminSession } from "@/server/admin/session";
@@ -66,7 +67,16 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
         hiddenHrefs={hiddenHrefs}
         canSignOut={session.mode === "live"}
       />
-      <div className={styles.main}>{children}</div>
+      <div className={styles.main}>
+        {/* Env server yang hilang baru ketahuan saat member gagal upload — tampilkan ke tim sejak awal. */}
+        {session.mode === "live" && !hasServiceRoleKey() && (
+          <p className={styles.envWarning} role="alert">
+            <strong>SUPABASE_SERVICE_ROLE_KEY belum dipasang di server.</strong> Upload foto (member & admin), tambah member, dan undang tim tidak
+            berfungsi. Isi di Vercel → Settings → Environment Variables (Production), lalu redeploy.
+          </p>
+        )}
+        {children}
+      </div>
       <Toaster />
     </div>
   );
