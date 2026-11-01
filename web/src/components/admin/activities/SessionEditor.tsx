@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { formatRupiahPlain, LEVEL_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
+import { shrinkImage } from "@/lib/image-resize";
 import { participantsLockReason } from "@/lib/session-lock";
 import { memberInviteWaLink } from "@/lib/wa-invite";
 import { clearParticipants, removeParticipants } from "@/server/admin/actions/play";
@@ -212,9 +213,10 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   /** Upload langsung ke Storage; URL baru tersimpan ke sesi saat admin menekan Simpan. */
   const uploadCover = (file: File | undefined) => {
     if (!file || uploading) return;
-    const body = new FormData();
-    body.append("file", file);
     startUploading(async () => {
+      // Foto HP > 4,5 MB ditolak Vercel sebelum sampai server → perkecil dulu di browser.
+      const body = new FormData();
+      body.append("file", await shrinkImage(file));
       const result = await uploadSessionCover(body).catch(() => ({ ok: false as const, error: "Upload gagal — coba lagi." }));
       if (result.ok) {
         uploads.track(result.url);
@@ -229,9 +231,9 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   /** Thumbnail Foto sesi — upload ke Storage yang sama dengan foto cover; tersimpan saat Simpan. */
   const uploadPhotoCover = (file: File | undefined) => {
     if (!file || uploadingPhoto) return;
-    const body = new FormData();
-    body.append("file", file);
     startUploadingPhoto(async () => {
+      const body = new FormData();
+      body.append("file", await shrinkImage(file));
       const result = await uploadSessionCover(body).catch(() => ({ ok: false as const, error: "Upload gagal — coba lagi." }));
       if (result.ok) {
         uploads.track(result.url);

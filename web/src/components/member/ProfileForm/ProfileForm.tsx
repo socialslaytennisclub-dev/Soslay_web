@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { pinWithin } from "@/animations";
+import { shrinkImage } from "@/lib/image-resize";
 import { Avatar, Button, Checkbox, ChoiceChips, DateField, SelectField, TextField } from "@/components/ui";
 import {
   cityOptions,
@@ -89,9 +90,11 @@ export function ProfileForm({ initial }: { initial?: MemberProfile }) {
     update(field, checked ? [...values, option] : values.filter((value) => value !== option));
   }
 
-  function choosePhoto(file: File | undefined) {
-    if (!file) return;
-    if (!["image/jpeg", "image/png"].includes(file.type)) return setPhotoError("Format harus JPG atau PNG.");
+  async function choosePhoto(picked: File | undefined) {
+    if (!picked) return;
+    if (!["image/jpeg", "image/png"].includes(picked.type)) return setPhotoError("Format harus JPG atau PNG.");
+    // Foto HP besar diperkecil dulu (avatar cukup 1024 px) — batas 2 MB hanya untuk yang tetap besar.
+    const file = await shrinkImage(picked, { maxEdge: 1024, maxBytes: 500 * 1024 });
     if (file.size > MAX_PHOTO_BYTES) return setPhotoError("Ukuran foto maksimal 2 MB.");
     setPhotoError(undefined);
     photoFile.current = file;

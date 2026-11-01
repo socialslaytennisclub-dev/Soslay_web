@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { cx } from "@/lib/cx";
+import { shrinkImage } from "@/lib/image-resize";
 import { deleteVenue, discardVenueUploads, saveVenue, uploadVenuePhoto } from "@/server/admin/actions/catalog";
 import type { VenueForm } from "@/server/admin/types";
 import styles from "../activities/SessionEditor.module.css";
@@ -39,9 +40,10 @@ export function VenueEditor({ initial, imageOptions, initialNotice }: { initial:
   /** Upload langsung ke Storage; URL baru tersimpan ke venue saat admin menekan Simpan. */
   const upload = async (key: "coverPath" | "heroPath", file: File | undefined) => {
     if (!file || uploading) return;
-    const body = new FormData();
-    body.append("file", file);
     setUploading(key);
+    // Foto HP > 4,5 MB ditolak Vercel sebelum sampai server → perkecil dulu di browser.
+    const body = new FormData();
+    body.append("file", await shrinkImage(file));
     const result = await uploadVenuePhoto(body).catch(() => ({ ok: false as const, error: "Upload gagal — coba lagi." }));
     setUploading(null);
     if (!result.ok) return toast.error(result.error);
