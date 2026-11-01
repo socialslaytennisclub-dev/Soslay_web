@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { Caveat } from "next/font/google";
 import { notFound } from "next/navigation";
+import { caveat } from "@/fonts/caveat";
 import { SpotlightHero } from "@/components/guide/SpotlightHero";
 import {
   BringSection,
@@ -14,9 +14,6 @@ import { Navbar } from "@/components/layout/Navbar/Navbar";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 import { findGuide, participantGuides } from "@/content/guides";
 import { findVenue, venueCities, venueHref } from "@/content/venues";
-
-/** Tulisan tangan di kartu hero & panel Court Vibe (Figma: Caveat Bold) — hanya dimuat di halaman ini. */
-const caveat = Caveat({ subsets: ["latin"], weight: "700", variable: "--font-caveat" });
 
 /** Hanya venue yang punya panduan yang di-prerender; slug lain → 404. */
 export function generateStaticParams() {

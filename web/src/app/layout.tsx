@@ -1,19 +1,25 @@
 import type { Metadata } from "next";
-import { Inter, Poppins } from "next/font/google";
 import localFont from "next/font/local";
 import Script from "next/script";
 import { SPLASH_SCRIPT } from "@/components/home/SplashScreen/splash";
 import "./globals.css";
 
-const poppins = Poppins({
-  subsets: ["latin"],
-  weight: ["500", "600", "700", "800"],
+// Font Google (subset latin, lisensi OFL) di-host sendiri di src/fonts: build tidak bergantung pada
+// unduhan fonts.googleapis.com — unduhan yang gagal di Vercel sempat menggagalkan deploy.
+const poppins = localFont({
+  src: [
+    { path: "../fonts/Poppins-Medium.woff2", weight: "500" },
+    { path: "../fonts/Poppins-SemiBold.woff2", weight: "600" },
+    { path: "../fonts/Poppins-Bold.woff2", weight: "700" },
+    { path: "../fonts/Poppins-ExtraBold.woff2", weight: "800" },
+  ],
   variable: "--font-poppins",
 });
 
-const inter = Inter({
-  subsets: ["latin"],
-  weight: ["400", "500", "600", "700"],
+/** Inter variable — satu file untuk semua ketebalan. */
+const inter = localFont({
+  src: "../fonts/Inter-Variable.woff2",
+  weight: "100 900",
   variable: "--font-inter",
 });
 

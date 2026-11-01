@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { Caveat } from "next/font/google";
 import { notFound } from "next/navigation";
+import { caveat } from "@/fonts/caveat";
 import { SpotlightHero } from "@/components/guide/SpotlightHero";
 import { Footer } from "@/components/layout/Footer/Footer";
 import { Navbar } from "@/components/layout/Navbar/Navbar";
@@ -15,9 +15,6 @@ import { formatTanggalISO } from "@/lib/format";
 import { upcomingSessions } from "@/lib/sessions";
 import { getWebsiteSessions } from "@/server/public/sessions";
 import { findWebsiteVenue, getWebsiteVenues } from "@/server/public/venues";
-
-/** Catatan tulisan tangan di kartu hero (Figma: Caveat Bold). */
-const caveat = Caveat({ subsets: ["latin"], weight: "700", variable: "--font-caveat" });
 
 /** Venue aktif di-prerender saat build; venue baru dari admin dirender saat pertama dibuka. */
 export async function generateStaticParams() {
