@@ -4,9 +4,11 @@ import QRCode from "qrcode";
 import { memberSessions } from "@/content/member";
 import { LEVEL_LABEL } from "@/lib/admin-labels";
 import { cityOf, type City } from "@/lib/format";
+import { sessionClosesAt } from "@/lib/session-close";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { TennisLevel } from "@/server/admin/types";
 import { localParts } from "@/server/public/sessions";
+import { closeExpiredSessions } from "@/server/close-sessions";
 import { checkInOpensAt } from "./check-in";
 import { getMemberSession } from "./user";
 
@@ -51,6 +53,8 @@ export type MemberSessionDetail = {
   end: string;
   startsAt: string;
   endsAt: string;
+  /** Ditutup otomatis (jam selesai + jeda 30 menit, lib/session-close) — batas check-in & fase live. */
+  closesAt: string;
   /** Check-in dibuka 30 menit sebelum mulai. */
   checkInAt: string;
   phase: DetailPhase;
@@ -78,7 +82,7 @@ export type MemberSessionDetail = {
   /** Host / admin sudah menekan "Mulai Activity" (sesi live sebelum jam jadwal). */
   liveStarted: boolean;
   /** Sesi diakhiri lewat "Akhiri Activity" (null = selesai karena jadwal lewat / belum selesai). */
-  ended: { at: string; byMe: boolean } | null;
+  ended: { at: string; byMe: boolean; /** Ditutup otomatis setelah jeda (tanpa Akhiri Activity). */ auto: boolean } | null;
   /** Foto sesi dari admin (Figma S3 · tab Foto); null = belum diunggah. */
   photos: { albumUrl: string; coverUrl: string | null; count: number | null; postedAt: string | null } | null;
   /** Review milik member ini (S3-P · tab Review). */
@@ -175,7 +179,7 @@ function qrSvg(value: string) {
 }
 
 function phaseOf(s: Pick<SessionRow, "status" | "starts_at" | "ends_at" | "live_started_at" | "ended_at">, now: number): DetailPhase {
-  if (s.status === "completed" || s.ended_at || new Date(s.ends_at).getTime() < now) return "done";
+  if (s.status === "completed" || s.ended_at || sessionClosesAt(s.ends_at) < now) return "done";
   if (s.live_started_at || new Date(s.starts_at).getTime() <= now) return "live";
   return "upcoming";
 }
@@ -228,13 +232,19 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
   if (!user) return null;
 
   // RLS: member boleh membaca sesi yang ia ikuti / yang ia host (termasuk visibilitas Link).
-  const { data: session } = await supabase
-    .from("sessions")
-    .select(
-      "id, slug, title, description, type_slug, starts_at, ends_at, status, capacity, kuy_booking_url, recommended_levels, match_format, court_count, round_count, target_points, leaderboard_mode, points_per_attendance, show_live_leaderboard, live_started_at, ended_at, ended_by, current_round, started_rounds, photo_album_url, photo_cover_path, photo_count, photos_posted_at, activity_types(label), venues(name, city, address, maps_url)",
-    )
-    .eq("slug", slug)
-    .maybeSingle<SessionRow>();
+  const readSession = () =>
+    supabase
+      .from("sessions")
+      .select(
+        "id, slug, title, description, type_slug, starts_at, ends_at, status, capacity, kuy_booking_url, recommended_levels, match_format, court_count, round_count, target_points, leaderboard_mode, points_per_attendance, show_live_leaderboard, live_started_at, ended_at, ended_by, current_round, started_rounds, photo_album_url, photo_cover_path, photo_count, photos_posted_at, activity_types(label), venues(name, city, address, maps_url)",
+      )
+      .eq("slug", slug)
+      .maybeSingle<SessionRow>();
+  let { data: session } = await readSession();
+  // Lewat jeda tapi belum tertutup (cron belum jalan) → tutup sekarang (status + bonus juara), baca ulang.
+  if (session?.status === "published" && !session.ended_at && sessionClosesAt(session.ends_at) < Date.now() && (await closeExpiredSessions(supabase))) {
+    ({ data: session } = await readSession());
+  }
   if (!session?.venues || session.status === "draft" || session.status === "cancelled") return null;
 
   // Akses: punya booking aktif (peserta) atau ditunjuk sebagai host sesi ini.
@@ -301,6 +311,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     end: localParts(session.ends_at, city).time,
     startsAt: session.starts_at,
     endsAt: session.ends_at,
+    closesAt: new Date(sessionClosesAt(session.ends_at)).toISOString(),
     checkInAt: checkInOpensAt(session.starts_at, session.live_started_at),
     phase: phaseOf(session, fetchedAt),
     venue: { name: session.venues.name, address: session.venues.address ?? session.venues.city, mapsUrl: session.venues.maps_url },
@@ -354,9 +365,10 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     startedRounds: session.started_rounds ?? [],
     isHost: assigned === true,
     plays: matchRows.some((m) => side(m) !== null),
-    canScore: canScore === true,
+    // Hak host berakhir saat sesi ditutup (can_run_session di database) — termasuk tutup otomatis.
+    canScore: canScore === true && !done,
     liveStarted: !!session.live_started_at,
-    ended: session.ended_at ? { at: session.ended_at, byMe: session.ended_by === user.id } : null,
+    ended: session.ended_at ? { at: session.ended_at, byMe: session.ended_by === user.id, auto: session.ended_by === null } : null,
     photos: session.photo_album_url
       ? { albumUrl: session.photo_album_url, coverUrl: session.photo_cover_path, count: session.photo_count, postedAt: session.photos_posted_at }
       : null,
@@ -372,7 +384,8 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
           updatedAt: review.updated_at as string,
         }
       : null,
-    reviewUntil: new Date(new Date(session.ended_at ?? session.ends_at).getTime() + REVIEW_WINDOW_MS).toISOString(),
+    // Sama dengan RPC submit_session_review: 7 hari sejak diakhiri host, atau sejak ditutup otomatis.
+    reviewUntil: new Date((session.ended_at ? new Date(session.ended_at).getTime() : sessionClosesAt(session.ends_at)) + REVIEW_WINDOW_MS).toISOString(),
     fetchedAt,
     myPoints: ((ledger ?? []) as { delta: number; reason: string; note: string | null }[]).map((r) => ({
       label: r.reason === "attendance" ? "Hadir" : /^Bonus juara/.test(r.note ?? "") ? "Bonus juara" : /^Review/.test(r.note ?? "") ? "Review" : "Bonus",
@@ -401,6 +414,7 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     end: s.end,
     startsAt,
     endsAt,
+    closesAt: new Date(sessionClosesAt(endsAt)).toISOString(),
     checkInAt: checkInOpensAt(startsAt, null),
     phase: s.status === "done" ? "done" : "upcoming",
     venue: { name: s.venue, address: s.city, mapsUrl: null },
@@ -422,7 +436,7 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     ended: null,
     photos: null,
     myReview: null,
-    reviewUntil: new Date(new Date(endsAt).getTime() + REVIEW_WINDOW_MS).toISOString(),
+    reviewUntil: new Date(sessionClosesAt(endsAt) + REVIEW_WINDOW_MS).toISOString(),
     myPoints: [],
     fetchedAt: Date.now(),
   };

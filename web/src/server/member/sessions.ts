@@ -2,6 +2,8 @@ import "server-only";
 import { cache } from "react";
 import type { MemberSession } from "@/content/member";
 import { cityOf } from "@/lib/format";
+import { sessionClosesAt } from "@/lib/session-close";
+import { closeExpiredSessions } from "@/server/close-sessions";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { localParts } from "@/server/public/sessions";
 import { getMemberSession } from "./user";
@@ -50,13 +52,15 @@ export const getMySessions = cache(async (): Promise<MemberSession[] | null> => 
   const byId = new Map(((sessions ?? []) as unknown as SessionRow[]).map((s) => [s.id, s]));
   const earned = new Map((points ?? []).map((p) => [p.booking_id as string, p.delta as number]));
   const now = Date.now();
+  // Ada sesi lewat jeda yang belum tertutup (cron belum jalan) → tutup sekarang (status + bonus juara).
+  if (byId.size && [...byId.values()].some((s) => s.status === "published" && sessionClosesAt(s.ends_at) < now)) await closeExpiredSessions(supabase);
 
   return bookings.flatMap((b): MemberSession[] => {
     const s = byId.get(b.session_id);
     if (!s || !s.venues || s.status === "cancelled" || s.status === "draft") return [];
     const city = cityOf(s.venues.city);
     const start = localParts(s.starts_at, city);
-    const done = s.status === "completed" || new Date(s.ends_at).getTime() < now;
+    const done = s.status === "completed" || sessionClosesAt(s.ends_at) < now;
     return [
       {
         slug: s.slug,

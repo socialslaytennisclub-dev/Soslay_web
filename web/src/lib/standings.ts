@@ -29,7 +29,8 @@ const podiumBonus = (rank: number) => PODIUM_BONUS[rank - 1] ?? 0;
 /**
  * Slay Point sesi (ringkasan host), sama dengan yang dicatat database: poin hadir untuk member yang
  * check-in + bonus juara peringkat 1–3 untuk member (peserta tanpa akun tidak dapat poin). Bonus
- * juara hanya dibagikan lewat "Akhiri Activity" → `withBonus` false untuk sesi yang selesai sesuai jadwal.
+ * juara dibagikan saat sesi ditutup ("Akhiri Activity" atau tutup otomatis setelah jeda) → `withBonus`
+ * false selama penutupan itu belum tercatat.
  */
 export function sessionPoints(
   { people, standings, format }: { people: { id: string; checkedIn: boolean; member: boolean }[]; standings: (Standing & { id: string })[]; format: { attendancePoints: number; leaderboardMode: "points" | "wins" } },

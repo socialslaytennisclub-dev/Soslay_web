@@ -93,7 +93,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   const [levels, setLevels] = useState<TennisLevel[]>(session.recommendedLevels);
   const [waitlist, setWaitlist] = useState(session.waitlistEnabled);
   const [membersOnly, setMembersOnly] = useState(session.membersOnly);
-  const [status, setStatus] = useState<string>(session.displayStatus === "scheduled" ? "scheduled" : session.status === "completed" ? "published" : session.status);
+  const [status, setStatus] = useState<string>(session.displayStatus === "scheduled" ? "scheduled" : session.displayStatus === "completed" ? "published" : session.status);
   const [visibility, setVisibility] = useState(session.visibility);
   const until = session.visibleUntil ?? session.startsAt;
   const [visibleUntil, setVisibleUntil] = useState(`${toDate(until)}T${toTime(until)}`);
@@ -287,7 +287,8 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
       </Badge>
     ) : (
       <Badge tone={status === "published" ? "lime" : status === "cancelled" ? "pink" : status === "scheduled" ? "indigo" : "neutral"} dot>
-        {session.status === "completed" ? "Selesai" : STATUS_OPTIONS.find((o) => o.value === status)?.label}
+        {/* displayStatus: termasuk sesi yang sudah lewat jeda tutup walau belum diakhiri host (sama dengan tabel). */}
+        {session.displayStatus === "completed" ? "Selesai" : STATUS_OPTIONS.find((o) => o.value === status)?.label}
       </Badge>
     );
 
@@ -730,7 +731,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                   sessionId={session.id}
                   sessionTitle={session.title}
                   sessionWhen={sessionWhen}
-                  addLock={session.status === "completed" || session.play.endedAt ? "Sesi sudah selesai — peserta tidak bisa ditambah lagi." : null}
+                  addLock={session.displayStatus === "completed" || session.play.endedAt ? "Sesi sudah selesai — peserta tidak bisa ditambah lagi." : null}
                 />
               </span>
               <div className={styles.stats}>

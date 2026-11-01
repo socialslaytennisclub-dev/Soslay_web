@@ -16,7 +16,8 @@ type Props = {
   city: City;
   /** Jendela check-in dibuka (30 menit sebelum mulai, atau saat sesi di-live-kan lebih awal). */
   opensAt: string;
-  endsAt: string;
+  /** Jendela check-in ditutup = sesi ditutup otomatis (jam selesai + jeda, lib/session-close). */
+  closesAt: string;
   /** Sudah tercatat hadir (oleh siapa pun); `checkedInAt` null bila waktunya tidak diketahui. */
   checkedIn: boolean;
   checkedInAt: string | null;
@@ -30,7 +31,7 @@ type Props = {
  * Tombol check-in mandiri peserta: aktif selama jendela check-in s.d. sesi selesai, langsung tercatat
  * di admin & Panel Host (RPC member_self_check_in). Batal check-in hanya lewat host / admin.
  */
-export function SelfCheckIn({ sessionId, city, opensAt, endsAt, checkedIn, checkedInAt, fetchedAt, variant }: Props) {
+export function SelfCheckIn({ sessionId, city, opensAt, closesAt, checkedIn, checkedInAt, fetchedAt, variant }: Props) {
   const router = useRouter();
   const [busy, startBusy] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +49,7 @@ export function SelfCheckIn({ sessionId, city, opensAt, endsAt, checkedIn, check
 
   const [now, setNow] = useState(fetchedAt);
   const opens = new Date(opensAt).getTime();
-  const ends = new Date(endsAt).getTime();
+  const ends = new Date(closesAt).getTime();
   const open = now >= opens && now <= ends;
   // Satu timer ke perubahan berikutnya — jendela dibuka, lalu jendela ditutup (halaman yang
   // dibiarkan terbuka tidak perlu dimuat ulang).

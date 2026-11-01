@@ -380,6 +380,64 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.log("✓ americano: import Kuyy → booking member, host input skor (total 21) & check-in (+50 pts), hak host berakhir saat sesi diakhiri");
 }
 
+// Jeda tutup 30 menit: host masih bisa input skor selama jeda, terkunci setelahnya; sesi yang
+// lewat jeda ditutup sungguhan oleh close_expired_sessions() (completed + bonus juara, sekali).
+{
+  const newMember = async (name, email) => {
+    const { id } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, name, email]);
+    return id;
+  };
+  const fails = async (sql, params) => db.query(sql, params).then(() => false, () => true);
+  const balance = async (m) => Number((await one(`select points_balance from member_stats where member_id = $1`, [m])).points_balance);
+  const venueId = (await one(`select id from venues limit 1`)).id;
+  // Selesai 10 menit lalu → masih dalam jeda.
+  const s = (
+    await one(
+      `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, match_format, points_per_attendance)
+       values ('slay-grace', 'Slaymericano Jeda', 'weekly-mabar', $1, now() - interval '130 minutes', now() - interval '10 minutes', 8, 'published', 'americano', 50) returning id`,
+      [venueId],
+    )
+  ).id;
+  const host = await newMember("Host Jeda", "host-jeda@mail.com");
+  const winner = await newMember("Juara Jeda", "juara-jeda@mail.com");
+  await db.query(`insert into session_hosts (session_id, member_id) values ($1, $2)`, [s, host]);
+  const ids = [];
+  for (const [i, name] of ["Juara Jeda", "Rani", "Sinta", "Dodi"].entries()) {
+    ids.push((await one(`insert into session_participants (session_id, full_name, kuy_reg_no, member_id) values ($1, $2, $3, $4) returning id`, [s, name, `G${i + 1}`, i === 0 ? winner : null])).id);
+  }
+  const match = (await one(`insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2) values ($1, 1, 1, $2, $3, $4, $5) returning id`, [s, ...ids])).id;
+
+  await as(host);
+  console.assert(!(await fails(`select save_match_score($1, 15::smallint, 6::smallint)`, [match])), "host tidak bisa input skor dalam jeda 30 menit!");
+  await as(null);
+  await db.query(`update sessions set starts_at = now() - interval '160 minutes', ends_at = now() - interval '40 minutes' where id = $1`, [s]);
+  await as(host);
+  console.assert(await fails(`select save_match_score($1, 10::smallint, 11::smallint)`, [match]), "host bisa ubah skor setelah sesi ditutup!");
+  console.assert(await fails(`select host_set_check_in($1, $2, true)`, [s, ids[1]]), "host bisa check-in setelah sesi ditutup!");
+  console.assert(await fails(`select host_save_lineup($1, 2::smallint, '[]'::jsonb)`, [s]), "host bisa ubah line-up setelah sesi ditutup!");
+
+  await as(null);
+  const before = await balance(winner);
+  await as(winner);
+  const closed = (await one(`select close_expired_sessions() n`)).n;
+  await as(null);
+  const row = await one(`select status, ended_by, ended_at = ends_at + interval '30 minutes' at_close from sessions where id = $1`, [s]);
+  console.assert(closed >= 1 && row.status === "completed" && row.ended_by === null && row.at_close, `tutup otomatis ${JSON.stringify({ closed, row })}`);
+  console.assert((await balance(winner)) - before === 100, `bonus juara tutup otomatis → +${(await balance(winner)) - before} (harusnya +100)`);
+  await db.query(`select close_expired_sessions()`);
+  console.assert((await balance(winner)) - before === 100, "bonus juara dibagikan dua kali oleh tutup otomatis!");
+  console.assert(!(await one(`select has_function_privilege('anon', 'close_expired_sessions()', 'execute') ok`)).ok, "anon bisa memanggil close_expired_sessions");
+  console.assert(!(await one(`select has_function_privilege('authenticated', 'finish_session(uuid, uuid, timestamptz)', 'execute') ok`)).ok, "member bisa memanggil finish_session langsung");
+
+  // Durasi jeda SQL harus sama dengan web/src/lib/session-close.ts.
+  const ts = await readFile(path.resolve(import.meta.dirname, "../src/lib/session-close.ts"), "utf8");
+  const tsMinutes = Number(ts.match(/SESSION_CLOSE_GRACE_MS = (\d+) \* 60_000/)?.[1]);
+  const sqlMinutes = Number((await one(`select extract(epoch from session_closes_at('2026-01-01') - '2026-01-01'::timestamptz) / 60 m`)).m);
+  console.assert(tsMinutes > 0 && tsMinutes === sqlMinutes, `jeda tutup beda: TS ${tsMinutes} menit, SQL ${sqlMinutes} menit`);
+  console.log(`✓ jeda tutup ${sqlMinutes} menit: host bisa skor dalam jeda, terkunci setelahnya; tutup otomatis → completed + bonus juara sekali`);
+}
+
 // Check-in mandiri member (/akun/absensi): hanya peserta sendiri, hanya di jendela check-in.
 {
   const venueId = (await one(`select id from venues limit 1`)).id;
@@ -400,10 +458,12 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const open = await mkSession("absen-open", "10 minutes");
   const later = await mkSession("absen-later", "2 hours");
   const past = await mkSession("absen-past", "-3 hours");
+  // Selesai 10 menit lalu → masih dalam jeda tutup 30 menit (session_closes_at).
+  const grace = await mkSession("absen-grace", "-130 minutes");
   const kuy = await mkMember("Peserta Kuy", "absen-kuy@mail.com");
   const web = await mkMember("Peserta Web", "absen-web@mail.com");
   const outsider = await mkMember("Bukan Peserta", "absen-lain@mail.com");
-  for (const s of [open, later, past]) {
+  for (const s of [open, later, past, grace]) {
     await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, member_id, amount) values ($1, 'Peserta Kuy', 'U1', $2, 150000)`, [s, kuy]);
   }
   await db.query(`insert into bookings (session_id, member_id) values ($1, $2)`, [open, web]);
@@ -418,6 +478,7 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.query(`update sessions set live_started_at = now() where id = $1`, [later]);
   console.assert(!(await fails(`select member_self_check_in($1)`, [later])), "check-in sesi yang sudah di-live-kan lebih awal ditolak!");
   console.assert(await fails(`select member_self_check_in($1)`, [past]), "check-in sesi yang sudah lewat diterima!");
+  console.assert(!(await fails(`select member_self_check_in($1)`, [grace])), "check-in dalam jeda 30 menit setelah selesai ditolak!");
 
   await as(null);
   const kuyBefore = await balance(kuy);
@@ -436,7 +497,7 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const webRow = await one(`select source, checked_in_at, checked_in_by from session_participants where session_id = $1 and member_id = $2`, [open, web]);
   console.assert(webRow?.source === "website" && webRow.checked_in_at && webRow.checked_in_by === web && (await balance(web)) - webBefore === 50, `check-in mandiri booking website ${JSON.stringify(webRow)}`);
   console.assert(!(await one(`select has_function_privilege('anon', 'member_self_check_in(uuid)', 'execute') ok`)).ok, "anon punya akses member_self_check_in");
-  console.log("✓ check-in mandiri: peserta sendiri, jendela 30 menit sebelum s.d. selesai, +50 pts sekali");
+  console.log("✓ check-in mandiri: peserta sendiri, jendela 30 menit sebelum s.d. 30 menit setelah selesai, +50 pts sekali");
 }
 
 // Ghost member: peserta belum daftar dikumpulkan per Kuy ID; saat daftar → riwayat & poin pindah ke akunnya.

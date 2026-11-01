@@ -1,5 +1,6 @@
 import "server-only";
 import { cityOf, type City } from "@/lib/format";
+import { openSessionsEndAfter, sessionClosesAt } from "@/lib/session-close";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getMemberSession } from "./user";
 
@@ -7,7 +8,7 @@ const CHECK_IN_LEAD_MS = 30 * 60_000;
 
 /**
  * Check-in dibuka 30 menit sebelum jadwal — atau sejak admin me-live-kan sesi lebih awal — s.d.
- * jadwal selesai. Sama dengan RPC member_self_check_in; dipakai detail sesi & /akun/absensi.
+ * sesi ditutup (jam selesai + 30 menit). Sama dengan RPC member_self_check_in; dipakai detail sesi & /akun/absensi.
  */
 export const checkInOpensAt = (startsAt: string, liveStartedAt: string | null) =>
   new Date(Math.min(new Date(startsAt).getTime() - CHECK_IN_LEAD_MS, liveStartedAt ? new Date(liveStartedAt).getTime() : Infinity)).toISOString();
@@ -23,6 +24,8 @@ export type CheckInItem = {
   startsAt: string;
   endsAt: string;
   opensAt: string;
+  /** Check-in ditutup: jam selesai + jeda 30 menit (lib/session-close). */
+  closesAt: string;
   checkedIn: boolean;
   /** null = belum check-in / waktunya tidak tercatat. */
   checkedInAt: string | null;
@@ -50,7 +53,8 @@ export async function getMyCheckIns(): Promise<{ items: CheckInItem[]; now: numb
       "id",
       booked.map((b) => b.session_id as string),
     )
-    .gt("ends_at", new Date(now).toISOString())
+    // Masih tampil selama jeda tutup (jam selesai + 30 menit) — check-in telat tetap bisa.
+    .gt("ends_at", openSessionsEndAfter(now))
     .lt("starts_at", new Date(now + LOOKAHEAD_MS).toISOString())
     .order("starts_at");
 
@@ -68,6 +72,7 @@ export async function getMyCheckIns(): Promise<{ items: CheckInItem[]; now: numb
         startsAt: s.starts_at,
         endsAt: s.ends_at,
         opensAt: checkInOpensAt(s.starts_at, s.live_started_at),
+        closesAt: new Date(sessionClosesAt(s.ends_at)).toISOString(),
         checkedIn: b?.status === "attended",
         checkedInAt: b?.status === "attended" ? ((b.checked_in_at as string | null) ?? null) : null,
       },

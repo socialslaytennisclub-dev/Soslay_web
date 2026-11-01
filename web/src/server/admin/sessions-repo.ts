@@ -1,5 +1,6 @@
 import "server-only";
 import { generateLineup, usesLineup } from "@/lib/americano";
+import { sessionClosesAt } from "@/lib/session-close";
 import { venueList } from "@/content/venues";
 import { venueChoices } from "./catalog-repo";
 import { getDataset, type DataSession, type Dataset } from "./dataset";
@@ -30,7 +31,15 @@ function fill(d: Dataset, sessionId: string) {
   return { booked, waitlisted };
 }
 
+/**
+ * Selesai = diakhiri lewat "Akhiri Activity" (status completed) ATAU sudah ditutup otomatis (jam
+ * selesai + jeda 30 menit, lib/session-close) — aturan yang sama dengan halaman sesi member
+ * (phaseOf). Tanpa ini sesi yang tidak diakhiri host hilang dari semua tab.
+ */
+const isFinished = (s: DataSession, now: Date) => s.status === "completed" || (s.status === "published" && sessionClosesAt(s.endsAt) < now.getTime());
+
 function displayStatus(s: DataSession, booked: number, now: Date): SessionDisplayStatus {
+  if (isFinished(s, now)) return "completed";
   if (s.status !== "published") return s.status;
   if (s.publishAt && s.publishAt > now) return "scheduled";
   if (booked >= s.capacity) return "full";
@@ -64,11 +73,12 @@ function toRow(d: Dataset, s: DataSession): SessionRow {
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
 function inTab(s: DataSession, tab: SessionsQuery["tab"], now: Date) {
-  const future = s.startsAt >= now;
-  if (tab === "completed") return s.status === "completed";
+  if (tab === "completed") return isFinished(s, now);
   if (tab === "draft") return s.status === "draft";
   if (tab === "archived") return s.status === "cancelled";
-  return future && s.status !== "cancelled";
+  // Mendatang termasuk sesi yang sedang berjalan (sudah mulai, belum ditutup). Draft yang jadwalnya
+  // lewat tetap hanya di tab Draft.
+  return s.status !== "cancelled" && !isFinished(s, now) && sessionClosesAt(s.endsAt) >= now.getTime();
 }
 
 /** Mode demo tidak menyimpan waktu dibuat → anggap dibuat 3 minggu sebelum sesi. */
@@ -107,7 +117,7 @@ export async function listSessions(query: SessionsQuery): Promise<SessionsResult
     items,
     counts: {
       upcoming: sessions.filter((s) => inTab(s, "upcoming", now)).length,
-      completed: sessions.filter((s) => s.status === "completed").length,
+      completed: sessions.filter((s) => inTab(s, "completed", now)).length,
       draft: sessions.filter((s) => s.status === "draft").length,
       archived: sessions.filter((s) => s.status === "cancelled").length,
     },

@@ -4,6 +4,7 @@ import { cache } from "react";
 import { products as catalog } from "@/content/products";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { closeExpiredSessions } from "@/server/close-sessions";
 import * as demo from "./demo-data";
 import { getAdminSession } from "./session";
 import type { BookingStatus, MemberStatus, OrderStatus, PaymentStatus, TennisLevel, Tier } from "./types";
@@ -172,6 +173,8 @@ type OrderRowDb = {
 async function loadLive(): Promise<Dataset> {
   const client = await createSupabaseServerClient();
   const now = new Date();
+  // Sesi yang lewat jeda tapi belum tertutup (cron belum jalan) → tutup dulu supaya status & bonus sudah benar.
+  await closeExpiredSessions(client);
 
   const [profiles, statsRows, sessionRows, bookingRows, orderRows] = await Promise.all([
     fetchAll<ProfileRow>(client, "profiles", "*", "joined_at"),

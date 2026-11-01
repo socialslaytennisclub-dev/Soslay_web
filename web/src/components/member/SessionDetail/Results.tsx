@@ -12,7 +12,8 @@ import styles from "./SessionDetail.module.css";
 const PHOTO_SLA_MS = 24 * 3_600_000;
 const TOP = 10;
 
-const endedAt = (d: MemberSessionDetail) => d.ended?.at ?? d.endsAt;
+/** Waktu sesi selesai: diakhiri host, atau ditutup otomatis (jam selesai + jeda) — bukan jam jadwal. */
+const endedAt = (d: MemberSessionDetail) => d.ended?.at ?? d.closesAt;
 /** Batas unggah foto sesi (SLA 1×24 jam setelah selesai). */
 const photoDue = (d: MemberSessionDetail) => new Date(new Date(endedAt(d)).getTime() + PHOTO_SLA_MS).toISOString();
 
@@ -172,7 +173,7 @@ export function HostResults({ detail: d, endedNotice }: { detail: MemberSessionD
   const plan = planOf(d);
   const played = plan.rounds.filter((r) => !isUnstarted(plan.statusOf(r)) && d.matches.some((m) => m.round === r && m.scoreA !== null));
   const unplayed = plan.rounds.filter((r) => !played.includes(r));
-  const by = d.ended ? (d.ended.byMe ? "Diakhiri oleh kamu (host)" : "Diakhiri host / admin") : "Selesai sesuai jadwal";
+  const by = !d.ended || d.ended.auto ? "Ditutup otomatis" : d.ended.byMe ? "Diakhiri oleh kamu (host)" : "Diakhiri host / admin";
 
   return (
     <>
@@ -197,7 +198,7 @@ export function HostResults({ detail: d, endedNotice }: { detail: MemberSessionD
           <strong>{formatAngka(total)} pts</strong>
           <small>
             +{d.format.attendancePoints} × {earning} member hadir{present > earning ? ` (${present - earning} peserta tanpa akun tidak dapat poin)` : ""}
-            {d.ended ? ` · bonus juara ${bonus ? `+${PODIUM_BONUS.join(" / +")}` : "–"}` : " · tanpa bonus juara (sesi tidak diakhiri lewat Akhiri Activity)"}
+            {d.ended ? ` · bonus juara ${bonus ? `+${PODIUM_BONUS.join(" / +")}` : "–"}` : " · bonus juara dibagikan saat sesi ditutup"}
           </small>
         </div>
       </section>

@@ -33,7 +33,7 @@ export function CheckInList({ items, now }: { items: CheckInItem[]; now: number 
             </span>
           </div>
           <div className={styles.action}>
-            <SelfCheckIn sessionId={item.id} city={item.city} opensAt={item.opensAt} endsAt={item.endsAt} checkedIn={item.checkedIn} checkedInAt={item.checkedInAt} fetchedAt={now} variant="card" />
+            <SelfCheckIn sessionId={item.id} city={item.city} opensAt={item.opensAt} closesAt={item.closesAt} checkedIn={item.checkedIn} checkedInAt={item.checkedInAt} fetchedAt={now} variant="card" />
             <Link href={`/akun/aktivitas/${item.slug}`} className={styles.link}>
               Detail sesi →
             </Link>

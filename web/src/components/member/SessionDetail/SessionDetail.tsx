@@ -215,7 +215,7 @@ function Ticket({ detail: d, ticket }: { detail: MemberSessionDetail; ticket: Ti
         </div>
       </dl>
       {d.phase !== "done" && (
-        <SelfCheckIn sessionId={d.id} city={d.city} opensAt={d.checkInAt} endsAt={d.endsAt} checkedIn={ticket.status === "attended"} checkedInAt={ticket.checkedInAt} fetchedAt={d.fetchedAt} variant="ticket" />
+        <SelfCheckIn sessionId={d.id} city={d.city} opensAt={d.checkInAt} closesAt={d.closesAt} checkedIn={ticket.status === "attended"} checkedInAt={ticket.checkedInAt} fetchedAt={d.fetchedAt} variant="ticket" />
       )}
       {d.phase !== "done" && (
         <QrCheckIn
