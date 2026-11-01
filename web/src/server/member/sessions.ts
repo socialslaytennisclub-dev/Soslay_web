@@ -57,6 +57,7 @@ export const getMySessions = cache(async (): Promise<MemberSession[] | null> => 
 
   return bookings.flatMap((b): MemberSession[] => {
     const s = byId.get(b.session_id);
+    if (s?.venues === null) console.warn(`[my-activities] sesi ${s.slug} disembunyikan: venue tidak terbaca`);
     if (!s || !s.venues || s.status === "cancelled" || s.status === "draft") return [];
     const city = cityOf(s.venues.city);
     const start = localParts(s.starts_at, city);

@@ -13,7 +13,7 @@ import { createSupabasePublicClient } from "@/lib/supabase/public";
 
 const KUY_DEFAULT = "https://kuy.id/soslay";
 /** Sesi lama tidak perlu dimuat: website hanya menampilkan beberapa sesi terakhir. */
-const PAST_WINDOW_DAYS = 120;
+const PAST_WINDOW_DAYS = 120; // = jendela venue tersembunyi di migrasi 20261101020000_hidden_venue_scope.sql
 
 type Row = {
   id: string;
@@ -31,7 +31,7 @@ type Row = {
   price: number;
   capacity: number;
   recommended_levels: TennisLevel[];
-  venues: { name: string; city: string; address: string | null; cover_path: string | null } | null;
+  venues: { name: string; slug: string; is_active: boolean; city: string; address: string | null; cover_path: string | null } | null;
 };
 
 /** Tanggal & jam lokal venue ("2026-10-18", "07:00"). */
@@ -64,7 +64,7 @@ export const getWebsiteSessions = cache(async (): Promise<Session[]> => {
   const [{ data, error }, { data: slots }] = await Promise.all([
     client
       .from("sessions")
-      .select("id, slug, title, type_slug, created_at, starts_at, ends_at, cover_path, kuy_booking_url, is_featured, show_on_homepage, visible_until, price, capacity, recommended_levels, venues(name, city, address, cover_path)")
+      .select("id, slug, title, type_slug, created_at, starts_at, ends_at, cover_path, kuy_booking_url, is_featured, show_on_homepage, visible_until, price, capacity, recommended_levels, venues(name, slug, is_active, city, address, cover_path)")
       .in("status", ["published", "completed"])
       .gte("starts_at", since)
       .order("starts_at")
@@ -81,7 +81,12 @@ export const getWebsiteSessions = cache(async (): Promise<Session[]> => {
 
   const now = Date.now();
   return (data as unknown as Row[]).flatMap((s): Session[] => {
-    if (!s.venues || !isActivityType(s.type_slug)) return [];
+    if (!s.venues) {
+      // Join venue kosong = venue tidak terbaca publik (RLS) → sesi hilang dari website; catat supaya kelihatan.
+      console.warn(`[sessions] sesi ${s.slug} disembunyikan: venue tidak terbaca`);
+      return [];
+    }
+    if (!isActivityType(s.type_slug)) return [];
     if (s.visible_until && new Date(s.visible_until).getTime() < now && new Date(s.starts_at).getTime() > now) return [];
     const city = cityOf(s.venues.city);
     const start = localParts(s.starts_at, city);
@@ -92,7 +97,7 @@ export const getWebsiteSessions = cache(async (): Promise<Session[]> => {
         title: s.title,
         createdAt: s.created_at,
         type: s.type_slug,
-        venue: { name: s.venues.name, city, address: s.venues.address ?? undefined },
+        venue: { name: s.venues.name, city, address: s.venues.address ?? undefined, slug: s.venues.is_active ? s.venues.slug : undefined },
         date: start.date,
         start: start.time,
         end: end.time,

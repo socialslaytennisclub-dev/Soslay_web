@@ -40,7 +40,7 @@ export function SessionGrid({ id, title, description, sessions, variant = "upcom
               badge={activityTypeLabel(session.type)}
               image={session.image}
               imagePosition={session.imagePosition}
-              href={past ? venueHrefByName(session.venue.name) : session.bookingUrl}
+              href={past ? (session.venue.slug ? `/venue/${session.venue.slug}` : venueHrefByName(session.venue.name)) : session.bookingUrl}
               ctaLabel={past ? null : undefined}
               cursorLabel={past ? "Lihat" : undefined}
             />

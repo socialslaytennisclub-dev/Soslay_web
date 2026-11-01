@@ -438,24 +438,40 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.log(`✓ jeda tutup ${sqlMinutes} menit: host bisa skor dalam jeda, terkunci setelahnya; tutup otomatis → completed + bonus juara sekali`);
 }
 
-// Venue tersembunyi tetap terbaca publik bila dipakai sesi yang terlihat (sesi tidak hilang dari website).
+// Venue tersembunyi tetap terbaca bila dipakai sesi yang tampil di website (jendela 120 hari) atau
+// sesi milik pemanggil (host / booking → My Activity); selain itu tetap tertutup.
 {
-  const { id: hidden } = await one(`insert into venues (slug, name, city, is_active) values ('venue-hidden', 'Venue Tersembunyi', 'Jakarta', false) returning id`);
-  const { id: unused } = await one(`insert into venues (slug, name, city, is_active) values ('venue-unused', 'Venue Kosong', 'Jakarta', false) returning id`);
-  await db.query(
-    `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status)
-     values ('di-venue-hidden', 'Mabar Venue Baru', 'weekly-mabar', $1, now() + interval '1 day', now() + interval '1 day 2 hours', 8, 'published')`,
-    [hidden],
-  );
-  await db.exec(`grant usage on schema public to anon; grant select on sessions, venues to anon;`);
+  const venue = async (slug) => (await one(`insert into venues (slug, name, city, is_active) values ($1, $1, 'Jakarta', false) returning id`, [slug])).id;
+  const [pub, old, link, unused] = [await venue("hv-public"), await venue("hv-old"), await venue("hv-link"), await venue("hv-unused")];
+  const session = async (slug, venueId, startOffset, status, visibility) =>
+    (
+      await one(
+        `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, visibility)
+         values ($1, $1, 'weekly-mabar', $2, now() + $3::interval, now() + $3::interval + interval '2 hours', 8, $4, $5) returning id`,
+        [slug, venueId, startOffset, status, visibility],
+      )
+    ).id;
+  await session("hv-s-public", pub, "1 day", "published", "public");
+  await session("hv-s-old", old, "-200 days", "completed", "public");
+  const linkSession = await session("hv-s-link", link, "1 day", "published", "link");
+  const { id: host } = await one(`insert into auth.users default values returning id`);
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Host Venue Baru', 'hv-host@example.com')`, [host]);
+  await db.query(`insert into session_hosts (session_id, member_id, role) values ($1, $2, 'host')`, [linkSession, host]);
+
+  await db.exec(`grant usage on schema public to anon, authenticated; grant select on sessions, venues to anon, authenticated;`);
+  const readable = async (role, uid, venueIds) => {
+    await as(uid);
+    await db.exec(`set role ${role}`);
+    const { n } = await one(`select count(*)::int n from venues where id = any($1)`, [venueIds]);
+    await db.exec(`reset role`);
+    return n;
+  };
+  console.assert((await readable("anon", null, [pub])) === 1, "sesi di venue tersembunyi hilang dari website!");
+  console.assert((await readable("anon", null, [old, link, unused])) === 0, "venue tersembunyi terbaca publik lewat sesi lama / Link / tanpa sesi!");
+  console.assert((await readable("authenticated", host, [link])) === 1, "host tidak bisa membaca venue sesi Link-nya (My Activity)!");
+  await db.exec(`revoke select on sessions, venues from anon; revoke usage on schema public from anon;`);
   await as(null);
-  await db.exec(`set role anon`);
-  const { n } = await one(`select count(*)::int n from sessions s join venues v on v.id = s.venue_id where s.slug = 'di-venue-hidden'`);
-  const { m } = await one(`select count(*)::int m from venues where id = $1`, [unused]);
-  await db.exec(`reset role`);
-  console.assert(n === 1, "sesi di venue tersembunyi hilang dari website!");
-  console.assert(m === 0, "venue tersembunyi tanpa sesi terbaca publik!");
-  console.log("✓ sesi di venue tersembunyi tetap tampil; venue tersembunyi tanpa sesi tetap tertutup");
+  console.log("✓ venue tersembunyi: terbaca lewat sesi website & sesi milik host; sesi lama / Link / tanpa sesi tetap tertutup");
 }
 
 // Check-in mandiri member (/akun/absensi): hanya peserta sendiri, hanya di jendela check-in.

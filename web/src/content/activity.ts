@@ -22,7 +22,8 @@ export type Session = {
   /** Waktu sesi dibuat di admin (ISO) — urutan "terbaru ditambahkan" di grid upcoming. */
   createdAt?: string;
   type: ActivityTypeSlug;
-  venue: { name: string; city: City; address?: string };
+  /** slug hanya untuk venue yang punya halaman detail (tampil di website). */
+  venue: { name: string; city: City; address?: string; slug?: string };
   /** Tanggal & jam lokal venue. */
   date: string; // YYYY-MM-DD
   start: string; // HH:mm
