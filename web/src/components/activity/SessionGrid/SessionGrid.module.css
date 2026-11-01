@@ -18,8 +18,9 @@
 }
 
 /*
- * Tablet & desktop: 2 kolom. Sesi lama (variant past) zigzag — kolom kanan turun supaya sesi terbaru (kiri, urutan pertama) paling atas
- * (Figma 25:493 kebalikannya: kiri mulai y200, kanan y0).
+ * Tablet & desktop: 2 kolom. Sesi lama (variant past) zigzag — kolom kiri turun (Figma 25:493: kiri mulai y200,
+ * kanan y0). Sesi terbaru (urutan pertama) di kanan atas, lalu kiri, kanan, …: ganjil → kolom 2, genap →
+ * kolom 1, dense supaya keduanya satu baris. Urutan DOM (baca/tab) tetap terbaru dulu.
  * transform tidak memengaruhi layout → padding bawah grid menampung pergeseran kartu terakhir.
  */
 @media (min-width: 768px) {
@@ -31,10 +32,16 @@
   }
 
   .zigzag:has(> :nth-child(2)) {
+    grid-auto-flow: row dense;
     padding-bottom: var(--zigzag);
   }
 
+  .zigzag:has(> :nth-child(2)) > :nth-child(odd) {
+    grid-column: 2;
+  }
+
   .zigzag:has(> :nth-child(2)) > :nth-child(even) {
+    grid-column: 1;
     transform: translateY(var(--zigzag));
   }
 }
