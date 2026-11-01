@@ -438,6 +438,26 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.log(`✓ jeda tutup ${sqlMinutes} menit: host bisa skor dalam jeda, terkunci setelahnya; tutup otomatis → completed + bonus juara sekali`);
 }
 
+// Venue tersembunyi tetap terbaca publik bila dipakai sesi yang terlihat (sesi tidak hilang dari website).
+{
+  const { id: hidden } = await one(`insert into venues (slug, name, city, is_active) values ('venue-hidden', 'Venue Tersembunyi', 'Jakarta', false) returning id`);
+  const { id: unused } = await one(`insert into venues (slug, name, city, is_active) values ('venue-unused', 'Venue Kosong', 'Jakarta', false) returning id`);
+  await db.query(
+    `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status)
+     values ('di-venue-hidden', 'Mabar Venue Baru', 'weekly-mabar', $1, now() + interval '1 day', now() + interval '1 day 2 hours', 8, 'published')`,
+    [hidden],
+  );
+  await db.exec(`grant usage on schema public to anon; grant select on sessions, venues to anon;`);
+  await as(null);
+  await db.exec(`set role anon`);
+  const { n } = await one(`select count(*)::int n from sessions s join venues v on v.id = s.venue_id where s.slug = 'di-venue-hidden'`);
+  const { m } = await one(`select count(*)::int m from venues where id = $1`, [unused]);
+  await db.exec(`reset role`);
+  console.assert(n === 1, "sesi di venue tersembunyi hilang dari website!");
+  console.assert(m === 0, "venue tersembunyi tanpa sesi terbaca publik!");
+  console.log("✓ sesi di venue tersembunyi tetap tampil; venue tersembunyi tanpa sesi tetap tertutup");
+}
+
 // Check-in mandiri member (/akun/absensi): hanya peserta sendiri, hanya di jendela check-in.
 {
   const venueId = (await one(`select id from venues limit 1`)).id;
