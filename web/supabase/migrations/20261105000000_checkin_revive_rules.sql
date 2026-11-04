@@ -1,8 +1,9 @@
 -- Aturan lanjutan "check-in menghidupkan booking batal" (20261104000000):
--- 1. Hanya panitia (admin / host) yang bisa menghidupkan booking batal. Member yang membatalkan
---    bookingnya tidak bisa check-in mandiri (bisa jadi sudah di-refund) — minta panitia.
--- 2. Booking yang dihidupkan lalu keluar dari "hadir" ke status apa pun (registered, no_show)
---    kembali ke cancelled, bukan hanya lewat registered.
+-- 1. Hanya panitia (admin / host sesi, termasuk host yang men-check-in dirinya sendiri) yang bisa
+--    menghidupkan booking batal. Member biasa yang membatalkan bookingnya tidak bisa check-in
+--    mandiri (bisa jadi sudah di-refund) — minta panitia.
+-- 2. Booking yang dihidupkan lalu batal hadir (check-in dihapus) atau ditandai no_show kembali ke
+--    cancelled. Perubahan sengaja lain (mis. admin mem-booking-kan ulang → registered) dihormati.
 
 create or replace function bookings_revive_marker() returns trigger
 language plpgsql set search_path = public as $$
@@ -10,7 +11,10 @@ begin
   if old.status = 'cancelled' and new.status = 'attended' then
     new.revived_from_cancelled := true;
   elsif old.status = 'attended' and new.status <> 'attended' and old.revived_from_cancelled then
-    new.status := 'cancelled';
+    -- Batal check-in (checked_in_at dihapus) / no_show → kembali seperti semula; selain itu ikut permintaan.
+    if new.checked_in_at is null or new.status = 'no_show' then
+      new.status := 'cancelled';
+    end if;
     new.revived_from_cancelled := false;
   elsif new.status = 'cancelled' then
     new.revived_from_cancelled := false;
@@ -18,8 +22,8 @@ begin
   return new;
 end $$;
 
--- Sama dengan versi 20261104000000, kecuali: booking cancelled hanya dihidupkan bila yang
--- men-check-in bukan member itu sendiri (check-in mandiri ditolak di member_self_check_in).
+-- Sama dengan versi 20261104000000, kecuali: booking cancelled hanya dihidupkan oleh panitia —
+-- yang men-check-in bukan member itu sendiri, atau pemanggilnya admin / host sesi (can_run_session).
 create or replace function session_participant_sync() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
@@ -35,7 +39,7 @@ begin
         checked_in_at = new.checked_in_at,
         checked_in_by = case when new.checked_in_by is not null and exists (select 1 from staff_members where user_id = new.checked_in_by) then new.checked_in_by end
     where session_id = new.session_id and member_id = new.member_id
-      and (status <> 'cancelled' or (new.checked_in_at is not null and new.checked_in_by is distinct from new.member_id))
+      and (status <> 'cancelled' or (new.checked_in_at is not null and (new.checked_in_by is distinct from new.member_id or can_run_session(new.session_id))))
       and status is distinct from (case when new.checked_in_at is null then 'registered'::booking_status else 'attended'::booking_status end);
   end if;
   return new;
@@ -57,7 +61,7 @@ begin
   if now() < least(v_s.starts_at - interval '30 minutes', coalesce(v_s.live_started_at, 'infinity')) then
     raise exception 'Check-in dibuka 30 menit sebelum sesi';
   end if;
-  if exists (select 1 from bookings where session_id = p_session and member_id = v_uid and status = 'cancelled') then
+  if not can_run_session(p_session) and exists (select 1 from bookings where session_id = p_session and member_id = v_uid and status = 'cancelled') then
     raise exception 'Booking kamu untuk sesi ini sudah dibatalkan — minta panitia untuk check-in';
   end if;
 

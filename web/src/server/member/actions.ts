@@ -188,7 +188,7 @@ export async function selfCheckIn(sessionId: string): Promise<HostScoreResult> {
   // PGRST202 = RPC belum ada di database (migrasi belum dipasang).
   if (error.code === "PGRST202") return { ok: false, error: "Check-in mandiri belum aktif. Minta host meng-check-in kamu." };
   if (/bukan peserta/.test(error.message)) return { ok: false, error: "Kamu belum terdaftar di sesi ini. Minta host meng-check-in kamu." };
-  if (/Masuk dulu|30 menit|sudah selesai|tidak ditemukan/.test(error.message)) return { ok: false, error: `${error.message}.` };
+  if (/Masuk dulu|30 menit|sudah selesai|tidak ditemukan|sudah dibatalkan/.test(error.message)) return { ok: false, error: `${error.message}.` };
   return { ok: false, error: "Check-in gagal. Coba lagi." };
 }
 
