@@ -474,8 +474,8 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.log("✓ venue tersembunyi: terbaca lewat sesi website & sesi milik host; sesi lama / Link / tanpa sesi tetap tertutup");
 }
 
-// Peserta susulan setelah sesi selesai (admin, play.ts lateCheckIn): baris peserta langsung
-// ber-checked_in_at → booking hadir + poin kehadiran; booking yang dulu dibatalkan dihidupkan lagi.
+// Check-in peserta (admin, host, peserta susulan) → booking hadir + poin, juga booking yang dulu
+// dibatalkan; batal check-in → booking kembali ke status semula (cancelled / registered), poin ditarik.
 {
   const newMember = async (name) => {
     const { id } = await one(`insert into auth.users default values returning id`);
@@ -492,26 +492,22 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const [walkIn, cancelled] = [await newMember("late-walkin"), await newMember("late-cancelled")];
   await db.query(`insert into bookings (session_id, member_id, status, payment_status, source, amount) values ($1, $2, 'cancelled', 'paid', 'admin', 0)`, [s, cancelled]);
   const [before1, before2] = [await balance(walkIn), await balance(cancelled)];
+  // Peserta susulan (play.ts lateCheckIn): baris langsung ber-checked_in_at.
   for (const [m, reg] of [[walkIn, "ADM-LATE1"], [cancelled, "ADM-LATE2"]])
     await db.query(`insert into session_participants (session_id, kuy_reg_no, member_id, full_name, source, checked_in_at) values ($1, $2, $3, 'x', 'admin', now())`, [s, reg, m]);
   const status = async (m) => (await one(`select status from bookings where session_id = $1 and member_id = $2`, [s, m])).status;
   console.assert((await status(walkIn)) === "attended" && (await balance(walkIn)) - before1 === 50, "peserta susulan tidak tercatat hadir / tanpa poin!");
-  console.assert((await status(cancelled)) === "cancelled", "trigger mulai menimpa booking batal — cek reviveCancelledBookings");
-  // Sama dengan reviveCancelledBookings (play.ts), dijalankan sebagai admin lewat RLS — bukan superuser.
-  const { id: staff } = await one(`insert into auth.users default values returning id`);
-  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Susulan', 'late@soslay.test', 'active' from roles where name = 'Super Admin'`, [staff]);
-  await db.exec(`grant usage on schema public to authenticated; grant select, update on bookings to authenticated;`);
-  await as(staff);
-  await db.exec(`set role authenticated`);
-  const revived = await db.query(
-    `update bookings set status = 'attended', checked_in_at = now(), checked_in_by = $3 where session_id = $1 and status = 'cancelled' and member_id = any($2) returning id`,
-    [s, [cancelled], staff],
-  );
-  await db.exec(`reset role`);
-  await db.exec(`revoke select, update on bookings from authenticated;`);
-  console.assert(revived.rows.length === 1, "admin tidak bisa menghidupkan booking batal (RLS bookings)!");
-  console.assert((await balance(cancelled)) - before2 === 50, "booking batal yang dihidupkan tidak dapat poin!");
-  console.log("✓ peserta susulan: langsung hadir +50 pts; booking batal dihidupkan → hadir +50 pts");
+  console.assert((await status(cancelled)) === "attended" && (await balance(cancelled)) - before2 === 50, "booking batal tidak dihidupkan saat check-in!");
+  // Batal check-in (set_participant_check_in — jalur admin & host): kembali ke status semula, poin ditarik.
+  const uncheck = async (reg) => db.query(`update session_participants set checked_in_at = null, checked_in_by = null where session_id = $1 and kuy_reg_no = $2`, [s, reg]);
+  await uncheck("ADM-LATE1");
+  await uncheck("ADM-LATE2");
+  console.assert((await status(walkIn)) === "registered" && (await balance(walkIn)) === before1, "batal check-in tidak mengembalikan registered / poin!");
+  console.assert((await status(cancelled)) === "cancelled" && (await balance(cancelled)) === before2, "batal check-in booking yang dihidupkan tidak kembali ke cancelled!");
+  // Check-in lagi → hidup lagi (+50 sekali).
+  await db.query(`update session_participants set checked_in_at = now() where session_id = $1 and kuy_reg_no = 'ADM-LATE2'`, [s]);
+  console.assert((await status(cancelled)) === "attended" && (await balance(cancelled)) - before2 === 50, "check-in ulang booking batal gagal!");
+  console.log("✓ check-in: booking batal ikut dihidupkan (+50), batal check-in → kembali cancelled / registered, poin ditarik");
 }
 
 // Check-in mandiri member (/akun/absensi): hanya peserta sendiri, hanya di jendela check-in.

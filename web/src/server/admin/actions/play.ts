@@ -8,7 +8,6 @@ import { localPhone, phoneFormatError } from "@/lib/wa-invite";
 import { getDataset } from "../dataset";
 import { ownContacts, parseKuyExport, type KuyRow } from "../kuy-import";
 import { findMemberById, findMemberByIdentifier, findMemberByPhone, type MemberIdentity } from "../identity";
-import { lateCheckIn, REVIVE_FAILED, reviveCancelledBookings } from "../late-check-in";
 import { getAdminSession } from "../session";
 import type { KuyImportPreview, KuyImportPreviewRow, SessionMatch } from "../types";
 import { audit, refreshPaths, requireEditor, type ActionResult } from "./common";
@@ -121,15 +120,17 @@ export async function previewKuyImport(sessionId: string, formData: FormData): P
   if (!upload.parsed.rows.length) return { ok: false, error: "Tidak ada peserta di file ini." };
 
   const members = await matchMembers(upload.parsed.rows);
-  const rows = skipRepeatMembers(upload.parsed.rows, members);
   let existing: Participants = { regNos: new Set(), memberRegNo: new Map() };
   let ghosts = new Map<string, GhostRow>();
   let ghostCounts = new Map<string, number>();
-  if (session.mode === "live") {
-    const supabase = await createSupabaseServerClient();
+  const supabase = session.mode === "live" ? await createSupabaseServerClient() : null;
+  if (supabase) {
     const read = await existingParticipants(supabase, sessionId);
     if (!read) return { ok: false, error: "Gagal membaca peserta yang sudah tercatat — coba lagi." };
     existing = read;
+  }
+  const rows = skipRepeatMembers(upload.parsed.rows, members, existing);
+  if (supabase) {
     ghosts = await findGhosts(supabase, rows.filter((r) => !members.get(r.regNo)));
     ghostCounts = await ghostActivityCounts(supabase, [...new Set([...ghosts.values()].map((g) => g.id))]);
   }
@@ -180,7 +181,7 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
   const selected = parseSelected(formData.get("selected"));
   if (selected === "invalid") return { ok: false, error: "Pilihan peserta tidak terbaca — buka preview lagi." };
   const members = await matchMembers(upload.parsed.rows);
-  const picked = skipRepeatMembers(upload.parsed.rows, members).filter((r) => !r.skipReason && (!selected || selected.has(r.regNo)));
+  const picked = skipRepeatMembers(upload.parsed.rows, members, existing).filter((r) => !r.skipReason && (!selected || selected.has(r.regNo)));
   // Member yang sudah ada di sesi lewat nomor lain (mis. ditambah manual) tidak dicatat dua kali;
   // sesi selesai → baris lama juga tidak ditimpa.
   const rows = picked.filter((r) => !alreadyInAs(existing, members.get(r.regNo)?.id, r.regNo) && !(state.finished && existing.regNos.has(r.regNo)));
@@ -253,7 +254,6 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
     { onConflict: "session_id,kuy_reg_no" },
   );
   if (error) return { ok: false, error: `Gagal mengimpor: ${error.message}` };
-  const reviveFailed = checkIn !== null && !(await reviveCancelledBookings(supabase, sessionId, rows.flatMap((r) => members.get(r.regNo)?.id ?? []), checkIn));
 
   // ID Soslay ↔ Kuy ID: member yang cocok lewat email/telepon tapi belum punya Kuy ID di profilnya
   // → username Kuyy miliknya sendiri (bukan pembeli tiket) disambungkan ke profil Soslay-nya.
@@ -278,7 +278,6 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
   if (guests.length) parts.push(`${guests.length} belum member dicatat sebagai ghost member — undang daftar lewat tombol WA`);
   if (kept) parts.push(`${kept} sudah tercatat sebelumnya, tidak diubah`);
   if (state.finished) parts.push(matched ? "sesi sudah selesai, otomatis tercatat hadir (+poin kehadiran member)" : "sesi sudah selesai, otomatis tercatat hadir");
-  if (reviveFailed) parts.push(REVIVE_FAILED);
   return { ok: true, message: `${parts.join(" · ")}.` };
 }
 
@@ -509,22 +508,28 @@ const alreadyInAs = (existing: Participants, memberId: string | undefined, regNo
 
 /**
  * Satu member dua kali di file yang sama (dua nomor registrasi, cocok lewat kontak/Kuy ID miliknya
- * sendiri — tiket tamu berkontak pembeli tidak ikut cocok, lihat ownContacts) → baris berikutnya
- * dilewati dengan alasan, sama di preview & impor.
+ * sendiri — tiket tamu berkontak pembeli tidak ikut cocok, lihat ownContacts) → satu baris saja
+ * dipakai: baris yang nomornya sudah tercatat di sesi (supaya impor ulang tetap memperbaruinya),
+ * selain itu baris pertama. Sisanya dilewati dengan alasan, sama di preview & impor.
  */
-function skipRepeatMembers(rows: KuyRow[], members: Map<string, KuyImportPreviewRow["member"]>): KuyRow[] {
-  const first = new Map<string, string>();
+function skipRepeatMembers(rows: KuyRow[], members: Map<string, KuyImportPreviewRow["member"]>, existing: Participants): KuyRow[] {
+  const keep = new Map<string, KuyRow>();
+  for (const r of rows) {
+    const id = members.get(r.regNo)?.id;
+    if (r.skipReason || !id) continue;
+    if (!keep.has(id) || existing.memberRegNo.get(id) === r.regNo) keep.set(id, r);
+  }
   return rows.map((r) => {
-    const member = members.get(r.regNo);
-    if (r.skipReason || !member) return r;
-    const firstName = first.get(member.id);
-    if (firstName === undefined) {
-      first.set(member.id, r.name);
-      return r;
-    }
-    return { ...r, skipReason: `Member yang sama sudah ada di baris lain file ini (${firstName})` };
+    const kept = !r.skipReason && keep.get(members.get(r.regNo)?.id ?? "");
+    return kept && kept !== r ? { ...r, skipReason: `Member yang sama sudah ada di baris lain file ini (${kept.name})` } : r;
   });
 }
+
+/**
+ * Kolom check-in untuk peserta yang ditambahkan setelah sesi selesai. Trigger database meneruskannya
+ * ke booking (hadir + poin), termasuk booking yang dulu dibatalkan (migrasi checkin_revives_cancelled).
+ */
+const lateCheckIn = (by: string) => ({ checked_in_at: new Date().toISOString(), checked_in_by: by });
 
 /** `selected` dari form preview: daftar nomor registrasi (JSON), tidak dikirim → null (semua baris). */
 function parseSelected(raw: FormDataEntryValue | null): Set<string> | null | "invalid" {
@@ -583,10 +588,9 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
       ...checkIn,
     });
     if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
-    const revived = !checkIn || (await reviveCancelledBookings(supabase, sessionId, [member.id], checkIn));
     await audit(auth.userId, `menambah peserta ${member.fullName} (manual)`, "session", sessionId);
     refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
-    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta${lateNote}${revived ? "" : ` · ${REVIVE_FAILED}`}.` };
+    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta${lateNote}.` };
   };
 
   if ("memberId" in input) return byId ? addMember(byId) : { ok: false, error: "Member tidak ditemukan." };
