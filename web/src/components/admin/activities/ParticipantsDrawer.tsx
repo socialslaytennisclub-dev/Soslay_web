@@ -30,7 +30,7 @@ const READ_COLUMNS = ["Nama", "No. WhatsApp", "Email", "Username Kuy", "Level te
 const kb = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
 const phoneLabel = (phone: string) => (phone ? `0${phone.replace(/^0/, "")}` : "");
 
-export function ParticipantsDrawer({ sessionId, sessionTitle, sessionWhen, addLock }: { sessionId: string; sessionTitle: string; sessionWhen: string; addLock?: string | null }) {
+export function ParticipantsDrawer({ sessionId, sessionTitle, sessionWhen }: { sessionId: string; sessionTitle: string; sessionWhen: string }) {
   const dialog = useDialog();
   const router = useRouter();
   const [tab, setTab] = useState<Tab>("manual");
@@ -172,7 +172,7 @@ export function ParticipantsDrawer({ sessionId, sessionTitle, sessionWhen, addLo
 
   return (
     <>
-      <AdminButton size="sm" icon="user-plus" onClick={dialog.open} disabled={Boolean(addLock)} title={addLock ?? "Tambah peserta manual atau impor dari Kuy"}>
+      <AdminButton size="sm" icon="user-plus" onClick={dialog.open} title="Tambah peserta manual atau impor dari Kuy">
         Tambah peserta
       </AdminButton>
       <Drawer
