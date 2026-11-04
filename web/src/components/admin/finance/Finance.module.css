@@ -58,6 +58,14 @@
   border-color: transparent;
 }
 
+/* Baris tab bisa digulir ke samping (overflow-x) → di dalam kolom flex (isi modal) tingginya boleh
+   dikecilkan browser sampai terpotong. Kunci tinggi alaminya. */
+.tabs,
+.segment,
+.modalBody > * {
+  flex-shrink: 0;
+}
+
 .tab,
 .segBtn {
   flex: none;
