@@ -52,6 +52,12 @@ try {
   }
   // Checksum pertama diambil dari isi file sekarang — versi lama yang dulu dijalankan tidak diketahui.
   if (backfilled) console.log(`ℹ ${backfilled} migrasi lama dicatat checksum-nya dari isi file sekarang (perubahan sebelum hari ini tidak terdeteksi).`);
+  // Migrasi terpasang yang isinya diubah: perubahannya tidak pernah dijalankan → berhenti sebelum
+  // menjalankan apa pun (migrasi baru bisa bergantung pada perubahan itu).
+  if (changed.length) {
+    for (const name of changed) console.error(`✗ ${name} sudah terpasang tapi isinya berubah — perubahan itu TIDAK dijalankan; kembalikan isinya dan buat migrasi baru.`);
+    throw new Error("migrasi dihentikan, tidak ada yang dijalankan");
+  }
   const pending = files.filter((f) => !applied.has(f));
   if (!pending.length) console.log("✓ Database sudah terbaru.");
 
@@ -62,9 +68,6 @@ try {
     });
     console.log(`✓ migration ${file}`);
   }
-  // Migrasi terpasang yang isinya diubah: perubahannya tidak pernah dijalankan → gagalkan supaya terlihat.
-  for (const name of changed) console.error(`✗ ${name} sudah terpasang tapi isinya berubah — perubahan itu TIDAK dijalankan; buat migrasi baru.`);
-  if (changed.length) process.exitCode = 1;
 } catch (error) {
   console.error("✗ Gagal:", error.message);
   process.exitCode = 1;

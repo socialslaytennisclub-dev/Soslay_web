@@ -198,23 +198,30 @@ export async function bookMemberIntoSession(memberId: string, sessionId: string)
   const supabase = await createSupabaseServerClient();
   const [{ data: session }, { count }, { data: current }] = await Promise.all([
     supabase.from("sessions").select("title, capacity, price, waitlist_enabled, status, starts_at").eq("id", sessionId).maybeSingle(),
-    supabase.from("bookings").select("id", { count: "exact", head: true }).eq("session_id", sessionId).in("status", ["registered", "attended", "no_show"]),
+    // Kursi terisi oleh member LAIN — booking member ini sendiri tidak dihitung (re-book tidak menurunkannya ke waitlist).
+    supabase.from("bookings").select("id", { count: "exact", head: true }).eq("session_id", sessionId).neq("member_id", memberId).in("status", ["registered", "attended", "no_show"]),
     supabase.from("bookings").select("status").eq("session_id", sessionId).eq("member_id", memberId).maybeSingle(),
   ]);
   if (!session || session.status !== "published") return fail("Sesi tidak tersedia.");
   // Booking yang sudah hadir jangan diturunkan ke registered (check-in & poin kehadirannya hilang
   // sementara daftar peserta tetap Hadir) — juga dijaga di query update di bawah (check-in bersamaan).
   if (current?.status === "attended") return fail(ATTENDED);
+  if (current?.status === "registered") return fail("Member ini sudah terdaftar di sesi tersebut.");
   const full = (count ?? 0) >= (session.capacity as number);
   if (full && !session.waitlist_enabled) return fail("Sesi sudah penuh dan waitlist tidak aktif.");
 
-  const row = { status: full ? "waitlisted" : "registered", payment_status: "pending", source: "admin", amount: session.price } as const;
+  const status = full ? "waitlisted" : "registered";
   if (current) {
-    const { data: updated, error } = await supabase.from("bookings").update(row).eq("session_id", sessionId).eq("member_id", memberId).neq("status", "attended").select("id");
+    // Booking lama (cancelled / waitlisted / no_show) dihidupkan: hanya statusnya — pembayaran & nominal
+    // yang sudah tercatat (mis. sudah lunas) tidak ditimpa.
+    const { data: updated, error } = await supabase.from("bookings").update({ status }).eq("session_id", sessionId).eq("member_id", memberId).neq("status", "attended").select("id");
     if (error) return fail(`Gagal booking: ${error.message}`);
-    if (!updated?.length) return fail(ATTENDED);
+    if (!updated?.length) {
+      const { data: now } = await supabase.from("bookings").select("status").eq("session_id", sessionId).eq("member_id", memberId).maybeSingle();
+      return fail(now?.status === "attended" ? ATTENDED : "Booking tidak bisa diubah — cek izin akses Activities atau muat ulang halaman.");
+    }
   } else {
-    const { error } = await supabase.from("bookings").insert({ session_id: sessionId, member_id: memberId, ...row });
+    const { error } = await supabase.from("bookings").insert({ session_id: sessionId, member_id: memberId, status, payment_status: "pending", source: "admin", amount: session.price });
     if (error) return fail(error.code === "23505" ? "Member baru saja terdaftar di sesi ini — muat ulang halaman." : `Gagal booking: ${error.message}`);
   }
   await audit(auth.userId, `booking-kan member ke ${session.title}`, "booking", sessionId);
