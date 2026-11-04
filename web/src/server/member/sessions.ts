@@ -3,6 +3,7 @@ import { cache } from "react";
 import type { MemberSession } from "@/content/member";
 import { cityOf } from "@/lib/format";
 import { sessionClosesAt } from "@/lib/session-close";
+import { isSessionFinished } from "@/lib/session-lock";
 import { closeExpiredSessions } from "@/server/close-sessions";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { localParts } from "@/server/public/sessions";
@@ -20,6 +21,7 @@ type SessionRow = {
   title: string;
   starts_at: string;
   ends_at: string;
+  ended_at: string | null;
   status: string;
   cover_path: string | null;
   venues: { name: string; city: string; cover_path: string | null } | null;
@@ -43,7 +45,7 @@ export const getMySessions = cache(async (): Promise<MemberSession[] | null> => 
   // RLS "member read booked sessions" / "host read hosted sessions": termasuk visibilitas Link.
   const { data: sessions } = await supabase
     .from("sessions")
-    .select("id, slug, title, starts_at, ends_at, status, cover_path, venues(name, city, cover_path)")
+    .select("id, slug, title, starts_at, ends_at, ended_at, status, cover_path, venues(name, city, cover_path)")
     .in(
       "id",
       bookings.map((b) => b.session_id),
@@ -61,7 +63,7 @@ export const getMySessions = cache(async (): Promise<MemberSession[] | null> => 
     if (!s || !s.venues || s.status === "cancelled" || s.status === "draft") return [];
     const city = cityOf(s.venues.city);
     const start = localParts(s.starts_at, city);
-    const done = s.status === "completed" || sessionClosesAt(s.ends_at) < now;
+    const done = isSessionFinished({ status: s.status, endedAt: s.ended_at, endsAt: s.ends_at, now: new Date(now) });
     return [
       {
         slug: s.slug,
