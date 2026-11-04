@@ -603,11 +603,11 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(self);
   const refused = await db.query(`select member_self_check_in($1)`, [s]).then(() => "", (e) => e.message);
   console.assert(/sudah dibatalkan/.test(refused), `check-in mandiri booking batal: pesan "${refused}" (selfCheckIn di member/actions.ts mencocokkan "sudah dibatalkan")`);
-  // Host yang ikut main men-check-in dirinya sendiri (Panel Host) → booking batalnya hidup.
-  await as(host);
-  await checkIn("RV5", host);
-  console.assert((await status(host)) === "attended", "host tidak bisa menghidupkan booking batalnya sendiri!");
+  // Host yang ikut main men-check-in dirinya sendiri (Panel Host) → booking batalnya hidup. Dinilai
+  // dari checked_in_by, bukan login pemanggil: tanpa JWT (script / service-role) hasilnya sama.
   await as(null);
+  await checkIn("RV5", host);
+  console.assert((await status(host)) === "attended", "host tidak bisa menghidupkan booking batalnya sendiri (tanpa JWT)!");
   // setCheckIn jalur booking langsung: hadir lalu batal (menulis registered) → kembali cancelled.
   await db.query(`update bookings set status = 'attended' where session_id = $1 and member_id = $2`, [s, direct]);
   await db.query(`update bookings set status = 'registered' where session_id = $1 and member_id = $2`, [s, direct]);

@@ -194,11 +194,15 @@ export async function bookMemberIntoSession(memberId: string, sessionId: string)
   const auth = await requireEditor("activities");
   if ("error" in auth) return fail(auth.error);
   const supabase = await createSupabaseServerClient();
-  const [{ data: session }, { count }] = await Promise.all([
+  const [{ data: session }, { count }, { data: current }] = await Promise.all([
     supabase.from("sessions").select("title, capacity, price, waitlist_enabled, status, starts_at").eq("id", sessionId).maybeSingle(),
     supabase.from("bookings").select("id", { count: "exact", head: true }).eq("session_id", sessionId).in("status", ["registered", "attended", "no_show"]),
+    supabase.from("bookings").select("status").eq("session_id", sessionId).eq("member_id", memberId).maybeSingle(),
   ]);
   if (!session || session.status !== "published") return fail("Sesi tidak tersedia.");
+  // Upsert di bawah menimpa status; booking yang sudah hadir jangan diturunkan ke registered
+  // (check-in & poin kehadirannya akan hilang sementara daftar peserta tetap Hadir).
+  if (current?.status === "attended") return fail("Member ini sudah tercatat hadir di sesi tersebut.");
   const full = (count ?? 0) >= (session.capacity as number);
   if (full && !session.waitlist_enabled) return fail("Sesi sudah penuh dan waitlist tidak aktif.");
 

@@ -6,6 +6,7 @@
  * Yang sudah terpasang dicatat di tabel public.schema_migrations. Butuh DATABASE_URL di
  * .env.local (sama dengan db:setup).
  */
+import { createHash } from "node:crypto";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import postgres from "postgres";
@@ -31,14 +32,25 @@ try {
     if (hasSchema) for (const name of BASELINE) await sql`insert into schema_migrations (name) values (${name})`;
   }
 
-  const applied = new Set((await sql`select name from schema_migrations`).map((r) => r.name));
-  const pending = (await readdir(dir)).filter((f) => f.endsWith(".sql") && !applied.has(f)).sort();
+  // Checksum isi file: migrasi yang sudah terpasang lalu diubah tidak akan dijalankan ulang —
+  // beri peringatan supaya perubahannya dibuat sebagai migrasi baru.
+  await sql`alter table schema_migrations add column if not exists checksum text`;
+  const files = (await readdir(dir)).filter((f) => f.endsWith(".sql")).sort();
+  const sums = new Map(await Promise.all(files.map(async (f) => [f, createHash("sha256").update(await readFile(path.join(dir, f), "utf8")).digest("hex")])));
+  const appliedRows = await sql`select name, checksum from schema_migrations`;
+  const applied = new Set(appliedRows.map((r) => r.name));
+  for (const { name, checksum } of appliedRows) {
+    if (!sums.has(name)) continue;
+    if (checksum === null) await sql`update schema_migrations set checksum = ${sums.get(name)} where name = ${name}`;
+    else if (checksum !== sums.get(name)) console.warn(`⚠ ${name} sudah terpasang tapi isinya berubah — perubahan itu TIDAK dijalankan; buat migrasi baru.`);
+  }
+  const pending = files.filter((f) => !applied.has(f));
   if (!pending.length) console.log("✓ Database sudah terbaru.");
 
   for (const file of pending) {
     await sql.begin(async (tx) => {
       await tx.unsafe(await readFile(path.join(dir, file), "utf8"));
-      await tx`insert into schema_migrations (name) values (${file})`;
+      await tx`insert into schema_migrations (name, checksum) values (${file}, ${sums.get(file)})`;
     });
     console.log(`✓ migration ${file}`);
   }
