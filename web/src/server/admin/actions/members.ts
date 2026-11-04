@@ -189,8 +189,6 @@ export async function deleteMemberNote(memberId: string, noteId: string): Promis
   return done("Catatan dihapus.");
 }
 
-const ATTENDED = "Member ini sudah tercatat hadir di sesi tersebut.";
-
 /** Daftarkan member ke sesi dari admin (mis. lewat WhatsApp). Butuh izin Activities. */
 export async function bookMemberIntoSession(memberId: string, sessionId: string): Promise<ActionResult> {
   const auth = await requireEditor("activities");
@@ -205,25 +203,19 @@ export async function bookMemberIntoSession(memberId: string, sessionId: string)
   if (!session || session.status !== "published") return fail("Sesi tidak tersedia.");
   // Booking yang sudah hadir jangan diturunkan ke registered (check-in & poin kehadirannya hilang
   // sementara daftar peserta tetap Hadir) — juga dijaga di query update di bawah (check-in bersamaan).
-  if (current?.status === "attended") return fail(ATTENDED);
+  if (current?.status === "attended") return fail("Member ini sudah tercatat hadir di sesi tersebut.");
   if (current?.status === "registered") return fail("Member ini sudah terdaftar di sesi tersebut.");
   const full = (count ?? 0) >= (session.capacity as number);
   if (full && !session.waitlist_enabled) return fail("Sesi sudah penuh dan waitlist tidak aktif.");
 
   const status = full ? "waitlisted" : "registered";
-  if (current) {
-    // Booking lama (cancelled / waitlisted / no_show) dihidupkan: hanya statusnya — pembayaran & nominal
-    // yang sudah tercatat (mis. sudah lunas) tidak ditimpa.
-    const { data: updated, error } = await supabase.from("bookings").update({ status }).eq("session_id", sessionId).eq("member_id", memberId).neq("status", "attended").select("id");
-    if (error) return fail(`Gagal booking: ${error.message}`);
-    if (!updated?.length) {
-      const { data: now } = await supabase.from("bookings").select("status").eq("session_id", sessionId).eq("member_id", memberId).maybeSingle();
-      return fail(now?.status === "attended" ? ATTENDED : "Booking tidak bisa diubah — cek izin akses Activities atau muat ulang halaman.");
-    }
-  } else {
-    const { error } = await supabase.from("bookings").insert({ session_id: sessionId, member_id: memberId, status, payment_status: "pending", source: "admin", amount: session.price });
-    if (error) return fail(error.code === "23505" ? "Member baru saja terdaftar di sesi ini — muat ulang halaman." : `Gagal booking: ${error.message}`);
-  }
+  // Booking lama (cancelled / waitlisted / no_show) dihidupkan: hanya statusnya — pembayaran & nominal
+  // yang sudah tercatat (mis. sudah lunas) tidak ditimpa. `neq attended` menjaga check-in bersamaan.
+  const { data: written, error } = current
+    ? await supabase.from("bookings").update({ status }).eq("session_id", sessionId).eq("member_id", memberId).neq("status", "attended").select("id")
+    : await supabase.from("bookings").insert({ session_id: sessionId, member_id: memberId, status, payment_status: "pending", source: "admin", amount: session.price }).select("id");
+  if (error) return fail(`Gagal booking: ${error.message}`);
+  if (!written?.length) return fail("Booking berubah sementara itu (mis. baru check-in) — muat ulang halaman.");
   await audit(auth.userId, `booking-kan member ke ${session.title}`, "booking", sessionId);
   refreshPaths(`/admin/members/${memberId}`, `/admin/activities/${sessionId}`, "/admin/activities");
   return done(full ? `Sesi penuh — member masuk waitlist ${session.title}.` : `Member terdaftar di ${session.title} (pembayaran: menunggu).`);

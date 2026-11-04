@@ -3,13 +3,19 @@
 -- lewat RPC, script, maupun klien service-role. Aturan berikutnya cukup mengubah fungsi ini,
 -- tanpa menyalin ulang seluruh session_participant_sync.
 
+/** Panitia sesi: staf aktif atau host sesi ini (tanpa auth.uid(), beda dengan is_assigned_host). */
+create function is_session_crew(p_session uuid, p_user uuid)
+returns boolean language sql stable security definer set search_path = public as $$
+  select exists (select 1 from staff_members where user_id = p_user and status = 'active')
+      or exists (select 1 from session_hosts where session_id = p_session and member_id = p_user and role = 'host');
+$$;
+revoke execute on function is_session_crew(uuid, uuid) from public, anon, authenticated;
+
 /** Check-in oleh `p_by` boleh menghidupkan booking batal `p_member`: dicatat orang lain, atau yang
- *  men-check-in dirinya sendiri adalah panitia (staf aktif / host sesi ini). */
+ *  men-check-in dirinya sendiri adalah panitia. */
 create function can_revive_booking(p_session uuid, p_member uuid, p_by uuid)
 returns boolean language sql stable security definer set search_path = public as $$
-  select p_by is distinct from p_member
-      or exists (select 1 from staff_members where user_id = p_by and status = 'active')
-      or exists (select 1 from session_hosts where session_id = p_session and member_id = p_by and role = 'host');
+  select p_by is distinct from p_member or is_session_crew(p_session, p_by);
 $$;
 revoke execute on function can_revive_booking(uuid, uuid, uuid) from public, anon, authenticated;
 
@@ -53,7 +59,7 @@ begin
   if now() < least(v_s.starts_at - interval '30 minutes', coalesce(v_s.live_started_at, 'infinity')) then
     raise exception 'Check-in dibuka 30 menit sebelum sesi';
   end if;
-  if not can_revive_booking(p_session, v_uid, v_uid) and exists (select 1 from bookings where session_id = p_session and member_id = v_uid and status = 'cancelled') then
+  if exists (select 1 from bookings where session_id = p_session and member_id = v_uid and status = 'cancelled') and not is_session_crew(p_session, v_uid) then
     raise exception 'Booking kamu untuk sesi ini sudah dibatalkan — minta panitia untuk check-in';
   end if;
 
