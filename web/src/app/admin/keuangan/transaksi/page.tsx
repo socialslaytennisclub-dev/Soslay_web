@@ -65,8 +65,9 @@ export default async function FinanceTransactionsPage({ searchParams }: PageProp
 
   const options = txFormOptions(data, role, userName);
   const filtersOn = !!(cat || acc || src || q);
-  const pnl = profitLoss(data, firstDay(month), lastDay(month));
-  const monthTx = posted(data).filter((t) => t.date.startsWith(month));
+  // Ringkasan atas mengikuti periode yang dipilih (bulan, atau semua periode).
+  const pnl = allMonths ? profitLoss(data, "0000-01-01", data.today) : profitLoss(data, firstDay(month), lastDay(month));
+  const monthTx = allMonths ? posted(data) : posted(data).filter((t) => t.date.startsWith(month));
   const incomeCount = monthTx.filter((t) => t.type === "income").length;
   const expenseCount = monthTx.filter((t) => t.type === "expense").length;
   const noProof = monthTx.filter((t) => t.type === "expense" && t.source === "manual" && !t.parentId && !t.hasProof).length;
@@ -86,7 +87,7 @@ export default async function FinanceTransactionsPage({ searchParams }: PageProp
                   <AdminButton icon="upload-simple" href="/admin/keuangan/transaksi/import">
                     Import jurnal
                   </AdminButton>
-                  <AdminButton icon="download-simple" href={`/admin/keuangan/export?reports=transactions&format=csv&m=${month}`} prefetch={false} download>
+                  <AdminButton icon="download-simple" href={`/admin/keuangan/export?reports=transactions&format=csv&m=${allMonths ? "all" : month}`} prefetch={false} download>
                     Export CSV
                   </AdminButton>
                 </>

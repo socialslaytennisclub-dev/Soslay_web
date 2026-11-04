@@ -141,7 +141,10 @@ export function journalRows(data: FinanceData, from: string, to: string): Cell[]
   return rows;
 }
 
-export function buildReportSheets(data: FinanceData, reports: ReportKey[], month: string, exporter: string): Sheet[] {
+/** `period` = YYYY-MM, atau "all" (daftar transaksi & jurnal semua periode; laporan lain memakai bulan berjalan). */
+export function buildReportSheets(data: FinanceData, reports: ReportKey[], period: string, exporter: string): Sheet[] {
+  const allPeriods = period === "all";
+  const month = allPeriods ? data.today.slice(0, 7) : period;
   const [y, m] = month.split("-").map(Number);
   const from = `${month}-01`;
   const to = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
@@ -157,9 +160,9 @@ export function buildReportSheets(data: FinanceData, reports: ReportKey[], month
       case "yearly":
         return { name: `Tahunan ${y}`, widths: [14, 18, 18, 18, 10, 18], rows: [...header(REPORTS.yearly, String(y), exporter), ...yearlyRows(data, y)] };
       case "journal":
-        return { name: "Jurnal", widths: [12, 16, 44, 22, 16, 16], rows: [...header(REPORTS.journal, monthLabel(month), exporter), ...journalRows(data, from, to)] };
+        return { name: "Jurnal", widths: [12, 16, 44, 22, 16, 16], rows: [...header(REPORTS.journal, allPeriods ? "Semua periode" : monthLabel(month), exporter), ...(allPeriods ? journalRows(data, "0000-01-01", "9999-12-31") : journalRows(data, from, to))] };
       default:
-        return { name: "Transaksi", widths: [16, 12, 12, 14, 44, 26, 18, 18, 22, 28, 14, 16, 8, 30], rows: [...header(REPORTS.transactions, monthLabel(month), exporter), ...transactionRows(data, from, to)] };
+        return { name: "Transaksi", widths: [16, 12, 12, 14, 44, 26, 18, 18, 22, 28, 14, 16, 8, 30], rows: [...header(REPORTS.transactions, allPeriods ? "Semua periode" : monthLabel(month), exporter), ...(allPeriods ? transactionRows(data, "0000-01-01", "9999-12-31") : transactionRows(data, from, to))] };
     }
   });
 }

@@ -15,7 +15,7 @@ export type TxFormOptions = {
   userName: string;
   today: string;
   accounts: { id: string; name: string; systemKey: string | null }[];
-  categories: { id: string; name: string; kind: "income" | "expense"; systemKey: string | null }[];
+  categories: { id: string; name: string; kind: "income" | "expense"; systemKey: string | null; archived: boolean }[];
   sessions: { id: string; label: string }[];
   /** Akun default per jenis (bank utama). */
   defaultAccountId: string | null;
@@ -68,7 +68,8 @@ export function TxModal({ open, onClose, options, initial, duplicate = false, pr
 
   const isOwner = type === "owner_withdrawal" || type === "owner_contribution";
   const kind = type === "income" ? "income" : "expense";
-  const cats = options.categories.filter((c) => c.kind === kind);
+  // Kategori arsip hanya tampil untuk transaksi yang sudah memakainya.
+  const cats = options.categories.filter((c) => c.kind === kind && (!c.archived || c.id === initial?.categoryId));
   const ticket = options.categories.find((c) => c.id === categoryId)?.systemKey === "ticket";
   const tabs = TABS.filter((t) => !t.full || options.role === "full");
   const activeTab = isOwner ? "owner_withdrawal" : type;

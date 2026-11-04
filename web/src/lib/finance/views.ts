@@ -1,7 +1,7 @@
 /** View-model daftar transaksi & opsi form — disusun di server, dikirim ke komponen klien. */
 import { dateLabel } from "./format";
 import { groupTransactions, signedAmount, type TxRow } from "./reports";
-import type { FinanceData, FinanceRole, FinTx } from "./types";
+import type { FinanceData, FinanceRole, FinCategory, FinTx } from "./types";
 
 export type TxView = {
   key: string;
@@ -86,6 +86,12 @@ export function toTxViews(data: FinanceData, txs: FinTx[], role: FinanceRole, us
   });
 }
 
+/** Kategori yang boleh dipilih di form manual. */
+export function selectableCategory(data: FinanceData, c: FinCategory) {
+  if (c.isArchived) return false;
+  return !c.isSystem || (c.systemKey === "tax" && data.settings.taxEnabled);
+}
+
 /** Opsi form Catat transaksi. */
 export function txFormOptions(data: FinanceData, role: FinanceRole, userName: string) {
   return {
@@ -93,7 +99,11 @@ export function txFormOptions(data: FinanceData, role: FinanceRole, userName: st
     userName,
     today: data.today,
     accounts: data.accounts.filter((a) => a.isActive).map((a) => ({ id: a.id, name: a.name, systemKey: a.systemKey })),
-    categories: data.categories.filter((c) => !c.isSystem && !c.isArchived).map((c) => ({ id: c.id, name: c.name, kind: c.kind, systemKey: c.systemKey })),
+    // Kategori sistem tidak bisa dipilih, kecuali PPh saat pajak aktif (= setoran pajak, mengurangi utang
+    // pajak). Kategori arsip ikut dikirim supaya transaksi lama tetap bisa diedit tanpa ganti kategori.
+    categories: data.categories
+      .filter((c) => selectableCategory(data, c) || c.isArchived)
+      .map((c) => ({ id: c.id, name: c.systemKey === "tax" ? `${c.name} (setoran)` : c.name, kind: c.kind, systemKey: c.systemKey, archived: c.isArchived })),
     sessions: data.sessions.slice(0, 300).map((s) => ({ id: s.id, label: `${s.title} · ${dateLabel(s.startsAt.slice(0, 10))} · ${s.venueName}` })),
     defaultAccountId: data.settings.defaultBankAccountId ?? data.accounts.find((a) => a.systemKey === "bank_main")?.id ?? null,
   };

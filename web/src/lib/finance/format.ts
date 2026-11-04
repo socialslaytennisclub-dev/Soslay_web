@@ -1,4 +1,9 @@
-/** Format tampilan Keuangan (§10): Rupiah titik ribuan, minus unicode, singkatan jt / M, tanggal WIB. */
+/**
+ * Format tampilan Keuangan (§10): Rupiah titik ribuan, minus unicode, singkatan jt / M, tanggal WIB.
+ * Nilai positif memakai helper Rupiah admin (lib/admin-labels) supaya formatnya sama dengan modul lain;
+ * di sini hanya ditambah tanda minus, "+", kurung laporan, dan singkatan miliar (M).
+ */
+import { formatRupiahPlain, formatRupiahShort } from "@/lib/admin-labels";
 
 const nf = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
 const MINUS = "−";
@@ -8,12 +13,12 @@ export const num = (v: number) => nf.format(Math.abs(Math.round(v)));
 
 /** "Rp4.800.000" · negatif "−Rp4.800.000". */
 export function rp(v: number): string {
-  return `${v < 0 ? MINUS : ""}Rp${num(v)}`;
+  return `${v < 0 ? MINUS : ""}${formatRupiahPlain(Math.abs(Math.round(v)))}`;
 }
 
 /** Bertanda untuk daftar transaksi: "+Rp3.300.000" / "−Rp4.800.000". */
 export function rpSigned(v: number): string {
-  return `${v < 0 ? MINUS : "+"}Rp${num(v)}`;
+  return `${v < 0 ? MINUS : "+"}${formatRupiahPlain(Math.abs(Math.round(v)))}`;
 }
 
 /** Laporan: pengeluaran dalam kurung "(4.800.000)". */
@@ -26,8 +31,7 @@ export function rpShort(v: number): string {
   const sign = v < 0 ? MINUS : "";
   const a = Math.abs(v);
   if (a >= 1_000_000_000) return `${sign}Rp${(a / 1_000_000_000).toLocaleString("id-ID", { maximumFractionDigits: 2 })} M`;
-  if (a >= 1_000_000) return `${sign}Rp${(a / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt`;
-  return `${sign}Rp${num(a)}`;
+  return `${sign}${formatRupiahShort(Math.round(a))}`;
 }
 
 /** Sumbu grafik: "200 jt". */

@@ -117,6 +117,49 @@ export type Pnl = {
 
 const AUTO_SOURCES = new Set(["ticket", "ticket_manual_paid", "kuyy_import", "shop_order_verified", "refund", "pg_payout", "depreciation", "tax"]);
 
+/**
+ * Indeks harian (dibuat sekali per FinanceData): tanggal diakui → total per kategori. Laporan yang
+ * memanggil profitLoss berkali-kali (Tahunan: 25×, Neraca: dari awal data) cukup menjumlahkan hari,
+ * tidak memindai ulang semua transaksi.
+ */
+type DayTotals = Map<string, { amount: number; auto: boolean }>;
+const dayIndexCache = new WeakMap<FinanceData, { days: string[]; byDay: Map<string, DayTotals> }>();
+function dayIndex(data: FinanceData) {
+  let idx = dayIndexCache.get(data);
+  if (idx) return idx;
+  const cats = catBy(data);
+  const byDay = new Map<string, DayTotals>();
+  for (const t of posted(data)) {
+    if (!t.categoryId || (t.type !== "income" && t.type !== "expense")) continue;
+    const cat = cats.get(t.categoryId);
+    if (!cat || cat.reportGroup === "tax") continue; // setoran pajak → utang, bukan beban
+    const day = byDay.get(t.recognizedOn) ?? new Map();
+    const cell = day.get(t.categoryId) ?? { amount: 0, auto: false };
+    cell.amount += t.amount;
+    cell.auto ||= AUTO_SOURCES.has(t.source);
+    day.set(t.categoryId, cell);
+    byDay.set(t.recognizedOn, day);
+  }
+  idx = { days: [...byDay.keys()].sort(), byDay };
+  dayIndexCache.set(data, idx);
+  return idx;
+}
+
+/** Hari-hari berdata dalam [from, to] (pencarian biner pada daftar hari terurut). */
+function daysIn(data: FinanceData, from: string, to: string): DayTotals[] {
+  const { days, byDay } = dayIndex(data);
+  let lo = 0;
+  let hi = days.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (days[mid] < from) lo = mid + 1;
+    else hi = mid;
+  }
+  const out: DayTotals[] = [];
+  for (let i = lo; i < days.length && days[i] <= to; i++) out.push(byDay.get(days[i])!);
+  return out;
+}
+
 export function profitLoss(data: FinanceData, from: string, to: string): Pnl {
   const cats = catBy(data);
   const lines = new Map<string, PnlLine>();
@@ -126,12 +169,7 @@ export function profitLoss(data: FinanceData, from: string, to: string): Pnl {
     line.auto ||= auto;
     lines.set(cat.id, line);
   };
-  for (const t of posted(data)) {
-    if (!between(t.recognizedOn, from, to) || !t.categoryId) continue;
-    const cat = cats.get(t.categoryId);
-    if (!cat || cat.reportGroup === "tax") continue; // setoran pajak → utang, bukan beban
-    if (t.type === "income" || t.type === "expense") add(cat, t.amount, AUTO_SOURCES.has(t.source));
-  }
+  for (const day of daysIn(data, from, to)) for (const [id, c] of day) add(cats.get(id)!, c.amount, c.auto);
   // Penyusutan per akhir bulan dalam rentang.
   const dep = systemCategory(data, "depreciation");
   if (dep && data.settings.autoDepreciation) {
@@ -150,7 +188,7 @@ export function profitLoss(data: FinanceData, from: string, to: string): Pnl {
   const totalOpex = sum("opex");
   const grossProfit = totalRevenue - totalCogs;
   const profitBeforeTax = grossProfit - totalOpex;
-  const tax = taxFor(data, from, to);
+  const tax = taxFor(data, totalRevenue);
   const netProfit = profitBeforeTax - tax;
   return {
     revenue: all.filter((l) => l.group === "revenue").sort(byAmount),
@@ -169,16 +207,10 @@ export function profitLoss(data: FinanceData, from: string, to: string): Pnl {
   };
 }
 
-/** PPh final = tarif × pendapatan, per bulan penuh dalam rentang (hanya bila pajak aktif — K-4). */
-function taxFor(data: FinanceData, from: string, to: string): number {
+/** PPh final = tarif × pendapatan periode (hanya bila pajak aktif — K-4). */
+function taxFor(data: FinanceData, revenue: number): number {
   const { taxEnabled, taxRate } = data.settings;
   if (!taxEnabled || !taxRate) return 0;
-  const cats = catBy(data);
-  let revenue = 0;
-  for (const t of posted(data)) {
-    if (t.type !== "income" || !t.categoryId || !between(t.recognizedOn, from, to)) continue;
-    if (cats.get(t.categoryId)?.reportGroup === "revenue") revenue += t.amount;
-  }
   return Math.round((revenue * taxRate) / 100);
 }
 
@@ -252,13 +284,17 @@ export function balanceSheet(data: FinanceData, asOf: string): BalanceSheet {
       ]
     : [];
 
-  // Utang pajak = PPh terutang − setoran (transaksi kategori PPh).
+  const year = asOf.slice(0, 4);
+  const priorYears = profitLoss(data, "0000-01-01", `${Number(year) - 1}-12-31`);
+  const currentYearPnl = profitLoss(data, `${year}-01-01`, asOf);
+
+  // Utang pajak = PPh terutang s.d. tanggal neraca (sama dengan yang sudah mengurangi laba di ekuitas)
+  // − setoran (transaksi kategori PPh).
   let taxPayable = 0;
   if (data.settings.taxEnabled) {
     const taxCat = systemCategory(data, "tax");
-    const accrued = taxFor(data, "0000-01-01", lastDay(addMonths(monthOf(asOf), lastDay(monthOf(asOf)) <= asOf ? 0 : -1)));
     const paid = posted(data).filter((t) => t.categoryId === taxCat?.id && t.date <= asOf).reduce((s, t) => s + t.amount, 0);
-    taxPayable = accrued - paid;
+    taxPayable = priorYears.tax + currentYearPnl.tax - paid;
   }
   const payable = sumItems(items, "payable", asOf);
   const otherLiability = sumItems(items, "other_liability", asOf);
@@ -268,13 +304,12 @@ export function balanceSheet(data: FinanceData, asOf: string): BalanceSheet {
     ...(data.settings.taxEnabled ? [{ label: "Utang pajak", note: "PPh final belum disetor", amount: taxPayable, auto: true }] : []),
   ];
 
-  const year = asOf.slice(0, 4);
   const contributions = posted(data).filter((t) => t.type === "owner_contribution" && t.date <= asOf).reduce((s, t) => s + t.amount, 0);
   const withdrawals = posted(data).filter((t) => t.type === "owner_withdrawal" && t.date <= asOf).reduce((s, t) => s + t.amount, 0);
   const capitalItems = sumItems(items, "capital", asOf);
   const retainedOpening = sumItems(items, "retained_earnings_opening", asOf);
-  const retained = retainedOpening + profitLoss(data, "0000-01-01", `${Number(year) - 1}-12-31`).netProfit;
-  const currentYear = profitLoss(data, `${year}-01-01`, asOf).netProfit;
+  const retained = retainedOpening + priorYears.netProfit;
+  const currentYear = currentYearPnl.netProfit;
   const equity: BsLine[] = [
     { label: "Modal disetor", note: "Setoran awal + transaksi setor modal", amount: capitalItems + contributions, auto: contributions !== 0 },
     { label: "Laba ditahan", note: `Akumulasi laba s.d. 31 Des ${Number(year) - 1}`, amount: retained, auto: true },

@@ -249,6 +249,9 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
       kuy_username: r.username || null,
       amount: r.amount,
       payment_method: r.paymentMethod || null,
+      // Waktu bayar → tanggal pendapatan Keuangan (A-8). Hanya dikirim bila file memuat kolomnya,
+      // supaya import ulang dari export lama tidak menghapus waktu yang sudah tersimpan.
+      ...(upload.parsed.hasPaidAt ? { paid_at: r.paidAt } : {}),
       ...checkIn,
     })),
     { onConflict: "session_id,kuy_reg_no" },
@@ -607,7 +610,7 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
   const existing = await findMemberByPhone(phone);
   if (existing) return addMember(existing);
 
-  const row: KuyRow = { regNo, name: fullName, email, phone, instagram: "", level: null, levelRaw: "", username: "", status: "going", amount: 0, paymentMethod: "", ticket: "", ticketPrice: 0, skipReason: null };
+  const row: KuyRow = { regNo, name: fullName, email, phone, instagram: "", level: null, levelRaw: "", username: "", status: "going", amount: 0, paymentMethod: "", ticket: "", ticketPrice: 0, paidAt: null, skipReason: null };
   const known = (await findGhosts(supabase, [row])).get(regNo);
   let ghostId = known?.id;
   if (ghostId) {

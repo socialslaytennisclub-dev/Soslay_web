@@ -666,8 +666,10 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const net = async (source) => Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source = $1 and deleted_at is null`, [source])).s);
 
   // A-8: peserta Kuyy dibayar → Tiket activity ke Saldo Kuyy; Rp0 tidak dicatat; ubah/hapus → koreksi.
-  const p1 = (await one(`insert into session_participants (session_id, full_name, kuy_reg_no, amount) values ($1, 'Peserta A', 'F1', 150000) returning id`, [sid])).id;
-  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, amount) values ($1, 'Peserta Rp0', 'F2', 0)`, [sid]);
+  const p1 = (await one(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount) values ($1, 'Peserta A', 'F1', 'pesertaa', 150000) returning id`, [sid])).id;
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount) values ($1, 'Peserta Rp0', 'F2', 'pesertab', 0)`, [sid]);
+  // Roster yang disalin dari booking website (tanpa username Kuyy) bukan uang Kuyy.
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, amount) values ($1, 'Dari booking', 'B1', 150000)`, [sid]);
   const acc = await one(`select a.system_key from finance_transactions t join finance_accounts a on a.id = t.account_id where t.source = 'kuyy_import' limit 1`);
   console.assert((await net("kuyy_import")) === 150000 && acc.system_key === "kuyy", "A-8 import Kuyy");
   await db.query(`update session_participants set amount = 140000 where id = $1`, [p1]);
@@ -677,14 +679,29 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const code = (await one(`select code from finance_transactions where source = 'kuyy_import' order by created_at limit 1`)).code;
   console.assert(/^TRX-\d{4}-\d{4}$/.test(code), `kode transaksi ${code}`);
 
-  // A-7: Tandai Lunas (pending → paid) → pemasukan ke akun default; batal lunas → koreksi; Rp0 → tidak ada.
+  // A-7: Tandai Lunas lewat RPC → pemasukan ke akun default; batal lunas → koreksi. Perubahan status
+  // lunas dari jalur lain (mis. payment gateway) tidak dicatat sebagai bayar manual.
   const u = (await one(`insert into auth.users default values returning id`)).id;
   await db.query(`insert into profiles (id, full_name, email) values ($1, 'Mira Lunas', 'mira@fin.test')`, [u]);
   const bk = (await one(`insert into bookings (session_id, member_id, source, amount) values ($1, $2, 'admin', 150000) returning id`, [sid, u])).id;
   await db.query(`update bookings set payment_status = 'paid' where id = $1`, [bk]);
-  console.assert((await net("ticket_manual_paid")) === 150000, "A-7 Tandai Lunas");
+  console.assert((await net("ticket_manual_paid")) === 0, "A-7: lunas dari jalur lain tidak dicatat sebagai bayar manual");
   await db.query(`update bookings set payment_status = 'pending' where id = $1`, [bk]);
+  const fsa = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Fina', 'fina@soslay.test', 'active' from roles where name = 'Super Admin'`, [fsa]);
+  await as(fsa);
+  await db.query(`select mark_booking_paid($1, true)`, [bk]);
+  console.assert((await net("ticket_manual_paid")) === 150000, "A-7 Tandai Lunas");
+  await db.query(`select mark_booking_paid($1, false)`, [bk]);
   console.assert((await net("ticket_manual_paid")) === 0, "A-7 batal lunas → koreksi");
+  await as(null);
+  let rpcDenied = false;
+  try {
+    await db.query(`select mark_booking_paid($1, true)`, [bk]);
+  } catch {
+    rpcDenied = true;
+  }
+  console.assert(rpcDenied, "mark_booking_paid tanpa izin harus ditolak");
 
   // A-2: order shop terverifikasi → Penjualan merchandise; refund → koreksi.
   const ord = (await one(`insert into orders (member_id, subtotal, total, recipient_name, recipient_phone, shipping_address) values ($1, 220000, 220000, 'Mira', '0812', 'Jl. A') returning id`, [u])).id;
@@ -693,9 +710,12 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.query(`update orders set payment_status = 'refunded' where id = $1`, [ord]);
   console.assert((await net("shop_order_verified")) === 0, "A-3 refund order → koreksi");
 
+  // Dibayar sebelum go-live (tanggal bayar dari file Kuyy) tapi diimpor sesudahnya → tidak dicatat (§14 7b).
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount, paid_at) values ($1, 'Bayar Lama', 'F4', 'bayarlama', 99000, '2019-12-28T10:00:00+07:00')`, [sid]);
+  console.assert((await net("kuyy_import")) === 0, "dibayar sebelum go-live tidak dicatat");
   // Sebelum go-live: tidak ada transaksi otomatis.
   await db.exec(`update finance_settings set go_live_date = '2999-01-01'`);
-  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, amount) values ($1, 'Peserta Lama', 'F3', 99000)`, [sid]);
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount) values ($1, 'Peserta Lama', 'F3', 'pesertalama', 99000)`, [sid]);
   console.assert((await net("kuyy_import")) === 0, "data sebelum go-live tidak dicatat otomatis");
 
   // RLS: Pencatat keuangan boleh catat pengeluaran sendiri, tidak boleh modal pemilik / pos neraca.

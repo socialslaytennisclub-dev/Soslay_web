@@ -13,7 +13,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const data = await getFinanceData();
   const m = url.searchParams.get("m");
-  const month = m && /^\d{4}-\d{2}$/.test(m) ? m : monthOf(data.today);
+  const month = m === "all" || (m && /^\d{4}-\d{2}$/.test(m)) ? m : monthOf(data.today);
   const reports = (url.searchParams.get("reports") ?? "transactions").split(",").filter((r): r is ReportKey => r in REPORTS);
   if (!reports.length) return new Response("Pilih laporan.", { status: 400 });
   const exporter = session.mode === "denied" ? "" : session.name;

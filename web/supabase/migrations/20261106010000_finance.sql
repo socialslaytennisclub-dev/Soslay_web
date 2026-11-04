@@ -317,41 +317,56 @@ begin
 end $$;
 revoke all on function finance_sync_auto(text, text, bigint, text, uuid, text, uuid, timestamptz) from public;
 
--- A-8 · peserta Kuyy diimpor ke Activities → Pemasukan · Tiket activity · Saldo Kuyy.
+-- A-8 · peserta Kuyy diimpor ke Activities → Pemasukan · Tiket activity · Saldo Kuyy, di tanggal bayar
+-- dari file Kuyy (paid_at; fallback tanggal import). Hanya baris dari file Kuyy (kuy_username terisi) —
+-- baris roster yang disalin dari booking website / ditambah admin tidak dihitung sebagai uang Kuyy.
+-- Pembayaran sebelum go-live tidak dicatat (sudah masuk lewat withdraw di import jurnal).
+alter table session_participants add column paid_at timestamptz;
+comment on column session_participants.paid_at is 'Waktu bayar dari export Kuyy (kosong bila file tidak memuatnya).';
+
 create function finance_on_participant() returns trigger language plpgsql security definer set search_path = public as $$
 declare
   s   finance_settings;
   p   session_participants := case when tg_op = 'DELETE' then old else new end;
-  amt bigint := case when tg_op = 'DELETE' or p.source <> 'kuy' then 0 else p.amount end;
+  amt bigint := case when tg_op = 'DELETE' or p.source <> 'kuy' or p.kuy_username is null then 0 else p.amount end;
 begin
   select * into s from finance_settings;
   if not s.auto_kuyy then return null; end if;
   perform finance_sync_auto('kuyy_import', 'sp:' || p.id, amt, 'ticket',
     (select id from finance_accounts where system_key = 'kuyy'),
-    'Tiket Kuyy · ' || p.full_name, p.session_id, coalesce(p.imported_at, now()));
+    'Tiket Kuyy · ' || p.full_name, p.session_id, coalesce(p.paid_at, p.imported_at, now()));
   return null;
 end $$;
-create trigger session_participants_finance after insert or update of amount, source or delete on session_participants
+create trigger session_participants_finance after insert or update of amount, source, kuy_username or delete on session_participants
   for each row execute function finance_on_participant();
 
--- A-7 · "Tandai Lunas" (booking pending → paid) → Pemasukan · Tiket activity · akun default bayar manual.
--- Booking impor Kuyy sudah tercatat lewat A-8 → dilewati.
-create function finance_on_booking_paid() returns trigger language plpgsql security definer set search_path = public as $$
+-- A-7 · "Tandai Lunas" → Pemasukan · Tiket activity · akun default bayar manual. Sengaja lewat RPC
+-- eksplisit (bukan trigger pada setiap perubahan payment_status): pembayaran lewat payment gateway (A-1,
+-- K-3) nanti juga mengubah booking jadi lunas, dan itu bukan bayar manual. Batal lunas → koreksi.
+-- Harga Rp0 (mis. peserta impor Kuyy yang bayar manual DP) → tidak ada transaksi.
+create function mark_booking_paid(p_booking uuid, p_paid boolean)
+returns void language plpgsql security definer set search_path = public as $$
 declare
+  b bookings;
   s finance_settings;
 begin
-  if new.payment_status is not distinct from old.payment_status and new.amount = old.amount then return null; end if;
-  if new.source = 'kuy' then return null; end if;
+  if not (has_permission('activities', 'edit') or exists (
+    select 1 from bookings x join session_hosts h on h.session_id = x.session_id where x.id = p_booking and h.member_id = auth.uid()
+  )) then
+    raise exception 'Tidak punya izin menandai pembayaran.' using errcode = '42501';
+  end if;
+  update bookings set payment_status = (case when p_paid then 'paid' else 'pending' end)::payment_status
+  where id = p_booking returning * into b;
+  if not found then raise exception 'Booking tidak ditemukan.'; end if;
   select * into s from finance_settings;
-  if not s.auto_manual_paid then return null; end if;
-  perform finance_sync_auto('ticket_manual_paid', 'bk:' || new.id,
-    case when new.payment_status = 'paid' then new.amount else 0 end, 'ticket', s.manual_paid_account_id,
-    'Bayar manual · ' || coalesce((select full_name from profiles where id = new.member_id), 'peserta'),
-    new.session_id, now());
-  return null;
+  if not s.auto_manual_paid then return; end if;
+  perform finance_sync_auto('ticket_manual_paid', 'bk:' || b.id,
+    case when p_paid then b.amount else 0 end, 'ticket', s.manual_paid_account_id,
+    'Bayar manual · ' || coalesce((select full_name from profiles where id = b.member_id), 'peserta'),
+    b.session_id, now());
 end $$;
-create trigger bookings_finance after update of payment_status, amount on bookings
-  for each row execute function finance_on_booking_paid();
+revoke all on function mark_booking_paid(uuid, boolean) from public;
+grant execute on function mark_booking_paid(uuid, boolean) to authenticated;
 
 -- A-2 · order shop terverifikasi (payment_status → paid) → Pemasukan · Penjualan merchandise · Bank.
 -- Refund / batal → koreksi minus (A-3).

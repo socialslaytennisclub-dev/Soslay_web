@@ -1,8 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { dupKey } from "@/lib/finance/journal";
 import { accountBalances } from "@/lib/finance/reports";
+import { selectableCategory } from "@/lib/finance/views";
 import type { BalanceItemKey, FinanceRole, TxTerm, TxType } from "@/lib/finance/types";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { uploadPrivateFile } from "@/server/storage";
@@ -80,6 +80,7 @@ export async function saveTransaction(formData: FormData): Promise<TxResult> {
   const removeProof = formData.get("removeProof") === "1";
 
   const data = await getFinanceData();
+  const existingTx = id ? data.transactions.find((t) => t.id === id) : undefined;
   const category = data.categories.find((c) => c.id === categoryId);
   const fields: TxFieldErrors = {};
   if (!ymd.test(date)) fields.date = "Isi tanggal transaksi.";
@@ -87,7 +88,8 @@ export async function saveTransaction(formData: FormData): Promise<TxResult> {
   if (!Number.isInteger(amount) || amount <= 0) fields.amount = "Jumlah harus angka Rupiah lebih dari 0.";
   if (type === "income" || type === "expense") {
     if (!category) fields.categoryId = "Pilih kategori.";
-    else if (category.kind !== type || category.isSystem || category.isArchived) fields.categoryId = "Kategori ini tidak bisa dipilih.";
+    // Kategori arsip hanya boleh dipertahankan oleh transaksi yang memang sudah memakainya.
+    else if (category.kind !== type || !(selectableCategory(data, category) || (category.isArchived && existingTx?.categoryId === category.id))) fields.categoryId = "Kategori ini tidak bisa dipilih.";
   }
   if (!data.accounts.some((a) => a.id === accountId && a.isActive)) fields.accountId = "Pilih akun.";
   if (type === "transfer") {
@@ -200,12 +202,17 @@ export async function deleteTransaction(id: string, reason?: string): Promise<Ac
   if (auth.role === "recorder" && tx.createdBy !== auth.userId) return fail("Pencatat hanya bisa menghapus transaksi yang dicatat sendiri.");
   const supabase = await createSupabaseServerClient();
   const now = new Date().toISOString();
-  const { error } = await supabase.from("finance_transactions").update({ deleted_at: now, deleted_reason: reason?.slice(0, 200) || null, updated_by: auth.userId }).or(`id.eq.${id},parent_id.eq.${id}`);
+  const { error } = await supabase.from("finance_transactions").update({ deleted_at: now, deleted_reason: reason?.slice(0, 200) || null, updated_by: auth.userId }).eq("id", id);
   if (error) return fail(`Gagal menghapus: ${error.message}`);
+  // Biaya transfer ikut terhapus, ditandai supaya "Batalkan" memulihkan tepat baris ini saja.
+  await supabase.from("finance_transactions").update({ deleted_at: now, deleted_reason: childDeletedReason(id), updated_by: auth.userId }).eq("parent_id", id).is("deleted_at", null);
   await financeLog(auth.userId, "transaction", id, `hapus ${tx.code}`, tx, { deleted_reason: reason ?? null });
   refresh();
   return done(`${tx.code} dihapus.`);
 }
+
+/** Penanda biaya transfer yang terhapus bersama transfer induknya (bukan yang diganti saat transfer diedit). */
+const childDeletedReason = (parentId: string) => `ikut dihapus bersama ${parentId}`;
 
 /** "Batalkan" pada toast (12k): pulihkan transaksi yang baru dihapus. */
 export async function restoreTransaction(id: string): Promise<ActionResult> {
@@ -215,8 +222,10 @@ export async function restoreTransaction(id: string): Promise<ActionResult> {
   const { data: tx } = await supabase.from("finance_transactions").select("code, deleted_at, created_by").eq("id", id).maybeSingle();
   if (!tx?.deleted_at) return fail("Transaksi tidak ditemukan.");
   if (auth.role === "recorder" && tx.created_by !== auth.userId) return fail("Tidak bisa memulihkan transaksi milik orang lain.");
-  const { error } = await supabase.from("finance_transactions").update({ deleted_at: null, deleted_reason: null }).or(`id.eq.${id},and(parent_id.eq.${id},deleted_at.eq.${tx.deleted_at})`);
+  const { error } = await supabase.from("finance_transactions").update({ deleted_at: null, deleted_reason: null }).eq("id", id);
   if (error) return fail(`Gagal memulihkan: ${error.message}`);
+  const { error: childError } = await supabase.from("finance_transactions").update({ deleted_at: null, deleted_reason: null }).eq("parent_id", id).eq("deleted_reason", childDeletedReason(id));
+  if (childError) return fail(`${tx.code} dipulihkan, tapi biaya transfernya gagal: ${childError.message}`);
   await financeLog(auth.userId, "transaction", id, `batalkan hapus ${tx.code}`, null, null);
   refresh();
   return done(`${tx.code} dipulihkan.`);
@@ -630,10 +639,19 @@ export async function undoImport(batchId: string): Promise<ActionResult> {
   return done(`Import ${batch.file_name} dibatalkan — ${batch.tx_total} transaksi dihapus.`);
 }
 
-/** Kunci duplikat transaksi yang sudah ada (import 13h). */
-export async function existingImportKeys(): Promise<string[]> {
-  const auth = await requireFinance("full");
-  if ("error" in auth && !auth.error.startsWith("Mode demo")) return [];
-  const data = await getFinanceData();
-  return data.transactions.map((t) => dupKey(t.date, t.description, t.amount));
+// ── Activities: "Tandai Lunas" (A-7) ─────────────────────────────────────────
+/**
+ * Tandai booking lunas / batal lunas (bayar manual). Lewat RPC mark_booking_paid: status pembayaran
+ * berubah dan Keuangan mencatat Tiket activity ke akun default pembayaran manual (Rp0 → tidak ada
+ * transaksi; batal lunas → koreksi). Admin Activities atau host sesi itu.
+ */
+export async function markBookingPaid(bookingId: string, paid: boolean): Promise<ActionResult> {
+  const session = await getAdminSession();
+  if (session.mode === "demo") return fail("Mode demo: sambungkan Supabase untuk menyimpan.");
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase.rpc("mark_booking_paid", { p_booking: bookingId, p_paid: paid });
+  if (error) return fail(error.code === "42501" ? "Kamu tidak punya izin menandai pembayaran." : `Gagal menyimpan: ${error.message}`);
+  revalidatePath("/admin/activities", "layout");
+  refresh();
+  return done(paid ? "Ditandai lunas." : "Tanda lunas dibatalkan.");
 }
