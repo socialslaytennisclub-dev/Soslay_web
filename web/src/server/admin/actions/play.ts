@@ -461,11 +461,13 @@ export type ParticipantLookup =
   | { found: "member"; member: Pick<MemberIdentity, "id" | "fullName" | "memberCode" | "kuyId" | "email" | "phone" | "level" | "matchedBy">; alreadyIn: boolean }
   | { found: "none" };
 
-/** Tambah peserta ditolak hanya kalau sesi sudah selesai (saat Live masih boleh, mis. walk-in). */
+/**
+ * Tambah peserta tetap boleh kapan saja — juga setelah sesi selesai (mis. data Kuyy atau walk-in
+ * baru dicatat sesudah main). Hanya admin editor "activities" yang bisa memanggil aksi ini.
+ */
 async function addLock(supabase: Supabase, sessionId: string): Promise<string | null> {
-  const { data: session } = await supabase.from("sessions").select("status, ended_at").eq("id", sessionId).maybeSingle();
+  const { data: session } = await supabase.from("sessions").select("id").eq("id", sessionId).maybeSingle();
   if (!session) return "Sesi tidak ditemukan.";
-  if (session.status === "completed" || session.ended_at) return "Sesi sudah selesai — peserta tidak bisa ditambah lagi.";
   return null;
 }
 

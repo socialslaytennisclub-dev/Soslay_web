@@ -733,7 +733,6 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                   sessionId={session.id}
                   sessionTitle={session.title}
                   sessionWhen={sessionWhen}
-                  addLock={session.displayStatus === "completed" || session.play.endedAt ? "Sesi sudah selesai — peserta tidak bisa ditambah lagi." : null}
                 />
               </span>
               <div className={styles.stats}>
