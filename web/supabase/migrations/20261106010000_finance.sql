@@ -324,6 +324,15 @@ revoke all on function finance_sync_auto(text, text, bigint, text, uuid, text, u
 alter table session_participants add column paid_at timestamptz;
 comment on column session_participants.paid_at is 'Waktu bayar dari export Kuyy (kosong bila file tidak memuatnya).';
 
+-- Import ulang dari export tanpa kolom waktu bayar (atau sel kosong) tidak menghapus waktu yang sudah ada.
+create function session_participant_keep_paid_at() returns trigger language plpgsql as $$
+begin
+  new.paid_at := coalesce(new.paid_at, old.paid_at);
+  return new;
+end $$;
+create trigger session_participants_keep_paid_at before update of paid_at on session_participants
+  for each row execute function session_participant_keep_paid_at();
+
 create function finance_on_participant() returns trigger language plpgsql security definer set search_path = public as $$
 declare
   s   finance_settings;

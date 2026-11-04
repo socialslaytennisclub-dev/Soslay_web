@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { cx } from "@/lib/cx";
+import { isAutoSource } from "@/lib/finance/sources";
 import type { FinanceRole, FinTx } from "@/lib/finance/types";
 import styles from "./Finance.module.css";
 
@@ -47,14 +48,11 @@ export function PageHead({ title, subtitle, actions, back }: { title: string; su
   );
 }
 
-const AUTO_SOURCES: FinTx["source"][] = ["ticket", "ticket_manual_paid", "kuyy_import", "shop_order_verified", "refund", "pg_payout"];
-export const isAutoTx = (t: Pick<FinTx, "source">) => AUTO_SOURCES.includes(t.source);
-
 /** Badge kolom Sumber: Otomatis · Manual · Import · Transfer · Modal. */
 export function SourcePill({ tx }: { tx: Pick<FinTx, "source" | "type"> }) {
   if (tx.type === "transfer") return <span className={cx(styles.pill, styles.pillTransfer)}>Transfer</span>;
   if (tx.type === "owner_withdrawal" || tx.type === "owner_contribution") return <span className={cx(styles.pill, styles.pillNavy)}>Modal</span>;
-  if (isAutoTx(tx)) return <span className={cx(styles.pill, styles.pillAuto)}>Otomatis</span>;
+  if (isAutoSource(tx.source)) return <span className={cx(styles.pill, styles.pillAuto)}>Otomatis</span>;
   if (tx.source === "import") return <span className={styles.pill}>Import</span>;
   return <span className={styles.pill}>Manual</span>;
 }

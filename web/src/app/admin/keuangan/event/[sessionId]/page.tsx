@@ -9,7 +9,8 @@ import { Kpi } from "@/components/admin/overview/Overview";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { cx } from "@/lib/cx";
 import { dateLabel, pct, rp, rpShort } from "@/lib/finance/format";
-import { posted } from "@/lib/finance/reports";
+import { posted, postedBySession } from "@/lib/finance/reports";
+import { SOURCE_META } from "@/lib/finance/sources";
 import { toTxViews, txFormOptions } from "@/lib/finance/views";
 import { financePage } from "@/server/admin/finance-page";
 import pageStyles from "../../../page.module.css";
@@ -17,7 +18,6 @@ import pageStyles from "../../../page.module.css";
 export const metadata: Metadata = { title: "Detail event" };
 
 const TERM = { dp: "DP", installment: "Cicilan", settlement: "Pelunasan" } as const;
-const CHANNEL: Record<string, string> = { kuyy_import: "Kuyy", ticket_manual_paid: "Bayar manual (Tandai Lunas)", ticket: "Payment gateway", manual: "Dicatat manual", import: "Import jurnal" };
 
 /** Admin / 12w — Detail event: pendapatan per jalur/termin, biaya per kategori, transaksi terkait. */
 export default async function EventDetailPage({ params }: PageProps<"/admin/keuangan/event/[sessionId]">) {
@@ -27,7 +27,7 @@ export default async function EventDetailPage({ params }: PageProps<"/admin/keua
   const { sessionId } = await params;
   const session = data.sessions.find((s) => s.id === sessionId);
   if (!session) notFound();
-  const linked = posted(data).filter((t) => t.sessionId === sessionId);
+  const linked = postedBySession(data).get(sessionId) ?? [];
   const income = linked.filter((t) => t.type === "income");
   const expense = linked.filter((t) => t.type === "expense");
   const revenue = income.reduce((s, t) => s + t.amount, 0);
@@ -37,7 +37,8 @@ export default async function EventDetailPage({ params }: PageProps<"/admin/keua
 
   const byChannel = new Map<string, number>();
   for (const t of income) {
-    const key = t.term ? `${CHANNEL[t.source] ?? "Manual"} · ${TERM[t.term]}` : (CHANNEL[t.source] ?? "Manual");
+    const channel = SOURCE_META[t.source].channel;
+    const key = t.term ? `${channel} · ${TERM[t.term]}` : channel;
     byChannel.set(key, (byChannel.get(key) ?? 0) + t.amount);
   }
   const byCategory = new Map<string, number>();

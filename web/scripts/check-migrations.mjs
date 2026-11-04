@@ -713,6 +713,8 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   // Dibayar sebelum go-live (tanggal bayar dari file Kuyy) tapi diimpor sesudahnya → tidak dicatat (§14 7b).
   await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount, paid_at) values ($1, 'Bayar Lama', 'F4', 'bayarlama', 99000, '2019-12-28T10:00:00+07:00')`, [sid]);
   console.assert((await net("kuyy_import")) === 0, "dibayar sebelum go-live tidak dicatat");
+  await db.query(`update session_participants set paid_at = null where kuy_reg_no = 'F4'`);
+  console.assert((await one(`select paid_at from session_participants where kuy_reg_no = 'F4'`)).paid_at !== null, "import ulang tanpa waktu bayar tidak boleh menghapus paid_at");
   // Sebelum go-live: tidak ada transaksi otomatis.
   await db.exec(`update finance_settings set go_live_date = '2999-01-01'`);
   await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount) values ($1, 'Peserta Lama', 'F3', 'pesertalama', 99000)`, [sid]);

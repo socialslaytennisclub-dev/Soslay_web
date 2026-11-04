@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { AdminIcon } from "@/components/admin/ui/AdminIcon";
 import { AdminButton } from "@/components/admin/ui/AdminUI";
 import { Drawer } from "@/components/admin/ui/Drawer";
@@ -12,16 +12,10 @@ import { dateLabel, rp, rpSigned } from "@/lib/finance/format";
 import type { TxView } from "@/lib/finance/views";
 import { deleteTransaction, restoreTransaction } from "@/server/admin/actions/finance";
 import styles from "./Finance.module.css";
+import { FinanceModal } from "./FinanceModal";
+import { SourcePill } from "./FinanceUI";
 import { TxModal, type TxFormOptions } from "./TxModal";
 
-const AUTO = new Set(["ticket", "ticket_manual_paid", "kuyy_import", "shop_order_verified", "refund", "pg_payout"]);
-
-function Source({ v }: { v: TxView }) {
-  if (v.type === "transfer") return <span className={cx(styles.pill, styles.pillTransfer)}>Transfer</span>;
-  if (v.type.startsWith("owner_")) return <span className={cx(styles.pill, styles.pillNavy)}>Modal</span>;
-  if (AUTO.has(v.source)) return <span className={cx(styles.pill, styles.pillAuto)}>Otomatis</span>;
-  return <span className={styles.pill}>{v.source === "import" ? "Import" : "Manual"}</span>;
-}
 
 function Proof({ v }: { v: TxView }) {
   if (v.proof === "auto") return <AdminIcon name="link-simple" size={16} label="Bukti otomatis dari sistem" />;
@@ -87,7 +81,7 @@ export function TxTable({ rows, options, compact = false, showProof = true, open
                 <td>{v.category}</td>
                 <td>{v.account}</td>
                 <td>
-                  <Source v={v} />
+                  <SourcePill tx={v} />
                 </td>
                 {showProof && (
                   <td>
@@ -142,7 +136,7 @@ export function TxTable({ rows, options, compact = false, showProof = true, open
       <Drawer
         dialogRef={drawer.dialogRef}
         title={detail ? (detail.grouped.length ? detail.title : detail.tx.code) : "Detail transaksi"}
-        subtitle={detail ? (detail.editable ? "Transaksi manual" : AUTO.has(detail.source) ? "Otomatis · read-only — koreksi lewat modul asalnya" : "Read-only") : undefined}
+        subtitle={detail ? (detail.editable ? "Transaksi manual" : detail.auto ? "Otomatis · read-only — koreksi lewat modul asalnya" : "Read-only") : undefined}
         onClose={drawer.close}
         onBackdropClick={drawer.onBackdropClick}
         footer={
@@ -215,7 +209,7 @@ function Detail({ v }: { v: TxView }) {
         <dd>{v.account}</dd>
         <dt>Sumber</dt>
         <dd>
-          <Source v={v} />
+          <SourcePill tx={v} />
         </dd>
         {t.counterparty && (
           <>
@@ -264,7 +258,7 @@ function Detail({ v }: { v: TxView }) {
           )}
         </dd>
         <dt>Dicatat</dt>
-        <dd>{t.createdByName ?? (AUTO.has(t.source) ? "Sistem" : "—")}</dd>
+        <dd>{t.createdByName ?? (v.auto ? "Sistem" : "—")}</dd>
       </dl>
       {v.grouped.length > 0 && (
         <div className={styles.boxList}>
@@ -284,63 +278,50 @@ function Detail({ v }: { v: TxView }) {
 }
 
 function DeleteDialog({ v, onClose, onDone }: { v: TxView; onClose: () => void; onDone: () => void }) {
-  const ref = useRef<HTMLDialogElement>(null);
   const [reason, setReason] = useState("");
   const [pending, start] = useTransition();
   const router = useRouter();
-  useEffect(() => {
-    ref.current?.showModal();
-  }, []);
   return (
-    <dialog ref={ref} className={styles.modal} onClose={onClose} aria-label="Hapus transaksi">
-      <div className={styles.modalInner}>
-        <div className={styles.modalHead}>
-          <div>
-            <h2 className={styles.panelTitle}>Hapus {v.tx.code}?</h2>
-            <p className={styles.panelSub}>
-              {v.title} · {rpSigned(v.amount)}
-            </p>
-          </div>
+    <FinanceModal open={true} onClose={onClose} title={`Hapus ${v.tx.code}?`} subtitle={<>{v.title} · {rpSigned(v.amount)}</>}
+      footer={
+        <>
+        <span />
+        <div className={styles.actions}>
+          <AdminButton variant="outline" onClick={onClose}>
+            Batal
+          </AdminButton>
+          <AdminButton
+            variant="primary"
+            icon="trash"
+            disabled={pending}
+            onClick={() =>
+              start(async () => {
+                const r = await deleteTransaction(v.id, reason);
+                if (!r.ok) return toast.error(r.error);
+                onDone();
+                toast.withAction(r.message, {
+                  label: "Batalkan",
+                  onClick: async () => {
+                    toast.result(await restoreTransaction(v.id));
+                    router.refresh();
+                  },
+                });
+              })
+            }
+          >
+            {pending ? "Menghapus…" : "Hapus transaksi"}
+          </AdminButton>
         </div>
-        <div className={styles.modalBody}>
-          <p className={styles.note}>Saldo akun & laporan akan disesuaikan. Riwayat tetap tercatat di log dan kamu bisa membatalkan dalam 5 detik.</p>
-          <label className={styles.field}>
-            <span>
-              Alasan <span className={styles.optional}>(opsional)</span>
-            </span>
-            <input className={styles.input} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="mis. dobel input" />
-          </label>
-        </div>
-        <div className={styles.modalFoot}>
-          <span />
-          <div className={styles.actions}>
-            <AdminButton variant="outline" onClick={onClose}>
-              Batal
-            </AdminButton>
-            <AdminButton
-              variant="primary"
-              icon="trash"
-              disabled={pending}
-              onClick={() =>
-                start(async () => {
-                  const r = await deleteTransaction(v.id, reason);
-                  if (!r.ok) return toast.error(r.error);
-                  onDone();
-                  toast.withAction(r.message, {
-                    label: "Batalkan",
-                    onClick: async () => {
-                      toast.result(await restoreTransaction(v.id));
-                      router.refresh();
-                    },
-                  });
-                })
-              }
-            >
-              {pending ? "Menghapus…" : "Hapus transaksi"}
-            </AdminButton>
-          </div>
-        </div>
-      </div>
-    </dialog>
+        </>
+      }
+    >
+      <p className={styles.note}>Saldo akun & laporan akan disesuaikan. Riwayat tetap tercatat di log dan kamu bisa membatalkan dalam 5 detik.</p>
+      <label className={styles.field}>
+        <span>
+          Alasan <span className={styles.optional}>(opsional)</span>
+        </span>
+        <input className={styles.input} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="mis. dobel input" />
+      </label>
+    </FinanceModal>
   );
 }

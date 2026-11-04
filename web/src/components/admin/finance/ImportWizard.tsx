@@ -1,16 +1,17 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
 import { AdminIcon } from "@/components/admin/ui/AdminIcon";
-import { AdminButton } from "@/components/admin/ui/AdminUI";
+import { AdminButton, PickerInput } from "@/components/admin/ui/AdminUI";
 import { toast } from "@/components/admin/ui/Toaster";
 import { cx } from "@/lib/cx";
-import { dateLabel, monthLabel, rp, rpSigned } from "@/lib/finance/format";
+import { dateLabel, monthLabel, rp, rpSigned, TX_TYPE_LABEL } from "@/lib/finance/format";
 import { applyToSimilar, detectLayout, enrich, parseRows, similarityKey, type ColumnKey, type ColumnMap, type ImportError, type ImportFormat, type ImportTx } from "@/lib/finance/journal";
 import type { FinCategory } from "@/lib/finance/types";
 import { commitImport, readImportFile, saveCategory } from "@/server/admin/actions/finance";
 import styles from "./Finance.module.css";
+import { FinanceModal } from "./FinanceModal";
 
 type Props = {
   categories: FinCategory[];
@@ -115,13 +116,16 @@ export function ImportWizard(props: Props) {
     setDraftCleared(true);
   };
 
+  const autoTicketMonths = useMemo(() => new Set(props.autoTicketMonths), [props.autoTicketMonths]);
+  const existingKeys = useMemo(() => new Set(props.existingKeys), [props.existingKeys]);
+
   const parse = (over?: Partial<{ format: ImportFormat; columns: ColumnMap; headerRow: number; period: string; defaultDate: string; rows: string[][] }>) => {
     const opt = { format, columns, headerRow, period, defaultDate, ...over };
     const result = parseRows(over?.rows ?? rows, opt);
     const enriched = enrich(result.txs, {
       categories,
-      autoTicketMonths: new Set(props.autoTicketMonths),
-      existingKeys: new Set(props.existingKeys),
+      autoTicketMonths,
+      existingKeys,
       goLiveDate: props.goLiveDate,
       ticketCategoryId: props.ticketCategoryId,
     });
@@ -303,7 +307,7 @@ export function ImportWizard(props: Props) {
               </label>
               <label className={styles.field}>
                 <span>Tanggal default</span>
-                <input
+                <PickerInput
                   type="date"
                   className={styles.input}
                   value={defaultDate}
@@ -480,7 +484,7 @@ function CategoryWalker({ txs, categories, canSave, onChange, onNewCategory, onD
       <div className={styles.walkerTx}>
         <span className={styles.muted}>
           Baris {tx.rowFrom}
-          {tx.rowTo !== tx.rowFrom ? `–${tx.rowTo}` : ""} · {tx.type === "income" ? "Pemasukan" : "Pengeluaran"} · {dateLabel(tx.date)}
+          {tx.rowTo !== tx.rowFrom ? `–${tx.rowTo}` : ""} · {TX_TYPE_LABEL[tx.type]} · {dateLabel(tx.date)}
           {tx.dateSource !== "column" ? ` (${tx.dateSource === "description" ? "dari keterangan" : "tanggal default"})` : ""}
         </span>
         <strong>{tx.description}</strong>
@@ -615,11 +619,6 @@ function Review({
   const [filter, setFilter] = useState<"all" | "review" | "manual" | "suggested">("all");
   const [confirming, setConfirming] = useState(false);
   const [dupMode, setDupMode] = useState<"both" | "one">("one");
-  const ref = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    if (confirming) ref.current?.showModal();
-    else ref.current?.close();
-  }, [confirming]);
 
   const cat = new Map(categories.map((c) => [c.id, c]));
   const active = txs.filter((t) => !t.skip);
@@ -738,7 +737,7 @@ function Review({
                   <td>
                     <span className={styles.cellTitle}>{t.description}</span>
                   </td>
-                  <td>{t.type === "income" ? "Pemasukan" : t.type === "expense" ? "Pengeluaran" : "Transfer"}</td>
+                  <td>{TX_TYPE_LABEL[t.type]}</td>
                   <td>
                     {t.type === "transfer" ? (
                       <span className={styles.muted}>
@@ -783,79 +782,69 @@ function Review({
         </div>
       </section>
 
-      <dialog ref={ref} className={styles.modal} onClose={() => setConfirming(false)} aria-label="Konfirmasi import">
-        <div className={styles.modalInner}>
-          <div className={styles.modalHead}>
-            <div>
-              <h2 className={styles.panelTitle}>Konfirmasi import</h2>
-              <p className={styles.panelSub}>{fileName}</p>
-            </div>
-            <button type="button" className={styles.close} onClick={() => setConfirming(false)} aria-label="Tutup">
-              <AdminIcon name="x" size={18} />
-            </button>
+      <FinanceModal open={confirming} onClose={() => setConfirming(false)} title="Konfirmasi import" subtitle={<>{fileName}</>}
+        footer={
+          <>
+          <span />
+          <div className={styles.actions}>
+            <AdminButton onClick={() => setConfirming(false)}>Batal</AdminButton>
+            <AdminButton variant="primary" disabled={pending || !chosen.length} onClick={() => onCommit(chosen, learn)}>
+              {pending ? "Mengimpor…" : `Import ${chosen.length} transaksi`}
+            </AdminButton>
           </div>
-          <div className={styles.modalBody}>
-            {dups.length > 0 && (
-              <div className={styles.inlineForm}>
-                <strong>{dups.length} kemungkinan duplikat</strong>
-                <p className={styles.muted}>Tanggal + keterangan + jumlah sama, di dalam file atau dengan transaksi yang sudah ada: {dups.slice(0, 3).map((d) => `#${d.index} ${d.description} · ${rp(d.amount)}`).join("; ")}</p>
-                <div className={styles.segment}>
-                  <button type="button" className={cx(styles.segBtn, dupMode === "one" && styles.segActive)} onClick={() => setDupMode("one")}>
-                    Import satu saja
-                  </button>
-                  <button type="button" className={cx(styles.segBtn, dupMode === "both" && styles.segActive)} onClick={() => setDupMode("both")}>
-                    Import keduanya
-                  </button>
-                </div>
-              </div>
-            )}
-            {blocked.length > 0 && (
-              <p className={styles.alert}>
-                <AdminIcon name="warning-circle" size={16} />
-                {blocked.length} transaksi tidak ikut diimpor (belum berkategori atau bertanggal sejak go-live).
-              </p>
-            )}
-            <div className={styles.boxList}>
-              <div className={styles.settingRow}>
-                <div>Transaksi diimpor</div>
-                <strong>{chosen.length}</strong>
-              </div>
-              <div className={styles.settingRow}>
-                <div>Pendapatan {monthLabel(period)}</div>
-                <strong>+{rp(income)}</strong>
-              </div>
-              <div className={styles.settingRow}>
-                <div>Biaya {monthLabel(period)}</div>
-                <strong className={styles.neg}>{rp(-expense)}</strong>
-              </div>
-              <div className={styles.settingRow}>
-                <div>Dampak laba bulan itu</div>
-                <strong>{rpSigned(income - expense)}</strong>
-              </div>
-              <div className={styles.settingRow}>
-                <div>Perubahan saldo Bank BCA</div>
-                <strong>{rpSigned(bankDelta)}</strong>
-              </div>
-              {newCats.length > 0 && (
-                <div className={styles.settingRow}>
-                  <div>Kategori baru</div>
-                  <strong>{newCats.map((id) => cat.get(id)?.name).join(", ")}</strong>
-                </div>
-              )}
-            </div>
-            <p className={styles.muted}>Hasil import berlabel &quot;Import · {fileName}&quot; dan bisa dibatalkan sekaligus dalam 24 jam.</p>
-          </div>
-          <div className={styles.modalFoot}>
-            <span />
-            <div className={styles.actions}>
-              <AdminButton onClick={() => setConfirming(false)}>Batal</AdminButton>
-              <AdminButton variant="primary" disabled={pending || !chosen.length} onClick={() => onCommit(chosen, learn)}>
-                {pending ? "Mengimpor…" : `Import ${chosen.length} transaksi`}
-              </AdminButton>
+          </>
+        }
+      >
+        {dups.length > 0 && (
+          <div className={styles.inlineForm}>
+            <strong>{dups.length} kemungkinan duplikat</strong>
+            <p className={styles.muted}>Tanggal + keterangan + jumlah sama, di dalam file atau dengan transaksi yang sudah ada: {dups.slice(0, 3).map((d) => `#${d.index} ${d.description} · ${rp(d.amount)}`).join("; ")}</p>
+            <div className={styles.segment}>
+              <button type="button" className={cx(styles.segBtn, dupMode === "one" && styles.segActive)} onClick={() => setDupMode("one")}>
+                Import satu saja
+              </button>
+              <button type="button" className={cx(styles.segBtn, dupMode === "both" && styles.segActive)} onClick={() => setDupMode("both")}>
+                Import keduanya
+              </button>
             </div>
           </div>
+        )}
+        {blocked.length > 0 && (
+          <p className={styles.alert}>
+            <AdminIcon name="warning-circle" size={16} />
+            {blocked.length} transaksi tidak ikut diimpor (belum berkategori atau bertanggal sejak go-live).
+          </p>
+        )}
+        <div className={styles.boxList}>
+          <div className={styles.settingRow}>
+            <div>Transaksi diimpor</div>
+            <strong>{chosen.length}</strong>
+          </div>
+          <div className={styles.settingRow}>
+            <div>Pendapatan {monthLabel(period)}</div>
+            <strong>+{rp(income)}</strong>
+          </div>
+          <div className={styles.settingRow}>
+            <div>Biaya {monthLabel(period)}</div>
+            <strong className={styles.neg}>{rp(-expense)}</strong>
+          </div>
+          <div className={styles.settingRow}>
+            <div>Dampak laba bulan itu</div>
+            <strong>{rpSigned(income - expense)}</strong>
+          </div>
+          <div className={styles.settingRow}>
+            <div>Perubahan saldo Bank BCA</div>
+            <strong>{rpSigned(bankDelta)}</strong>
+          </div>
+          {newCats.length > 0 && (
+            <div className={styles.settingRow}>
+              <div>Kategori baru</div>
+              <strong>{newCats.map((id) => cat.get(id)?.name).join(", ")}</strong>
+            </div>
+          )}
         </div>
-      </dialog>
+        <p className={styles.muted}>Hasil import berlabel &quot;Import · {fileName}&quot; dan bisa dibatalkan sekaligus dalam 24 jam.</p>
+      </FinanceModal>
     </>
   );
 }

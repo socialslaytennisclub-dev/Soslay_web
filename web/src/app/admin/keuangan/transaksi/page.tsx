@@ -11,9 +11,10 @@ import { AdminIcon } from "@/components/admin/ui/AdminIcon";
 import { AdminButton } from "@/components/admin/ui/AdminUI";
 import { cx } from "@/lib/cx";
 import { dateTimeWib, monthLabel, pct, rp, rpSigned } from "@/lib/finance/format";
-import { firstDay, lastDay, posted, profitLoss } from "@/lib/finance/reports";
+import { firstDay, groupTransactions, lastDay, posted, profitLoss } from "@/lib/finance/reports";
+import { isAutoSource } from "@/lib/finance/sources";
 import type { FinTx } from "@/lib/finance/types";
-import { toTxViews, txFormOptions } from "@/lib/finance/views";
+import { txFormOptions, txViews } from "@/lib/finance/views";
 import { one } from "@/server/admin/query";
 import { canUndoImport, financePage, monthParam } from "@/server/admin/finance-page";
 import pageStyles from "../../page.module.css";
@@ -21,7 +22,6 @@ import pageStyles from "../../page.module.css";
 export const metadata: Metadata = { title: "Transaksi" };
 
 const PAGE_SIZE = 20;
-const AUTO = new Set(["ticket", "ticket_manual_paid", "kuyy_import", "shop_order_verified", "refund", "pg_payout"]);
 type Tab = "all" | "income" | "expense" | "transfer";
 
 /** Admin / 12b Transaksi · 12t filter tanpa hasil · 12x tampilan Pencatat keuangan · 13i hasil import. */
@@ -46,14 +46,17 @@ export default async function FinanceTransactionsPage({ searchParams }: PageProp
   const matchFilters = (t: FinTx) =>
     (!cat || t.categoryId === cat) &&
     (!acc || t.accountId === acc || t.toAccountId === acc) &&
-    (!src || (src === "auto" ? AUTO.has(t.source) : src === "import" ? t.source === "import" : !AUTO.has(t.source) && t.source !== "import")) &&
+    (!src || (src === "auto" ? isAutoSource(t.source) : src === "import" ? t.source === "import" : !isAutoSource(t.source) && t.source !== "import")) &&
     (!q || [t.description, t.counterparty, t.note, t.code, t.ownerName].some((v) => v?.toLowerCase().includes(q)));
   const filtered = base.filter(matchFilters);
   const isType = (t: FinTx, k: Tab) => k === "all" || (k === "transfer" ? t.type === "transfer" : k === "income" ? t.type === "income" || t.type === "owner_contribution" : t.type === "expense" || t.type === "owner_withdrawal");
-  const counts = { all: filtered.length, income: filtered.filter((t) => isType(t, "income")).length, expense: filtered.filter((t) => isType(t, "expense")).length, transfer: filtered.filter((t) => isType(t, "transfer")).length };
-  const views = toTxViews(data, filtered.filter((t) => isType(t, tab)), role, userId);
-  const pages = Math.max(1, Math.ceil(views.length / PAGE_SIZE));
-  const shown = views.slice((Math.min(page, pages) - 1) * PAGE_SIZE, Math.min(page, pages) * PAGE_SIZE);
+  const counts = { all: filtered.length, income: 0, expense: 0, transfer: 0 };
+  for (const t of filtered) for (const k of ["income", "expense", "transfer"] as const) if (isType(t, k)) counts[k]++;
+  // Gabung → potong per halaman → baru susun view (hanya PAGE_SIZE baris yang diformat & dikirim ke klien).
+  const rows = groupTransactions(filtered.filter((t) => isType(t, tab)));
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const shown = txViews(data, rows.slice((Math.min(page, pages) - 1) * PAGE_SIZE, Math.min(page, pages) * PAGE_SIZE), role, userId);
+  const total = rows.length;
 
   const href = (over: Record<string, string | number | undefined>) => {
     const p = new URLSearchParams();
@@ -181,10 +184,10 @@ export default async function FinanceTransactionsPage({ searchParams }: PageProp
             </div>
           )}
 
-          {views.length > 0 && (
+          {total > 0 && (
             <div className={styles.tableFoot}>
               <span>
-                Menampilkan {(Math.min(page, pages) - 1) * PAGE_SIZE + 1}–{Math.min(Math.min(page, pages) * PAGE_SIZE, views.length)} dari {views.length} transaksi
+                Menampilkan {(Math.min(page, pages) - 1) * PAGE_SIZE + 1}–{Math.min(Math.min(page, pages) * PAGE_SIZE, total)} dari {total} transaksi
               </span>
               {pages > 1 && (
                 <nav className={styles.pager} aria-label="Halaman">

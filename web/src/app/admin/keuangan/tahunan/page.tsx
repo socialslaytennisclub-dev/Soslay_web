@@ -11,7 +11,7 @@ import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { AdminIcon } from "@/components/admin/ui/AdminIcon";
 import { cx } from "@/lib/cx";
 import { MONTHS, MONTHS_SHORT, num, pct, rpShort } from "@/lib/finance/format";
-import { pctChange, yearly } from "@/lib/finance/reports";
+import { deltaPct, pctChange, yearly } from "@/lib/finance/reports";
 import { one } from "@/server/admin/query";
 import { financePage } from "@/server/admin/finance-page";
 import pageStyles from "../../page.module.css";
@@ -54,9 +54,9 @@ export default async function YearlyPage({ searchParams }: PageProps<"/admin/keu
         </div>
 
         <div className={styles.kpis}>
-          <Kpi icon="trend-up" label={`Pendapatan ${elapsedLabel}`} value={rpShort(y.totals.revenue)} delta={round1(pctChange(y.totals.revenue, y.totals.prevRevenue))} note={`vs ${rpShort(y.totals.prevRevenue)} periode sama ${year - 1}`} />
+          <Kpi icon="trend-up" label={`Pendapatan ${elapsedLabel}`} value={rpShort(y.totals.revenue)} delta={deltaPct(y.totals.revenue, y.totals.prevRevenue)} note={`vs ${rpShort(y.totals.prevRevenue)} periode sama ${year - 1}`} />
           <Kpi icon="trend-down" label={`Total biaya ${elapsedLabel}`} value={rpShort(y.totals.cost)} note="HPP & beban operasional" />
-          <Kpi icon="money" label={`Laba bersih ${elapsedLabel}`} value={rpShort(y.totals.net)} delta={round1(pctChange(y.totals.net, y.totals.prevNet))} note={`Margin ${pct(y.totals.margin)} · ${year - 1}: ${rpShort(y.totals.prevNet)}`} />
+          <Kpi icon="money" label={`Laba bersih ${elapsedLabel}`} value={rpShort(y.totals.net)} delta={deltaPct(y.totals.net, y.totals.prevNet)} note={`Margin ${pct(y.totals.margin)} · ${year - 1}: ${rpShort(y.totals.prevNet)}`} />
           <Kpi icon="star" label="Bulan terbaik" value={y.best ? MONTHS[Number(y.best.ym.slice(5)) - 1] : "—"} note={y.best ? `Laba ${rpShort(y.best.net)} · margin ${pct(y.best.margin)}` : "Belum ada data"} />
         </div>
 
@@ -205,4 +205,3 @@ export default async function YearlyPage({ searchParams }: PageProps<"/admin/keu
   );
 }
 
-const round1 = (v: number | null) => (v === null ? undefined : Math.round(v * 10) / 10);

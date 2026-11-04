@@ -27,7 +27,7 @@ export default async function EventProfitPage({ searchParams }: PageProps<"/admi
   const { data, role } = ctx;
   const raw = await searchParams;
   const { month, months } = monthParam(data, raw.m);
-  const kind = (["mabar", "coaching", "event"].includes(one(raw.kind) ?? "") ? one(raw.kind) : "all") as EventKind | "all";
+  const kind = ((one(raw.kind) ?? "") in KIND_LABEL ? one(raw.kind) : "all") as EventKind | "all";
   const sort = ((one(raw.sort) ?? "profit") in SORTS ? (one(raw.sort) ?? "profit") : "profit") as Sort;
   const all = eventRows(data, month);
   const rows = all
@@ -85,7 +85,7 @@ export default async function EventProfitPage({ searchParams }: PageProps<"/admi
               active={kind}
               items={[
                 { key: "all", label: "Semua", href: href({ kind: undefined }), count: all.length },
-                ...(["mabar", "coaching", "event"] as EventKind[]).map((k) => ({ key: k, label: KIND_LABEL[k], href: href({ kind: k }), count: count(k) })),
+                ...(Object.keys(KIND_LABEL) as EventKind[]).map((k) => ({ key: k, label: KIND_LABEL[k], href: href({ kind: k }), count: count(k) })),
               ]}
             />
             <ParamSelect name="sort" value={sort} options={(Object.keys(SORTS) as Sort[]).map((k) => ({ value: k, label: `Urut: ${SORTS[k]}` }))} label="Urutan" />

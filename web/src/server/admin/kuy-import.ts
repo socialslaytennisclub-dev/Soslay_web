@@ -84,7 +84,7 @@ export function parseKuyTime(raw: string): string | null {
   return null;
 }
 
-export function parseKuyExport(data: ArrayBuffer): { eventTitle: string; rows: KuyRow[]; hasPaidAt: boolean } {
+export function parseKuyExport(data: ArrayBuffer): { eventTitle: string; rows: KuyRow[] } {
   const sheet = readFirstSheet(data);
   const headerAt = sheet.findIndex((r) => r.some((c) => c.toLowerCase() === "username") && r.some((c) => c.toLowerCase() === "email"));
   if (headerAt < 0) throw new Error('Kolom "Username" & "Email" tidak ditemukan — pastikan ini export peserta dari Kuyy.');
@@ -134,7 +134,7 @@ export function parseKuyExport(data: ArrayBuffer): { eventTitle: string; rows: K
       skipReason,
     });
   }
-  return { eventTitle, rows, hasPaidAt: paidCol >= 0 };
+  return { eventTitle, rows };
 }
 
 /**

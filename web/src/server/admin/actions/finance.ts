@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { accountBalances } from "@/lib/finance/reports";
+import { canEditTx, SOURCE_META } from "@/lib/finance/sources";
 import { selectableCategory } from "@/lib/finance/views";
 import type { BalanceItemKey, FinanceRole, TxTerm, TxType } from "@/lib/finance/types";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -21,10 +22,11 @@ const PROOF_TYPES = { "image/jpeg": "jpg", "image/png": "png", "application/pdf"
 const MAX_PROOF = 5 * 1024 * 1024;
 
 type Auth = { userId: string; name: string; role: FinanceRole };
+const DEMO_ERROR = "Mode demo: sambungkan Supabase untuk menyimpan.";
 
 async function requireFinance(level: "record" | "full"): Promise<Auth | { error: string }> {
   const session = await getAdminSession();
-  if (session.mode === "demo") return { error: "Mode demo: sambungkan Supabase untuk menyimpan." };
+  if (session.mode === "demo") return { error: DEMO_ERROR };
   if (session.mode === "denied") return { error: "Sesi admin berakhir — masuk lagi lewat /masuk/admin." };
   const role = financeRole(session);
   if (!role) return { error: "Kamu tidak punya akses Keuangan." };
@@ -34,8 +36,10 @@ async function requireFinance(level: "record" | "full"): Promise<Auth | { error:
 
 async function financeLog(actorId: string, entity: string, entityId: string | null, action: string, before: unknown, after: unknown) {
   const supabase = await createSupabaseServerClient();
-  await supabase.from("finance_audit_logs").insert({ entity, entity_id: entityId, action, before: before ?? null, after: after ?? null, actor_id: actorId });
-  await audit(actorId, `Keuangan · ${action}`, `finance_${entity}`, entityId ?? undefined);
+  await Promise.all([
+    supabase.from("finance_audit_logs").insert({ entity, entity_id: entityId, action, before: before ?? null, after: after ?? null, actor_id: actorId }),
+    audit(actorId, `Keuangan · ${action}`, `finance_${entity}`, entityId ?? undefined),
+  ]);
 }
 
 function refresh() {
@@ -88,8 +92,7 @@ export async function saveTransaction(formData: FormData): Promise<TxResult> {
   if (!Number.isInteger(amount) || amount <= 0) fields.amount = "Jumlah harus angka Rupiah lebih dari 0.";
   if (type === "income" || type === "expense") {
     if (!category) fields.categoryId = "Pilih kategori.";
-    // Kategori arsip hanya boleh dipertahankan oleh transaksi yang memang sudah memakainya.
-    else if (category.kind !== type || !(selectableCategory(data, category) || (category.isArchived && existingTx?.categoryId === category.id))) fields.categoryId = "Kategori ini tidak bisa dipilih.";
+    else if (category.kind !== type || !selectableCategory(data, category, existingTx?.categoryId)) fields.categoryId = "Kategori ini tidak bisa dipilih.";
   }
   if (!data.accounts.some((a) => a.id === accountId && a.isActive)) fields.accountId = "Pilih akun.";
   if (type === "transfer") {
@@ -109,8 +112,8 @@ export async function saveTransaction(formData: FormData): Promise<TxResult> {
   const existing = id ? data.transactions.find((t) => t.id === id) : null;
   if (id) {
     if (!existing) return { ok: false, error: "Transaksi tidak ditemukan." };
-    if (existing.source !== "manual" && existing.source !== "import") return { ok: false, error: "Transaksi otomatis tidak bisa diubah dari Keuangan — koreksi lewat modul asalnya." };
-    if (auth.role === "recorder" && existing.createdBy !== auth.userId) return { ok: false, error: "Pencatat hanya bisa mengubah transaksi yang dicatat sendiri." };
+    if (!SOURCE_META[existing.source].editable) return { ok: false, error: "Transaksi otomatis tidak bisa diubah dari Keuangan — koreksi lewat modul asalnya." };
+    if (!canEditTx(existing, auth.role, auth.userId)) return { ok: false, error: "Pencatat hanya bisa mengubah transaksi manual yang dicatat sendiri." };
   }
 
   let proofFields: Record<string, unknown> = {};
@@ -198,8 +201,8 @@ export async function deleteTransaction(id: string, reason?: string): Promise<Ac
   const data = await getFinanceData();
   const tx = data.transactions.find((t) => t.id === id);
   if (!tx) return fail("Transaksi tidak ditemukan.");
-  if (tx.source !== "manual" && tx.source !== "import") return fail("Transaksi otomatis tidak bisa dihapus dari Keuangan.");
-  if (auth.role === "recorder" && tx.createdBy !== auth.userId) return fail("Pencatat hanya bisa menghapus transaksi yang dicatat sendiri.");
+  if (!SOURCE_META[tx.source].editable) return fail("Transaksi otomatis tidak bisa dihapus dari Keuangan.");
+  if (!canEditTx(tx, auth.role, auth.userId)) return fail("Pencatat hanya bisa menghapus transaksi manual yang dicatat sendiri.");
   const supabase = await createSupabaseServerClient();
   const now = new Date().toISOString();
   const { error } = await supabase.from("finance_transactions").update({ deleted_at: now, deleted_reason: reason?.slice(0, 200) || null, updated_by: auth.userId }).eq("id", id);
@@ -501,8 +504,11 @@ export async function saveTarget(year: number, amount: number, monthly: number[]
 // ── Import jurnal (§7) ───────────────────────────────────────────────────────
 /** Langkah 1: baca file (XLSX/CSV, maks 5 MB) → baris teks. Parsing dilakukan di browser. */
 export async function readImportFile(formData: FormData): Promise<{ ok: true; rows: string[][]; fileName: string } | { ok: false; error: string }> {
-  const auth = await requireFinance("full");
-  if ("error" in auth && !auth.error.startsWith("Mode demo")) return { ok: false, error: auth.error };
+  // Membaca file tidak menyimpan apa pun → mode demo boleh mencoba wizard sampai tahap tinjau.
+  if ((await getAdminSession()).mode !== "demo") {
+    const auth = await requireFinance("full");
+    if ("error" in auth) return { ok: false, error: auth.error };
+  }
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Pilih file Excel (.xlsx) atau CSV dulu." };
   if (file.size > 5 * 1024 * 1024) return { ok: false, error: "Ukuran file maksimal 5 MB." };
@@ -647,7 +653,7 @@ export async function undoImport(batchId: string): Promise<ActionResult> {
  */
 export async function markBookingPaid(bookingId: string, paid: boolean): Promise<ActionResult> {
   const session = await getAdminSession();
-  if (session.mode === "demo") return fail("Mode demo: sambungkan Supabase untuk menyimpan.");
+  if (session.mode === "demo") return fail(DEMO_ERROR);
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.rpc("mark_booking_paid", { p_booking: bookingId, p_paid: paid });
   if (error) return fail(error.code === "42501" ? "Kamu tidak punya izin menandai pembayaran." : `Gagal menyimpan: ${error.message}`);

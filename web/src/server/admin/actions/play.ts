@@ -249,9 +249,9 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
       kuy_username: r.username || null,
       amount: r.amount,
       payment_method: r.paymentMethod || null,
-      // Waktu bayar → tanggal pendapatan Keuangan (A-8). Hanya dikirim bila file memuat kolomnya,
-      // supaya import ulang dari export lama tidak menghapus waktu yang sudah tersimpan.
-      ...(upload.parsed.hasPaidAt ? { paid_at: r.paidAt } : {}),
+      // Waktu bayar → tanggal pendapatan Keuangan (A-8). Nilai kosong tidak menimpa waktu yang
+      // sudah tersimpan (trigger session_participants_keep_paid_at).
+      paid_at: r.paidAt,
       ...checkIn,
     })),
     { onConflict: "session_id,kuy_reg_no" },

@@ -58,14 +58,6 @@
   border-color: transparent;
 }
 
-/* Baris tab bisa digulir ke samping (overflow-x) → di dalam kolom flex (isi modal) tingginya boleh
-   dikecilkan browser sampai terpotong. Kunci tinggi alaminya. */
-.tabs,
-.segment,
-.modalBody > * {
-  flex-shrink: 0;
-}
-
 .tab,
 .segBtn {
   flex: none;
@@ -534,29 +526,6 @@
   justify-content: space-between;
   gap: var(--space-12);
   padding: var(--space-16) var(--space-20);
-}
-
-.search {
-  display: flex;
-  align-items: center;
-  gap: var(--space-8);
-  width: min(100%, 260px);
-  height: 36px;
-  padding: 0 var(--space-12);
-  border: 1px solid var(--color-indigo-border);
-  border-radius: var(--radius-md);
-  color: var(--color-indigo-muted);
-}
-
-.search input {
-  flex: 1;
-  min-width: 0;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  font-family: var(--font-ui);
-  font-size: 13px;
-  color: var(--color-navy-900);
 }
 
 .legend {
@@ -1037,6 +1006,12 @@
   justify-content: space-between;
   gap: var(--space-16);
   padding: var(--space-24) var(--space-24) var(--space-16);
+}
+
+/* Isi modal = kolom yang di-scroll. Anaknya tidak boleh menyusut: baris tab yang bisa digulir ke samping
+   (overflow-x) punya tinggi minimum 0 dan akan terpotong saat tinggi modal terbatas. */
+.modalBody > * {
+  flex-shrink: 0;
 }
 
 .modalBody {

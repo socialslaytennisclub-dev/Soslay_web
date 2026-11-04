@@ -7,6 +7,7 @@
  *   jadi selalu konsisten dengan pos peralatan & pengaturan pajak.
  * - Transaksi kategori PPh yang dicatat manual = setoran pajak (mengurangi utang pajak), bukan beban.
  */
+import { isAutoSource, SOURCE_META } from "./sources";
 import type { BalanceItem, FinAccount, FinCategory, FinanceData, FinSession, FinTx, ReportGroup } from "./types";
 
 // ── Tanggal (string YYYY-MM-DD / YYYY-MM) ─────────────────────────────────────
@@ -28,6 +29,11 @@ const monthsBetween = (a: string, b: string) => {
   return (yb - ya) * 12 + (mb - ma);
 };
 export const pctChange = (now: number, before: number): number | null => (before === 0 ? null : ((now - before) / Math.abs(before)) * 100);
+/** Perubahan % dibulatkan 1 desimal untuk badge KPI (undefined = tidak ada pembanding). */
+export const deltaPct = (now: number, before: number): number | undefined => {
+  const v = pctChange(now, before);
+  return v === null ? undefined : Math.round(v * 10) / 10;
+};
 
 export type Period = { from: string; to: string; label: string };
 
@@ -90,11 +96,32 @@ export function accumulatedDepreciation(data: FinanceData, asOf: string): number
   return total;
 }
 
-const catBy = (data: FinanceData) => new Map(data.categories.map((c) => [c.id, c]));
+/** Hitung sekali per FinanceData (data satu request tidak pernah diubah). */
+function memo<T>(fn: (data: FinanceData) => T) {
+  const cache = new WeakMap<FinanceData, T>();
+  return (data: FinanceData): T => {
+    if (!cache.has(data)) cache.set(data, fn(data));
+    return cache.get(data)!;
+  };
+}
+
+const catBy = memo((data) => new Map(data.categories.map((c) => [c.id, c])));
 export const systemCategory = (data: FinanceData, key: string) => data.categories.find((c) => c.systemKey === key) ?? null;
 
 /** Transaksi yang dihitung laporan: terposting (draf berulang tidak ikut). */
-export const posted = (data: FinanceData) => data.transactions.filter((t) => t.status === "posted");
+export const posted = memo((data) => data.transactions.filter((t) => t.status === "posted"));
+
+/** Transaksi terposting per sesi (laporan Per event & detail event). */
+export const postedBySession = memo((data) => {
+  const map = new Map<string, FinTx[]>();
+  for (const t of posted(data)) {
+    if (!t.sessionId) continue;
+    const list = map.get(t.sessionId);
+    if (list) list.push(t);
+    else map.set(t.sessionId, [t]);
+  }
+  return map;
+});
 
 // ── Laba Rugi ────────────────────────────────────────────────────────────────
 export type PnlLine = { categoryId: string; name: string; amount: number; group: ReportGroup; auto: boolean; systemKey: string | null };
@@ -115,7 +142,6 @@ export type Pnl = {
   totalExpense: number;
 };
 
-const AUTO_SOURCES = new Set(["ticket", "ticket_manual_paid", "kuyy_import", "shop_order_verified", "refund", "pg_payout", "depreciation", "tax"]);
 
 /**
  * Indeks harian (dibuat sekali per FinanceData): tanggal diakui → total per kategori. Laporan yang
@@ -136,7 +162,7 @@ function dayIndex(data: FinanceData) {
     const day = byDay.get(t.recognizedOn) ?? new Map();
     const cell = day.get(t.categoryId) ?? { amount: 0, auto: false };
     cell.amount += t.amount;
-    cell.auto ||= AUTO_SOURCES.has(t.source);
+    cell.auto ||= isAutoSource(t.source);
     day.set(t.categoryId, cell);
     byDay.set(t.recognizedOn, day);
   }
@@ -414,15 +440,20 @@ export type EventRow = {
 };
 
 export function eventRows(data: FinanceData, ym: string): EventRow[] {
-  const txs = posted(data);
+  const bySession = postedBySession(data);
   const kuyy = data.accounts.find((a) => a.systemKey === "kuyy")?.id;
   return data.sessions
     .filter((s) => monthOf(s.startsAt.slice(0, 10)) === ym)
     .map((s) => {
-      const linked = txs.filter((t) => t.sessionId === s.id);
-      const revenue = linked.filter((t) => t.type === "income").reduce((x, t) => x + t.amount, 0);
-      const cost = linked.filter((t) => t.type === "expense").reduce((x, t) => x + t.amount, 0);
-      const channels = new Set(linked.filter((t) => t.type === "income").map((t) => (t.source === "kuyy_import" || t.accountId === kuyy || /kuy/i.test(t.description) ? "Kuyy" : t.source === "ticket" ? "sistem" : "bayar manual")));
+      let revenue = 0;
+      let cost = 0;
+      const channels = new Set<string>();
+      for (const t of bySession.get(s.id) ?? []) {
+        if (t.type === "expense") cost += t.amount;
+        if (t.type !== "income") continue;
+        revenue += t.amount;
+        channels.add(t.source === "kuyy_import" || t.accountId === kuyy || /kuy/i.test(t.description) ? "Kuyy" : t.source === "ticket" ? "sistem" : "bayar manual");
+      }
       return {
         session: s,
         kind: eventKind(s.typeSlug),
@@ -470,7 +501,6 @@ export function trend(data: FinanceData, endYm: string, months = 6) {
 export const asOfFor = (data: FinanceData, ym: string) => (lastDay(ym) > data.today ? data.today : lastDay(ym));
 
 // ── Daftar transaksi: gabung tiket otomatis per sesi (§3.2) ───────────────────
-const GROUPED = new Set(["kuyy_import", "ticket_manual_paid", "ticket"]);
 
 export type TxRow = { key: string; tx: FinTx; items: FinTx[]; amount: number };
 
@@ -479,7 +509,7 @@ export function groupTransactions(txs: FinTx[]): TxRow[] {
   const rows: TxRow[] = [];
   const groups = new Map<string, TxRow>();
   for (const t of txs) {
-    if (GROUPED.has(t.source) && t.sessionId) {
+    if (SOURCE_META[t.source].ticket && t.sessionId) {
       const key = `grp:${t.source}:${t.sessionId}:${t.accountId}:${monthOf(t.recognizedOn)}`;
       const g = groups.get(key);
       if (g) {

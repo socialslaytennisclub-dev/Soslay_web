@@ -340,3 +340,12 @@ a.navActive:hover {
     display: flex;
   }
 }
+
+/* Halaman cetak admin (laporan Keuangan → PDF): bingkai admin tidak ikut tercetak. */
+@media print {
+  .sidebar,
+  .mobileBar,
+  .topbar {
+    display: none !important;
+  }
+}

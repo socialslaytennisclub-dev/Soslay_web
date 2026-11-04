@@ -1,7 +1,7 @@
 import "server-only";
-import { dateLabel, monthLabel, MONTHS } from "@/lib/finance/format";
+import { dateLabel, monthLabel, MONTHS, TX_TYPE_LABEL } from "@/lib/finance/format";
 import { balanceSheet, posted, profitLoss, yearly, type Pnl } from "@/lib/finance/reports";
-import type { FinanceData, FinTx } from "@/lib/finance/types";
+import type { FinanceData } from "@/lib/finance/types";
 import type { Cell, Sheet } from "./xlsx-write";
 
 /** Isi export Keuangan (§8) — dipakai route export (.xlsx / .csv) dan halaman cetak (PDF). */
@@ -14,14 +14,6 @@ export const REPORTS = {
   journal: "Jurnal umum (debet / kredit)",
 } as const;
 export type ReportKey = keyof typeof REPORTS;
-
-const TYPE_LABEL: Record<FinTx["type"], string> = {
-  income: "Pemasukan",
-  expense: "Pengeluaran",
-  transfer: "Transfer",
-  owner_withdrawal: "Penarikan pemilik",
-  owner_contribution: "Setor modal",
-};
 
 function header(report: string, period: string, exporter: string): Cell[][] {
   return [["Soslay Tennis Club"], [report], [`Periode: ${period}`], [`Diekspor ${new Date().toLocaleString("id-ID", { timeZone: "Asia/Jakarta" })} WIB oleh ${exporter}`], []];
@@ -40,7 +32,7 @@ export function transactionRows(data: FinanceData, from: string, to: string): Ce
         t.code,
         t.date,
         t.recognizedOn,
-        TYPE_LABEL[t.type],
+        TX_TYPE_LABEL[t.type],
         t.description,
         t.categoryId ? (cat.get(t.categoryId) ?? "") : "",
         acc.get(t.accountId) ?? "",

@@ -1,14 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { useRef, useState, useTransition, type ReactNode } from "react";
 import { AdminIcon } from "@/components/admin/ui/AdminIcon";
-import { AdminButton } from "@/components/admin/ui/AdminUI";
+import { AdminButton, PickerInput } from "@/components/admin/ui/AdminUI";
 import { toast } from "@/components/admin/ui/Toaster";
 import { cx } from "@/lib/cx";
+import { amountDigits, amountDisplay } from "@/lib/finance/format";
 import type { FinanceRole, FinTx, TxType } from "@/lib/finance/types";
 import { deleteTransaction, saveTransaction, type TxFieldErrors } from "@/server/admin/actions/finance";
 import styles from "./Finance.module.css";
+import { FinanceModal } from "./FinanceModal";
 
 export type TxFormOptions = {
   role: FinanceRole;
@@ -35,17 +37,13 @@ const TERMS = [
   { value: "settlement", label: "Pelunasan" },
 ];
 
-const fmt = (v: string) => {
-  const digits = v.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
-  return digits ? Number(digits).toLocaleString("id-ID") : "";
-};
+const fmt = (v: string) => amountDisplay(amountDigits(v));
 
 /**
  * Modal "Catat transaksi" (Figma 12c / 12h / 12h-2 / 12i, validasi 12j). Dipakai untuk catat baru,
  * edit, dan duplikat transaksi manual. Setelah simpan → toast dengan "Batalkan" 5 detik (12k).
  */
 export function TxModal({ open, onClose, options, initial, duplicate = false, presetSessionId }: { open: boolean; onClose: () => void; options: TxFormOptions; initial?: FinTx | null; duplicate?: boolean; presetSessionId?: string }) {
-  const ref = useRef<HTMLDialogElement>(null);
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -59,12 +57,6 @@ export function TxModal({ open, onClose, options, initial, duplicate = false, pr
   const [banner, setBanner] = useState<string | null>(null);
   const [removeProof, setRemoveProof] = useState(false);
 
-  useEffect(() => {
-    const d = ref.current;
-    if (!d) return;
-    if (open && !d.open) d.showModal();
-    if (!open && d.open) d.close();
-  }, [open]);
 
   const isOwner = type === "owner_withdrawal" || type === "owner_contribution";
   const kind = type === "income" ? "income" : "expense";
@@ -133,189 +125,179 @@ export function TxModal({ open, onClose, options, initial, duplicate = false, pr
   );
 
   return (
-    <dialog ref={ref} className={styles.modal} aria-label="Catat transaksi" onClose={onClose} onClick={(e) => e.target === ref.current && onClose()}>
-      <form ref={formRef} action={submit} className={styles.modalInner} noValidate>
-        <div className={styles.modalHead}>
-          <div>
-            <h2 className={styles.panelTitle}>{editing ? `Ubah ${initial!.code}` : "Catat transaksi"}</h2>
-            <p className={styles.panelSub}>Pemasukan tiket & order shop sudah tercatat otomatis.</p>
-          </div>
-          <button type="button" className={styles.close} onClick={onClose} aria-label="Tutup">
-            <AdminIcon name="x" size={18} />
-          </button>
+    <FinanceModal open={open} onClose={onClose} title={editing ? `Ubah ${initial!.code}` : "Catat transaksi"} subtitle={<>Pemasukan tiket & order shop sudah tercatat otomatis.</>} action={submit} formRef={formRef}
+      footer={
+        <>
+        <span className={styles.footNote}>Tercatat atas nama {options.userName}</span>
+        <div className={styles.actions}>
+          <AdminButton variant="outline" onClick={onClose}>
+            Batal
+          </AdminButton>
+          <AdminButton variant="primary" icon="check-bold" type="submit" disabled={pending}>
+            {pending ? "Menyimpan…" : "Simpan transaksi"}
+          </AdminButton>
         </div>
-        <div className={styles.modalBody}>
-          {!editing && (
-            <div className={styles.segment} role="tablist" aria-label="Jenis transaksi">
-              {tabs.map((t) => (
-                <button
-                  key={t.type}
-                  type="button"
-                  role="tab"
-                  aria-selected={activeTab === t.type}
-                  className={cx(styles.segBtn, activeTab === t.type && styles.tabActive)}
-                  onClick={() => {
-                    setType(t.type);
-                    setCategoryId("");
-                    setFields({});
-                  }}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </div>
-          )}
-          {banner && (
-            <p className={styles.errorBanner} role="alert">
-              {banner}
-            </p>
-          )}
+        </>
+      }
+    >
+      {!editing && (
+        <div className={styles.segment} role="tablist" aria-label="Jenis transaksi">
+          {tabs.map((t) => (
+            <button
+              key={t.type}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === t.type}
+              className={cx(styles.segBtn, activeTab === t.type && styles.tabActive)}
+              onClick={() => {
+                setType(t.type);
+                setCategoryId("");
+                setFields({});
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {banner && (
+        <p className={styles.errorBanner} role="alert">
+          {banner}
+        </p>
+      )}
 
-          {isOwner && (
-            <div className={styles.segment} aria-label="Jenis modal pemilik">
-              {(
-                [
-                  ["owner_withdrawal", "Penarikan pemilik"],
-                  ["owner_contribution", "Setor modal"],
-                ] as const
-              ).map(([v, l]) => (
-                <button key={v} type="button" disabled={editing} className={cx(styles.segBtn, type === v && styles.segActive)} onClick={() => setType(v)}>
-                  {l}
-                </button>
-              ))}
-            </div>
-          )}
+      {isOwner && (
+        <div className={styles.segment} aria-label="Jenis modal pemilik">
+          {(
+            [
+              ["owner_withdrawal", "Penarikan pemilik"],
+              ["owner_contribution", "Setor modal"],
+            ] as const
+          ).map(([v, l]) => (
+            <button key={v} type="button" disabled={editing} className={cx(styles.segBtn, type === v && styles.segActive)} onClick={() => setType(v)}>
+              {l}
+            </button>
+          ))}
+        </div>
+      )}
 
+      <div className={styles.fieldRow}>
+        {field("Tanggal", "date", <PickerInput type="date" name="date" max={options.today} defaultValue={initial && !duplicate ? initial.date : options.today} className={cx(styles.input, fields.date && styles.inputError)} required />)}
+        {field(
+          type === "transfer" ? "Jumlah ditarik" : "Jumlah",
+          "amount",
+          <span className={styles.money}>
+            <span>Rp</span>
+            <input name="amount" inputMode="numeric" value={amount} onChange={(e) => setAmount(fmt(e.target.value))} placeholder="0" className={cx(styles.input, fields.amount && styles.inputError)} aria-invalid={!!fields.amount} />
+          </span>,
+        )}
+      </div>
+
+      {(type === "income" || type === "expense") && (
+        <div className={styles.fieldRow}>
+          {field(
+            "Kategori",
+            "categoryId",
+            <select name="categoryId" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={cx(styles.input, fields.categoryId && styles.inputError)}>
+              <option value="">Pilih kategori</option>
+              {cats.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>,
+          )}
+          {field(type === "expense" ? "Dibayar dari" : "Masuk ke", "accountId", accountSelect("accountId", initial?.accountId))}
+        </div>
+      )}
+
+      {type === "transfer" && (
+        <>
           <div className={styles.fieldRow}>
-            {field("Tanggal", "date", <input type="date" name="date" max={options.today} defaultValue={initial && !duplicate ? initial.date : options.today} className={cx(styles.input, fields.date && styles.inputError)} required />)}
-            {field(
-              type === "transfer" ? "Jumlah ditarik" : "Jumlah",
-              "amount",
-              <span className={styles.money}>
-                <span>Rp</span>
-                <input name="amount" inputMode="numeric" value={amount} onChange={(e) => setAmount(fmt(e.target.value))} placeholder="0" className={cx(styles.input, fields.amount && styles.inputError)} aria-invalid={!!fields.amount} />
-              </span>,
-            )}
+            {field("Dari akun", "accountId", accountSelect("accountId", initial?.accountId))}
+            {field("Ke akun", "toAccountId", accountSelect("toAccountId", initial?.toAccountId ?? ""))}
           </div>
-
-          {(type === "income" || type === "expense") && (
-            <div className={styles.fieldRow}>
-              {field(
-                "Kategori",
-                "categoryId",
-                <select name="categoryId" value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={cx(styles.input, fields.categoryId && styles.inputError)}>
-                  <option value="">Pilih kategori</option>
-                  {cats.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.name}
-                    </option>
-                  ))}
-                </select>,
-              )}
-              {field(type === "expense" ? "Dibayar dari" : "Masuk ke", "accountId", accountSelect("accountId", initial?.accountId))}
-            </div>
+          {field(
+            opt("Biaya transfer"),
+            "fee",
+            <span className={styles.money}>
+              <span>Rp</span>
+              <input name="fee" inputMode="numeric" value={fee} onChange={(e) => setFee(fmt(e.target.value))} placeholder="0" className={cx(styles.input, fields.fee && styles.inputError)} />
+            </span>,
+            "Withdraw Kuyy: selisih jumlah ditarik vs yang masuk bank → Biaya platform Kuyy. Pencairan PG → Biaya payment gateway.",
           )}
+        </>
+      )}
 
-          {type === "transfer" && (
-            <>
-              <div className={styles.fieldRow}>
-                {field("Dari akun", "accountId", accountSelect("accountId", initial?.accountId))}
-                {field("Ke akun", "toAccountId", accountSelect("toAccountId", initial?.toAccountId ?? ""))}
-              </div>
-              {field(
-                opt("Biaya transfer"),
-                "fee",
-                <span className={styles.money}>
-                  <span>Rp</span>
-                  <input name="fee" inputMode="numeric" value={fee} onChange={(e) => setFee(fmt(e.target.value))} placeholder="0" className={cx(styles.input, fields.fee && styles.inputError)} />
-                </span>,
-                "Withdraw Kuyy: selisih jumlah ditarik vs yang masuk bank → Biaya platform Kuyy. Pencairan PG → Biaya payment gateway.",
-              )}
-            </>
-          )}
+      {isOwner && (
+        <div className={styles.fieldRow}>
+          {field(type === "owner_withdrawal" ? "Diambil dari" : "Disetor ke", "accountId", accountSelect("accountId", initial?.accountId))}
+          {field(opt("Pemilik"), "ownerName", <input name="ownerName" defaultValue={initial?.ownerName ?? ""} className={styles.input} />)}
+        </div>
+      )}
 
-          {isOwner && (
-            <div className={styles.fieldRow}>
-              {field(type === "owner_withdrawal" ? "Diambil dari" : "Disetor ke", "accountId", accountSelect("accountId", initial?.accountId))}
-              {field(opt("Pemilik"), "ownerName", <input name="ownerName" defaultValue={initial?.ownerName ?? ""} className={styles.input} />)}
-            </div>
-          )}
+      {(type === "income" || type === "expense") && field(opt(type === "expense" ? "Vendor / penerima" : "Pembayar"), "counterparty", <input name="counterparty" defaultValue={initial?.counterparty ?? ""} className={styles.input} />)}
 
-          {(type === "income" || type === "expense") && field(opt(type === "expense" ? "Vendor / penerima" : "Pembayar"), "counterparty", <input name="counterparty" defaultValue={initial?.counterparty ?? ""} className={styles.input} />)}
+      {(type === "income" || type === "expense") &&
+        field(
+          <>
+            Kaitkan ke sesi / event <span className={styles.optional}>{ticket ? "(disarankan)" : "(opsional)"}</span>
+          </>,
+          "sessionId",
+          <select name="sessionId" defaultValue={initial?.sessionId ?? presetSessionId ?? ""} className={styles.input}>
+            <option value="">— Tidak dikaitkan —</option>
+            {options.sessions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </select>,
+          type === "expense" ? "Biaya ikut dihitung di laba per sesi." : "Pendapatan ikut dihitung di laba per event.",
+        )}
 
-          {(type === "income" || type === "expense") &&
-            field(
+      {type === "income" &&
+        ticket &&
+        field(
+          "Termin",
+          "term",
+          <select name="term" defaultValue={initial?.term ?? ""} className={styles.input}>
+            {TERMS.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
+          </select>,
+          "Untuk DP / cicilan event (mis. Rally in Paradise). Tulis nama peserta di catatan.",
+        )}
+
+      {field(opt("Keterangan"), "description", <input name="description" defaultValue={initial && !duplicate ? initial.description : (initial?.description ?? "")} placeholder="Otomatis dari kategori & vendor bila kosong" className={styles.input} />)}
+      {field(opt("Catatan"), "note", <input name="note" defaultValue={initial?.note ?? ""} className={styles.input} />)}
+
+      {type !== "transfer" && (
+        <label className={styles.field}>
+          <span>
+            Bukti (nota / struk / transfer) <span className={styles.optional}>(opsional)</span>
+          </span>
+          <span className={styles.upload}>
+            <AdminIcon name="paperclip" size={18} />
+            {editing && initial?.hasProof && !removeProof ? (
               <>
-                Kaitkan ke sesi / event <span className={styles.optional}>{ticket ? "(disarankan)" : "(opsional)"}</span>
-              </>,
-              "sessionId",
-              <select name="sessionId" defaultValue={initial?.sessionId ?? presetSessionId ?? ""} className={styles.input}>
-                <option value="">— Tidak dikaitkan —</option>
-                {options.sessions.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>,
-              type === "expense" ? "Biaya ikut dihitung di laba per sesi." : "Pendapatan ikut dihitung di laba per event.",
+                <a href={`/admin/keuangan/bukti/${initial.id}`} target="_blank" rel="noreferrer" className={styles.link}>
+                  {initial.proofName ?? "Lihat bukti"}
+                </a>
+                <button type="button" className={styles.link} onClick={() => setRemoveProof(true)}>
+                  Hapus
+                </button>
+              </>
+            ) : (
+              <input type="file" name="proof" accept="image/jpeg,image/png,application/pdf" />
             )}
-
-          {type === "income" &&
-            ticket &&
-            field(
-              "Termin",
-              "term",
-              <select name="term" defaultValue={initial?.term ?? ""} className={styles.input}>
-                {TERMS.map((t) => (
-                  <option key={t.value} value={t.value}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>,
-              "Untuk DP / cicilan event (mis. Rally in Paradise). Tulis nama peserta di catatan.",
-            )}
-
-          {field(opt("Keterangan"), "description", <input name="description" defaultValue={initial && !duplicate ? initial.description : (initial?.description ?? "")} placeholder="Otomatis dari kategori & vendor bila kosong" className={styles.input} />)}
-          {field(opt("Catatan"), "note", <input name="note" defaultValue={initial?.note ?? ""} className={styles.input} />)}
-
-          {type !== "transfer" && (
-            <label className={styles.field}>
-              <span>
-                Bukti (nota / struk / transfer) <span className={styles.optional}>(opsional)</span>
-              </span>
-              <span className={styles.upload}>
-                <AdminIcon name="paperclip" size={18} />
-                {editing && initial?.hasProof && !removeProof ? (
-                  <>
-                    <a href={`/admin/keuangan/bukti/${initial.id}`} target="_blank" rel="noreferrer" className={styles.link}>
-                      {initial.proofName ?? "Lihat bukti"}
-                    </a>
-                    <button type="button" className={styles.link} onClick={() => setRemoveProof(true)}>
-                      Hapus
-                    </button>
-                  </>
-                ) : (
-                  <input type="file" name="proof" accept="image/jpeg,image/png,application/pdf" />
-                )}
-              </span>
-              {err("proof")}
-              <small>JPG, PNG atau PDF · maks. 5 MB. Tanpa bukti tetap tersimpan (ditandai &quot;Belum&quot;).</small>
-            </label>
-          )}
-        </div>
-        <div className={styles.modalFoot}>
-          <span className={styles.footNote}>Tercatat atas nama {options.userName}</span>
-          <div className={styles.actions}>
-            <AdminButton variant="outline" onClick={onClose}>
-              Batal
-            </AdminButton>
-            <AdminButton variant="primary" icon="check-bold" type="submit" disabled={pending}>
-              {pending ? "Menyimpan…" : "Simpan transaksi"}
-            </AdminButton>
-          </div>
-        </div>
-      </form>
-    </dialog>
+          </span>
+          {err("proof")}
+          <small>JPG, PNG atau PDF · maks. 5 MB. Tanpa bukti tetap tersimpan (ditandai &quot;Belum&quot;).</small>
+        </label>
+      )}
+    </FinanceModal>
   );
 }
 

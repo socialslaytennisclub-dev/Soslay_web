@@ -4,6 +4,7 @@
  * di sini hanya ditambah tanda minus, "+", kurung laporan, dan singkatan miliar (M).
  */
 import { formatRupiahPlain, formatRupiahShort } from "@/lib/admin-labels";
+import type { TxType } from "./types";
 
 const nf = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 });
 const MINUS = "−";
@@ -33,6 +34,25 @@ export function rpShort(v: number): string {
   if (a >= 1_000_000_000) return `${sign}Rp${(a / 1_000_000_000).toLocaleString("id-ID", { maximumFractionDigits: 2 })} M`;
   return `${sign}${formatRupiahShort(Math.round(a))}`;
 }
+
+/** Nama jenis transaksi (daftar, import, export). */
+export const TX_TYPE_LABEL: Record<TxType, string> = {
+  income: "Pemasukan",
+  expense: "Pengeluaran",
+  transfer: "Transfer",
+  owner_withdrawal: "Penarikan pemilik",
+  owner_contribution: "Setor modal",
+};
+
+/** Isian Rupiah di form: ketikan → angka mentah ("4800000", "-150000"); tanpa nol di depan. */
+export function amountDigits(raw: string, allowNegative = false): string {
+  const negative = allowNegative && raw.trim().startsWith("-");
+  const digits = raw.replace(/\D/g, "").replace(/^0+(?=\d)/, "");
+  return negative ? `-${digits}` : digits;
+}
+
+/** Angka mentah → tampilan isian dengan titik ribuan ("4.800.000"); "" dan "-" apa adanya. */
+export const amountDisplay = (digits: string) => (digits && digits !== "-" ? Number(digits).toLocaleString("id-ID") : digits);
 
 /** Sumbu grafik: "200 jt". */
 export function jt(v: number): string {

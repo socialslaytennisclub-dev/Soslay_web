@@ -18,8 +18,6 @@ export default async function FinancePrintPage({ searchParams }: PageProps<"/adm
   return (
     <div className={styles.page}>
       <PrintOnLoad />
-      {/* Sidebar & topbar admin tidak ikut tercetak. */}
-      <style>{"@media print { #admin-sidebar, header[class*=topbar], [class*=mobileBar] { display: none !important; } }"}</style>
       {sheets.map((s) => {
         const head = s.rows.slice(0, 4);
         const [cols, ...body] = s.rows.slice(5);

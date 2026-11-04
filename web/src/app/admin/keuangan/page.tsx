@@ -12,7 +12,7 @@ import { AdminIcon, type AdminIconName } from "@/components/admin/ui/AdminIcon";
 import { AdminButton } from "@/components/admin/ui/AdminUI";
 import { cx } from "@/lib/cx";
 import { dateLabel, dateTimeWib, monthLabel, pct, rp, rpShort } from "@/lib/finance/format";
-import { accountBalances, addMonths, asOfFor, firstDay, lastDay, pctChange, posted, profitLoss, trend } from "@/lib/finance/reports";
+import { accountBalances, addMonths, asOfFor, deltaPct, firstDay, lastDay, posted, profitLoss, trend } from "@/lib/finance/reports";
 import { toTxViews, txFormOptions } from "@/lib/finance/views";
 import { financePage, monthParam } from "@/server/admin/finance-page";
 import pageStyles from "../page.module.css";
@@ -111,9 +111,9 @@ export default async function FinanceSummaryPage({ searchParams }: PageProps<"/a
         <FinanceTabs active="ringkasan" role={role} query={`?m=${month}`} />
 
         <div className={styles.kpis}>
-          <Kpi icon="trend-up" label="Pendapatan" value={rpShort(pnl.totalRevenue)} delta={round1(pctChange(pnl.totalRevenue, prev.totalRevenue))} note={`vs ${rpShort(prev.totalRevenue)} di ${monthLabel(prevYm).split(" ")[0]}`} />
-          <Kpi icon="trend-down" label="Pengeluaran" value={rpShort(pnl.totalExpense)} delta={round1(pctChange(pnl.totalExpense, prev.totalExpense))} note="HPP & beban operasional" />
-          <Kpi icon="money" label="Laba bersih" value={rpShort(pnl.netProfit)} delta={round1(pctChange(pnl.netProfit, prev.netProfit))} note={`Margin ${pct(pnl.netMargin)} (${monthLabel(prevYm).split(" ")[0]} ${pct(prev.netMargin)})`} />
+          <Kpi icon="trend-up" label="Pendapatan" value={rpShort(pnl.totalRevenue)} delta={deltaPct(pnl.totalRevenue, prev.totalRevenue)} note={`vs ${rpShort(prev.totalRevenue)} di ${monthLabel(prevYm).split(" ")[0]}`} />
+          <Kpi icon="trend-down" label="Pengeluaran" value={rpShort(pnl.totalExpense)} delta={deltaPct(pnl.totalExpense, prev.totalExpense)} note="HPP & beban operasional" />
+          <Kpi icon="money" label="Laba bersih" value={rpShort(pnl.netProfit)} delta={deltaPct(pnl.netProfit, prev.netProfit)} note={`Margin ${pct(pnl.netMargin)} (${monthLabel(prevYm).split(" ")[0]} ${pct(prev.netMargin)})`} />
           <Kpi icon="bank" label="Saldo kas & bank" value={rpShort(cashTotal)} note={`${cashAccounts.length} akun · per ${dateLabel(asOf)}`} />
         </div>
 
@@ -250,4 +250,3 @@ export default async function FinanceSummaryPage({ searchParams }: PageProps<"/a
   );
 }
 
-const round1 = (v: number | null) => (v === null ? undefined : Math.round(v * 10) / 10);
