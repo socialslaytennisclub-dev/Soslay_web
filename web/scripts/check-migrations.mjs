@@ -608,6 +608,15 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(null);
   await checkIn("RV5", host);
   console.assert((await status(host)) === "attended", "host tidak bisa menghidupkan booking batalnya sendiri (tanpa JWT)!");
+  // Check-in mandiri host sesi dengan booking batal: diterima (definisi panitia sama dengan trigger).
+  const host2 = await mk("rv-host2");
+  await db.query(`insert into bookings (session_id, member_id, status, payment_status, source, amount) values ($1, $2, 'cancelled', 'paid', 'admin', 0)`, [s, host2]);
+  await db.query(`insert into session_hosts (session_id, member_id, role) values ($1, $2, 'host')`, [s, host2]);
+  await db.query(`insert into session_participants (session_id, kuy_reg_no, member_id, full_name) values ($1, 'RV7', $2, 'x')`, [s, host2]);
+  await as(host2);
+  const hostSelf = await db.query(`select member_self_check_in($1)`, [s]).then(() => "", (e) => e.message);
+  await as(null);
+  console.assert(!hostSelf && (await status(host2)) === "attended", `check-in mandiri host dengan booking batal: "${hostSelf}"`);
   // setCheckIn jalur booking langsung: hadir lalu batal (menulis registered) → kembali cancelled.
   await db.query(`update bookings set status = 'attended' where session_id = $1 and member_id = $2`, [s, direct]);
   await db.query(`update bookings set status = 'registered' where session_id = $1 and member_id = $2`, [s, direct]);

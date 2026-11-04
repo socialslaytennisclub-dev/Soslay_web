@@ -189,6 +189,8 @@ export async function deleteMemberNote(memberId: string, noteId: string): Promis
   return done("Catatan dihapus.");
 }
 
+const ATTENDED = "Member ini sudah tercatat hadir di sesi tersebut.";
+
 /** Daftarkan member ke sesi dari admin (mis. lewat WhatsApp). Butuh izin Activities. */
 export async function bookMemberIntoSession(memberId: string, sessionId: string): Promise<ActionResult> {
   const auth = await requireEditor("activities");
@@ -200,17 +202,21 @@ export async function bookMemberIntoSession(memberId: string, sessionId: string)
     supabase.from("bookings").select("status").eq("session_id", sessionId).eq("member_id", memberId).maybeSingle(),
   ]);
   if (!session || session.status !== "published") return fail("Sesi tidak tersedia.");
-  // Upsert di bawah menimpa status; booking yang sudah hadir jangan diturunkan ke registered
-  // (check-in & poin kehadirannya akan hilang sementara daftar peserta tetap Hadir).
-  if (current?.status === "attended") return fail("Member ini sudah tercatat hadir di sesi tersebut.");
+  // Booking yang sudah hadir jangan diturunkan ke registered (check-in & poin kehadirannya hilang
+  // sementara daftar peserta tetap Hadir) — juga dijaga di query update di bawah (check-in bersamaan).
+  if (current?.status === "attended") return fail(ATTENDED);
   const full = (count ?? 0) >= (session.capacity as number);
   if (full && !session.waitlist_enabled) return fail("Sesi sudah penuh dan waitlist tidak aktif.");
 
-  const { error } = await supabase.from("bookings").upsert(
-    { session_id: sessionId, member_id: memberId, status: full ? "waitlisted" : "registered", payment_status: "pending", source: "admin", amount: session.price },
-    { onConflict: "session_id,member_id" },
-  );
-  if (error) return fail(`Gagal booking: ${error.message}`);
+  const row = { status: full ? "waitlisted" : "registered", payment_status: "pending", source: "admin", amount: session.price } as const;
+  if (current) {
+    const { data: updated, error } = await supabase.from("bookings").update(row).eq("session_id", sessionId).eq("member_id", memberId).neq("status", "attended").select("id");
+    if (error) return fail(`Gagal booking: ${error.message}`);
+    if (!updated?.length) return fail(ATTENDED);
+  } else {
+    const { error } = await supabase.from("bookings").insert({ session_id: sessionId, member_id: memberId, ...row });
+    if (error) return fail(error.code === "23505" ? "Member baru saja terdaftar di sesi ini — muat ulang halaman." : `Gagal booking: ${error.message}`);
+  }
   await audit(auth.userId, `booking-kan member ke ${session.title}`, "booking", sessionId);
   refreshPaths(`/admin/members/${memberId}`, `/admin/activities/${sessionId}`, "/admin/activities");
   return done(full ? `Sesi penuh — member masuk waitlist ${session.title}.` : `Member terdaftar di ${session.title} (pembayaran: menunggu).`);
