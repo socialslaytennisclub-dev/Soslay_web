@@ -580,7 +580,6 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
     await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, name, `${name}@example.com`]);
     return id;
   };
-  const fails = async (sql, params) => db.query(sql, params).then(() => false, () => true);
   const venueId = (await one(`select id from venues limit 1`)).id;
   const { id: s } = await one(
     `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, points_per_attendance)
