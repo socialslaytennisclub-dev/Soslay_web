@@ -171,11 +171,27 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
   // Hanya baris yang dicentang admin di preview (kalau dikirim); baris dilewati tetap diabaikan.
   const selectedRaw = formData.get("selected");
   const selected = typeof selectedRaw === "string" ? new Set(JSON.parse(selectedRaw) as string[]) : null;
-  const rows = upload.parsed.rows.filter((r) => !r.skipReason && (!selected || selected.has(r.regNo)));
-  if (!rows.length) return { ok: false, error: "Tidak ada peserta yang dipilih untuk diimpor." };
+  const picked = upload.parsed.rows.filter((r) => !r.skipReason && (!selected || selected.has(r.regNo)));
+  if (!picked.length) return { ok: false, error: "Tidak ada peserta yang dipilih untuk diimpor." };
+
+  const supabase = await createSupabaseServerClient();
+  const state = await sessionFinished(supabase, sessionId);
+  if ("error" in state) return { ok: false, error: state.error };
+  // Sesi sudah selesai → absensi, skor & poin sudah tercatat per baris. Impor ulang hanya
+  // MENAMBAH nomor registrasi baru; baris yang sudah ada tidak ditimpa (member_id-nya tidak boleh
+  // berpindah ke orang lain setelah poin dibagikan).
+  let kept = 0;
+  let rows = picked;
+  if (state.finished) {
+    const { data: existing, error: existingError } = await supabase.from("session_participants").select("kuy_reg_no").eq("session_id", sessionId).in("kuy_reg_no", picked.map((r) => r.regNo));
+    if (existingError) return { ok: false, error: `Gagal membaca peserta: ${existingError.message}` };
+    const taken = new Set((existing ?? []).map((r) => r.kuy_reg_no as string));
+    rows = picked.filter((r) => !taken.has(r.regNo));
+    kept = picked.length - rows.length;
+    if (!rows.length) return { ok: false, error: "Sesi sudah selesai dan semua peserta di file ini sudah tercatat — tidak ada yang diubah." };
+  }
 
   const members = await matchMembers(rows);
-  const supabase = await createSupabaseServerClient();
 
   // Belum member → ghost member: pakai yang sudah ada (aktivitas sebelumnya) atau buat baru.
   const guests = rows.filter((r) => !members.get(r.regNo));
@@ -260,6 +276,8 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
   const parts = [`${rows.length} peserta diimpor`, `${matched} cocok dengan member Soslay`];
   if (linked) parts.push(`${linked} Kuy ID disambungkan ke ID Soslay`);
   if (guests.length) parts.push(`${guests.length} belum member dicatat sebagai ghost member — undang daftar lewat tombol WA`);
+  if (kept) parts.push(`${kept} sudah tercatat sebelumnya, tidak diubah karena sesi sudah selesai`);
+  if (state.finished) parts.push("tandai Hadir untuk peserta yang ikut main supaya poin kehadirannya masuk");
   return { ok: true, message: `${parts.join(" · ")}.` };
 }
 
@@ -464,11 +482,12 @@ export type ParticipantLookup =
 /**
  * Tambah peserta tetap boleh kapan saja — juga setelah sesi selesai (mis. data Kuyy atau walk-in
  * baru dicatat sesudah main). Hanya admin editor "activities" yang bisa memanggil aksi ini.
+ * `finished` dipakai untuk aturan khusus sesi selesai (lihat addParticipantManual & impor Kuyy).
  */
-async function addLock(supabase: Supabase, sessionId: string): Promise<string | null> {
-  const { data: session } = await supabase.from("sessions").select("id").eq("id", sessionId).maybeSingle();
-  if (!session) return "Sesi tidak ditemukan.";
-  return null;
+async function sessionFinished(supabase: Supabase, sessionId: string): Promise<{ error: string } | { finished: boolean }> {
+  const { data: session } = await supabase.from("sessions").select("status, ended_at").eq("id", sessionId).maybeSingle();
+  if (!session) return { error: "Sesi tidak ditemukan." };
+  return { finished: session.status === "completed" || Boolean(session.ended_at) };
 }
 
 /** Cek isian admin (ID Soslay / Kuy ID / Reclub ID / nomor HP) → member Soslay atau belum terdaftar. */
@@ -493,9 +512,13 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
   const supabase = await createSupabaseServerClient();
-  const locked = await addLock(supabase, sessionId);
-  if (locked) return { ok: false, error: locked };
+  const state = await sessionFinished(supabase, sessionId);
+  if ("error" in state) return { ok: false, error: state.error };
   const regNo = `ADM-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+  // Sesi sudah selesai → peserta yang ditambahkan sesudahnya memang ikut main: langsung tercatat
+  // hadir (booking member ikut "attended" + poin kehadiran lewat trigger), tidak menggantung "terdaftar".
+  const lateCheckIn = state.finished ? { checked_in_at: new Date().toISOString(), checked_in_by: auth.userId } : {};
+  const lateNote = state.finished ? " · sesi sudah selesai, otomatis tercatat hadir" : "";
 
   if ("memberId" in input) {
     const member = await findMemberById(input.memberId);
@@ -512,11 +535,12 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
       phone: member.phone || null,
       tennis_level: member.level,
       kuy_username: member.kuyId || null,
+      ...lateCheckIn,
     });
     if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
     await audit(auth.userId, `menambah peserta ${member.fullName} (manual)`, "session", sessionId);
     refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
-    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta.` };
+    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta${lateNote}.` };
   }
 
   const fullName = input.fullName.trim();
@@ -551,9 +575,10 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
     full_name: known?.full_name ?? fullName,
     email: email || null,
     phone: phone || null,
+    ...lateCheckIn,
   });
   if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
   await audit(auth.userId, `menambah peserta ${fullName} (manual, ghost)`, "session", sessionId);
   refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
-  return { ok: true, message: `${fullName} ditambahkan sebagai ghost member${known ? " (sudah pernah ikut aktivitas sebelumnya)" : ""}.` };
+  return { ok: true, message: `${fullName} ditambahkan sebagai ghost member${known ? " (sudah pernah ikut aktivitas sebelumnya)" : ""}${lateNote}.` };
 }
