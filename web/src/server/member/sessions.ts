@@ -2,7 +2,6 @@ import "server-only";
 import { cache } from "react";
 import type { MemberSession } from "@/content/member";
 import { cityOf } from "@/lib/format";
-import { sessionClosesAt } from "@/lib/session-close";
 import { isSessionFinished } from "@/lib/session-lock";
 import { closeExpiredSessions } from "@/server/close-sessions";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -55,7 +54,7 @@ export const getMySessions = cache(async (): Promise<MemberSession[] | null> => 
   const earned = new Map((points ?? []).map((p) => [p.booking_id as string, p.delta as number]));
   const now = Date.now();
   // Ada sesi lewat jeda yang belum tertutup (cron belum jalan) → tutup sekarang (status + bonus juara).
-  if (byId.size && [...byId.values()].some((s) => s.status === "published" && sessionClosesAt(s.ends_at) < now)) await closeExpiredSessions(supabase);
+  if (byId.size && [...byId.values()].some((s) => s.status === "published" && isSessionFinished({ status: s.status, endedAt: s.ended_at, endsAt: s.ends_at, now: new Date(now) }))) await closeExpiredSessions(supabase);
 
   return bookings.flatMap((b): MemberSession[] => {
     const s = byId.get(b.session_id);

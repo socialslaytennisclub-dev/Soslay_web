@@ -497,7 +497,19 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const status = async (m) => (await one(`select status from bookings where session_id = $1 and member_id = $2`, [s, m])).status;
   console.assert((await status(walkIn)) === "attended" && (await balance(walkIn)) - before1 === 50, "peserta susulan tidak tercatat hadir / tanpa poin!");
   console.assert((await status(cancelled)) === "cancelled", "trigger mulai menimpa booking batal — cek reviveCancelledBookings");
-  await db.query(`update bookings set status = 'attended', checked_in_at = now() where session_id = $1 and member_id = $2 and status = 'cancelled'`, [s, cancelled]);
+  // Sama dengan reviveCancelledBookings (play.ts), dijalankan sebagai admin lewat RLS — bukan superuser.
+  const { id: staff } = await one(`insert into auth.users default values returning id`);
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Susulan', 'late@soslay.test', 'active' from roles where name = 'Super Admin'`, [staff]);
+  await db.exec(`grant usage on schema public to authenticated; grant select, update on bookings to authenticated;`);
+  await as(staff);
+  await db.exec(`set role authenticated`);
+  const revived = await db.query(
+    `update bookings set status = 'attended', checked_in_at = now(), checked_in_by = $3 where session_id = $1 and status = 'cancelled' and member_id = any($2) returning id`,
+    [s, [cancelled], staff],
+  );
+  await db.exec(`reset role`);
+  await db.exec(`revoke select, update on bookings from authenticated;`);
+  console.assert(revived.rows.length === 1, "admin tidak bisa menghidupkan booking batal (RLS bookings)!");
   console.assert((await balance(cancelled)) - before2 === 50, "booking batal yang dihidupkan tidak dapat poin!");
   console.log("✓ peserta susulan: langsung hadir +50 pts; booking batal dihidupkan → hadir +50 pts");
 }
