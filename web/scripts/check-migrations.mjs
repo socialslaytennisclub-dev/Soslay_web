@@ -572,6 +572,48 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.log("✓ check-in mandiri: peserta sendiri, jendela 30 menit sebelum s.d. 30 menit setelah selesai, +50 pts sekali");
 }
 
+// Booking batal hanya dihidupkan panitia: host (bukan staf) bisa, member sendiri tidak (check-in
+// mandiri ditolak); check-in langsung di bookings ikut dipulihkan; hadir → no_show juga kembali cancelled.
+{
+  const mk = async (name) => {
+    const { id } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, name, `${name}@example.com`]);
+    return id;
+  };
+  const fails = async (sql, params) => db.query(sql, params).then(() => false, () => true);
+  const venueId = (await one(`select id from venues limit 1`)).id;
+  const { id: s } = await one(
+    `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, points_per_attendance)
+     values ('revive-rules', 'Mabar Aturan', 'weekly-mabar', $1, now() + interval '10 minutes', now() + interval '2 hours', 20, 'published', 50) returning id`,
+    [venueId],
+  );
+  const [viaHost, self, direct, noShow, host] = [await mk("rv-host-p"), await mk("rv-self"), await mk("rv-direct"), await mk("rv-noshow"), await mk("rv-host")];
+  for (const m of [viaHost, self, direct, noShow])
+    await db.query(`insert into bookings (session_id, member_id, status, payment_status, source, amount) values ($1, $2, 'cancelled', 'paid', 'admin', 0)`, [s, m]);
+  for (const [m, reg] of [[viaHost, "RV1"], [self, "RV2"], [noShow, "RV4"]])
+    await db.query(`insert into session_participants (session_id, kuy_reg_no, member_id, full_name) values ($1, $2, $3, 'x')`, [s, reg, m]);
+  const status = async (m) => (await one(`select status from bookings where session_id = $1 and member_id = $2`, [s, m])).status;
+  const checkIn = (reg, by) => db.query(`update session_participants set checked_in_at = now(), checked_in_by = $3 where session_id = $1 and kuy_reg_no = $2`, [s, reg, by]);
+
+  await checkIn("RV1", host);
+  console.assert((await status(viaHost)) === "attended", "check-in host tidak menghidupkan booking batal!");
+  await checkIn("RV2", self);
+  console.assert((await status(self)) === "cancelled", "member menghidupkan booking batalnya sendiri!");
+  await db.query(`update session_participants set checked_in_at = null where session_id = $1 and kuy_reg_no = 'RV2'`, [s]);
+  await as(self);
+  console.assert(await fails(`select member_self_check_in($1)`, [s]), "check-in mandiri dengan booking batal diterima!");
+  await as(null);
+  // setCheckIn jalur booking langsung: hadir lalu batal (menulis registered) → kembali cancelled.
+  await db.query(`update bookings set status = 'attended' where session_id = $1 and member_id = $2`, [s, direct]);
+  await db.query(`update bookings set status = 'registered' where session_id = $1 and member_id = $2`, [s, direct]);
+  console.assert((await status(direct)) === "cancelled", "batal check-in langsung tidak kembali ke cancelled!");
+  // Dihidupkan lalu ditandai no_show → kembali cancelled.
+  await checkIn("RV4", host);
+  await db.query(`update bookings set status = 'no_show' where session_id = $1 and member_id = $2`, [s, noShow]);
+  console.assert((await status(noShow)) === "cancelled", "booking hidup → no_show tidak kembali ke cancelled!");
+  console.log("✓ booking batal: dihidupkan host/admin saja, check-in mandiri ditolak; batal hadir / no_show → kembali cancelled");
+}
+
 // Ghost member: peserta belum daftar dikumpulkan per Kuy ID; saat daftar → riwayat & poin pindah ke akunnya.
 {
   const venueId = (await one(`select id from venues limit 1`)).id;

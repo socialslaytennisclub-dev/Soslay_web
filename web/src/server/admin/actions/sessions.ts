@@ -312,6 +312,8 @@ export async function setCheckIn(sessionId: string, participant: { id: string; m
     const { error } = await supabase.rpc("set_participant_check_in", { p_participant: participant.id, p_checked_in: checkedIn });
     if (error) return { ok: false, error: `Check-in gagal: ${error.message}` };
   } else {
+    // Booking cancelled ikut di-check-in (orangnya datang); batal check-in menulis "registered", tapi
+    // trigger bookings_revive_marker mengembalikan booking yang tadinya cancelled ke cancelled.
     const { data, error } = await supabase
       .from("bookings")
       .update(checkedIn ? { status: "attended", checked_in_at: new Date().toISOString(), checked_in_by: auth.userId } : { status: "registered", checked_in_at: null, checked_in_by: null })
