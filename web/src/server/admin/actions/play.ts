@@ -168,16 +168,15 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
   const supabase = await createSupabaseServerClient();
-  const [upload, state] = await Promise.all([readUpload(formData), sessionFinished(supabase, sessionId)]);
+  const [upload, state, existing] = await Promise.all([readUpload(formData), sessionFinished(supabase, sessionId), existingRegNos(supabase, sessionId)]);
   if ("error" in upload) return { ok: false, error: upload.error };
   if ("error" in state) return { ok: false, error: state.error };
   // Hanya baris yang dicentang admin di preview (kalau dikirim); baris dilewati tetap diabaikan.
   const selectedRaw = formData.get("selected");
   const selected = typeof selectedRaw === "string" ? new Set(JSON.parse(selectedRaw) as string[]) : null;
   const picked = upload.parsed.rows.filter((r) => !r.skipReason && (!selected || selected.has(r.regNo)));
-  const taken = state.finished && picked.length ? await existingRegNos(supabase, sessionId, picked.map((r) => r.regNo)) : new Set<string>();
-  if (!taken) return { ok: false, error: "Gagal membaca peserta yang sudah tercatat — coba lagi." };
-  const rows = picked.filter((r) => !taken.has(r.regNo));
+  if (state.finished && !existing) return { ok: false, error: "Gagal membaca peserta yang sudah tercatat — coba lagi." };
+  const rows = state.finished && existing ? picked.filter((r) => !existing.has(r.regNo)) : picked;
   const kept = picked.length - rows.length;
   if (!rows.length) {
     return { ok: false, error: kept ? "Sesi sudah selesai dan semua peserta di file ini sudah tercatat — tidak ada yang diubah." : "Tidak ada peserta yang dipilih untuk diimpor." };
@@ -482,11 +481,9 @@ async function sessionFinished(supabase: Supabase, sessionId: string): Promise<{
   return { finished: isSessionFinished({ status: session.status as string, endedAt: session.ended_at as string | null, endsAt: session.ends_at as string }) };
 }
 
-/** Nomor registrasi yang sudah tercatat di sesi (opsional: hanya di antara `regNos`); null bila gagal dibaca. */
-async function existingRegNos(supabase: Supabase, sessionId: string, regNos?: string[]): Promise<Set<string> | null> {
-  let query = supabase.from("session_participants").select("kuy_reg_no").eq("session_id", sessionId);
-  if (regNos) query = query.in("kuy_reg_no", regNos);
-  const { data, error } = await query;
+/** Nomor registrasi yang sudah tercatat di sesi; null bila gagal dibaca. */
+async function existingRegNos(supabase: Supabase, sessionId: string): Promise<Set<string> | null> {
+  const { data, error } = await supabase.from("session_participants").select("kuy_reg_no").eq("session_id", sessionId);
   return error ? null : new Set((data ?? []).map((r) => r.kuy_reg_no as string));
 }
 
@@ -517,9 +514,8 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
   const regNo = `ADM-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
   // Sesi sudah selesai → peserta yang ditambahkan sesudahnya memang ikut main: langsung tercatat
   // hadir (booking member ikut "attended" + poin kehadiran lewat trigger), tidak menggantung "terdaftar".
-  const late = state.finished
-    ? { fields: { checked_in_at: new Date().toISOString(), checked_in_by: auth.userId }, note: " · sesi sudah selesai, otomatis tercatat hadir" }
-    : { fields: {}, note: "" };
+  const checkIn = state.finished ? { checked_in_at: new Date().toISOString(), checked_in_by: auth.userId } : {};
+  const lateNote = state.finished ? " · sesi sudah selesai, otomatis tercatat hadir" : "";
 
   const addMember = async (member: MemberIdentity): Promise<ActionResult> => {
     const { count } = await supabase.from("session_participants").select("id", { count: "exact", head: true }).eq("session_id", sessionId).eq("member_id", member.id);
@@ -534,12 +530,12 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
       phone: member.phone || null,
       tennis_level: member.level,
       kuy_username: member.kuyId || null,
-      ...late.fields,
+      ...checkIn,
     });
     if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
     await audit(auth.userId, `menambah peserta ${member.fullName} (manual)`, "session", sessionId);
     refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
-    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta${late.note}.` };
+    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta${lateNote}.` };
   };
 
   if ("memberId" in input) return byId ? addMember(byId) : { ok: false, error: "Member tidak ditemukan." };
@@ -576,10 +572,10 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
     full_name: known?.full_name ?? fullName,
     email: email || null,
     phone: phone || null,
-    ...late.fields,
+    ...checkIn,
   });
   if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
   await audit(auth.userId, `menambah peserta ${fullName} (manual, ghost)`, "session", sessionId);
   refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
-  return { ok: true, message: `${fullName} ditambahkan sebagai ghost member${known ? " (sudah pernah ikut aktivitas sebelumnya)" : ""}${late.note}.` };
+  return { ok: true, message: `${fullName} ditambahkan sebagai ghost member${known ? " (sudah pernah ikut aktivitas sebelumnya)" : ""}${lateNote}.` };
 }

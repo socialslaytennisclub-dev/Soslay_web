@@ -1,6 +1,7 @@
 import "server-only";
 import { generateLineup, usesLineup } from "@/lib/americano";
 import { sessionClosesAt } from "@/lib/session-close";
+import { isSessionFinished } from "@/lib/session-lock";
 import { venueList } from "@/content/venues";
 import { venueChoices } from "./catalog-repo";
 import { getDataset, type DataSession, type Dataset } from "./dataset";
@@ -36,7 +37,7 @@ function fill(d: Dataset, sessionId: string) {
  * selesai + jeda 30 menit, lib/session-close) — aturan yang sama dengan halaman sesi member
  * (phaseOf). Tanpa ini sesi yang tidak diakhiri host hilang dari semua tab.
  */
-const isFinished = (s: DataSession, now: Date) => s.status === "completed" || (s.status === "published" && sessionClosesAt(s.endsAt) < now.getTime());
+const isFinished = (s: DataSession, now: Date) => isSessionFinished({ status: s.status, endedAt: null, endsAt: s.endsAt, now });
 
 function displayStatus(s: DataSession, booked: number, now: Date): SessionDisplayStatus {
   if (isFinished(s, now)) return "completed";
