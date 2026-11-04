@@ -54,7 +54,9 @@ export const getMySessions = cache(async (): Promise<MemberSession[] | null> => 
   const earned = new Map((points ?? []).map((p) => [p.booking_id as string, p.delta as number]));
   const now = Date.now();
   // Ada sesi lewat jeda yang belum tertutup (cron belum jalan) → tutup sekarang (status + bonus juara).
-  if (byId.size && [...byId.values()].some((s) => s.status === "published" && isSessionFinished({ status: s.status, endedAt: s.ended_at, endsAt: s.ends_at, now: new Date(now) }))) await closeExpiredSessions(supabase);
+  // (endedAt: null → hanya jeda waktu, yang memang ditangani close_expired_sessions; sesi published
+  // ber-ended_at tidak ditutup RPC itu, jadi jangan memanggilnya tiap kali halaman dibuka.)
+  if (byId.size && [...byId.values()].some((s) => s.status === "published" && isSessionFinished({ status: s.status, endedAt: null, endsAt: s.ends_at, now: new Date(now) }))) await closeExpiredSessions(supabase);
 
   return bookings.flatMap((b): MemberSession[] => {
     const s = byId.get(b.session_id);

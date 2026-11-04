@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { isActivityType } from "@/content/activity";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { discardUploads, isOwnUpload, uploadPublicImage } from "../../storage";
+import { lateCheckIn, REVIVE_FAILED, reviveCancelledBookings } from "../late-check-in";
 import { monthKey } from "../time";
 import type { MatchFormat, TennisLevel } from "../types";
 import { audit, refreshPaths, requireEditor, type ActionResult } from "./common";
@@ -311,6 +312,10 @@ export async function setCheckIn(sessionId: string, participant: { id: string; m
   if (fromRoster) {
     const { error } = await supabase.rpc("set_participant_check_in", { p_participant: participant.id, p_checked_in: checkedIn });
     if (error) return { ok: false, error: `Check-in gagal: ${error.message}` };
+    // Trigger check-in melewati booking yang dibatalkan → hidupkan lagi supaya poin kehadirannya masuk.
+    if (checkedIn && participant.memberId && !(await reviveCancelledBookings(supabase, sessionId, [participant.memberId], lateCheckIn(auth.userId)))) {
+      return { ok: false, error: `Check-in tersimpan, tapi ${REVIVE_FAILED}.` };
+    }
   } else {
     const { data, error } = await supabase
       .from("bookings")

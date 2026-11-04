@@ -14,12 +14,13 @@ export type SessionLockInput = {
   now?: Date;
 };
 
+/** Diakhiri lewat "Akhiri Activity" (atau ditutup otomatis): completed / ended_at — tanpa melihat jam. */
+export const isSessionEnded = ({ status, endedAt }: { status: string; endedAt: string | null }) => status === "completed" || Boolean(endedAt);
+
 /**
  * Sesi selesai = diakhiri ("Akhiri Activity" → completed / ended_at) atau sudah ditutup otomatis
  * (jam selesai + jeda, lib/session-close) — sama dengan status "Selesai" di admin.
  */
-/** Diakhiri lewat "Akhiri Activity" (atau ditutup otomatis): completed / ended_at — tanpa melihat jam. */
-export const isSessionEnded = ({ status, endedAt }: { status: string; endedAt: string | null }) => status === "completed" || Boolean(endedAt);
 
 export function isSessionFinished({ status, endedAt, endsAt, now = new Date() }: { status: string; endedAt: string | null; endsAt: string | Date; now?: Date }): boolean {
   if (isSessionEnded({ status, endedAt })) return true;
