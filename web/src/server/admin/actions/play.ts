@@ -1,7 +1,7 @@
 "use server";
 
 import { isEmail } from "@/lib/auth";
-import { participantsLockReason } from "@/lib/session-lock";
+import { isSessionFinished, participantsLockReason } from "@/lib/session-lock";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { localPhone, phoneFormatError } from "@/lib/wa-invite";
@@ -125,8 +125,7 @@ export async function previewKuyImport(sessionId: string, formData: FormData): P
   let ghostCounts = new Map<string, number>();
   if (session.mode === "live") {
     const supabase = await createSupabaseServerClient();
-    const { data } = await supabase.from("session_participants").select("kuy_reg_no").eq("session_id", sessionId);
-    existing = new Set((data ?? []).map((r) => r.kuy_reg_no as string));
+    existing = (await existingRegNos(supabase, sessionId)) ?? new Set();
     ghosts = await findGhosts(supabase, rows.filter((r) => !members.get(r.regNo)));
     ghostCounts = await ghostActivityCounts(supabase, [...new Set([...ghosts.values()].map((g) => g.id))]);
   }
@@ -162,20 +161,29 @@ export async function previewKuyImport(sessionId: string, formData: FormData): P
 /**
  * Simpan peserta dari file yang sama (dibaca ulang di server, bukan dari preview client).
  * Impor ulang memperbarui data per nomor registrasi; check-in yang sudah ada dipertahankan.
+ * Kecuali sesi sudah selesai: absensi, skor & poin sudah dibagikan per baris, jadi hanya nomor
+ * registrasi BARU yang ditambahkan — baris lama tidak ditimpa (member_id-nya tidak boleh pindah).
  */
 export async function importKuyParticipants(sessionId: string, formData: FormData): Promise<ActionResult> {
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
-  const upload = await readUpload(formData);
+  const supabase = await createSupabaseServerClient();
+  const [upload, state] = await Promise.all([readUpload(formData), sessionFinished(supabase, sessionId)]);
   if ("error" in upload) return { ok: false, error: upload.error };
+  if ("error" in state) return { ok: false, error: state.error };
   // Hanya baris yang dicentang admin di preview (kalau dikirim); baris dilewati tetap diabaikan.
   const selectedRaw = formData.get("selected");
   const selected = typeof selectedRaw === "string" ? new Set(JSON.parse(selectedRaw) as string[]) : null;
-  const rows = upload.parsed.rows.filter((r) => !r.skipReason && (!selected || selected.has(r.regNo)));
-  if (!rows.length) return { ok: false, error: "Tidak ada peserta yang dipilih untuk diimpor." };
+  const picked = upload.parsed.rows.filter((r) => !r.skipReason && (!selected || selected.has(r.regNo)));
+  const taken = state.finished && picked.length ? await existingRegNos(supabase, sessionId, picked.map((r) => r.regNo)) : new Set<string>();
+  if (!taken) return { ok: false, error: "Gagal membaca peserta yang sudah tercatat — coba lagi." };
+  const rows = picked.filter((r) => !taken.has(r.regNo));
+  const kept = picked.length - rows.length;
+  if (!rows.length) {
+    return { ok: false, error: kept ? "Sesi sudah selesai dan semua peserta di file ini sudah tercatat — tidak ada yang diubah." : "Tidak ada peserta yang dipilih untuk diimpor." };
+  }
 
   const members = await matchMembers(rows);
-  const supabase = await createSupabaseServerClient();
 
   // Belum member → ghost member: pakai yang sudah ada (aktivitas sebelumnya) atau buat baru.
   const guests = rows.filter((r) => !members.get(r.regNo));
@@ -260,6 +268,8 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
   const parts = [`${rows.length} peserta diimpor`, `${matched} cocok dengan member Soslay`];
   if (linked) parts.push(`${linked} Kuy ID disambungkan ke ID Soslay`);
   if (guests.length) parts.push(`${guests.length} belum member dicatat sebagai ghost member — undang daftar lewat tombol WA`);
+  if (kept) parts.push(`${kept} sudah tercatat sebelumnya, tidak diubah karena sesi sudah selesai`);
+  if (state.finished) parts.push("tandai Hadir untuk peserta yang ikut main supaya poin kehadirannya masuk");
   return { ok: true, message: `${parts.join(" · ")}.` };
 }
 
@@ -461,12 +471,23 @@ export type ParticipantLookup =
   | { found: "member"; member: Pick<MemberIdentity, "id" | "fullName" | "memberCode" | "kuyId" | "email" | "phone" | "level" | "matchedBy">; alreadyIn: boolean }
   | { found: "none" };
 
-/** Tambah peserta ditolak hanya kalau sesi sudah selesai (saat Live masih boleh, mis. walk-in). */
-async function addLock(supabase: Supabase, sessionId: string): Promise<string | null> {
-  const { data: session } = await supabase.from("sessions").select("status, ended_at").eq("id", sessionId).maybeSingle();
-  if (!session) return "Sesi tidak ditemukan.";
-  if (session.status === "completed" || session.ended_at) return "Sesi sudah selesai — peserta tidak bisa ditambah lagi.";
-  return null;
+/**
+ * Tambah peserta tetap boleh kapan saja — juga setelah sesi selesai (mis. data Kuyy atau walk-in
+ * baru dicatat sesudah main). Hanya admin editor "activities" yang bisa memanggil aksi ini.
+ * `finished` dipakai untuk aturan khusus sesi selesai (lihat addParticipantManual & impor Kuyy).
+ */
+async function sessionFinished(supabase: Supabase, sessionId: string): Promise<{ error: string } | { finished: boolean }> {
+  const { data: session } = await supabase.from("sessions").select("status, ended_at, ends_at").eq("id", sessionId).maybeSingle();
+  if (!session) return { error: "Sesi tidak ditemukan." };
+  return { finished: isSessionFinished({ status: session.status as string, endedAt: session.ended_at as string | null, endsAt: session.ends_at as string }) };
+}
+
+/** Nomor registrasi yang sudah tercatat di sesi (opsional: hanya di antara `regNos`); null bila gagal dibaca. */
+async function existingRegNos(supabase: Supabase, sessionId: string, regNos?: string[]): Promise<Set<string> | null> {
+  let query = supabase.from("session_participants").select("kuy_reg_no").eq("session_id", sessionId);
+  if (regNos) query = query.in("kuy_reg_no", regNos);
+  const { data, error } = await query;
+  return error ? null : new Set((data ?? []).map((r) => r.kuy_reg_no as string));
 }
 
 /** Cek isian admin (ID Soslay / Kuy ID / Reclub ID / nomor HP) → member Soslay atau belum terdaftar. */
@@ -491,13 +512,16 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
   const supabase = await createSupabaseServerClient();
-  const locked = await addLock(supabase, sessionId);
-  if (locked) return { ok: false, error: locked };
+  const [state, byId] = await Promise.all([sessionFinished(supabase, sessionId), "memberId" in input ? findMemberById(input.memberId) : null]);
+  if ("error" in state) return { ok: false, error: state.error };
   const regNo = `ADM-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
+  // Sesi sudah selesai → peserta yang ditambahkan sesudahnya memang ikut main: langsung tercatat
+  // hadir (booking member ikut "attended" + poin kehadiran lewat trigger), tidak menggantung "terdaftar".
+  const late = state.finished
+    ? { fields: { checked_in_at: new Date().toISOString(), checked_in_by: auth.userId }, note: " · sesi sudah selesai, otomatis tercatat hadir" }
+    : { fields: {}, note: "" };
 
-  if ("memberId" in input) {
-    const member = await findMemberById(input.memberId);
-    if (!member) return { ok: false, error: "Member tidak ditemukan." };
+  const addMember = async (member: MemberIdentity): Promise<ActionResult> => {
     const { count } = await supabase.from("session_participants").select("id", { count: "exact", head: true }).eq("session_id", sessionId).eq("member_id", member.id);
     if (count) return { ok: false, error: `${member.fullName} sudah terdaftar di sesi ini.` };
     const { error } = await supabase.from("session_participants").insert({
@@ -510,12 +534,15 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
       phone: member.phone || null,
       tennis_level: member.level,
       kuy_username: member.kuyId || null,
+      ...late.fields,
     });
     if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
     await audit(auth.userId, `menambah peserta ${member.fullName} (manual)`, "session", sessionId);
     refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
-    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta.` };
-  }
+    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta${late.note}.` };
+  };
+
+  if ("memberId" in input) return byId ? addMember(byId) : { ok: false, error: "Member tidak ditemukan." };
 
   const fullName = input.fullName.trim();
   const email = input.email.trim().toLowerCase();
@@ -527,7 +554,7 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
   if (email && !isEmail(email)) return { ok: false, error: "Email tidak valid." };
   // Ternyata sudah member (nomor HP terdaftar) → pakai data member.
   const existing = await findMemberByPhone(phone);
-  if (existing) return addParticipantManual(sessionId, { memberId: existing.id });
+  if (existing) return addMember(existing);
 
   const row: KuyRow = { regNo, name: fullName, email, phone, instagram: "", level: null, levelRaw: "", username: "", status: "going", amount: 0, paymentMethod: "", ticket: "", ticketPrice: 0, skipReason: null };
   const known = (await findGhosts(supabase, [row])).get(regNo);
@@ -549,9 +576,10 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
     full_name: known?.full_name ?? fullName,
     email: email || null,
     phone: phone || null,
+    ...late.fields,
   });
   if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
   await audit(auth.userId, `menambah peserta ${fullName} (manual, ghost)`, "session", sessionId);
   refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
-  return { ok: true, message: `${fullName} ditambahkan sebagai ghost member${known ? " (sudah pernah ikut aktivitas sebelumnya)" : ""}.` };
+  return { ok: true, message: `${fullName} ditambahkan sebagai ghost member${known ? " (sudah pernah ikut aktivitas sebelumnya)" : ""}${late.note}.` };
 }
