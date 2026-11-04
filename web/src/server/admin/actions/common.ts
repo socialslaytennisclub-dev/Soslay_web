@@ -17,6 +17,7 @@ const MODULE_LABEL: Record<AdminModule, string> = {
   orders: "Orders",
   content: "Konten & Galeri",
   settings: "Settings & Roles",
+  finance: "Keuangan",
 };
 
 /**

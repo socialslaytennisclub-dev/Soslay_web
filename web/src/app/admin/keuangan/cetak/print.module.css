@@ -1,0 +1,68 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding: 32px;
+  background: #fff;
+  font-family: var(--font-ui);
+  color: var(--color-navy-900);
+}
+
+.sheetHead {
+  margin-bottom: 16px;
+}
+
+.sheet h1 {
+  margin: 4px 0;
+  font-family: var(--font-display);
+  font-size: 20px;
+}
+
+.meta {
+  font-size: 11px;
+  color: var(--color-indigo-muted);
+}
+
+.sheet table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.sheet th,
+.sheet td {
+  padding: 5px 8px;
+  border-bottom: 1px solid #e6e8ff;
+  text-align: left;
+}
+
+.sheet th {
+  background: #f4f5ff;
+}
+
+.num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.group td {
+  padding-top: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--color-indigo-600);
+}
+
+.total td {
+  font-weight: 700;
+}
+
+@media print {
+  .page {
+    padding: 0;
+  }
+
+  .sheet {
+    break-after: page;
+  }
+}

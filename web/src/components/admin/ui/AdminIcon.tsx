@@ -1,6 +1,16 @@
 import type { CSSProperties } from "react";
 import {
   ArrowDown,
+  ArrowLeftRight,
+  Banknote,
+  FileText,
+  HandCoins,
+  Landmark,
+  Paperclip,
+  PiggyBank,
+  Scale,
+  Undo2,
+  Wallet,
   ArrowUp,
   ArrowUpDown,
   ArrowUpRight,
@@ -172,6 +182,16 @@ const ICONS = {
   "check-bold": Check,
   "dots-three-bold": Ellipsis,
   "dots-three-vertical-bold": EllipsisVertical,
+  wallet: Wallet,
+  money: Banknote,
+  "arrows-left-right": ArrowLeftRight,
+  paperclip: Paperclip,
+  "file-text": FileText,
+  "hand-coins": HandCoins,
+  bank: Landmark,
+  "piggy-bank": PiggyBank,
+  scale: Scale,
+  undo: Undo2,
 } satisfies Record<string, LucideIcon>;
 
 export type AdminIconName = keyof typeof ICONS;

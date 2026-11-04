@@ -21,6 +21,7 @@ export const ADMIN_MODULES: { key: AdminModule; label: string }[] = [
   { key: "orders", label: "Orders" },
   { key: "content", label: "Konten & galeri" },
   { key: "settings", label: "Settings & roles" },
+  { key: "finance", label: "Keuangan (lihat = Pencatat)" },
 ];
 
 const all = (access: ModuleAccess) => Object.fromEntries(ADMIN_MODULES.map((m) => [m.key, access])) as Record<AdminModule, ModuleAccess>;
@@ -37,11 +38,12 @@ export async function listRoles(): Promise<RolePermissions[]> {
   }
   return [
     { name: "Super Admin", isSystem: true, access: all("edit") },
-    { name: "Admin", isSystem: true, access: { ...all("edit"), settings: "view" } },
+    { name: "Admin", isSystem: true, access: { ...all("edit"), settings: "view", finance: "none" } },
     { name: "Community Manager", isSystem: true, access: { ...all("none"), overview: "view", members: "edit", activities: "edit", venues: "view", content: "edit" } },
     { name: "Coach", isSystem: true, access: { ...all("none"), overview: "view", members: "view", activities: "edit", venues: "view" } },
     { name: "Fotografer", isSystem: true, access: { ...all("none"), activities: "view", content: "edit" } },
     { name: "Kasir Shop", isSystem: true, access: { ...all("none"), overview: "view", members: "view", products: "edit", orders: "edit" } },
+    { name: "Pencatat keuangan", isSystem: true, access: { ...all("none"), finance: "view" } },
   ];
 }
 

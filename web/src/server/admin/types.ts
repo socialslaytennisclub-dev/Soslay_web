@@ -413,7 +413,7 @@ export type SitePage = { path: string; name: string; description: string; update
 
 // ── Settings & Roles ────────────────────────────────────────────────────────
 
-export type AdminModule = "overview" | "members" | "activities" | "venues" | "products" | "orders" | "content" | "settings";
+export type AdminModule = "overview" | "members" | "activities" | "venues" | "products" | "orders" | "content" | "settings" | "finance";
 export type ModuleAccess = "edit" | "view" | "none";
 
 export type StaffMember = {

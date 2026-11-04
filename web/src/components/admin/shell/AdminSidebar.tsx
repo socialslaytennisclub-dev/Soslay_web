@@ -48,6 +48,7 @@ export function AdminSidebar({ memberCount, ordersToProcess, pendingRedemptions,
         { label: "Konten & Galeri", href: "/admin/konten", icon: "layout", ready: true },
       ],
     },
+    { label: "Keuangan", items: [{ label: "Keuangan", href: "/admin/keuangan", icon: "wallet", ready: true }] },
   ];
   const bottom: NavItem[] = [
     { label: "Settings & Roles", href: "/admin/settings", icon: "gear-six", ready: true },
