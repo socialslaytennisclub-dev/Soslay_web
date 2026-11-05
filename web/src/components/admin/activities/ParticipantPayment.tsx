@@ -26,7 +26,7 @@ const VIA_OPTIONS: { value: Via; label: string }[] = [
 ];
 
 /** Label kolom "Via" — peserta impor Kuyy yang bayar langsung tampil "Manual". */
-export const viaLabel = (p: SessionParticipant, sourceLabel: string) => (p.source === "kuy" && p.paidVia === "manual" ? "Manual" : sourceLabel);
+export const viaLabel = (p: SessionParticipant, sourceLabel: string) => (p.kuyImport && p.paidVia === "manual" ? "Manual" : sourceLabel);
 
 /** Pilihan tunggal berbentuk tombol (pola segment di editor sesi). */
 function Segment<T extends string>({ label, options, value, onChange }: { label: string; options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
@@ -44,8 +44,8 @@ function Segment<T extends string>({ label, options, value, onChange }: { label:
   );
 }
 
-/** Peserta impor Kuyy → nominal & status bayarnya bisa diubah admin. */
-export const canEditPayment = (p: SessionParticipant) => p.source === "kuy" && p.amount !== null;
+/** Peserta dari file Kuyy → nominal, status & jalur bayarnya bisa diubah admin. */
+export const canEditPayment = (p: SessionParticipant) => p.kuyImport;
 
 /**
  * Ubah nominal & status bayar peserta hasil impor Excel Kuyy. Nominal peserta lunas masuk Keuangan

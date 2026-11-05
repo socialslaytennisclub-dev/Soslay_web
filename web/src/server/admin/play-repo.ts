@@ -46,7 +46,7 @@ type RosterRow = {
   kuy_username: string | null;
   ghost_id: string | null;
   phone: string | null;
-  source: "kuy" | "admin";
+  source: "kuy" | "admin" | "website";
   tennis_level: TennisLevel | null;
   kuy_reg_no: string | null;
   checked_in_at: string | null;
@@ -136,6 +136,7 @@ export async function loadSessionPlay(session: DataSession, live: boolean): Prom
             payment: r.payment_status,
             amount: r.amount,
             paidVia: r.payment_channel,
+            kuyImport: r.source === "kuy" && Boolean(r.kuy_username),
             status: r.checked_in_at ? "attended" : "registered",
             source: r.source,
             checkedIn: Boolean(r.checked_in_at),

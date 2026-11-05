@@ -303,10 +303,10 @@ export async function saveLineup(sessionId: string, matches: Omit<SessionMatch, 
   if (!roster?.length) {
     const { data: booked } = await supabase
       .from("bookings")
-      .select("member_id, amount, profiles(full_name, email, phone, instagram, tennis_level)")
+      .select("member_id, amount, source, profiles(full_name, email, phone, instagram, tennis_level)")
       .eq("session_id", sessionId)
       .in("status", ["registered", "attended"]);
-    type Booked = { member_id: string; amount: number; profiles: { full_name: string; email: string; phone: string | null; instagram: string | null; tennis_level: string | null } | null };
+    type Booked = { member_id: string; amount: number; source: "website" | "kuy" | "admin"; profiles: { full_name: string; email: string; phone: string | null; instagram: string | null; tennis_level: string | null } | null };
     const rows = ((booked ?? []) as unknown as Booked[]).map((b, i) => ({
       session_id: sessionId,
       member_id: b.member_id,
@@ -317,6 +317,8 @@ export async function saveLineup(sessionId: string, matches: Omit<SessionMatch, 
       instagram: b.profiles?.instagram ?? null,
       tennis_level: b.profiles?.tennis_level ?? null,
       amount: b.amount,
+      // Ikut sumber booking-nya (website / admin) — bukan baris file Kuyy, jadi tidak dihitung sebagai uang Kuyy.
+      source: b.source,
     }));
     if (rows.length) {
       const { data, error } = await supabase.from("session_participants").insert(rows).select("id, member_id");
@@ -492,10 +494,12 @@ export async function updateParticipantPayment(sessionId: string, participantId:
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("session_participants")
-    .update({ amount, payment_status: payment, payment_channel: via })
+    // amount_edited_at → import ulang file Kuyy tidak menimpa nominal ini (trigger keep_import_edits).
+    .update({ amount, payment_status: payment, payment_channel: via, amount_edited_at: new Date().toISOString() })
     .eq("id", participantId)
     .eq("session_id", sessionId)
     .eq("source", "kuy")
+    .not("kuy_username", "is", null)
     .select("full_name")
     .maybeSingle();
   if (error) return { ok: false, error: `Gagal menyimpan: ${error.message}` };

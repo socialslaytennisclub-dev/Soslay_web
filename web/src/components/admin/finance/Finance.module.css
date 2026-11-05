@@ -1202,44 +1202,6 @@ select.input {
   color: var(--color-indigo-700);
 }
 
-.menu {
-  position: relative;
-}
-
-.menuList {
-  position: absolute;
-  z-index: 5;
-  top: 100%;
-  right: 0;
-  display: flex;
-  flex-direction: column;
-  min-width: 160px;
-  padding: var(--space-4);
-  border: 1px solid var(--color-indigo-border);
-  border-radius: var(--radius-md);
-  background: var(--color-white);
-  box-shadow: 0 12px 32px rgb(10 8 74 / 0.12);
-}
-
-.menuList button,
-.menuList a {
-  padding: var(--space-8) var(--space-12);
-  border-radius: var(--radius-sm);
-  font-family: var(--font-ui);
-  font-size: 13px;
-  text-align: left;
-  color: var(--color-navy-900);
-}
-
-.menuList button:hover,
-.menuList a:hover {
-  background: var(--color-indigo-50);
-}
-
-.menuList .danger {
-  color: var(--color-pink-500);
-}
-
 /* ── Kosong / ditolak ───────────────────────────────────────────────────── */
 .empty {
   display: flex;

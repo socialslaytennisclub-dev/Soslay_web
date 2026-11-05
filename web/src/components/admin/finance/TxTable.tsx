@@ -5,6 +5,7 @@ import { useEffect, useState, useTransition } from "react";
 import { AdminIcon } from "@/components/admin/ui/AdminIcon";
 import { AdminButton } from "@/components/admin/ui/AdminUI";
 import { Drawer } from "@/components/admin/ui/Drawer";
+import { RowMenu } from "@/components/admin/ui/RowMenu";
 import { toast } from "@/components/admin/ui/Toaster";
 import { useDialog } from "@/hooks/useDialog";
 import { cx } from "@/lib/cx";
@@ -33,7 +34,6 @@ export function TxTable({ rows, options, compact = false, showProof = true, open
   const [detail, setDetail] = useState<TxView | null>(() => (openId ? (rows.find((r) => r.id === openId || r.tx.code === openId) ?? null) : null));
   const [edit, setEdit] = useState<{ view: TxView; duplicate: boolean } | null>(null);
   const [del, setDel] = useState<TxView | null>(null);
-  const [menu, setMenu] = useState<string | null>(null);
   const drawer = useDialog();
 
   // ?trx=… → drawer detail terbuka saat halaman dimuat.
@@ -41,13 +41,6 @@ export function TxTable({ rows, options, compact = false, showProof = true, open
     if (detail) drawer.open();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- buka sekali dari ?trx=
   }, [openId]);
-
-  useEffect(() => {
-    if (!menu) return;
-    const close = () => setMenu(null);
-    window.addEventListener("click", close);
-    return () => window.removeEventListener("click", close);
-  }, [menu]);
 
   const openDetail = (v: TxView) => {
     setDetail(v);
@@ -91,40 +84,19 @@ export function TxTable({ rows, options, compact = false, showProof = true, open
                 <td className={cx(styles.num, styles.strong, v.amount < 0 && styles.neg)}>{v.type === "transfer" ? rp(v.amount) : rpSigned(v.amount)}</td>
                 {!compact && (
                   <td onClick={(e) => e.stopPropagation()}>
-                    <div className={styles.menu}>
-                      <button
-                        type="button"
-                        className={styles.iconBtn}
-                        aria-label={`Aksi ${v.code}`}
-                        aria-expanded={menu === v.key}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setMenu(menu === v.key ? null : v.key);
-                        }}
-                      >
-                        <AdminIcon name="dots-three-vertical-bold" size={16} />
-                      </button>
-                      {menu === v.key && (
-                        <div className={styles.menuList} role="menu">
-                          <button type="button" role="menuitem" onClick={() => openDetail(v)}>
-                            Lihat detail
-                          </button>
-                          {v.editable && options && (
-                            <>
-                              <button type="button" role="menuitem" onClick={() => setEdit({ view: v, duplicate: false })}>
-                                Ubah
-                              </button>
-                              <button type="button" role="menuitem" onClick={() => setEdit({ view: v, duplicate: true })}>
-                                Duplikat
-                              </button>
-                              <button type="button" role="menuitem" className={styles.danger} onClick={() => setDel(v)}>
-                                Hapus
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      )}
-                    </div>
+                    <RowMenu
+                      label={`Aksi ${v.code}`}
+                      items={[
+                        { label: "Lihat detail", icon: "eye", onSelect: () => openDetail(v) },
+                        ...(v.editable && options
+                          ? [
+                              { label: "Ubah", icon: "pencil-simple" as const, onSelect: () => setEdit({ view: v, duplicate: false }) },
+                              { label: "Duplikat", icon: "copy" as const, onSelect: () => setEdit({ view: v, duplicate: true }) },
+                              { label: "Hapus", icon: "trash" as const, danger: true, onSelect: () => setDel(v) },
+                            ]
+                          : []),
+                      ]}
+                    />
                   </td>
                 )}
               </tr>

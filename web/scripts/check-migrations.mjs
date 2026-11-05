@@ -697,21 +697,41 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await net("kuyy_import")) === 260000, "A-8 koreksi nominal");
   await db.query(`update session_participants set payment_status = 'pending' where id = $1`, [p5]);
   console.assert((await net("kuyy_import")) === 140000, "A-8 lunas → menunggu → koreksi");
-  // Via Manual (bayar langsung, bukan lewat Kuyy) → pindah dari Saldo Kuyy ke akun bayar manual (BCA).
+  // Via Manual (bayar langsung, bukan lewat Kuyy) → pindah dari Saldo Kuyy ke akun bayar manual (BCA), kedua
+  // kaki di tanggal yang sama; pencatatan otomatis Kuyy yang dimatikan tetap mengoreksi sisanya (tidak dobel).
+  await db.exec(`update finance_settings set auto_kuyy = false`);
   await db.query(`update session_participants set payment_channel = 'manual' where id = $1`, [p1]);
+  await db.exec(`update finance_settings set auto_kuyy = true`);
   const manualAcc = await one(`select a.system_key from finance_transactions t join finance_accounts a on a.id = t.account_id where t.source = 'ticket_manual_paid' and t.source_ref = $1`, ['sp:' + p1]);
   console.assert((await net("kuyy_import")) === 0 && (await net("ticket_manual_paid")) === 140000 && manualAcc?.system_key === "bank_main", `A-8 via Manual → akun bayar manual ${JSON.stringify(manualAcc)}`);
+  const legs = await one(`select count(distinct date)::int n from finance_transactions where source_ref = $1 and (source = 'ticket_manual_paid' or amount < 0)`, ['sp:' + p1]);
+  console.assert(legs.n === 1, `pindah jalur: koreksi & pemasukan beda tanggal (${legs.n})`);
   await db.query(`delete from session_participants where id = $1`, [p1]);
   console.assert((await net("kuyy_import")) === 0 && (await net("ticket_manual_paid")) === 0, "A-8 hapus peserta → koreksi");
+  // Nominal yang diubah admin tidak tertimpa import ulang file Kuyy (yang menulis amount tanpa amount_edited_at).
+  const p7 = (await one(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount) values ($1, 'Peserta DP2', 'F7', 'pesertad', 250000) returning id`, [sid])).id;
+  await db.query(`update session_participants set amount = 50000, amount_edited_at = now() where id = $1`, [p7]);
+  await db.query(`update session_participants set amount = 250000 where id = $1`, [p7]);
+  console.assert((await one(`select amount from session_participants where id = $1`, [p7])).amount === 50000, "import ulang menimpa nominal yang diubah admin");
+  await db.query(`delete from session_participants where id = $1`, [p7]);
+  // Booking admin yang masih menunggu tidak ikut jadi lunas saat roster disalin dari booking (tanpa username Kuyy).
+  const adm = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Admin Booking', 'admbk@fin.test')`, [adm]);
+  await db.query(`insert into bookings (session_id, member_id, source, amount, payment_status) values ($1, $2, 'admin', 150000, 'pending')`, [sid, adm]);
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, member_id, amount) values ($1, 'Admin Booking', 'B9', $2, 150000)`, [sid, adm]);
+  const admBk = await one(`select payment_status::text from bookings where session_id = $1 and member_id = $2`, [sid, adm]);
+  console.assert(admBk.payment_status === "pending", `salinan roster mengubah booking admin jadi ${admBk.payment_status}`);
   // Booking member ikut nominal & status bayar baris pesertanya.
   const pm = (await one(`insert into auth.users default values returning id`)).id;
   await db.query(`insert into profiles (id, full_name, email) values ($1, 'Pay Sync', 'paysync@fin.test')`, [pm]);
-  const pmRow = (await one(`insert into session_participants (session_id, full_name, kuy_reg_no, member_id, amount, payment_status) values ($1, 'Pay Sync', 'F6', $2, 90000, 'pending') returning id`, [sid, pm])).id;
+  const pmRow = (await one(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, member_id, amount, payment_status) values ($1, 'Pay Sync', 'F6', 'paysync', $2, 90000, 'pending') returning id`, [sid, pm])).id;
   const pmBooking = () => one(`select payment_status::text, amount from bookings where session_id = $1 and member_id = $2`, [sid, pm]);
   console.assert((await pmBooking()).payment_status === "pending", `booking ikut status menunggu ${JSON.stringify(await pmBooking())}`);
   await db.query(`update session_participants set payment_status = 'paid', amount = 95000 where id = $1`, [pmRow]);
   const synced = await pmBooking();
   console.assert(synced.payment_status === "paid" && synced.amount === 95000, `booking ikut lunas & nominal ${JSON.stringify(synced)}`);
+  await db.query(`delete from session_participants where id = $1`, [pmRow]);
+  console.assert((await net("kuyy_import")) === 0, "hapus Pay Sync → koreksi");
   const code = (await one(`select code from finance_transactions where source = 'kuyy_import' order by created_at limit 1`)).code;
   console.assert(/^TRX-\d{4}-\d{4}$/.test(code), `kode transaksi ${code}`);
 

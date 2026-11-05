@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { cx } from "@/lib/cx";
 import { AdminIcon, type AdminIconName } from "./AdminIcon";
 import styles from "./RowMenu.module.css";
@@ -16,13 +16,22 @@ export type RowMenuItem = {
 };
 
 /**
- * Menu aksi per baris (titik tiga). Daftar memakai posisi `fixed` di bawah tombolnya supaya tidak
- * terpotong wadah tabel yang bisa digulir; tertutup saat klik di luar, Esc, gulir, atau ubah ukuran.
+ * Menu aksi per baris (titik tiga). Daftar memakai posisi `fixed` di bawah tombolnya (di atasnya bila tidak
+ * muat di layar) supaya tidak terpotong wadah tabel yang bisa digulir; tertutup saat klik di luar, Esc,
+ * gulir, atau ubah ukuran.
  */
 export function RowMenu({ label, items }: { label: string; items: RowMenuItem[] }) {
   const buttonRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+  const [pos, setPos] = useState<{ top: number; right: number; anchorTop: number } | null>(null);
+
+  // Tidak muat di bawah tombol → buka ke atas (diukur sebelum digambar, tanpa render ulang).
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    if (!pos || !list) return;
+    const h = list.offsetHeight;
+    if (pos.top + h > window.innerHeight - 8) list.style.top = `${Math.max(8, pos.anchorTop - h - 4)}px`;
+  }, [pos]);
 
   useEffect(() => {
     if (!pos) return;
@@ -52,7 +61,7 @@ export function RowMenu({ label, items }: { label: string; items: RowMenuItem[] 
   const toggle = () => {
     if (pos) return setPos(null);
     const r = buttonRef.current!.getBoundingClientRect();
-    setPos({ top: r.bottom + 4, right: window.innerWidth - r.right });
+    setPos({ top: r.bottom + 4, right: window.innerWidth - r.right, anchorTop: r.top });
   };
 
   return (

@@ -174,6 +174,7 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
         // Demo: peserta "Kuy" memakai harga sesi supaya form ubah nominal bisa dicoba.
         amount: source === "kuy" ? s.price : null,
         paidVia: "kuy",
+        kuyImport: source === "kuy",
         checkedIn: b.checkedIn ?? b.status === "attended",
         guests: b.guests ?? (i % 9 === 3 ? 1 : 0),
       };
