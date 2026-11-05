@@ -883,8 +883,17 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert(memberBooking?.status === "registered", `member paket tidak muncul di My Activities ${JSON.stringify(memberBooking)}`);
   // Activity yang ditautkan belakangan ikut terisi; yang dilepas dikeluarkan (sesi tetap ada).
   const s3 = await mkSession("trip-a3", null);
+  await db.query(`update sessions set status = 'draft', visibility = 'public' where id = $1`, [s3]);
+  await db.query(`update trips set visibility = 'members' where id = $1`, [trip]);
   await db.query(`update sessions set trip_id = $1 where id = $2`, [trip, s3]);
   console.assert((await tripRows(s3)) === 2, "activity yang ditautkan ke trip tidak terisi pembeli paket");
+  const linkedS3 = await one(`select status::text s, visibility::text v from sessions where id = $1`, [s3]);
+  console.assert(linkedS3.s === "published" && linkedS3.v === "members", `activity yang ditautkan tidak ikut status/visibilitas trip ${JSON.stringify(linkedS3)}`);
+  // Pembeli paket yang juga ada di baris Kuyy: baris Kuyy dihapus ("Hapus semua") → terdaftar lagi lewat paket.
+  await db.query(`delete from session_participants where session_id = $1 and member_id = $2`, [s3, buyer]);
+  await db.query(`insert into session_participants (session_id, member_id, full_name, kuy_reg_no, kuy_username) values ($1, $2, 'Gusde Arimbawa', 'K-9', 'gusde')`, [s3, buyer]);
+  await db.query(`delete from session_participants where session_id = $1 and kuy_reg_no = 'K-9'`, [s3]);
+  console.assert((await tripRows(s3)) === 2, "pembeli paket hilang setelah baris Kuyy-nya dihapus");
   await db.query(`update sessions set trip_id = null where id = $1`, [s3]);
   console.assert((await tripRows(s3)) === 0 && (await one(`select count(*)::int n from bookings where session_id = $1 and member_id = $2`, [s3, buyer])).n === 0, "lepas dari trip tidak mengeluarkan peserta paket");
   // Kapasitas: x paket + y satuan.
@@ -936,6 +945,19 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await visibleTo(null)) === 0 && (await visibleTo(stranger)) === 0, "trip Link terbaca orang luar");
   await db.query(`update trip_bookings set cancelled_at = null where id = $1`, [bk]);
   console.assert((await visibleTo(buyer)) === 1, "trip Link tidak terbaca pembeli paketnya");
+  // Daftar akun penerima: tim Activities tanpa akses Keuangan tetap mendapatkannya; orang luar tidak.
+  await db.exec(`grant execute on function payment_accounts() to anon`);
+  await as(tripAdmin);
+  const accs = (await db.query(`select * from payment_accounts()`)).rows.length;
+  await as(stranger);
+  const leaked = (await db.query(`select * from payment_accounts()`)).rows.length;
+  await as(null);
+  console.assert(accs > 0 && leaked === 0, `payment_accounts ${accs}/${leaked}`);
+  // Arsip → activity yang belum mulai kembali Draft; publikasikan lagi → tampil lagi.
+  await db.query(`update trips set status = 'cancelled' where id = $1`, [trip]);
+  console.assert((await one(`select count(*)::int n from sessions where trip_id = $1 and status = 'published'`, [trip])).n === 0, "arsip trip tidak menyembunyikan activity");
+  await db.query(`update trips set status = 'published' where id = $1`, [trip]);
+  console.assert((await one(`select count(*)::int n from sessions where trip_id = $1 and status = 'draft'`, [trip])).n === 0, "publikasikan lagi tidak menampilkan activity");
   await db.exec(`update finance_settings set go_live_date = '2026-12-01'`);
-  console.log("✓ trip: pembeli paket terdaftar di semua activity (tautkan / lepas / batal), kapasitas paket, pembayaran → Keuangan + koreksi");
+  console.log("✓ trip: pembeli paket terdaftar di semua activity (tautkan / lepas / batal), kapasitas paket, pembayaran → Keuangan + koreksi, ikut status trip, pulih setelah baris Kuyy dihapus, arsip, akun penerima");
 }

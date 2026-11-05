@@ -12,7 +12,7 @@ import { cx } from "@/lib/cx";
 import { settlementDue, shortDate, todayWib, tripRange } from "@/lib/trips";
 import { getDataset } from "@/server/admin/dataset";
 import { getPaymentAccounts } from "@/server/admin/finance-repo";
-import { getTrip, tripDisplayStatus, tripSummary } from "@/server/admin/trips-repo";
+import { getTrip, singlesRevenue, tripDisplayStatus, tripSummary } from "@/server/admin/trips-repo";
 import pageStyles from "../../../../page.module.css";
 
 export const metadata: Metadata = { title: "Peserta & pembayaran trip" };
@@ -24,13 +24,14 @@ export default async function TripPaymentsPage({ params }: PageProps<"/admin/act
   const { id } = await params;
   const [trip, payAccounts, d] = await Promise.all([getTrip(id), getPaymentAccounts(), getDataset()]);
   if (!trip) notFound();
+  const revenue = await singlesRevenue(trip);
   const s = tripSummary(trip);
   const today = todayWib(d.now);
   const due = settlementDue(trip.startsOn);
   const daysLeft = Math.round((Date.parse(due) - Date.parse(today)) / DAY);
   const display = tripDisplayStatus(trip, today);
   const { accounts, defaultId: defaultAccountId } = payAccounts;
-  const singlesIn = trip.activities.reduce((sum, a) => sum + (a.soldSingle ? a.singles * a.price : 0), 0);
+  const singlesIn = [...revenue.values()].reduce((sum, n) => sum + n, 0);
 
   return (
     <>
@@ -127,7 +128,7 @@ export default async function TripPaymentsPage({ params }: PageProps<"/admin/act
                   </span>
                   {a.soldSingle ? (
                     <span className={styles.singleChip}>
-                      Satuan {a.singles}/{quota} · {formatRupiahPlain(a.singles * a.price)}
+                      Satuan {a.singles}/{quota} · {formatRupiahPlain(revenue.get(a.id) ?? 0)}
                     </span>
                   ) : (
                     <span className={cx(styles.singleChip, styles.singleChipOff)}>Tidak dijual satuan</span>

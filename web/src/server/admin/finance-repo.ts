@@ -54,24 +54,27 @@ let demoData: FinanceData | undefined;
  * Akun penerima pembayaran (aktif, bukan Saldo Kuyy) + akun default bayar manual — untuk form Catat
  * pembayaran trip. Hanya dua tabel kecil, bukan seluruh data Keuangan.
  */
-export const getPaymentAccounts = cache(async (): Promise<{ accounts: { id: string; name: string }[]; defaultId: string }> => {
+/**
+ * Akun penerima (Catat pembayaran trip): aktif & bukan platform, default = akun bayar manual. `names` = nama
+ * semua akun (riwayat pembayaran). Live lewat RPC payment_accounts — tim Activities tanpa akses Keuangan
+ * tetap bisa memilih akun.
+ */
+export const getPaymentAccounts = cache(async (): Promise<{ accounts: { id: string; name: string }[]; defaultId: string; names: Map<string, string> }> => {
   const pick = (list: { id: string; name: string; type: string; isActive: boolean }[], manual: string | null) => {
     const accounts = list.filter((a) => a.isActive && a.type !== "platform").map((a) => ({ id: a.id, name: a.name }));
-    return { accounts, defaultId: manual && accounts.some((a) => a.id === manual) ? manual : (accounts[0]?.id ?? "") };
+    return { accounts, defaultId: manual && accounts.some((a) => a.id === manual) ? manual : (accounts[0]?.id ?? ""), names: new Map(list.map((a) => [a.id, a.name])) };
   };
   if (!isSupabaseConfigured) {
     const demo = await getFinanceData();
     return pick(demo.accounts, demo.settings.manualPaidAccountId);
   }
   const supabase = await createSupabaseServerClient();
-  const [accounts, settings] = await Promise.all([
-    supabase.from("finance_accounts").select("id, name, type, is_active").order("sort_order").order("created_at"),
-    supabase.from("finance_settings").select("manual_paid_account_id").maybeSingle(),
-  ]);
-  if (accounts.error) throw new Error(`Gagal memuat akun: ${accounts.error.message}`);
+  const { data, error } = await supabase.rpc("payment_accounts");
+  if (error) throw new Error(`Gagal memuat akun: ${error.message}`);
+  const rows = (data ?? []) as { id: string; name: string; type: string; is_active: boolean; is_manual_default: boolean }[];
   return pick(
-    (accounts.data ?? []).map((a) => ({ id: a.id as string, name: a.name as string, type: a.type as string, isActive: !!a.is_active })),
-    (settings.data?.manual_paid_account_id as string | null) ?? null,
+    rows.map((a) => ({ id: a.id, name: a.name, type: a.type, isActive: a.is_active })),
+    rows.find((a) => a.is_manual_default)?.id ?? null,
   );
 });
 

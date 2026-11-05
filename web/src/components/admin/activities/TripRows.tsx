@@ -57,7 +57,7 @@ function useTripMenu(trip: TripDetail): [RowMenuItem[], React.ReactNode] {
       onSelect: async () => {
         const ok = await confirm({
           title: `Arsipkan ${trip.title}?`,
-          body: <p>Trip disembunyikan dari website & My Activities. Activity, peserta dan pembayaran tetap tersimpan.</p>,
+          body: <p>Trip disembunyikan dari website & My Activities, activity yang belum mulai kembali jadi Draft. Peserta dan pembayaran tetap tersimpan — publikasikan lagi untuk menampilkannya.</p>,
           confirmLabel: "Arsipkan trip",
         });
         if (!ok) return;

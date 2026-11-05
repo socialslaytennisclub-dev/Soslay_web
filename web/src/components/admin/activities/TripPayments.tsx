@@ -29,7 +29,8 @@ function trail(b: TripBooking) {
   if (!pays.length) return `Daftar ${fmtDay(b.createdAt)} · belum DP`;
   const first = pays[0];
   const last = pays.at(-1)!;
-  const head = first.kind === "settlement" && pays.length === 1 ? `Lunas ${fmtDay(first.receivedOn)}` : `DP ${fmtDay(first.receivedOn)}`;
+  // "Lunas" hanya bila memang lunas — Pelunasan yang nominalnya diubah lebih kecil tetap "DP".
+  const head = b.money.status === "paid" && pays.length === 1 ? `Lunas ${fmtDay(first.receivedOn)}` : `DP ${fmtDay(first.receivedOn)}`;
   return b.money.status === "paid" && pays.length > 1 ? `${head} · lunas ${fmtDay(last.receivedOn)}` : head;
 }
 

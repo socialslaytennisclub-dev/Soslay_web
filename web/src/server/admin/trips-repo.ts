@@ -5,6 +5,7 @@ import { wibParts } from "@/lib/format";
 import { bookingMoney, todayWib, TRIP_PLACEHOLDER, type TripPaymentKind } from "@/lib/trips";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDataset, type Dataset } from "./dataset";
+import { getPaymentAccounts } from "./finance-repo";
 import { toRow } from "./session-rows";
 import { demoTrip, demoTripBookings, demoTripRundown } from "./trip-demo";
 import type { TripActivity, TripBooking, TripCandidate, TripDetail, TripStatus, TripSummary } from "./types";
@@ -23,7 +24,6 @@ type BookingRowDb = { id: string; trip_id: string; member_id: string | null; ful
 type PaymentRowDb = {
   id: string; booking_id: string; kind: TripPaymentKind; amount: number; received_on: string; account_id: string;
   proof_path: string | null; proof_name: string | null; voided_at: string | null; void_reason: string | null; created_at: string;
-  finance_accounts: { name: string } | null;
 };
 type RundownRowDb = { id: string; trip_id: string; day: string; time_label: string; title: string; location: string; session_id: string | null; sort: number };
 
@@ -54,15 +54,16 @@ function assemble(d: Dataset, raw: RawTrip): TripDetail {
 
 async function loadLiveTrips(): Promise<RawTrip[]> {
   const supabase = await createSupabaseServerClient();
-  const [trips, bookings, payments, rundown] = await Promise.all([
+  const [trips, bookings, payments, rundown, { names: accountName }] = await Promise.all([
     supabase.from("trips").select("*").order("starts_on").returns<TripRowDb[]>(),
     supabase.from("trip_bookings").select("id, trip_id, member_id, full_name, phone, email, created_at, cancelled_at").order("created_at").returns<BookingRowDb[]>(),
     supabase
       .from("trip_payments")
-      .select("id, booking_id, kind, amount, received_on, account_id, proof_path, proof_name, voided_at, void_reason, created_at, finance_accounts(name)")
+      .select("id, booking_id, kind, amount, received_on, account_id, proof_path, proof_name, voided_at, void_reason, created_at")
       .order("received_on")
       .returns<PaymentRowDb[]>(),
     supabase.from("trip_rundown_items").select("id, trip_id, day, time_label, title, location, session_id, sort").order("day").order("sort").returns<RundownRowDb[]>(),
+    getPaymentAccounts(),
   ]);
   if (trips.error) throw new Error(`Gagal memuat trip: ${trips.error.message}`);
   // Kelompokkan sekali (bukan filter per trip / salin array per baris).
@@ -113,7 +114,7 @@ async function loadLiveTrips(): Promise<RawTrip[]> {
           amount: p.amount,
           receivedOn: p.received_on,
           accountId: p.account_id,
-          accountName: p.finance_accounts?.name ?? "Akun",
+          accountName: accountName.get(p.account_id) ?? "Akun",
           proofName: p.proof_name,
           hasProof: Boolean(p.proof_path),
           voided: Boolean(p.voided_at),
@@ -154,6 +155,21 @@ export function tripSummary(t: TripDetail): TripSummary {
     }
   }
   return { ...s, singles: t.activities.reduce((sum, a) => sum + a.singles, 0), venues: new Set(t.activities.map((a) => a.venueName)).size };
+}
+
+/**
+ * Pemasukan peserta satuan per activity = jumlah nominal baris peserta selain paket (impor Kuyy / tambahan
+ * admin, nominal yang sudah diubah ikut). Demo: peserta satuan × harga.
+ */
+export async function singlesRevenue(t: TripDetail): Promise<Map<string, number>> {
+  const d = await getDataset();
+  if (!d.live || !t.activities.length) return new Map(t.activities.map((a) => [a.id, a.singles * a.price]));
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.from("session_participants").select("session_id, amount").in("session_id", t.activities.map((a) => a.id)).neq("source", "trip");
+  if (error) throw new Error(`Gagal memuat peserta satuan: ${error.message}`);
+  const sum = new Map<string, number>();
+  for (const r of data ?? []) sum.set(r.session_id as string, (sum.get(r.session_id as string) ?? 0) + ((r.amount as number | null) ?? 0));
+  return sum;
 }
 
 /** Status tampilan trip: draft · published · selesai (lewat tanggal selesai) · arsip. */

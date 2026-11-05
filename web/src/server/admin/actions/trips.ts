@@ -98,11 +98,13 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
   // Pemeriksaan awal (saling lepas) sekaligus: venue, activity yang diambil, pembeli paket, keterisian.
   const venueNames = [...new Set(input.activities.map((a) => a.venueName))];
   const existingIds = input.activities.flatMap((a) => (a.id ? [a.id] : []));
-  const [{ data: venues }, { data: linked }, { count: bundled }, fills] = await Promise.all([
+  const [{ data: venues }, { data: linked }, { data: buyerRows }, fills, { data: present }] = await Promise.all([
     venueNames.length ? supabase.from("venues").select("id, name").in("name", venueNames) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
     existingIds.length ? supabase.from("sessions").select("id, title, trip_id").in("id", existingIds) : Promise.resolve({ data: [] as { id: string; title: string; trip_id: string | null }[] }),
-    input.id ? supabase.from("trip_bookings").select("id", { count: "exact", head: true }).eq("trip_id", input.id).is("cancelled_at", null) : Promise.resolve({ count: 0 }),
+    input.id ? supabase.from("trip_bookings").select("member_id").eq("trip_id", input.id).is("cancelled_at", null) : Promise.resolve({ data: [] as { member_id: string | null }[] }),
     existingIds.length ? supabase.rpc("session_fill_counts").in("session_id", existingIds) : Promise.resolve({ data: [] }),
+    // Pembeli paket yang sudah ada di sesi lewat jalur lain (mis. impor Kuyy) tidak dihitung dua kali.
+    existingIds.length ? supabase.from("session_participants").select("session_id, member_id").in("session_id", existingIds).neq("source", "trip").not("member_id", "is", null) : Promise.resolve({ data: [] as { session_id: string; member_id: string }[] }),
   ]);
   const venueId = new Map((venues ?? []).map((v) => [v.name as string, v.id as string]));
   const missing = venueNames.find((n) => !venueId.has(n));
@@ -112,10 +114,15 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
   if (taken) return { ok: false, error: `"${taken.title}" sudah terhubung ke trip lain — 1 activity hanya bisa masuk 1 trip.` };
 
   // Kapasitas tiap activity ≥ pembeli paket (otomatis terdaftar) + peserta lain yang sudah ada di sesi itu.
+  const buyers = buyerRows ?? [];
+  const buyerIds = new Set(buyers.flatMap((b) => (b.member_id ? [b.member_id as string] : [])));
   const others = new Map(((fills.data ?? []) as { session_id: string; filled: number; trip_filled: number }[]).map((r) => [r.session_id, r.filled - r.trip_filled]));
+  const overlap = new Map<string, number>();
+  for (const p of present ?? []) if (buyerIds.has(p.member_id as string)) overlap.set(p.session_id as string, (overlap.get(p.session_id as string) ?? 0) + 1);
   for (const a of input.activities) {
-    const need = (bundled ?? 0) + (a.id ? (others.get(a.id) ?? 0) : 0);
-    if (a.capacity < need) return { ok: false, error: `${a.title || "Activity"}: kapasitas minimal ${need} (${bundled ?? 0} pembeli paket${a.id && others.get(a.id) ? ` + ${others.get(a.id)} peserta lain` : ""}).` };
+    const other = a.id ? (others.get(a.id) ?? 0) : 0;
+    const bundled = buyers.length - (a.id ? (overlap.get(a.id) ?? 0) : 0);
+    if (a.capacity < bundled + other) return { ok: false, error: `${a.title || "Activity"}: kapasitas minimal ${bundled + other} (${bundled} pembeli paket${other ? ` + ${other} peserta lain` : ""}).` };
   }
 
   const tripRow = {
@@ -136,6 +143,15 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
     min_dp: input.minDp,
     inclusions: input.inclusions.map((s) => s.trim()).filter(Boolean),
   };
+  // Simpan tidak dalam satu transaksi: gagal di tengah → buang trip / activity yang baru dibuat di simpan ini
+  // supaya menekan Simpan lagi tidak membuat trip & activity ganda.
+  const created: string[] = [];
+  let newTrip: string | null = null;
+  const fail = async (error: string): Promise<SaveResult> => {
+    if (created.length) await supabase.from("sessions").delete().in("id", created);
+    if (newTrip) await supabase.from("trips").delete().eq("id", newTrip);
+    return { ok: false, error };
+  };
   let id = input.id;
   if (id) {
     const { error } = await supabase.from("trips").update(tripRow).eq("id", id);
@@ -147,7 +163,7 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
       .select("id")
       .single();
     if (error || !data) return { ok: false, error: `Gagal membuat trip: ${error?.message ?? "coba lagi"}` };
-    id = data.id as string;
+    id = newTrip = data.id as string;
   }
 
   // Activity: data inti diatur di trip; detail lain (foto, format, crew, level…) di Edit activity.
@@ -168,7 +184,7 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
     };
     if (a.id) {
       const { error } = await supabase.from("sessions").update(core).eq("id", a.id);
-      if (error) return { ok: false, error: `Gagal menyimpan ${a.title}: ${error.message}` };
+      if (error) return fail(`Gagal menyimpan ${a.title}: ${error.message}`);
       keyToSession.set(a.key, a.id);
     } else {
       const { data, error } = await supabase
@@ -185,7 +201,8 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
         })
         .select("id")
         .single();
-      if (error || !data) return { ok: false, error: `Gagal membuat ${a.title}: ${error?.message ?? "coba lagi"}` };
+      if (error || !data) return fail(`Gagal membuat ${a.title}: ${error?.message ?? "coba lagi"}`);
+      created.push(data.id as string);
       keyToSession.set(a.key, data.id as string);
     }
   }
@@ -193,9 +210,10 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
   const keep = [...keyToSession.values()];
   const detach = supabase.from("sessions").update({ trip_id: null, trip_order: null }).eq("trip_id", id);
   const { error: detachError } = keep.length ? await detach.not("id", "in", `(${keep.join(",")})`) : await detach;
-  if (detachError) return { ok: false, error: `Gagal melepas activity: ${detachError.message}` };
+  if (detachError) return fail(`Gagal melepas activity: ${detachError.message}`);
 
-  // Status & visibilitas trip diteruskan ke activity-nya oleh trigger trips_cascade_to_sessions.
+  // Status & visibilitas trip diteruskan ke activity-nya oleh trigger (trips_cascade_to_sessions; activity
+  // yang baru ditautkan: sessions_trip_link).
 
   // Rundown diganti seluruhnya dalam satu transaksi (gagal → rundown lama tetap utuh).
   const { error: rundownError } = await supabase.rpc("save_trip_rundown", {
@@ -208,7 +226,7 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
       session_id: r.activityKey ? (keyToSession.get(r.activityKey) ?? null) : null,
     })),
   });
-  if (rundownError) return { ok: false, error: `Gagal menyimpan rundown: ${rundownError.message}` };
+  if (rundownError) return fail(`Gagal menyimpan rundown: ${rundownError.message}`);
 
   await audit(auth.userId, `${input.id ? "mengubah" : "membuat"} trip ${tripRow.title}`, "trip", id);
   refreshPaths("/admin/activities", `/admin/activities/trip/${id}`);
@@ -324,14 +342,11 @@ export async function recordTripPayment(formData: FormData): Promise<ActionResul
   ]);
   if (!booking || booking.cancelled_at) return { ok: false, error: "Peserta paket tidak ditemukan." };
   const t = booking.trips as unknown as { price_normal: number; price_early_bird: number | null; early_bird_until: string | null } | null;
-  // Tidak boleh melebihi sisa tagihan (salah ketik langsung masuk Keuangan).
-  const remaining = t
-    ? bookingMoney(
-        { priceNormal: t.price_normal, priceEarlyBird: t.price_early_bird, earlyBirdUntil: t.early_bird_until },
-        (paid ?? []).map((p) => ({ amount: p.amount as number, receivedOn: p.received_on as string, voided: Boolean(p.voided_at) })),
-        todayWib(),
-      ).remaining
-    : 0;
+  // Tidak boleh melebihi sisa tagihan (salah ketik langsung masuk Keuangan). Harga paket (early bird /
+  // normal) dihitung dengan pembayaran ini ikut — tanggal diterima bisa mundur ke masa early bird.
+  const pricing = t ? { priceNormal: t.price_normal, priceEarlyBird: t.price_early_bird, earlyBirdUntil: t.early_bird_until } : null;
+  const before = (paid ?? []).map((p) => ({ amount: p.amount as number, receivedOn: p.received_on as string, voided: Boolean(p.voided_at) }));
+  const remaining = pricing ? Math.max(bookingMoney(pricing, [...before, { amount, receivedOn, voided: false }], todayWib()).price - bookingMoney(pricing, before, receivedOn).paid, 0) : 0;
   if (remaining <= 0) return { ok: false, error: `${booking.full_name} sudah lunas.` };
   if (amount > remaining) return { ok: false, error: `Jumlah melebihi sisa tagihan (${formatRupiahPlain(remaining)}).` };
 

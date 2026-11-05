@@ -434,7 +434,7 @@ export async function removeParticipants(sessionId: string, participants: { id: 
     if (present.length) return { ok: false, error: `${present.join(", ")} sudah check-in — batalkan check-in dulu sebelum menghapus.` };
     const { error } = await supabase.from("session_participants").delete().in("id", rosterIds);
     if (error) return { ok: false, error: `Gagal menghapus: ${error.message}` };
-    const memberIds = rows!.map((r) => r.member_id as string | null).filter((id): id is string => Boolean(id));
+    const memberIds = await withoutTripBuyers(supabase, sessionId, rows!.map((r) => r.member_id as string | null));
     if (memberIds.length) {
       // Booking hasil impor / tambahan admin dihapus; booking yang dibuat member sendiri di website
       // dibatalkan — keduanya supaya sesi hilang dari My Activities member itu.
@@ -465,6 +465,18 @@ export async function removeParticipants(sessionId: string, participants: { id: 
 }
 
 /**
+ * Member yang bookingnya boleh ikut dihapus setelah baris pesertanya dihapus: bukan pembeli paket trip
+ * (database langsung mendaftarkan mereka lagi lewat paket — bookingnya tetap dipakai).
+ */
+async function withoutTripBuyers(supabase: Supabase, sessionId: string, ids: (string | null)[]): Promise<string[]> {
+  const memberIds = ids.filter((id): id is string => Boolean(id));
+  if (!memberIds.length) return [];
+  const { data } = await supabase.from("session_participants").select("member_id").eq("session_id", sessionId).eq("source", "trip").in("member_id", memberIds);
+  const buyers = new Set((data ?? []).map((r) => r.member_id as string));
+  return memberIds.filter((id) => !buyers.has(id));
+}
+
+/**
  * Kosongkan semua peserta & absensi hasil impor Kuyy (untuk diganti impor data baru).
  * Line-up ikut terhapus; booking (Kuyy / tambahan manual) member yang belum hadir dihapus. Ditolak kalau
  * aktivitas sudah dikerjakan (mulai / selesai / ada skor / ada yang check-in).
@@ -479,7 +491,7 @@ export async function clearParticipants(sessionId: string): Promise<ActionResult
   // Pembeli paket trip tetap (bukan hasil impor Kuyy).
   const { data: removed, error } = await supabase.from("session_participants").delete().eq("session_id", sessionId).neq("source", "trip").select("member_id");
   if (error) return { ok: false, error: `Gagal menghapus: ${error.message}` };
-  const memberIds = (removed ?? []).map((r) => r.member_id as string | null).filter((id): id is string => Boolean(id));
+  const memberIds = await withoutTripBuyers(supabase, sessionId, (removed ?? []).map((r) => r.member_id as string | null));
   if (memberIds.length) {
     await supabase.from("bookings").delete().eq("session_id", sessionId).in("source", ["kuy", "admin"]).eq("status", "registered").in("member_id", memberIds);
   }

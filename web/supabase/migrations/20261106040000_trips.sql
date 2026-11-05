@@ -143,7 +143,8 @@ end $$;
 create trigger trip_bookings_sync after insert or update of cancelled_at, member_id, full_name, phone, email or delete on trip_bookings
   for each row execute function trip_bookings_sync();
 
--- Activity ditautkan ke trip → semua pembeli paket terdaftar; dilepas → peserta paket dikeluarkan.
+-- Activity ditautkan ke trip → semua pembeli paket terdaftar + ikut visibilitas & status trip (activity
+-- yang diambil dari luar trip juga); dilepas → peserta paket dikeluarkan.
 create function sessions_trip_link() returns trigger language plpgsql security definer set search_path = public as $$
 begin
   if tg_op = 'UPDATE' and old.trip_id is not null then
@@ -151,6 +152,12 @@ begin
   end if;
   if new.trip_id is not null then
     perform trip_add_bundle_participants(new.trip_id, new.id);
+    update sessions s set
+      visibility = t.visibility::session_visibility,
+      status = case when t.status = 'published' and s.status = 'draft' then 'published'::session_status else s.status end
+    from trips t
+    where s.id = new.id and t.id = new.trip_id
+      and (s.visibility::text is distinct from t.visibility or (t.status = 'published' and s.status = 'draft'));
   end if;
   return null;
 end $$;
@@ -158,6 +165,22 @@ create trigger sessions_trip_link_insert after insert on sessions
   for each row when (new.trip_id is not null) execute function sessions_trip_link();
 create trigger sessions_trip_link_update after update of trip_id on sessions
   for each row when (old.trip_id is distinct from new.trip_id) execute function sessions_trip_link();
+
+-- Pembeli paket yang juga ada di sesi lewat jalur lain (mis. baris impor Kuyy) tidak punya baris 'trip'.
+-- Baris lain itu dihapus ("Hapus semua" sebelum impor ulang, hapus peserta) → daftarkan lagi lewat paket.
+create function session_participants_restore_trip() returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  v_trip uuid;
+begin
+  select trip_id into v_trip from sessions where id = old.session_id;
+  if v_trip is not null then
+    perform trip_add_bundle_participants(v_trip, old.session_id, b.id)
+    from trip_bookings b where b.trip_id = v_trip and b.member_id = old.member_id and b.cancelled_at is null;
+  end if;
+  return null;
+end $$;
+create trigger session_participants_restore_trip after delete on session_participants
+  for each row when (old.source <> 'trip' and old.member_id is not null) execute function session_participants_restore_trip();
 
 -- ═══ Keuangan (A-10) ═════════════════════════════════════════════════════════
 -- Setiap pembayaran paket → Pemasukan · Tiket activity · akun penerima, terkait trip, termin DP / cicilan /
@@ -276,16 +299,35 @@ end $$;
 revoke execute on function save_trip_rundown(uuid, jsonb) from public, anon;
 grant execute on function save_trip_rundown(uuid, jsonb) to authenticated;
 
--- Trip → activity-nya: visibilitas selalu ikut; dipublikasikan → activity draft ikut tampil. Satu aturan di
--- database (bukan hanya di form trip).
+-- Trip → activity-nya: visibilitas selalu ikut; dipublikasikan → activity draft ikut tampil; diarsipkan →
+-- activity yang belum mulai kembali Draft (hilang dari website & My Activities; dipublikasikan lagi →
+-- tampil lagi). Satu aturan di database (bukan hanya di form trip).
 create function trips_cascade_to_sessions() returns trigger language plpgsql security definer set search_path = public as $$
 begin
   update sessions set
     visibility = new.visibility::session_visibility,
-    status = case when new.status = 'published' and status = 'draft' then 'published'::session_status else status end
+    status = case
+      when new.status = 'published' and status = 'draft' then 'published'::session_status
+      when new.status = 'cancelled' and status = 'published' and starts_at > now() then 'draft'::session_status
+      else status end
   where trip_id = new.id
-    and (visibility::text is distinct from new.visibility or (new.status = 'published' and status = 'draft'));
+    and (visibility::text is distinct from new.visibility
+      or (new.status = 'published' and status = 'draft')
+      or (new.status = 'cancelled' and status = 'published' and starts_at > now()));
   return null;
 end $$;
 create trigger trips_cascade_to_sessions after insert or update of status, visibility on trips
   for each row execute function trips_cascade_to_sessions();
+
+-- Akun penerima untuk Catat pembayaran (trip) & jalur bayar peserta: tim Activities perlu daftar akun walau
+-- tidak punya akses Keuangan (RLS finance_accounts). Hanya id, nama, tipe, aktif & akun bayar manual default.
+create function payment_accounts()
+returns table (id uuid, name text, type text, is_active boolean, is_manual_default boolean)
+language sql stable security definer set search_path = public as $$
+  select a.id, a.name, a.type, a.is_active, a.id = (select manual_paid_account_id from finance_settings limit 1)
+  from finance_accounts a
+  where (select has_permission('activities')) or (select has_permission('finance'))
+  order by a.sort_order, a.created_at;
+$$;
+revoke execute on function payment_accounts() from public, anon;
+grant execute on function payment_accounts() to authenticated;
