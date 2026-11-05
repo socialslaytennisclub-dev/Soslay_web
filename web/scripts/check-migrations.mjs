@@ -686,8 +686,12 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await net("kuyy_import")) === 260000, "A-8 koreksi nominal");
   await db.query(`update session_participants set payment_status = 'pending' where id = $1`, [p5]);
   console.assert((await net("kuyy_import")) === 140000, "A-8 lunas → menunggu → koreksi");
+  // Via Manual (bayar langsung, bukan lewat Kuyy) → pindah dari Saldo Kuyy ke akun bayar manual (BCA).
+  await db.query(`update session_participants set payment_channel = 'manual' where id = $1`, [p1]);
+  const manualAcc = await one(`select a.system_key from finance_transactions t join finance_accounts a on a.id = t.account_id where t.source = 'ticket_manual_paid' and t.source_ref = $1`, ['sp:' + p1]);
+  console.assert((await net("kuyy_import")) === 0 && (await net("ticket_manual_paid")) === 140000 && manualAcc?.system_key === "bank_main", `A-8 via Manual → akun bayar manual ${JSON.stringify(manualAcc)}`);
   await db.query(`delete from session_participants where id = $1`, [p1]);
-  console.assert((await net("kuyy_import")) === 0, "A-8 hapus peserta → koreksi");
+  console.assert((await net("kuyy_import")) === 0 && (await net("ticket_manual_paid")) === 0, "A-8 hapus peserta → koreksi");
   // Booking member ikut nominal & status bayar baris pesertanya.
   const pm = (await one(`insert into auth.users default values returning id`)).id;
   await db.query(`insert into profiles (id, full_name, email) values ($1, 'Pay Sync', 'paysync@fin.test')`, [pm]);

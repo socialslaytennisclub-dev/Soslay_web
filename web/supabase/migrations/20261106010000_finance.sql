@@ -326,9 +326,12 @@ revoke all on function finance_sync_auto(text, text, bigint, text, uuid, text, u
 alter table session_participants
   add column paid_at timestamptz,
   add column payment_status payment_status not null default 'paid'
-    constraint session_participants_payment_check check (payment_status in ('paid', 'pending'));
+    constraint session_participants_payment_check check (payment_status in ('paid', 'pending')),
+  add column payment_channel text not null default 'kuy'
+    constraint session_participants_channel_check check (payment_channel in ('kuy', 'manual'));
 comment on column session_participants.paid_at is 'Waktu bayar dari export Kuyy (kosong bila file tidak memuatnya).';
 comment on column session_participants.payment_status is 'Lunas / menunggu — bisa diubah admin setelah impor. Hanya yang lunas masuk Keuangan.';
+comment on column session_participants.payment_channel is 'Jalur bayar peserta impor Kuyy: kuy (Saldo Kuyy) / manual (transfer langsung → akun bayar manual, mis. BCA).';
 
 -- Import ulang dari export tanpa kolom waktu bayar (atau sel kosong) tidak menghapus waktu yang sudah ada.
 create function session_participant_keep_paid_at() returns trigger language plpgsql as $$
@@ -352,23 +355,39 @@ end $$;
 create trigger session_participants_sync_payment after insert or update of payment_status, amount, member_id on session_participants
   for each row execute function session_participant_payment_sync();
 
-/** Samakan transaksi Keuangan satu peserta dengan keadaannya sekarang (`p_count` false = baris dihapus). */
+/**
+ * Samakan transaksi Keuangan satu peserta dengan keadaannya sekarang (`p_count` false = baris dihapus).
+ * Via Kuy → Saldo Kuyy (sumber kuyy_import); via Manual (bayar langsung, tidak lewat Kuyy) → akun bayar
+ * manual di Pengaturan Keuangan, bawaannya BCA (sumber ticket_manual_paid). Pindah jalur = koreksi minus
+ * di akun lama + pemasukan di akun baru.
+ */
 create function finance_sync_participant(p session_participants, p_count boolean)
 returns void language plpgsql security definer set search_path = public as $$
 declare
   s   sessions;
+  st  finance_settings;
   ref text := 'sp:' || p.id;
+  due bigint;
+  ch  record;
 begin
-  if not (select auto_kuyy from finance_settings) then return; end if;
+  select * into st from finance_settings;
   select * into s from sessions where id = p.session_id;
-  perform finance_sync_auto('kuyy_import', ref,
-    case when p_count and p.source = 'kuy' and p.kuy_username is not null and p.payment_status = 'paid'
-              and (s.status = 'completed' or s.ended_at is not null)
-         then p.amount else 0 end,
-    'ticket', (select id from finance_accounts where system_key = 'kuyy'),
-    'Tiket Kuyy · ' || p.full_name, p.session_id,
-    case when exists (select 1 from finance_transactions where source = 'kuyy_import' and source_ref = ref and deleted_at is null)
-         then now() else coalesce(s.starts_at, now()) end);
+  due := case when p_count and p.source = 'kuy' and p.kuy_username is not null and p.payment_status = 'paid'
+                   and (s.status = 'completed' or s.ended_at is not null)
+              then p.amount else 0 end;
+  for ch in
+    select * from (values
+      ('kuyy_import', 'kuy', st.auto_kuyy, (select id from finance_accounts where system_key = 'kuyy'), 'Tiket Kuyy · '),
+      ('ticket_manual_paid', 'manual', st.auto_manual_paid, st.manual_paid_account_id, 'Bayar manual · ')
+    ) v(src, channel, enabled, account, label)
+  loop
+    continue when not ch.enabled;
+    perform finance_sync_auto(ch.src, ref, case when p.payment_channel = ch.channel then due else 0 end,
+      'ticket', ch.account, ch.label || p.full_name, p.session_id,
+      -- Pertama kali → tanggal activity; koreksi sesudahnya → hari ini.
+      case when exists (select 1 from finance_transactions where source = ch.src and source_ref = ref and deleted_at is null)
+           then now() else coalesce(s.starts_at, now()) end);
+  end loop;
 end $$;
 revoke all on function finance_sync_participant(session_participants, boolean) from public;
 
@@ -379,7 +398,7 @@ begin
   end if;
   return null;
 end $$;
-create trigger session_participants_finance after insert or update of amount, source, kuy_username, payment_status or delete on session_participants
+create trigger session_participants_finance after insert or update of amount, source, kuy_username, payment_status, payment_channel or delete on session_participants
   for each row execute function finance_on_participant();
 
 -- Activity selesai ("Akhiri Activity" / ditutup otomatis oleh close_expired_sessions) → semua peserta

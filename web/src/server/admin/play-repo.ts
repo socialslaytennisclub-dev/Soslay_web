@@ -52,6 +52,7 @@ type RosterRow = {
   checked_in_at: string | null;
   amount: number;
   payment_status: "paid" | "pending";
+  payment_channel: "kuy" | "manual";
 };
 type HostRow = { member_id: string; role: "host" | "photographer" };
 type MatchRow = { id: string; round_no: number; court_no: number; a1: string; a2: string; b1: string; b2: string; score_a: number | null; score_b: number | null };
@@ -81,7 +82,7 @@ export async function loadSessionPlay(session: DataSession, live: boolean): Prom
       .single<PlayRow>(),
     supabase
       .from("session_participants")
-      .select("id, member_id, full_name, kuy_username, ghost_id, phone, tennis_level, kuy_reg_no, checked_in_at, source, amount, payment_status")
+      .select("id, member_id, full_name, kuy_username, ghost_id, phone, tennis_level, kuy_reg_no, checked_in_at, source, amount, payment_status, payment_channel")
       .eq("session_id", id)
       .returns<RosterRow[]>(),
     supabase.from("session_hosts").select("member_id, role").eq("session_id", id).returns<HostRow[]>(),
@@ -134,6 +135,7 @@ export async function loadSessionPlay(session: DataSession, live: boolean): Prom
             level: r.tennis_level,
             payment: r.payment_status,
             amount: r.amount,
+            paidVia: r.payment_channel,
             status: r.checked_in_at ? "attended" : "registered",
             source: r.source,
             checkedIn: Boolean(r.checked_in_at),

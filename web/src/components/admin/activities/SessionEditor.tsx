@@ -17,7 +17,7 @@ import { FormCard, MultiChips, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge, desktopOnlyClass, MemberAvatar, MobileCard, MobileCardList, PickerInput } from "../ui/AdminUI";
 import { CrewDrawer } from "./CrewDrawer";
-import { PaymentCell, useParticipantPayment } from "./ParticipantPayment";
+import { PaymentCell, useParticipantPayment, ViaCell } from "./ParticipantPayment";
 import { ParticipantsDrawer } from "./ParticipantsDrawer";
 import { WaInviteLink } from "./WaInviteLink";
 import { FormatCard, LineupCard, type PlayForm } from "./PlayCards";
@@ -771,7 +771,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                         meta={[
                           { label: "Level", value: p.level ? LEVEL_LABEL[p.level] : "—" },
                           { label: "Bayar", value: <PaymentCell participant={p} onEdit={editPayment} /> },
-                          { label: "Via", value: SOURCE_LABEL[p.source] },
+                          { label: "Via", value: <ViaCell participant={p} label={SOURCE_LABEL[p.source]} onEdit={editPayment} /> },
                         ]}
                       />
                     ))}
@@ -806,7 +806,9 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                             <td>
                               <PaymentCell participant={p} onEdit={editPayment} />
                             </td>
-                            <td>{SOURCE_LABEL[p.source]}</td>
+                            <td>
+                              <ViaCell participant={p} label={SOURCE_LABEL[p.source]} onEdit={editPayment} />
+                            </td>
                             <td>{checkInButton(p)}</td>
                             <td>{removeButton(p)}</td>
                           </tr>

@@ -478,19 +478,21 @@ export async function clearParticipants(sessionId: string): Promise<ActionResult
 }
 
 /**
- * Ubah nominal & status bayar peserta hasil impor Kuyy (mis. bayar DP, salah harga di file). Boleh
+ * Ubah nominal, status & jalur bayar peserta hasil impor Kuyy (mis. bayar DP, salah harga di file, atau
+ * bayar langsung transfer ke BCA → via Manual: uangnya masuk akun bayar manual, bukan Saldo Kuyy). Boleh
  * kapan saja, juga setelah activity selesai: nominal peserta lunas masuk Keuangan begitu activity
  * selesai, perubahan sesudahnya dicatat sebagai koreksi (trigger finance_on_participant).
  */
-export async function updateParticipantPayment(sessionId: string, participantId: string, amount: number, payment: "paid" | "pending"): Promise<ActionResult> {
+export async function updateParticipantPayment(sessionId: string, participantId: string, amount: number, payment: "paid" | "pending", via: "kuy" | "manual"): Promise<ActionResult> {
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
   if (!Number.isInteger(amount) || amount < 0 || amount > 100_000_000) return { ok: false, error: "Nominal tidak valid." };
   if (payment !== "paid" && payment !== "pending") return { ok: false, error: "Status bayar tidak valid." };
+  if (via !== "kuy" && via !== "manual") return { ok: false, error: "Jalur bayar tidak valid." };
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase
     .from("session_participants")
-    .update({ amount, payment_status: payment })
+    .update({ amount, payment_status: payment, payment_channel: via })
     .eq("id", participantId)
     .eq("session_id", sessionId)
     .eq("source", "kuy")
@@ -498,7 +500,7 @@ export async function updateParticipantPayment(sessionId: string, participantId:
     .maybeSingle();
   if (error) return { ok: false, error: `Gagal menyimpan: ${error.message}` };
   if (!data) return { ok: false, error: "Peserta impor Kuyy tidak ditemukan — muat ulang halaman." };
-  const status = payment === "paid" ? "lunas" : "menunggu";
+  const status = `${payment === "paid" ? "lunas" : "menunggu"} · via ${via === "kuy" ? "Kuy" : "Manual"}`;
   await audit(auth.userId, `mengubah pembayaran ${data.full_name}: ${formatRupiahPlain(amount)} · ${status}`, "session", sessionId);
   refreshPaths(`/admin/activities/${sessionId}`);
   return { ok: true, message: `Pembayaran ${data.full_name} disimpan · ${formatRupiahPlain(amount)} · ${status}.` };

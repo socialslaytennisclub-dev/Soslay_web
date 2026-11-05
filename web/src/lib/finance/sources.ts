@@ -21,7 +21,7 @@ export const SOURCE_META: Record<TxSource, SourceMeta> = {
   manual: { auto: false, editable: true, ticket: false, note: null, channel: "Dicatat manual" },
   import: { auto: false, editable: true, ticket: false, note: "Import jurnal", channel: "Import jurnal" },
   ticket: { auto: true, editable: false, ticket: true, note: "Tiket via sistem", channel: "Payment gateway" },
-  ticket_manual_paid: { auto: true, editable: false, ticket: true, note: "Tandai Lunas · bayar manual", channel: "Bayar manual (Tandai Lunas)" },
+  ticket_manual_paid: { auto: true, editable: false, ticket: true, note: "Bayar manual · Tandai Lunas / peserta via Manual", channel: "Bayar manual" },
   kuyy_import: { auto: true, editable: false, ticket: true, note: "Import peserta Kuyy", channel: "Kuyy" },
   shop_order_verified: { auto: true, editable: false, ticket: false, note: "Shop · transfer diverifikasi", channel: "Shop" },
   refund: { auto: true, editable: false, ticket: false, note: "Koreksi refund", channel: "Refund" },

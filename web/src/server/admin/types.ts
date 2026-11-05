@@ -208,6 +208,8 @@ export type SessionParticipant = {
   /** Nominal tiket dari impor Kuyy (Rp) — null untuk peserta dari booking website. Bisa diubah admin
    *  bersama status bayarnya; masuk Keuangan setelah activity selesai & lunas. */
   amount: number | null;
+  /** Jalur bayar peserta impor Kuyy: lewat Kuyy (Saldo Kuyy) atau manual (transfer langsung → akun bayar manual, mis. BCA). */
+  paidVia: "kuy" | "manual";
   status: BookingStatus;
   source: "website" | "kuy" | "admin";
   checkedIn: boolean;
