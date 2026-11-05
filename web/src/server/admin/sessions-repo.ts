@@ -22,6 +22,11 @@ function venueMeta(name: string) {
   return venue ? { city: venue.city, type: venue.type, image: venue.image } : ALTITUDE;
 }
 
+/**
+ * Terisi = daftar peserta (impor Kuyy / roster) bila sesi sudah punya — termasuk ghost member yang tidak
+ * punya booking — selain itu booking aktif. Aturan yang sama dengan "Terdaftar" di halaman edit sesi
+ * (peserta impor menggantikan daftar booking).
+ */
 function fill(d: Dataset, sessionId: string) {
   let booked = 0;
   let waitlisted = 0;
@@ -29,7 +34,7 @@ function fill(d: Dataset, sessionId: string) {
     if (b.status === "waitlisted") waitlisted++;
     else if (b.status !== "cancelled") booked++;
   }
-  return { booked, waitlisted };
+  return { booked: d.rosterCount(sessionId) || booked, waitlisted };
 }
 
 /**
@@ -56,8 +61,8 @@ function toRow(d: Dataset, s: DataSession): SessionRow {
     title: s.title,
     typeSlug: s.typeSlug,
     typeLabel: activityTypeLabels[s.typeSlug] ?? s.typeSlug,
-    // Foto milik sesi lebih dulu (thumbnail album Foto, lalu cover sesi); tanpa itu → foto venue.
-    image: s.photoCoverPath || s.coverPath || meta.image,
+    // Thumbnail activity (cover sesi); tanpa itu → foto venue. Thumbnail album Foto hanya untuk tab Foto member.
+    image: s.coverPath || meta.image,
     startsAt: s.startsAt.toISOString(),
     endsAt: s.endsAt.toISOString(),
     venueName: s.venueName,
