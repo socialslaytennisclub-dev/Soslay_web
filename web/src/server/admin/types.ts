@@ -215,7 +215,7 @@ export type SessionParticipant = {
    */
   kuyPayment: { amount: number; via: "kuy" | "manual" } | null;
   status: BookingStatus;
-  source: "website" | "kuy" | "admin";
+  source: "website" | "kuy" | "admin" | "trip";
   checkedIn: boolean;
   guests: number;
 };

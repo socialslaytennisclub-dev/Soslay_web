@@ -108,6 +108,17 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
     if (taken) return { ok: false, error: `"${taken.title}" sudah terhubung ke trip lain — 1 activity hanya bisa masuk 1 trip.` };
   }
 
+  // Kapasitas tiap activity ≥ pembeli paket (otomatis terdaftar) + peserta lain yang sudah ada di sesi itu.
+  const [{ count: bundled }, fills] = await Promise.all([
+    input.id ? supabase.from("trip_bookings").select("id", { count: "exact", head: true }).eq("trip_id", input.id).is("cancelled_at", null) : Promise.resolve({ count: 0 }),
+    existingIds.length ? supabase.rpc("session_fill_counts") : Promise.resolve({ data: [] }),
+  ]);
+  const others = new Map(((fills.data ?? []) as { session_id: string; filled: number; trip_filled: number }[]).map((r) => [r.session_id, r.filled - r.trip_filled]));
+  for (const a of input.activities) {
+    const need = (bundled ?? 0) + (a.id ? (others.get(a.id) ?? 0) : 0);
+    if (a.capacity < need) return { ok: false, error: `${a.title || "Activity"}: kapasitas minimal ${need} (${bundled ?? 0} pembeli paket${a.id && others.get(a.id) ? ` + ${others.get(a.id)} peserta lain` : ""}).` };
+  }
+
   const tripRow = {
     title: input.title.trim(),
     description: input.description.trim(),
@@ -185,22 +196,24 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
   const { error: detachError } = keep.length ? await detach.not("id", "in", `(${keep.join(",")})`) : await detach;
   if (detachError) return { ok: false, error: `Gagal melepas activity: ${detachError.message}` };
 
-  // Rundown diganti seluruhnya (urutan = urutan di form per hari).
-  await supabase.from("trip_rundown_items").delete().eq("trip_id", id);
-  if (input.rundown.length) {
-    const { error } = await supabase.from("trip_rundown_items").insert(
-      input.rundown.map((r, i) => ({
-        trip_id: id,
-        day: r.day,
-        time_label: r.time.trim(),
-        title: r.title.trim(),
-        location: r.location.trim(),
-        session_id: r.activityKey ? (keyToSession.get(r.activityKey) ?? null) : null,
-        sort: i,
-      })),
-    );
-    if (error) return { ok: false, error: `Gagal menyimpan rundown: ${error.message}` };
+  // Trip dipublikasikan → activity-nya yang masih draft ikut tampil (activity yang sengaja dibatalkan tetap).
+  if (input.status === "published") {
+    const { error } = await supabase.from("sessions").update({ status: "published" }).eq("trip_id", id).eq("status", "draft");
+    if (error) return { ok: false, error: `Gagal mempublikasikan activity: ${error.message}` };
   }
+
+  // Rundown diganti seluruhnya dalam satu transaksi (gagal → rundown lama tetap utuh).
+  const { error: rundownError } = await supabase.rpc("save_trip_rundown", {
+    p_trip: id,
+    p_items: input.rundown.map((r) => ({
+      day: r.day,
+      time_label: r.time.trim(),
+      title: r.title.trim(),
+      location: r.location.trim(),
+      session_id: r.activityKey ? (keyToSession.get(r.activityKey) ?? null) : null,
+    })),
+  });
+  if (rundownError) return { ok: false, error: `Gagal menyimpan rundown: ${rundownError.message}` };
 
   await audit(auth.userId, `${input.id ? "mengubah" : "membuat"} trip ${tripRow.title}`, "trip", id);
   refreshPaths("/admin/activities", `/admin/activities/trip/${id}`);
@@ -307,6 +320,10 @@ export async function recordTripPayment(formData: FormData): Promise<ActionResul
   const supabase = await createSupabaseServerClient();
   const { data: booking } = await supabase.from("trip_bookings").select("id, trip_id, full_name, cancelled_at").eq("id", bookingId).maybeSingle();
   if (!booking || booking.cancelled_at) return { ok: false, error: "Peserta paket tidak ditemukan." };
+  // Tidak boleh melebihi sisa tagihan (salah ketik langsung masuk Keuangan).
+  const remaining = (await getTrip(booking.trip_id as string))?.bookings.find((b) => b.id === bookingId)?.money.remaining ?? 0;
+  if (remaining <= 0) return { ok: false, error: `${booking.full_name} sudah lunas.` };
+  if (amount > remaining) return { ok: false, error: `Jumlah melebihi sisa tagihan (${formatRupiahPlain(remaining)}).` };
 
   let proof: { proof_path: string; proof_name: string } | null = null;
   const file = formData.get("proof");

@@ -15,7 +15,7 @@ import type {
 export const TIER_LABEL: Record<Tier, string> = { basic: "Basic", silver: "Silver", gold: "Gold", platinum: "Platinum" };
 
 /** Asal peserta sesi (kolom "Via"). */
-export const PARTICIPANT_SOURCE_LABEL: Record<"website" | "kuy" | "admin", string> = { website: "Website", kuy: "Kuy", admin: "Admin" };
+export const PARTICIPANT_SOURCE_LABEL: Record<"website" | "kuy" | "admin" | "trip", string> = { website: "Website", kuy: "Kuy", admin: "Admin", trip: "Paket trip" };
 /** Jalur bayar peserta impor Kuyy: lewat Kuyy atau langsung (transfer, mis. BCA). */
 export const PAYMENT_CHANNEL_LABEL: Record<"kuy" | "manual", string> = { kuy: "Kuy", manual: "Manual" };
 

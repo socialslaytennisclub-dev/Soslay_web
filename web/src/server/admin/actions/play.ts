@@ -425,8 +425,11 @@ export async function removeParticipants(sessionId: string, participants: { id: 
   const names: string[] = [];
 
   if (rosterIds.length) {
-    const { data: rows } = await supabase.from("session_participants").select("id, full_name, member_id, checked_in_at").eq("session_id", sessionId).in("id", rosterIds);
+    const { data: rows } = await supabase.from("session_participants").select("id, full_name, member_id, checked_in_at, source").eq("session_id", sessionId).in("id", rosterIds);
     if ((rows?.length ?? 0) !== rosterIds.length) return { ok: false, error: "Sebagian peserta tidak ditemukan — muat ulang halaman." };
+    // Pembeli paket trip terdaftar lewat paketnya — keluarkan dengan membatalkan paket di Peserta & pembayaran trip.
+    const bundled = rows!.filter((r) => r.source === "trip").map((r) => r.full_name as string);
+    if (bundled.length) return { ok: false, error: `${bundled.join(", ")} terdaftar lewat paket trip — batalkan paketnya di Peserta & pembayaran trip.` };
     const present = rows!.filter((r) => r.checked_in_at).map((r) => r.full_name as string);
     if (present.length) return { ok: false, error: `${present.join(", ")} sudah check-in — batalkan check-in dulu sebelum menghapus.` };
     const { error } = await supabase.from("session_participants").delete().in("id", rosterIds);
@@ -473,7 +476,8 @@ export async function clearParticipants(sessionId: string): Promise<ActionResult
   const locked = await participantsLock(supabase, sessionId);
   if (locked) return { ok: false, error: locked };
 
-  const { data: removed, error } = await supabase.from("session_participants").delete().eq("session_id", sessionId).select("member_id");
+  // Pembeli paket trip tetap (bukan hasil impor Kuyy).
+  const { data: removed, error } = await supabase.from("session_participants").delete().eq("session_id", sessionId).neq("source", "trip").select("member_id");
   if (error) return { ok: false, error: `Gagal menghapus: ${error.message}` };
   const memberIds = (removed ?? []).map((r) => r.member_id as string | null).filter((id): id is string => Boolean(id));
   if (memberIds.length) {

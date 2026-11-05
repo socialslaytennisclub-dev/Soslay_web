@@ -172,24 +172,28 @@ alter table finance_transactions add constraint finance_transactions_source_chec
   'manual', 'import', 'ticket', 'ticket_manual_paid', 'kuyy_import', 'shop_order_verified',
   'refund', 'pg_payout', 'transfer_fee', 'adjustment', 'trip_payment'));
 
+-- Ref per akun ('tp:<id>:<akun>'): akun pembayaran diganti → koreksi minus di akun lama + pemasukan di akun baru.
 create function finance_on_trip_payment() returns trigger language plpgsql security definer set search_path = public as $$
 declare
   p   trip_payments := case when tg_op = 'DELETE' then old else new end;
   b   trip_bookings;
   t   trips;
-  ref text := 'tp:' || p.id;
+  ref text := 'tp:' || p.id || ':' || p.account_id;
+  label text;
 begin
   select * into b from trip_bookings where id = p.booking_id;
   select * into t from trips where id = b.trip_id;
+  label := (case p.kind when 'dp' then 'DP' when 'installment' then 'Cicilan' else 'Pelunasan' end) || ' · ' || coalesce(b.full_name, 'peserta') || ' · ' || coalesce(t.title, 'trip');
+  if tg_op = 'UPDATE' and old.account_id is distinct from new.account_id then
+    perform finance_sync_auto('trip_payment', 'tp:' || old.id || ':' || old.account_id, 0, 'ticket', old.account_id, label, null, now());
+  end if;
   perform finance_sync_auto('trip_payment', ref,
     case when tg_op = 'DELETE' or p.voided_at is not null then 0 else p.amount end,
-    'ticket', p.account_id,
-    (case p.kind when 'dp' then 'DP' when 'installment' then 'Cicilan' else 'Pelunasan' end) || ' · ' || coalesce(b.full_name, 'peserta') || ' · ' || coalesce(t.title, 'trip'),
-    null,
+    'ticket', p.account_id, label, null,
     case when exists (select 1 from finance_transactions where source = 'trip_payment' and source_ref = ref and deleted_at is null)
          then now() else (p.received_on + time '12:00') at time zone 'Asia/Jakarta' end);
   update finance_transactions set trip_id = t.id, term = p.kind
-  where source = 'trip_payment' and source_ref = ref and trip_id is null;
+  where source = 'trip_payment' and source_ref like 'tp:' || p.id || ':%' and trip_id is null;
   return null;
 end $$;
 create trigger trip_payments_finance after insert or update of amount, account_id, voided_at or delete on trip_payments
@@ -202,7 +206,16 @@ alter table trip_bookings      enable row level security;
 alter table trip_payments      enable row level security;
 
 -- Trip yang dipublikasikan boleh dibaca siapa saja yang login (info trip di halaman member).
-create policy "read trips" on trips for select using (status = 'published' or (select has_permission('activities')));
+-- Trip dipublikasikan: Publik → semua; Member → yang login; Link → hanya peserta trip (paket / satuan). Tim selalu.
+create policy "read trips" on trips for select using (
+  (select has_permission('activities'))
+  or (status = 'published' and (
+    visibility = 'public'
+    or (visibility = 'members' and (select auth.uid()) is not null)
+    or exists (select 1 from trip_bookings b where b.trip_id = trips.id and b.member_id = (select auth.uid()) and b.cancelled_at is null)
+    or exists (select 1 from sessions s join bookings bk on bk.session_id = s.id where s.trip_id = trips.id and bk.member_id = (select auth.uid()) and bk.status <> 'cancelled')
+  ))
+);
 create policy "admin write trips" on trips for all using ((select has_permission('activities', 'edit'))) with check ((select has_permission('activities', 'edit')));
 
 -- Rundown: tim, dan peserta paket trip itu (bila rundown ditampilkan). Peserta satuan hanya info trip.
@@ -224,3 +237,17 @@ create policy "read trip payments" on trip_payments for select using (
   or exists (select 1 from trip_bookings b where b.id = trip_payments.booking_id and b.member_id = (select auth.uid()))
 );
 create policy "admin write trip payments" on trip_payments for all using ((select has_permission('activities', 'edit'))) with check ((select has_permission('activities', 'edit')));
+
+-- Simpan rundown sekaligus (hapus + isi ulang dalam satu transaksi). Security invoker → RLS "admin write
+-- trip rundown" tetap berlaku.
+create function save_trip_rundown(p_trip uuid, p_items jsonb)
+returns void language plpgsql set search_path = public as $$
+begin
+  delete from trip_rundown_items where trip_id = p_trip;
+  insert into trip_rundown_items (trip_id, day, time_label, title, location, session_id, sort)
+  select p_trip, x.day, x.time_label, x.title, coalesce(x.location, ''), x.session_id, (x.ord - 1)::smallint
+  from rows from (jsonb_to_recordset(coalesce(p_items, '[]'::jsonb)) as (day date, time_label text, title text, location text, session_id uuid))
+    with ordinality as x(day, time_label, title, location, session_id, ord);
+end $$;
+revoke execute on function save_trip_rundown(uuid, jsonb) from public, anon;
+grant execute on function save_trip_rundown(uuid, jsonb) to authenticated;

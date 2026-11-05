@@ -47,7 +47,7 @@ type RosterRow = {
   kuy_username: string | null;
   ghost_id: string | null;
   phone: string | null;
-  source: "kuy" | "admin" | "website";
+  source: "kuy" | "admin" | "website" | "trip";
   tennis_level: TennisLevel | null;
   kuy_reg_no: string | null;
   checked_in_at: string | null;

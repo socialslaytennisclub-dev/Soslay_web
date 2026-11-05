@@ -900,13 +900,36 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const net = async () => Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source = 'trip_payment' and deleted_at is null`)).s);
   await db.query(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'dp', 1500000, current_date - 1, $2)`, [bk, bank]);
   const pel = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'settlement', 1700000, current_date, $2) returning id`, [bk, bank])).id;
-  const tx = await one(`select trip_id, term, activity_session_id from finance_transactions where source = 'trip_payment' and source_ref = $1`, ['tp:' + pel]);
+  const tx = await one(`select trip_id, term, activity_session_id from finance_transactions where source = 'trip_payment' and source_ref like $1`, ['tp:' + pel + ':%']);
   console.assert((await net()) === 3200000 && tx?.trip_id === trip && tx.term === "settlement", `A-10 pembayaran trip ${await net()} ${JSON.stringify(tx)}`);
+  // Akun penerima diganti → pindah akun di Keuangan (koreksi di akun lama, pemasukan di akun baru), total tetap.
+  const cash = (await one(`select id from finance_accounts where system_key = 'cash'`)).id;
+  await db.query(`update trip_payments set account_id = $2 where id = $1`, [pel, cash]);
+  const byAcc = async (acc) => Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source = 'trip_payment' and account_id = $1 and deleted_at is null`, [acc])).s);
+  console.assert((await net()) === 3200000 && (await byAcc(cash)) === 1700000 && (await byAcc(bank)) === 1500000, `A-10 ganti akun ${await byAcc(bank)} / ${await byAcc(cash)}`);
   await db.query(`update trip_payments set voided_at = now(), void_reason = 'salah input' where id = $1`, [pel]);
   console.assert((await net()) === 1500000, "A-10 pembayaran dibatalkan → koreksi");
   // Batal paket → keluar dari semua activity.
   await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [bk]);
   console.assert((await tripRows(s1)) === 1 && (await tripRows(s2)) === 1, "paket dibatalkan masih terdaftar di activity");
+  // Rundown disimpan sekaligus; visibilitas Link hanya untuk peserta trip.
+  await db.query(`select save_trip_rundown($1, $2::jsonb)`, [trip, JSON.stringify([{ day: "2026-10-17", time_label: "05.30", title: "Penjemputan", location: "Bali", session_id: null }, { day: "2026-10-17", time_label: "07.00", title: "Activity 1", session_id: s1 }])]);
+  const rd = await one(`select count(*)::int n, max(sort)::int m from trip_rundown_items where trip_id = $1`, [trip]);
+  console.assert(rd.n === 2 && rd.m === 1, `rundown ${JSON.stringify(rd)}`);
+  await db.query(`update trips set visibility = 'link' where id = $1`, [trip]);
+  await db.exec(`grant select on trips, trip_bookings, sessions, bookings to anon, authenticated`);
+  const visibleTo = async (uid) => {
+    await db.exec(`set role ${uid ? "authenticated" : "anon"}`);
+    await as(uid);
+    const n = (await one(`select count(*)::int n from trips where id = $1`, [trip])).n;
+    await as(null);
+    await db.exec(`reset role`);
+    return n;
+  };
+  const stranger = (await one(`insert into auth.users default values returning id`)).id;
+  console.assert((await visibleTo(null)) === 0 && (await visibleTo(stranger)) === 0, "trip Link terbaca orang luar");
+  await db.query(`update trip_bookings set cancelled_at = null where id = $1`, [bk]);
+  console.assert((await visibleTo(buyer)) === 1, "trip Link tidak terbaca pembeli paketnya");
   await db.exec(`update finance_settings set go_live_date = '2026-12-01'`);
   console.log("✓ trip: pembeli paket terdaftar di semua activity (tautkan / lepas / batal), kapasitas paket, pembayaran → Keuangan + koreksi");
 }

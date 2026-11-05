@@ -314,10 +314,11 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   };
   const rowLock = participantsLockReason({ ...lockBase, checkedIn: 0 });
   const clearLock = participantsLockReason({ ...lockBase, checkedIn: checkedInCount });
-  const fromKuy = session.participants.filter((p) => p.id !== p.memberId);
+  const fromKuy = session.participants.filter((p) => p.id !== p.memberId && p.source !== "trip");
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const removeLock = (p: SessionParticipant) => rowLock ?? (isCheckedIn(p) ? "Sudah check-in — batalkan check-in dulu sebelum menghapus." : null);
+  const removeLock = (p: SessionParticipant) =>
+    p.source === "trip" ? "Pembeli paket trip — batalkan paketnya di Peserta & pembayaran trip." : (rowLock ?? (isCheckedIn(p) ? "Sudah check-in — batalkan check-in dulu sebelum menghapus." : null));
   const toggleSelected = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);

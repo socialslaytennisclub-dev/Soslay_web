@@ -11,7 +11,7 @@ import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { settlementDue, shortDate, todayWib, tripRange } from "@/lib/trips";
 import { getDataset } from "@/server/admin/dataset";
-import { getFinanceData } from "@/server/admin/finance-repo";
+import { getPaymentAccounts } from "@/server/admin/finance-repo";
 import { getTrip, tripDisplayStatus, tripSummary } from "@/server/admin/trips-repo";
 import pageStyles from "../../../../page.module.css";
 
@@ -22,15 +22,14 @@ const DAY = 86_400_000;
 /** Admin / 05x-2 Trip — Peserta & pembayaran (BR-22). */
 export default async function TripPaymentsPage({ params }: PageProps<"/admin/activities/trip/[id]/peserta">) {
   const { id } = await params;
-  const [trip, finance, d] = await Promise.all([getTrip(id), getFinanceData(), getDataset()]);
+  const [trip, payAccounts, d] = await Promise.all([getTrip(id), getPaymentAccounts(), getDataset()]);
   if (!trip) notFound();
   const s = tripSummary(trip);
   const today = todayWib(d.now);
   const due = settlementDue(trip.startsOn);
   const daysLeft = Math.round((Date.parse(due) - Date.parse(today)) / DAY);
   const display = tripDisplayStatus(trip, today);
-  const accounts = finance.accounts.filter((a) => a.isActive && a.type !== "platform").map((a) => ({ id: a.id, name: a.name }));
-  const defaultAccountId = finance.settings.manualPaidAccountId ?? accounts[0]?.id ?? "";
+  const { accounts, defaultId: defaultAccountId } = payAccounts;
   const singlesIn = trip.activities.reduce((sum, a) => sum + (a.soldSingle ? a.singles * a.price : 0), 0);
 
   return (
