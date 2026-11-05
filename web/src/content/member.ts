@@ -278,9 +278,9 @@ export const playingDurationOptions = ["Kurang dari 6 bulan", "6–12 bulan", "1
 
 export const tennisLevelOptions = [
   "Beginner",
-  "Beginner–Intermediate",
+  "Upper Beginner",
   "Intermediate",
-  "Intermediate–Advanced",
+  "Upper Intermediate",
   "Advanced",
 ];
 

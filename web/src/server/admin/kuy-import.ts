@@ -51,6 +51,9 @@ const HEADERS = {
 
 export function parseLevel(raw: string): TennisLevel | null {
   const t = raw.toLowerCase();
+  // Nama level sekarang: Upper Beginner (dulu Beginner–Intermediate), Upper Intermediate (dulu Intermediate–Advanced).
+  if (t.includes("upper") && t.includes("beginner")) return "beginner_intermediate";
+  if (t.includes("upper") && t.includes("intermediate")) return "intermediate_advanced";
   const beg = t.includes("beginner") || t.includes("pemula");
   const int = t.includes("intermediate") || t.includes("menengah");
   const adv = t.includes("advance") || t.includes("mahir");

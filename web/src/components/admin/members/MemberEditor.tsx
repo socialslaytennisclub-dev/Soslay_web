@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
+import { LEVEL_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { adjustPoints, updateMember } from "@/server/admin/actions/members";
 import type { MemberForm } from "@/server/admin/types";
@@ -11,13 +12,7 @@ import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton } from "../ui/AdminUI";
 import { toast } from "../ui/Toaster";
 
-const LEVELS = [
-  ["beginner", "Beginner"],
-  ["beginner_intermediate", "Beginner–Intermediate"],
-  ["intermediate", "Intermediate"],
-  ["intermediate_advanced", "Intermediate–Advanced"],
-  ["advanced", "Advanced"],
-];
+const LEVELS = Object.entries(LEVEL_LABEL);
 const FREQUENCIES = [
   ["rarely", "First time / Rarely"],
   ["monthly", "1–2x / bulan"],

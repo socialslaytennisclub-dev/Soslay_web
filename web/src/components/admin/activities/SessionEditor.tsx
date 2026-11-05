@@ -47,10 +47,7 @@ const toDate = (iso: string) => new Date(new Date(iso).getTime() + WIB).toISOStr
 const toTime = (iso: string) => new Date(new Date(iso).getTime() + WIB).toISOString().slice(11, 16);
 const fromWib = (date: string, time: string) => new Date(`${date}T${time}:00+07:00`);
 
-const LEVELS = (Object.keys(LEVEL_LABEL) as TennisLevel[]).map((value) => ({
-  value,
-  label: { beginner_intermediate: "Beginner–Intermediate", intermediate_advanced: "Intermediate–Advanced" }[value as string] ?? LEVEL_LABEL[value],
-}));
+const LEVELS = (Object.keys(LEVEL_LABEL) as TennisLevel[]).map((value) => ({ value, label: LEVEL_LABEL[value] }));
 
 const STATUS_OPTIONS = [
   { value: "draft", label: "Draft" },

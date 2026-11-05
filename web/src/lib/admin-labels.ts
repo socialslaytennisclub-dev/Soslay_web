@@ -17,9 +17,9 @@ export const TIER_LABEL: Record<Tier, string> = { basic: "Basic", silver: "Silve
 
 export const LEVEL_LABEL: Record<TennisLevel, string> = {
   beginner: "Beginner",
-  beginner_intermediate: "Beg–Intermediate",
+  beginner_intermediate: "Upper Beginner",
   intermediate: "Intermediate",
-  intermediate_advanced: "Int–Advanced",
+  intermediate_advanced: "Upper Intermediate",
   advanced: "Advanced",
 };
 

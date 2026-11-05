@@ -44,20 +44,20 @@ export type TennisLevel = "beginner" | "beginner_intermediate" | "intermediate" 
 
 const LEVEL_LABEL: Record<TennisLevel, string> = {
   beginner: "Beginner",
-  beginner_intermediate: "Beginner–Intermediate",
+  beginner_intermediate: "Upper Beginner",
   intermediate: "Intermediate",
-  intermediate_advanced: "Intermediate–Advanced",
+  intermediate_advanced: "Upper Intermediate",
   advanced: "Advanced",
 };
 
 const LEVEL_ORDER = Object.keys(LEVEL_LABEL) as TennisLevel[];
 
-/** [] → "All levels", ["beginner"] → "Beginner", beberapa level → "Beginner–Intermediate". */
+/** [] → "All levels", ["beginner"] → "Beginner", beberapa level → rentang "Beginner–Intermediate". */
 export function levelLabel(levels: TennisLevel[] = []): string {
   if (!levels.length || levels.length === LEVEL_ORDER.length) return "All levels";
   const sorted = [...levels].sort((a, b) => LEVEL_ORDER.indexOf(a) - LEVEL_ORDER.indexOf(b));
-  const first = LEVEL_LABEL[sorted[0]].split("–")[0];
-  const last = LEVEL_LABEL[sorted[sorted.length - 1]].split("–").pop()!;
+  const first = LEVEL_LABEL[sorted[0]];
+  const last = LEVEL_LABEL[sorted[sorted.length - 1]];
   return first === last ? first : `${first}–${last}`;
 }
 
