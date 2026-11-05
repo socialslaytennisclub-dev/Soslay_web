@@ -17,13 +17,14 @@ import { FormCard, MultiChips, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge, desktopOnlyClass, MemberAvatar, MobileCard, MobileCardList, PickerInput } from "../ui/AdminUI";
 import { CrewDrawer } from "./CrewDrawer";
-import { PaymentCell, useParticipantPayment, ViaCell } from "./ParticipantPayment";
+import { canEditPayment, PaymentCell, useParticipantPayment, viaLabel } from "./ParticipantPayment";
 import { ParticipantsDrawer } from "./ParticipantsDrawer";
 import { WaInviteLink } from "./WaInviteLink";
 import { FormatCard, LineupCard, type PlayForm } from "./PlayCards";
 import styles from "./SessionEditor.module.css";
 import playStyles from "./Play.module.css";
 import { useConfirm } from "../ui/ConfirmDialog";
+import { RowMenu } from "../ui/RowMenu";
 import { toast, ToastOnMount } from "../ui/Toaster";
 import { useUploadCleanup } from "../ui/useUploadCleanup";
 
@@ -400,21 +401,16 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     );
   };
 
-  const removeButton = (p: SessionParticipant) => {
-    const reason = removeLock(p);
-    return (
-      <button
-        type="button"
-        className={styles.iconButton}
-        aria-label={`Hapus ${p.name} dari sesi`}
-        title={reason ?? "Hapus peserta"}
-        disabled={Boolean(reason) || removing !== null}
-        onClick={() => removeMany([p])}
-      >
-        <AdminIcon name="trash" size={16} />
-      </button>
-    );
-  };
+  /** Menu ⋮ per peserta: ubah pembayaran (impor Kuyy) & hapus dari sesi. */
+  const rowMenu = (p: SessionParticipant) => (
+    <RowMenu
+      label={`Aksi untuk ${p.name}`}
+      items={[
+        ...(canEditPayment(p) ? [{ label: "Ubah pembayaran", icon: "pencil-simple" as const, onSelect: () => editPayment(p) }] : []),
+        { label: "Hapus dari sesi", icon: "trash" as const, danger: true, disabledReason: removeLock(p), disabled: removing !== null, onSelect: () => removeMany([p]) },
+      ]}
+    />
+  );
 
   const participantName = (p: SessionParticipant) => (
     <span className={styles.person}>
@@ -765,13 +761,13 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                         aside={
                           <span className={styles.cardActions}>
                             {checkInButton(p)}
-                            {removeButton(p)}
+                            {rowMenu(p)}
                           </span>
                         }
                         meta={[
                           { label: "Level", value: p.level ? LEVEL_LABEL[p.level] : "—" },
-                          { label: "Bayar", value: <PaymentCell participant={p} onEdit={editPayment} /> },
-                          { label: "Via", value: <ViaCell participant={p} label={SOURCE_LABEL[p.source]} onEdit={editPayment} /> },
+                          { label: "Bayar", value: <PaymentCell participant={p} /> },
+                          { label: "Via", value: viaLabel(p, SOURCE_LABEL[p.source]) },
                         ]}
                       />
                     ))}
@@ -804,13 +800,13 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                             <td>{participantName(p)}</td>
                             <td>{p.level ? LEVEL_LABEL[p.level] : "—"}</td>
                             <td>
-                              <PaymentCell participant={p} onEdit={editPayment} />
+                              <PaymentCell participant={p} />
                             </td>
                             <td>
-                              <ViaCell participant={p} label={SOURCE_LABEL[p.source]} onEdit={editPayment} />
+                              {viaLabel(p, SOURCE_LABEL[p.source])}
                             </td>
                             <td>{checkInButton(p)}</td>
-                            <td>{removeButton(p)}</td>
+                            <td>{rowMenu(p)}</td>
                           </tr>
                         ))}
                       </tbody>

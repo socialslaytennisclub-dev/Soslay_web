@@ -120,25 +120,13 @@ export function useParticipantPayment(sessionId: string, finished: boolean): [(p
   return [edit, drawer];
 }
 
-/** Sel "Via": peserta impor Kuyy bisa diklik untuk mengubah jalur bayarnya (Kuy / Manual). */
-export function ViaCell({ participant: p, label, onEdit }: { participant: SessionParticipant; label: string; onEdit: (p: SessionParticipant) => void }) {
-  if (!canEditPayment(p)) return <>{label}</>;
-  return (
-    <button type="button" className={styles.paymentEdit} onClick={() => onEdit(p)} title="Ubah jalur bayar (Kuy / Manual)" aria-label={`Ubah jalur bayar ${p.name}`}>
-      <span>{viaLabel(p, label)}</span>
-      <AdminIcon name="pencil-simple" size={14} />
-    </button>
-  );
-}
-
-/** Sel "Bayar": badge status + nominal; peserta impor Kuyy bisa diklik untuk diubah. */
-export function PaymentCell({ participant: p, onEdit }: { participant: SessionParticipant; onEdit: (p: SessionParticipant) => void }) {
+/** Sel "Bayar": badge status + nominal (peserta impor Kuyy). Diubah lewat menu ⋮ → Ubah pembayaran. */
+export function PaymentCell({ participant: p }: { participant: SessionParticipant }) {
   if (!canEditPayment(p)) return <PaymentBadge status={p.payment} />;
   return (
-    <button type="button" className={styles.paymentEdit} onClick={() => onEdit(p)} title="Ubah nominal & status bayar" aria-label={`Ubah pembayaran ${p.name}`}>
+    <span className={styles.paymentCell}>
       <PaymentBadge status={p.payment} />
       <span>{formatRupiahPlain(p.amount ?? 0)}</span>
-      <AdminIcon name="pencil-simple" size={14} />
-    </button>
+    </span>
   );
 }
