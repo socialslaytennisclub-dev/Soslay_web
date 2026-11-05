@@ -205,6 +205,9 @@ export type SessionParticipant = {
   phone: string;
   level: TennisLevel | null;
   payment: PaymentStatus;
+  /** Nominal tiket dari impor Kuyy (Rp) — null untuk peserta dari booking website. Bisa diubah admin
+   *  bersama status bayarnya; masuk Keuangan setelah activity selesai & lunas. */
+  amount: number | null;
   status: BookingStatus;
   source: "website" | "kuy" | "admin";
   checkedIn: boolean;

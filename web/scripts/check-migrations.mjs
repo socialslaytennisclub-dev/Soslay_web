@@ -665,17 +665,38 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   )).id;
   const net = async (source) => Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source = $1 and deleted_at is null`, [source])).s);
 
-  // A-8: peserta Kuyy dibayar → Tiket activity ke Saldo Kuyy; Rp0 tidak dicatat; ubah/hapus → koreksi.
+  // A-8: peserta Kuyy lunas → Tiket activity ke Saldo Kuyy, baru setelah activity selesai; Rp0 / menunggu /
+  // tanpa username Kuyy tidak dicatat; ubah nominal / status / hapus → koreksi.
   const p1 = (await one(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount) values ($1, 'Peserta A', 'F1', 'pesertaa', 150000) returning id`, [sid])).id;
   await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount) values ($1, 'Peserta Rp0', 'F2', 'pesertab', 0)`, [sid]);
   // Roster yang disalin dari booking website (tanpa username Kuyy) bukan uang Kuyy.
   await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, amount) values ($1, 'Dari booking', 'B1', 150000)`, [sid]);
-  const acc = await one(`select a.system_key from finance_transactions t join finance_accounts a on a.id = t.account_id where t.source = 'kuyy_import' limit 1`);
-  console.assert((await net("kuyy_import")) === 150000 && acc.system_key === "kuyy", "A-8 import Kuyy");
+  const p5 = (await one(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount, payment_status) values ($1, 'Peserta DP', 'F5', 'pesertac', 120000, 'pending') returning id`, [sid])).id;
+  console.assert((await net("kuyy_import")) === 0, "A-8: activity belum selesai → belum dicatat");
+  await db.query(`update sessions set status = 'completed', ended_at = now() where id = $1`, [sid]);
+  const first = await one(
+    `select a.system_key, t.date::text = (s.starts_at at time zone 'Asia/Jakarta')::date::text same_day
+     from finance_transactions t join finance_accounts a on a.id = t.account_id join sessions s on s.id = t.activity_session_id
+     where t.source = 'kuyy_import' limit 1`,
+  );
+  console.assert((await net("kuyy_import")) === 150000 && first.system_key === "kuyy" && first.same_day, `A-8 activity selesai → peserta lunas tercatat di tanggal activity ${JSON.stringify(first)}`);
+  await db.query(`update session_participants set payment_status = 'paid' where id = $1`, [p5]);
+  console.assert((await net("kuyy_import")) === 270000, "A-8 menunggu → lunas setelah activity selesai");
   await db.query(`update session_participants set amount = 140000 where id = $1`, [p1]);
-  console.assert((await net("kuyy_import")) === 140000, "A-8 koreksi jumlah");
+  console.assert((await net("kuyy_import")) === 260000, "A-8 koreksi nominal");
+  await db.query(`update session_participants set payment_status = 'pending' where id = $1`, [p5]);
+  console.assert((await net("kuyy_import")) === 140000, "A-8 lunas → menunggu → koreksi");
   await db.query(`delete from session_participants where id = $1`, [p1]);
   console.assert((await net("kuyy_import")) === 0, "A-8 hapus peserta → koreksi");
+  // Booking member ikut nominal & status bayar baris pesertanya.
+  const pm = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Pay Sync', 'paysync@fin.test')`, [pm]);
+  const pmRow = (await one(`insert into session_participants (session_id, full_name, kuy_reg_no, member_id, amount, payment_status) values ($1, 'Pay Sync', 'F6', $2, 90000, 'pending') returning id`, [sid, pm])).id;
+  const pmBooking = () => one(`select payment_status::text, amount from bookings where session_id = $1 and member_id = $2`, [sid, pm]);
+  console.assert((await pmBooking()).payment_status === "pending", `booking ikut status menunggu ${JSON.stringify(await pmBooking())}`);
+  await db.query(`update session_participants set payment_status = 'paid', amount = 95000 where id = $1`, [pmRow]);
+  const synced = await pmBooking();
+  console.assert(synced.payment_status === "paid" && synced.amount === 95000, `booking ikut lunas & nominal ${JSON.stringify(synced)}`);
   const code = (await one(`select code from finance_transactions where source = 'kuyy_import' order by created_at limit 1`)).code;
   console.assert(/^TRX-\d{4}-\d{4}$/.test(code), `kode transaksi ${code}`);
 
@@ -710,9 +731,14 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.query(`update orders set payment_status = 'refunded' where id = $1`, [ord]);
   console.assert((await net("shop_order_verified")) === 0, "A-3 refund order → koreksi");
 
-  // Dibayar sebelum go-live (tanggal bayar dari file Kuyy) tapi diimpor sesudahnya → tidak dicatat (§14 7b).
-  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount, paid_at) values ($1, 'Bayar Lama', 'F4', 'bayarlama', 99000, '2019-12-28T10:00:00+07:00')`, [sid]);
-  console.assert((await net("kuyy_import")) === 0, "dibayar sebelum go-live tidak dicatat");
+  // Activity sebelum go-live tapi peserta baru diimpor / dilunasi sesudahnya → tidak dicatat (§14 7b).
+  const oldSid = (await one(
+    `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, ended_at, points_per_attendance)
+     values ('fin-old', 'Mabar Lama', 'weekly-mabar', $1, '2019-12-28T16:00:00+07:00', '2019-12-28T19:00:00+07:00', 20, 'completed', '2019-12-28T19:00:00+07:00', 50) returning id`,
+    [venueId],
+  )).id;
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount, paid_at) values ($1, 'Bayar Lama', 'F4', 'bayarlama', 99000, '2019-12-28T10:00:00+07:00')`, [oldSid]);
+  console.assert((await net("kuyy_import")) === 0, "activity sebelum go-live tidak dicatat");
   await db.query(`update session_participants set paid_at = null where kuy_reg_no = 'F4'`);
   console.assert((await one(`select paid_at from session_participants where kuy_reg_no = 'F4'`)).paid_at !== null, "import ulang tanpa waktu bayar tidak boleh menghapus paid_at");
   // Sebelum go-live: tidak ada transaksi otomatis.

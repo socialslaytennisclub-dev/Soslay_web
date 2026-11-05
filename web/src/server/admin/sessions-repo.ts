@@ -155,6 +155,7 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
     .map((b, i): SessionParticipant => {
       const m = d.memberById.get(b.memberId)!;
+      const source = b.source ?? ((i % 5 === 1 ? "kuy" : i % 7 === 3 ? "admin" : "website") as "website" | "kuy" | "admin");
       return {
         id: m.id,
         memberId: m.id,
@@ -166,7 +167,9 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
         level: m.level,
         payment: b.payment,
         status: b.status,
-        source: b.source ?? ((i % 5 === 1 ? "kuy" : i % 7 === 3 ? "admin" : "website") as "website" | "kuy" | "admin"),
+        source,
+        // Demo: peserta "Kuy" memakai harga sesi supaya form ubah nominal bisa dicoba.
+        amount: source === "kuy" ? s.price : null,
         checkedIn: b.checkedIn ?? b.status === "attended",
         guests: b.guests ?? (i % 9 === 3 ? 1 : 0),
       };

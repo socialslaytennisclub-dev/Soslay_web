@@ -15,8 +15,9 @@ import { usesLineup } from "@/lib/americano";
 import type { MemberChoice, SessionDetail, SessionHost, SessionParticipant, TennisLevel } from "@/server/admin/types";
 import { FormCard, MultiChips, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
-import { AdminButton, Badge, desktopOnlyClass, MemberAvatar, MobileCard, MobileCardList, PaymentBadge, PickerInput } from "../ui/AdminUI";
+import { AdminButton, Badge, desktopOnlyClass, MemberAvatar, MobileCard, MobileCardList, PickerInput } from "../ui/AdminUI";
 import { CrewDrawer } from "./CrewDrawer";
+import { PaymentCell, useParticipantPayment } from "./ParticipantPayment";
 import { ParticipantsDrawer } from "./ParticipantsDrawer";
 import { WaInviteLink } from "./WaInviteLink";
 import { FormatCard, LineupCard, type PlayForm } from "./PlayCards";
@@ -296,6 +297,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
 
   // ── Hapus peserta & absensi (terkunci begitu aktivitas sudah dikerjakan) ──
   const [confirm, confirmDialog] = useConfirm();
+  const [editPayment, paymentDrawer] = useParticipantPayment(session.id, session.displayStatus === "completed");
   const [removing, setRemoving] = useState<string | null>(null);
   const checkedInCount = session.participants.filter(isCheckedIn).length;
   const lockBase = {
@@ -747,6 +749,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                 </p>
               )}
               {confirmDialog}
+              {paymentDrawer}
 
               {ordered.length === 0 ? (
                 <p className={styles.empty}>Belum ada peserta.</p>
@@ -767,7 +770,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                         }
                         meta={[
                           { label: "Level", value: p.level ? LEVEL_LABEL[p.level] : "—" },
-                          { label: "Bayar", value: <PaymentBadge status={p.payment} /> },
+                          { label: "Bayar", value: <PaymentCell participant={p} onEdit={editPayment} /> },
                           { label: "Via", value: SOURCE_LABEL[p.source] },
                         ]}
                       />
@@ -801,7 +804,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                             <td>{participantName(p)}</td>
                             <td>{p.level ? LEVEL_LABEL[p.level] : "—"}</td>
                             <td>
-                              <PaymentBadge status={p.payment} />
+                              <PaymentCell participant={p} onEdit={editPayment} />
                             </td>
                             <td>{SOURCE_LABEL[p.source]}</td>
                             <td>{checkInButton(p)}</td>

@@ -625,3 +625,34 @@ a.personName:hover {
     top: var(--space-16);
   }
 }
+
+/* ── Ubah pembayaran peserta impor Kuyy ── */
+.paymentEdit {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  margin: -4px -6px;
+  padding: 4px 6px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-950);
+  white-space: nowrap;
+}
+
+.paymentEdit > svg {
+  color: var(--color-indigo-muted);
+}
+
+.paymentEdit:hover {
+  background: var(--color-indigo-50);
+}
+
+.paymentEdit:hover > svg {
+  color: var(--color-navy-900);
+}
+
+.paymentForm {
+  display: grid;
+  gap: var(--space-16);
+}

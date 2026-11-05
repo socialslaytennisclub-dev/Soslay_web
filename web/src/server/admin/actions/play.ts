@@ -1,5 +1,6 @@
 "use server";
 
+import { formatRupiahPlain } from "@/lib/admin-labels";
 import { isEmail } from "@/lib/auth";
 import { isSessionFinished, participantsLockReason } from "@/lib/session-lock";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -474,6 +475,33 @@ export async function clearParticipants(sessionId: string): Promise<ActionResult
   await audit(auth.userId, `mengosongkan ${removed?.length ?? 0} peserta sesi`, "session", sessionId);
   refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
   return { ok: true, message: `${removed?.length ?? 0} peserta & absensi dihapus · line-up ikut dikosongkan. Silakan impor data baru.` };
+}
+
+/**
+ * Ubah nominal & status bayar peserta hasil impor Kuyy (mis. bayar DP, salah harga di file). Boleh
+ * kapan saja, juga setelah activity selesai: nominal peserta lunas masuk Keuangan begitu activity
+ * selesai, perubahan sesudahnya dicatat sebagai koreksi (trigger finance_on_participant).
+ */
+export async function updateParticipantPayment(sessionId: string, participantId: string, amount: number, payment: "paid" | "pending"): Promise<ActionResult> {
+  const auth = await requireEditor("activities");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  if (!Number.isInteger(amount) || amount < 0 || amount > 100_000_000) return { ok: false, error: "Nominal tidak valid." };
+  if (payment !== "paid" && payment !== "pending") return { ok: false, error: "Status bayar tidak valid." };
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("session_participants")
+    .update({ amount, payment_status: payment })
+    .eq("id", participantId)
+    .eq("session_id", sessionId)
+    .eq("source", "kuy")
+    .select("full_name")
+    .maybeSingle();
+  if (error) return { ok: false, error: `Gagal menyimpan: ${error.message}` };
+  if (!data) return { ok: false, error: "Peserta impor Kuyy tidak ditemukan — muat ulang halaman." };
+  const status = payment === "paid" ? "lunas" : "menunggu";
+  await audit(auth.userId, `mengubah pembayaran ${data.full_name}: ${formatRupiahPlain(amount)} · ${status}`, "session", sessionId);
+  refreshPaths(`/admin/activities/${sessionId}`);
+  return { ok: true, message: `Pembayaran ${data.full_name} disimpan · ${formatRupiahPlain(amount)} · ${status}.` };
 }
 
 // ── Tambah peserta manual (admin) ──────────────────────────────────────────

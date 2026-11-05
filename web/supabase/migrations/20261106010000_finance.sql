@@ -317,12 +317,18 @@ begin
 end $$;
 revoke all on function finance_sync_auto(text, text, bigint, text, uuid, text, uuid, timestamptz) from public;
 
--- A-8 · peserta Kuyy diimpor ke Activities → Pemasukan · Tiket activity · Saldo Kuyy, di tanggal bayar
--- dari file Kuyy (paid_at; fallback tanggal import). Hanya baris dari file Kuyy (kuy_username terisi) —
--- baris roster yang disalin dari booking website / ditambah admin tidak dihitung sebagai uang Kuyy.
--- Pembayaran sebelum go-live tidak dicatat (sudah masuk lewat withdraw di import jurnal).
-alter table session_participants add column paid_at timestamptz;
+-- A-8 · peserta Kuyy (impor Excel di Activities) → Pemasukan · Tiket activity · Saldo Kuyy. Nominal baru
+-- masuk ketika activity SUDAH SELESAI dan status bayar peserta LUNAS — keduanya bisa berubah
+-- belakangan (admin mengubah nominal / status di daftar peserta), selisihnya dicatat sebagai koreksi.
+-- Tanggal transaksi = tanggal activity; koreksi sesudahnya = hari koreksi. Hanya baris dari file Kuyy
+-- (kuy_username terisi) — baris roster yang disalin dari booking website / ditambah admin tidak
+-- dihitung sebagai uang Kuyy. Activity sebelum go-live tidak dicatat (sudah masuk lewat import jurnal).
+alter table session_participants
+  add column paid_at timestamptz,
+  add column payment_status payment_status not null default 'paid'
+    constraint session_participants_payment_check check (payment_status in ('paid', 'pending'));
 comment on column session_participants.paid_at is 'Waktu bayar dari export Kuyy (kosong bila file tidak memuatnya).';
+comment on column session_participants.payment_status is 'Lunas / menunggu — bisa diubah admin setelah impor. Hanya yang lunas masuk Keuangan.';
 
 -- Import ulang dari export tanpa kolom waktu bayar (atau sel kosong) tidak menghapus waktu yang sudah ada.
 create function session_participant_keep_paid_at() returns trigger language plpgsql as $$
@@ -333,21 +339,61 @@ end $$;
 create trigger session_participants_keep_paid_at before update of paid_at on session_participants
   for each row execute function session_participant_keep_paid_at();
 
-create function finance_on_participant() returns trigger language plpgsql security definer set search_path = public as $$
-declare
-  s   finance_settings;
-  p   session_participants := case when tg_op = 'DELETE' then old else new end;
-  amt bigint := case when tg_op = 'DELETE' or p.source <> 'kuy' or p.kuy_username is null then 0 else p.amount end;
+-- Booking member mengikuti nominal & status bayar baris pesertanya (tampil di My Activities member).
+create function session_participant_payment_sync() returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  select * into s from finance_settings;
-  if not s.auto_kuyy then return null; end if;
-  perform finance_sync_auto('kuyy_import', 'sp:' || p.id, amt, 'ticket',
-    (select id from finance_accounts where system_key = 'kuyy'),
-    'Tiket Kuyy · ' || p.full_name, p.session_id, coalesce(p.paid_at, p.imported_at, now()));
+  if new.member_id is null then return null; end if;
+  update bookings set payment_status = new.payment_status, amount = new.amount
+  where session_id = new.session_id and member_id = new.member_id and source in ('kuy', 'admin')
+    and (payment_status, amount) is distinct from (new.payment_status, new.amount);
   return null;
 end $$;
-create trigger session_participants_finance after insert or update of amount, source, kuy_username or delete on session_participants
+-- Nama sesudah "session_participants_sync" (trigger AFTER jalan urut nama) → booking sudah dibuat.
+create trigger session_participants_sync_payment after insert or update of payment_status, amount, member_id on session_participants
+  for each row execute function session_participant_payment_sync();
+
+/** Samakan transaksi Keuangan satu peserta dengan keadaannya sekarang (`p_count` false = baris dihapus). */
+create function finance_sync_participant(p session_participants, p_count boolean)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  s   sessions;
+  ref text := 'sp:' || p.id;
+begin
+  if not (select auto_kuyy from finance_settings) then return; end if;
+  select * into s from sessions where id = p.session_id;
+  perform finance_sync_auto('kuyy_import', ref,
+    case when p_count and p.source = 'kuy' and p.kuy_username is not null and p.payment_status = 'paid'
+              and (s.status = 'completed' or s.ended_at is not null)
+         then p.amount else 0 end,
+    'ticket', (select id from finance_accounts where system_key = 'kuyy'),
+    'Tiket Kuyy · ' || p.full_name, p.session_id,
+    case when exists (select 1 from finance_transactions where source = 'kuyy_import' and source_ref = ref and deleted_at is null)
+         then now() else coalesce(s.starts_at, now()) end);
+end $$;
+revoke all on function finance_sync_participant(session_participants, boolean) from public;
+
+create function finance_on_participant() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'DELETE' then perform finance_sync_participant(old, false);
+  else perform finance_sync_participant(new, true);
+  end if;
+  return null;
+end $$;
+create trigger session_participants_finance after insert or update of amount, source, kuy_username, payment_status or delete on session_participants
   for each row execute function finance_on_participant();
+
+-- Activity selesai ("Akhiri Activity" / ditutup otomatis oleh close_expired_sessions) → semua peserta
+-- Kuyy yang lunas tercatat. Dibuka lagi → dikoreksi.
+create function finance_on_session_finished() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if (new.status = 'completed' or new.ended_at is not null) is not distinct from (old.status = 'completed' or old.ended_at is not null) then
+    return null;
+  end if;
+  perform finance_sync_participant(p, true) from session_participants p where p.session_id = new.id and p.source = 'kuy';
+  return null;
+end $$;
+create trigger sessions_finance after update of status, ended_at on sessions
+  for each row execute function finance_on_session_finished();
 
 -- A-7 · "Tandai Lunas" → Pemasukan · Tiket activity · akun default bayar manual. Sengaja lewat RPC
 -- eksplisit (bukan trigger pada setiap perubahan payment_status): pembayaran lewat payment gateway (A-1,
