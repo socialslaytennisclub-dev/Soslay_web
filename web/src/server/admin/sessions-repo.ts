@@ -1,5 +1,5 @@
 import "server-only";
-import { generateLineup, usesLineup } from "@/lib/americano";
+import { generateLineup, usesLineup, scoreTarget } from "@/lib/americano";
 import { sessionClosesAt } from "@/lib/session-close";
 import { isSessionFinished } from "@/lib/session-lock";
 import { venueList } from "@/content/venues";
@@ -137,8 +137,11 @@ function demoLineup(sessionId: string, participants: SessionParticipant[], play:
   const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
   const players = participants.filter((p) => p.status !== "waitlisted").map((p) => p.id);
   return generateLineup({ players, courts: play.courtCount, rounds: play.roundCount }, { rand, attempts: 8 }).map((m) => {
-    const a = m.round <= 2 ? Math.floor(rand() * (play.targetPoints + 1)) : null;
-    return { ...m, id: `${sessionId}-r${m.round}-c${m.court}`, scoreA: a, scoreB: a === null ? null : play.targetPoints - a };
+    const target = scoreTarget(play.matchFormat, play.targetPoints);
+    const a = m.round <= 2 ? Math.floor(rand() * ((target ?? 7) + 1)) : null;
+    // Tanpa target (Rotating Partner): skor bebas, mis. 6–4.
+    const b = a === null ? null : target === null ? (a === 6 ? Math.floor(rand() * 6) : 6) : target - a;
+    return { ...m, id: `${sessionId}-r${m.round}-c${m.court}`, scoreA: a, scoreB: b };
   });
 }
 

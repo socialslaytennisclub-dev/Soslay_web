@@ -11,7 +11,7 @@ import { participantsLockReason } from "@/lib/session-lock";
 import { memberInviteWaLink } from "@/lib/wa-invite";
 import { clearParticipants, removeParticipants } from "@/server/admin/actions/play";
 import { deleteSession, discardSessionUploads, saveSession, setCheckIn, uploadSessionCover, type SessionInput } from "@/server/admin/actions/sessions";
-import { usesLineup } from "@/lib/americano";
+import { hasTargetTotal, scoreTarget, usesLineup } from "@/lib/americano";
 import type { MemberChoice, SessionDetail, SessionHost, SessionParticipant, TennisLevel } from "@/server/admin/types";
 import { FormCard, MultiChips, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
@@ -146,7 +146,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     if (play.matchFormat !== "none") {
       if (!(Number(play.courtCount) >= 1 && Number(play.courtCount) <= 12)) e.play = "Jumlah court 1–12.";
       else if (!(Number(play.roundCount) >= 1 && Number(play.roundCount) <= 40)) e.play = "Jumlah ronde 1–40.";
-      else if (!(Number(play.targetPoints) >= 1)) e.play = "Isi target poin.";
+      else if (hasTargetTotal(play.matchFormat) && !(Number(play.targetPoints) >= 1)) e.play = "Isi target poin.";
     }
     return e;
   }, [title, date, startsAt, endsAt, price, capacity, mode, session.booked, play, kuyUrl]);
@@ -637,13 +637,13 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
               participants={session.participants}
               courts={Number(play.courtCount) || 1}
               rounds={Number(play.roundCount) || 1}
-              targetPoints={session.play.targetPoints}
+              targetPoints={scoreTarget(session.play.matchFormat, session.play.targetPoints)}
               balanceLevels={play.matchFormat === "rotating"}
               initial={session.matches}
               disabledReason={
                 mode === "new"
                   ? "Simpan sesi dulu, lalu impor peserta dari Kuyy untuk membuat line-up."
-                  : session.play.matchFormat !== play.matchFormat || String(session.play.courtCount) !== play.courtCount || String(session.play.roundCount) !== play.roundCount || String(session.play.targetPoints) !== play.targetPoints
+                  : session.play.matchFormat !== play.matchFormat || String(session.play.courtCount) !== play.courtCount || String(session.play.roundCount) !== play.roundCount || (hasTargetTotal(play.matchFormat) && String(session.play.targetPoints) !== play.targetPoints)
                     ? "Format berubah — klik \"Simpan perubahan\" dulu, lalu atur line-up."
                     : undefined
               }

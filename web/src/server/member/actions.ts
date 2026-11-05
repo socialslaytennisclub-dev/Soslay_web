@@ -114,6 +114,7 @@ export async function submitHostScore(matchId: string, scoreA: number, scoreB: n
   if (error) {
     if (/Hanya admin atau host/.test(error.message)) return { ok: false, error: "Hanya host sesi ini yang bisa input skor." };
     if (/Total poin/.test(error.message)) return { ok: false, error: error.message.replace("Total poin harus", "Total skor kedua tim harus") + " poin." };
+    if (/0–0/.test(error.message)) return { ok: false, error: "Skor masih 0–0 — isi skor kedua tim." };
     if (/terkunci/.test(error.message)) return { ok: false, error: "Sesi sudah diakhiri — skor terkunci." };
     return { ok: false, error: "Skor gagal disimpan. Coba lagi." };
   }

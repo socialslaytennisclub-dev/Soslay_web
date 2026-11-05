@@ -231,6 +231,17 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await one(`select is_session_host($1) ok`, [s])).ok, "host tidak dikenali");
   console.assert(await fails(`select save_match_score($1, 12::smallint, 8::smallint)`, [match]), "total ≠ 21 diterima!");
   await db.query(`select save_match_score($1, 12::smallint, 9::smallint)`, [match]);
+  // Rotating Partner: tanpa target poin — skor bebas (6–4), hanya 0–0 yang ditolak.
+  await as(null);
+  await db.query(`update sessions set match_format = 'rotating' where id = $1`, [s]);
+  await as(hostId);
+  await db.query(`select save_match_score($1, 6::smallint, 4::smallint)`, [match]);
+  console.assert((await one(`select score_a, score_b from session_matches where id = $1`, [match])).score_b === 4, "rotating: skor bebas ditolak");
+  console.assert(await fails(`select save_match_score($1, 0::smallint, 0::smallint)`, [match]), "rotating: 0–0 diterima!");
+  await as(null);
+  await db.query(`update sessions set match_format = 'americano' where id = $1`, [s]);
+  await as(hostId);
+  await db.query(`select save_match_score($1, 12::smallint, 9::smallint)`, [match]);
   // Urungkan dari Panel Host: kosongkan lalu simpan lagi; member biasa tidak boleh.
   await db.query(`select clear_match_score($1)`, [match]);
   console.assert((await one(`select score_a from session_matches where id = $1`, [match])).score_a === null, "urungkan skor gagal");

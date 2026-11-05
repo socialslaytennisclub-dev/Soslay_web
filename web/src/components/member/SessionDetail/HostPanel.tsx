@@ -61,6 +61,9 @@ function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { det
   const { dialogRef: endRef, open: openEnd, close: closeEnd, onBackdropClick: onEndBackdrop } = useDialog();
   const [editing, setEditing] = useState<DetailMatch | null>(null);
   const [scoreA, setScoreA] = useState(0);
+  // Tanpa target (Rotating Partner): skor tim B diisi sendiri, tidak dihitung dari target.
+  const [freeB, setFreeB] = useState(0);
+  const max = target ?? 99;
   const [saved, setSaved] = useState<Saved | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, startBusy] = useTransition();
@@ -70,7 +73,7 @@ function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { det
   const next = plan.rounds.includes(selected + 1) && isUnstarted(plan.statusOf(selected + 1)) ? selected + 1 : null;
   const last = selected === plan.rounds.at(-1);
   const courts = matches.filter((m) => m.round === selected);
-  const scoreB = target - scoreA;
+  const scoreB = target === null ? freeB : target - scoreA;
 
   const startRound = (round: number) =>
     startBusy(async () => {
@@ -83,7 +86,8 @@ function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { det
 
   const edit = (m: DetailMatch) => {
     setEditing(m);
-    setScoreA(m.scoreA ?? Math.ceil(target / 2));
+    setScoreA(m.scoreA ?? (target === null ? 0 : Math.ceil(target / 2)));
+    setFreeB(m.scoreB ?? 0);
     setError(null);
     openScore();
   };
@@ -244,7 +248,7 @@ function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { det
             </header>
             {[
               { label: "Tim A", team: editing.a, value: scoreA, set: (v: number) => setScoreA(v) },
-              { label: "Tim B", team: editing.b, value: scoreB, set: (v: number) => setScoreA(target - v) },
+              { label: "Tim B", team: editing.b, value: scoreB, set: (v: number) => (target === null ? setFreeB(v) : setScoreA(target - v)) },
             ].map(({ label, team, value, set }) => (
               <div key={label} className={styles.stepRow}>
                 <span className={styles.stepTeam}>
@@ -256,17 +260,15 @@ function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { det
                     <Minus size={16} />
                   </button>
                   <strong>{value}</strong>
-                  <button type="button" aria-label={`Tambah skor ${label}`} disabled={value >= target} onClick={() => set(value + 1)}>
+                  <button type="button" aria-label={`Tambah skor ${label}`} disabled={value >= max} onClick={() => set(value + 1)}>
                     <Plus size={16} />
                   </button>
                 </span>
               </div>
             ))}
             <p className={styles.totalRow}>
-              <span>Total poin match</span>
-              <span className={styles.totalOk}>
-                ✓ {target} / {target} · siap disimpan
-              </span>
+              <span>{target === null ? "Skor match" : "Total poin match"}</span>
+              <span className={styles.totalOk}>{target === null ? (scoreA + scoreB > 0 ? `✓ ${scoreA}–${scoreB} · siap disimpan` : "Isi skor kedua tim") : `✓ ${target} / ${target} · siap disimpan`}</span>
             </p>
             <div className={styles.verifyNote}>
               <ShieldCheck size={18} aria-hidden />
@@ -284,7 +286,7 @@ function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { det
               <button type="button" className={styles.btnOutline} onClick={closeScore}>
                 Batal
               </button>
-              <button type="button" className={styles.btnNavy} onClick={save} disabled={busy}>
+              <button type="button" className={styles.btnNavy} onClick={save} disabled={busy || scoreA + scoreB === 0}>
                 {busy ? "Menyimpan…" : "Simpan skor"}
               </button>
             </div>

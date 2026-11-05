@@ -12,6 +12,15 @@
 /** Format yang memakai line-up per ronde & court (lihat MatchFormat). */
 export const usesLineup = (format: string) => format === "americano" || format === "rotating";
 
+/**
+ * Americano: match selesai saat total poin kedua tim = target poin. Rotating Partner tidak memakai target —
+ * skor diisi bebas sesuai hasil di lapangan (mis. 6–4). Sama dengan SQL save_match_score.
+ */
+export const hasTargetTotal = (format: string) => format === "americano";
+
+/** Target poin per match, atau null bila format ini tanpa target (skor bebas). */
+export const scoreTarget = (format: string, targetPoints: number): number | null => (hasTargetTotal(format) ? targetPoints : null);
+
 export type LineupMatch = { round: number; court: number; a: [string, string]; b: [string, string] };
 
 export type LineupConfig = { players: string[]; courts: number; rounds: number };
