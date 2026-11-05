@@ -2,14 +2,20 @@ import Link from "next/link";
 import { Chip, MediaCard } from "@/components/ui";
 import { myActivitiesPage, splitSessions, type MemberSession } from "@/content/member";
 import { formatJamRange, formatTanggalISO } from "@/lib/format";
+import type { MemberTrip } from "@/server/member/trips";
+import { TripBanner } from "../TripBanner/TripBanner";
 import styles from "./MyActivities.module.css";
 
 /** Figma 25:1951 — "Terbaru" (sesi terdaftar) & "Lampau" (riwayat + poin). */
-export function MyActivities({ sessions }: { sessions: MemberSession[] }) {
+export function MyActivities({ sessions, trips = [] }: { sessions: MemberSession[]; trips?: MemberTrip[] }) {
   const { upcoming, past } = splitSessions(sessions);
 
   return (
     <>
+      {/* Tennis Escape (BR-22): banner trip di atas; activity per lapangan tetap tampil sebagai kartu biasa. */}
+      {trips.map((trip) => (
+        <TripBanner key={trip.slug} trip={trip} />
+      ))}
       <ActivityGroup id="aktivitas-terbaru" {...myActivitiesPage.upcoming} sessions={upcoming} />
       <ActivityGroup id="aktivitas-lampau" {...myActivitiesPage.past} sessions={past} />
     </>
@@ -74,6 +80,7 @@ function ActivityTicket({ session }: { session: MemberSession }) {
           <>
             {!session.hostOnly && <Chip tone="lime">Terdaftar</Chip>}
             {session.host ? <Chip tone="navy">Host</Chip> : null}
+            {session.trip ? <Chip tone="navy">{session.trip}</Chip> : null}
           </>
         )
       }

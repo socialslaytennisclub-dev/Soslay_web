@@ -855,3 +855,58 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await fillAs(webMember)) === null, "non-staf bisa membaca keterisian sesi");
   console.log("✓ keuangan: import Kuyy, Tandai Lunas & order shop tercatat otomatis (+ koreksi), go-live dihormati, RLS Pencatat keuangan");
 }
+
+// Tennis Escape = Trip (BR-22): pembeli paket otomatis terdaftar di semua activity trip; tautkan / lepas
+// activity & batal paket ikut menyesuaikan; pembayaran paket → Keuangan (A-10), dibatalkan → koreksi.
+{
+  await as(null);
+  await db.exec(`update finance_settings set go_live_date = '2020-01-01'`);
+  const venueId = (await one(`select id from venues limit 1`)).id;
+  const trip = (await one(
+    `insert into trips (slug, title, starts_on, ends_on, status, price_normal, price_early_bird, early_bird_until, package_quota, min_dp)
+     values ('rally-bali', 'Rally in Paradise · Bali', current_date + 10, current_date + 12, 'published', 3500000, 3200000, current_date, 12, 1500000) returning id`,
+  )).id;
+  const mkSession = async (slug, tripId) => (await one(
+    `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, points_per_attendance, trip_id)
+     values ($1, $1, 'tennis-escape', $2, now() + interval '10 days', now() + interval '10 days 3 hours', 16, 'published', 50, $3) returning id`,
+    [slug, venueId, tripId],
+  )).id;
+  const s1 = await mkSession("trip-a1", trip);
+  const s2 = await mkSession("trip-a2", trip);
+  const buyer = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Gusde Arimbawa', 'gusde@trip.test')`, [buyer]);
+  const bk = (await one(`insert into trip_bookings (trip_id, member_id, full_name) values ($1, $2, 'Gusde Arimbawa') returning id`, [trip, buyer])).id;
+  await db.query(`insert into trip_bookings (trip_id, full_name, phone) values ($1, 'Tamu Trip', '81200009999')`, [trip]);
+  const tripRows = async (sid) => Number((await one(`select count(*) n from session_participants where session_id = $1 and source = 'trip'`, [sid])).n);
+  console.assert((await tripRows(s1)) === 2 && (await tripRows(s2)) === 2, "pembeli paket tidak terdaftar di semua activity trip");
+  const memberBooking = await one(`select status::text from bookings where session_id = $1 and member_id = $2`, [s1, buyer]);
+  console.assert(memberBooking?.status === "registered", `member paket tidak muncul di My Activities ${JSON.stringify(memberBooking)}`);
+  // Activity yang ditautkan belakangan ikut terisi; yang dilepas dikeluarkan (sesi tetap ada).
+  const s3 = await mkSession("trip-a3", null);
+  await db.query(`update sessions set trip_id = $1 where id = $2`, [trip, s3]);
+  console.assert((await tripRows(s3)) === 2, "activity yang ditautkan ke trip tidak terisi pembeli paket");
+  await db.query(`update sessions set trip_id = null where id = $1`, [s3]);
+  console.assert((await tripRows(s3)) === 0 && (await one(`select count(*)::int n from bookings where session_id = $1 and member_id = $2`, [s3, buyer])).n === 0, "lepas dari trip tidak mengeluarkan peserta paket");
+  // Kapasitas: x paket + y satuan.
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username) values ($1, 'Satuan Kuy', 'U1', 'satuan1')`, [s1]);
+  const tripAdmin = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Trip', 'trip@soslay.test', 'active' from roles where name = 'Super Admin'`, [tripAdmin]);
+  await as(tripAdmin);
+  const fill = await one(`select filled, trip_filled from session_fill_counts() where session_id = $1`, [s1]);
+  await as(null);
+  console.assert(fill?.filled === 3 && fill.trip_filled === 2, `kapasitas trip ${JSON.stringify(fill)}`);
+  // A-10: DP & pelunasan → Keuangan (terkait trip, termin), dibatalkan → koreksi.
+  const bank = (await one(`select id from finance_accounts where system_key = 'bank_main'`)).id;
+  const net = async () => Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source = 'trip_payment' and deleted_at is null`)).s);
+  await db.query(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'dp', 1500000, current_date - 1, $2)`, [bk, bank]);
+  const pel = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'settlement', 1700000, current_date, $2) returning id`, [bk, bank])).id;
+  const tx = await one(`select trip_id, term, activity_session_id from finance_transactions where source = 'trip_payment' and source_ref = $1`, ['tp:' + pel]);
+  console.assert((await net()) === 3200000 && tx?.trip_id === trip && tx.term === "settlement", `A-10 pembayaran trip ${await net()} ${JSON.stringify(tx)}`);
+  await db.query(`update trip_payments set voided_at = now(), void_reason = 'salah input' where id = $1`, [pel]);
+  console.assert((await net()) === 1500000, "A-10 pembayaran dibatalkan → koreksi");
+  // Batal paket → keluar dari semua activity.
+  await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [bk]);
+  console.assert((await tripRows(s1)) === 1 && (await tripRows(s2)) === 1, "paket dibatalkan masih terdaftar di activity");
+  await db.exec(`update finance_settings set go_live_date = '2026-12-01'`);
+  console.log("✓ trip: pembeli paket terdaftar di semua activity (tautkan / lepas / batal), kapasitas paket, pembayaran → Keuangan + koreksi");
+}

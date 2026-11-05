@@ -27,9 +27,11 @@ type NavbarProps = {
   variant?: "overlay" | "solid";
   /** Member yang login, dari server (area /akun) — tanpa itu dibaca dari cookie sesi di browser. */
   member?: MemberUser | null;
+  /** Logo lebih kecil di header portal member (Figma 1209:957). */
+  compactLogo?: boolean;
 };
 
-export function Navbar({ variant = "solid", member: initialMember }: NavbarProps) {
+export function Navbar({ variant = "solid", member: initialMember, compactLogo = false }: NavbarProps) {
   const scrolled = useScrolled();
   const menu = useDisclosure({ lockScroll: true });
   const dropdown = useDisclosure();
@@ -48,7 +50,7 @@ export function Navbar({ variant = "solid", member: initialMember }: NavbarProps
     <header className={cx(styles.header, isSolid && styles.solid)}>
       <Container className={styles.bar}>
         <div className={styles.left}>
-          <Logo tone="lime" />
+          <Logo tone="lime" size={compactLogo ? "sm" : "md"} />
 
           <nav aria-label="Main navigation" className={styles.desktopNav}>
             <ul className={styles.navList}>

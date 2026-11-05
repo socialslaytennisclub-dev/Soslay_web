@@ -150,6 +150,8 @@ export type MemberSession = {
   status: MemberSessionStatus;
   /** Slay Point yang didapat setelah hadir. */
   points?: number;
+  /** Nama trip Tennis Escape bila activity ini bagian dari trip (chip di kartu). */
+  trip?: string;
   /** Member ditunjuk sebagai host sesi ini (chip HOST, Panel Host di detail sesi). */
   host?: boolean;
   /** Host tanpa ikut main (tidak punya booking) — tanpa chip Terdaftar / e-ticket. */

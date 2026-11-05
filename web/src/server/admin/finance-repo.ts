@@ -166,6 +166,7 @@ async function fetchTransactions(supabase: SupabaseClient): Promise<FinTx[]> {
     note: str(t.note),
     term: (t.term as FinTx["term"]) ?? null,
     sessionId: str(t.activity_session_id),
+    tripId: str(t.trip_id),
     source: t.source as FinTx["source"],
     sourceRef: str(t.source_ref),
     parentId: str(t.parent_id),

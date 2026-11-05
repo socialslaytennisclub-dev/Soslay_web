@@ -38,10 +38,12 @@ export default async function FinanceTransactionsPage({ searchParams }: PageProp
   const src = one(raw.src) ?? "";
   const q = (one(raw.q) ?? "").toLowerCase();
   const batchId = one(raw.batch);
+  // "Lihat di Keuangan" dari trip Tennis Escape: transaksi pembayaran paket trip itu.
+  const tripId = one(raw.trip);
   const page = Math.max(1, Number(one(raw.page)) || 1);
   const batch = batchId ? data.batches.find((b) => b.id === batchId) : undefined;
 
-  const inScope = (t: FinTx) => (batchId ? t.importBatchId === batchId : allMonths || t.date.startsWith(month));
+  const inScope = (t: FinTx) => (batchId ? t.importBatchId === batchId : tripId ? t.tripId === tripId : allMonths || t.date.startsWith(month));
   const base = posted(data).filter(inScope);
   const matchFilters = (t: FinTx) =>
     (!cat || t.categoryId === cat) &&
@@ -60,7 +62,7 @@ export default async function FinanceTransactionsPage({ searchParams }: PageProp
 
   const href = (over: Record<string, string | number | undefined>) => {
     const p = new URLSearchParams();
-    const merged = { m: one(raw.m), tab: tab === "all" ? undefined : tab, cat, acc, src, q: one(raw.q), batch: batchId, page: undefined as string | number | undefined, ...over };
+    const merged = { m: one(raw.m), tab: tab === "all" ? undefined : tab, cat, acc, src, q: one(raw.q), batch: batchId, trip: tripId, page: undefined as string | number | undefined, ...over };
     for (const [k, v] of Object.entries(merged)) if (v !== undefined && v !== "" && v !== "all") p.set(k, String(v));
     const s = p.toString();
     return `/admin/keuangan/transaksi${s ? `?${s}` : ""}`;

@@ -1,5 +1,6 @@
 import "server-only";
 import { addMonths, lastDay } from "@/lib/finance/reports";
+import { demoTrip, demoTripBookings } from "./trip-demo";
 import type { BalanceItem, FinAccount, FinCategory, FinSession, FinTx, FinanceData, TxSource, TxType } from "@/lib/finance/types";
 
 /**
@@ -74,7 +75,7 @@ export function buildFinanceDemo(sessions: FinSession[]): FinanceData {
   const round = (v: number, to = 1000) => Math.round(v / to) * to;
   const txs: FinTx[] = [];
   const counters = new Map<string, number>();
-  const push = (t: { type: TxType; date: string; amount: number; categoryId?: string | null; accountId: string; toAccountId?: string | null; description: string; counterparty?: string | null; source?: TxSource; sessionId?: string | null; proof?: boolean; note?: string | null; ownerName?: string | null }) => {
+  const push = (t: { type: TxType; date: string; amount: number; categoryId?: string | null; accountId: string; toAccountId?: string | null; description: string; counterparty?: string | null; source?: TxSource; sessionId?: string | null; tripId?: string | null; term?: FinTx["term"]; proof?: boolean; note?: string | null; ownerName?: string | null }) => {
     const ym = t.date.slice(2, 4) + t.date.slice(5, 7);
     const n = (counters.get(ym) ?? 0) + 1;
     counters.set(ym, n);
@@ -94,8 +95,9 @@ export function buildFinanceDemo(sessions: FinSession[]): FinanceData {
       counterparty: t.counterparty ?? null,
       ownerName: t.ownerName ?? null,
       note: t.note ?? null,
-      term: null,
+      term: t.term ?? null,
       sessionId: t.sessionId ?? null,
+      tripId: t.tripId ?? null,
       source: t.source ?? "manual",
       sourceRef: null,
       parentId: null,
@@ -150,6 +152,14 @@ export function buildFinanceDemo(sessions: FinSession[]): FinanceData {
     // Kas tunai disetor ke bank tiap bulan.
     push({ type: "transfer", date: day(ym, 29), amount: 1_500_000, accountId: "acc-kas", toAccountId: "acc-bca", description: "Setor kas tunai → Bank BCA" });
     if (ym >= "2026-01" && i % 2 === 0) push({ type: "owner_withdrawal", date: day(ym, 30), amount: 20_000_000, accountId: "acc-bca", description: "Penarikan pemilik", ownerName: "Pemilik" });
+  }
+
+  // Pembayaran paket trip "Rally in Paradise · Bali" (A-10, Tennis Escape).
+  for (const b of demoTripBookings) {
+    for (const p of b.payments) {
+      const label = p.kind === "dp" ? "DP" : p.kind === "installment" ? "Cicilan" : "Pelunasan";
+      push({ type: "income", date: p.receivedOn, amount: p.amount, categoryId: "cat-ticket", accountId: "acc-bca", description: `${label} · ${b.name} · ${demoTrip.title}`, source: "trip_payment", tripId: demoTrip.id, term: p.kind, proof: false });
+    }
   }
 
   return {

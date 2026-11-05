@@ -86,6 +86,8 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   const [points, setPoints] = useState(String(session.pointsPerAttendance));
   // Poin ikut default tipe baru selama admin belum mengubahnya sendiri.
   const changeType = (slug: string) => {
+    // Tennis Escape = trip (BR-22): form sesi baru berubah jadi form Buat trip.
+    if (mode === "new" && slug === "tennis-escape") return router.push("/admin/activities/trip/new");
     if (pointDefaults && points === String(pointDefaults[typeSlug] ?? "") && pointDefaults[slug] !== undefined) setPoints(String(pointDefaults[slug]));
     setTypeSlug(slug);
   };

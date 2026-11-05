@@ -28,6 +28,7 @@ export const SOURCE_META: Record<TxSource, SourceMeta> = {
   pg_payout: { auto: true, editable: false, ticket: false, note: "Pencairan payment gateway", channel: "Payment gateway" },
   transfer_fee: { auto: false, editable: false, ticket: false, note: "Biaya transfer", channel: "Dicatat manual" },
   adjustment: { auto: false, editable: false, ticket: false, note: "Penyesuaian", channel: "Penyesuaian" },
+  trip_payment: { auto: true, editable: false, ticket: true, note: "Pembayaran paket trip · DP / pelunasan", channel: "Paket trip (manual)" },
   depreciation: { auto: true, editable: false, ticket: false, note: "Penyusutan otomatis", channel: "Sistem" },
   tax: { auto: true, editable: false, ticket: false, note: "PPh otomatis", channel: "Sistem" },
 };

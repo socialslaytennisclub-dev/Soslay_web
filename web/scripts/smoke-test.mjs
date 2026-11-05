@@ -142,6 +142,20 @@ if (!demo) {
     await check(sessionPath, { includes: ["Peserta"] });
     await check(`/admin/activities/new?from=${sessionPath.split("/").pop()}`);
   }
+  // Tennis Escape = Trip (BR-22): baris trip di daftar, form, peserta & pembayaran, Keuangan, halaman member.
+  const tripList = await check("/admin/activities?type=trip", { includes: ["Rally in Paradise", "TRIP"] });
+  const tripPath = firstHref(tripList, "/admin/activities/trip/");
+  if (tripPath) {
+    const tripId = tripPath.split("/").pop();
+    await check(`/admin/activities/trip/${tripId}`, { includes: ["Activities dalam trip", "Rundown", "Paket bundling"] });
+    await check(`/admin/activities/trip/${tripId}/peserta`, { includes: ["Peserta bundling", "Sisa tagihan", "Catat pembayaran"] });
+    await check(`/admin/keuangan/transaksi?m=all&trip=${tripId}`, { includes: ["Rally in Paradise"] });
+  } else failures.push("/admin/activities?type=trip → tidak ada link trip");
+  await check("/admin/activities/trip/new", { includes: ["Buat trip", "Tambah activity"] });
+  if (demo) {
+    await check("/akun/aktivitas", { includes: ["Special event", "Rally in Paradise"] });
+    await check("/akun/trip/rally-in-paradise-bali", { includes: ["Paket kamu", "Rundown"] });
+  }
   const orders = await check("/admin/orders");
   const orderCode = orders.match(/SOS-\d{3,}/)?.[0];
   if (!orderCode) failures.push("/admin/orders → tidak ada kode order");

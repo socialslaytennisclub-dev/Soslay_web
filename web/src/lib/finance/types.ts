@@ -19,6 +19,7 @@ export type TxSource =
   | "pg_payout"
   | "transfer_fee"
   | "adjustment"
+  | "trip_payment"
   | "depreciation"
   | "tax";
 export type TxTerm = "dp" | "installment" | "settlement";
@@ -67,6 +68,8 @@ export type FinTx = {
   note: string | null;
   term: TxTerm | null;
   sessionId: string | null;
+  /** Trip Tennis Escape (pembayaran paket bundling, A-10). */
+  tripId: string | null;
   source: TxSource;
   sourceRef: string | null;
   parentId: string | null;

@@ -3,10 +3,11 @@ import Link from "next/link";
 import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { blurProps } from "@/lib/image";
-import type { SessionDisplayStatus, SessionRow, SessionSort } from "@/server/admin/types";
+import type { ActivityListRow, SessionDisplayStatus, SessionRow, SessionSort } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
 import { Badge, desktopOnlyClass, MobileCard, MobileCardList, type BadgeTone } from "../ui/AdminUI";
 import styles from "./Activities.module.css";
+import { TripCard, TripRows } from "./TripRows";
 
 const STATUS: Record<SessionDisplayStatus, { label: string; tone: BadgeTone }> = {
   almost_full: { label: "Hampir penuh", tone: "pink" },
@@ -54,7 +55,7 @@ function Thumb({ s }: { s: SessionRow }) {
 }
 
 type SessionsTableProps = {
-  items: SessionRow[];
+  rows: ActivityListRow[];
   sort: SessionSort;
   dir: "asc" | "desc";
   /** URL urutan per kolom (dihitung di server, mempertahankan filter). */
@@ -62,8 +63,8 @@ type SessionsTableProps = {
 };
 
 /** Tabel Activities (Figma 25:4725) + versi kartu di HP. Kolom Sesi & Jadwal bisa diurutkan. */
-export function SessionsTable({ items, sort, dir, sortHrefs }: SessionsTableProps) {
-  if (items.length === 0) {
+export function SessionsTable({ rows, sort, dir, sortHrefs }: SessionsTableProps) {
+  if (rows.length === 0) {
     return <p className={styles.empty}>Tidak ada sesi untuk filter ini.</p>;
   }
 
@@ -85,7 +86,9 @@ export function SessionsTable({ items, sort, dir, sortHrefs }: SessionsTableProp
   return (
     <>
       <MobileCardList label="Daftar sesi">
-        {items.map((s) => {
+        {rows.map((r) => {
+          if (r.kind === "trip") return (<li key={r.item.trip.id} className={styles.tripCardItem}><TripCard item={r.item} /></li>);
+          const s = r.session;
           const when = schedule(s);
           return (
             <MobileCard
@@ -127,7 +130,9 @@ export function SessionsTable({ items, sort, dir, sortHrefs }: SessionsTableProp
             </tr>
           </thead>
           <tbody>
-            {items.map((s) => {
+            {rows.map((r) => {
+              if (r.kind === "trip") return <TripRows key={r.item.trip.id} item={r.item} />;
+              const s = r.session;
               const when = schedule(s);
               return (
                 <tr key={s.id}>

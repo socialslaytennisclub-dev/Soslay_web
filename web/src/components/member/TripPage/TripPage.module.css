@@ -1,0 +1,336 @@
+/* Figma MT-2 — halaman trip member. */
+.page {
+  padding-bottom: var(--space-48);
+  background: var(--color-indigo-50, #f4f4ff);
+}
+
+.hero {
+  position: relative;
+  isolation: isolate;
+  /* Navbar member fixed di atas → hero mulai di bawahnya (sama dengan SessionDetail). */
+  padding-top: var(--nav-height);
+  min-height: 240px;
+  overflow: hidden;
+  color: var(--color-white);
+}
+
+.heroImage {
+  z-index: -2;
+  object-fit: cover;
+}
+
+.hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: linear-gradient(180deg, rgb(10 8 74 / 0.15) 0%, rgb(10 8 74 / 0.85) 100%);
+}
+
+.heroInner {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: var(--space-8);
+  width: min(100%, 880px);
+  min-height: 240px;
+  margin: 0 auto;
+  padding: var(--space-16) var(--space-16) var(--space-20);
+}
+
+.back {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  margin-bottom: auto;
+  border-radius: 50%;
+  background: var(--color-white);
+  color: var(--color-navy-900);
+}
+
+.eyebrow {
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-500);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-navy-900);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: clamp(24px, 4vw, 36px);
+  line-height: 1.1;
+}
+
+.heroMeta {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: rgb(255 255 255 / 0.85);
+}
+
+.content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  width: min(100%, 880px);
+  margin: 0 auto;
+  padding: var(--space-16);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+  padding: var(--space-16);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+  font-family: var(--font-ui);
+  color: var(--color-navy-900);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  font-size: 13px;
+  color: var(--color-indigo-600);
+}
+
+.status {
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+}
+
+.statusDue {
+  background: #fff1d6;
+  color: #9a5a00;
+}
+
+.statusPaid {
+  background: var(--color-lime-500);
+  color: var(--color-navy-900);
+}
+
+.cardTitle {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 20px;
+}
+
+.muted {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-indigo-600);
+}
+
+.money {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-12);
+}
+
+.money span {
+  display: grid;
+  gap: 2px;
+}
+
+.money small {
+  font-size: 12px;
+  color: var(--color-indigo-600);
+}
+
+.money strong {
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+
+.due {
+  color: #d1335b;
+}
+
+.waButton {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-8);
+  min-height: 48px;
+  border: 1.5px solid var(--color-navy-900);
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 15px;
+  color: var(--color-navy-900);
+}
+
+.waButton svg {
+  color: #1aa053;
+}
+
+.tabs {
+  display: flex;
+  gap: var(--space-8);
+  overflow-x: auto;
+}
+
+.tab {
+  flex-shrink: 0;
+  padding: 10px 18px;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-full);
+  background: var(--color-white);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.tabOn {
+  border-color: var(--color-navy-900);
+  background: var(--color-navy-900);
+  color: var(--color-white);
+}
+
+.days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6, 6px);
+}
+
+.day {
+  padding: 6px 12px;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-full);
+  background: var(--color-white);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.dayOn {
+  border-color: var(--color-lime-600);
+  background: #f2fbb8;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: var(--space-4) var(--space-16);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-14);
+  padding: var(--space-14) 0;
+  font-family: var(--font-ui);
+  color: var(--color-navy-900);
+}
+
+.item + .item {
+  border-top: 1px solid var(--color-indigo-border);
+}
+
+.itemLink {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-14);
+  color: inherit;
+}
+
+.time {
+  flex-shrink: 0;
+  width: 48px;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 15px;
+}
+
+.itemText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.itemText strong {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 16px;
+}
+
+.itemText small {
+  font-size: 13px;
+  color: var(--color-indigo-600);
+}
+
+.activityChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  background: #f2fbb8;
+  font-weight: var(--weight-medium);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.number {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--color-indigo-50, #f4f4ff);
+  font-weight: var(--weight-bold);
+  font-size: 13px;
+  color: var(--color-indigo-600);
+}
+
+.check {
+  color: var(--color-lime-700);
+}
+
+.note {
+  display: flex;
+  gap: var(--space-8);
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-indigo-600);
+}
+
+@media (min-width: 768px) {
+  .hero,
+  .heroInner {
+    min-height: 320px;
+  }
+  .heroInner,
+  .content {
+    padding-inline: var(--space-24);
+  }
+}

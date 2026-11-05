@@ -63,6 +63,8 @@ export type Dataset = {
    * ada di daftar itu — satu angka untuk Activities, Overview & okupansi venue (SQL session_fill_counts).
    */
   filled: (sessionId: string) => number;
+  /** Bagian keterisian dari pembeli paket trip (Tennis Escape: "x paket + y satuan"). */
+  tripFilled: (sessionId: string) => number;
   ordersOf: (memberId: string) => DataOrder[];
   stats: (memberId: string) => MemberStats;
 };
@@ -93,6 +95,14 @@ function index(members: DataMember[], sessions: DataSession[], bookings: DataBoo
   };
 }
 
+/** Mode demo: peserta paket = member DEMO_TRIP_BUNDLE di activity trip demo. */
+function demoTripFilled() {
+  const bundle = new Set(demo.DEMO_TRIP_BUNDLE.map((m) => m.id));
+  const counts = new Map<string, number>();
+  for (const b of demo.bookings) if (b.sessionId.startsWith(demo.DEMO_TRIP_ID) && bundle.has(b.memberId)) counts.set(b.sessionId, (counts.get(b.sessionId) ?? 0) + 1);
+  return (id: string) => counts.get(id) ?? 0;
+}
+
 /** Mode demo (tanpa daftar peserta): keterisian = booking aktif. */
 function activeBookingCounts(bookings: DataBooking[]) {
   const counts = new Map<string, number>();
@@ -116,6 +126,7 @@ function buildDemoDataset(): Dataset {
     bookingsOf,
     bookingsOfSession,
     filled: activeBookingCounts(demo.bookings),
+    tripFilled: demoTripFilled(),
     ordersOf,
     stats: demo.memberStats,
   };
@@ -125,13 +136,13 @@ let demoDataset: Dataset | undefined;
 // ── Live (Supabase) ─────────────────────────────────────────────────────────
 /** PostgREST membatasi 1.000 baris per request → hitung dulu, lalu ambil semua halaman paralel. */
 /** Keterisian semua sesi (RPC session_fill_counts, satu baris per sesi, per halaman 1000). */
-async function fetchFillCounts(client: SupabaseClient): Promise<Map<string, number>> {
+async function fetchFillCounts(client: SupabaseClient): Promise<Map<string, { filled: number; trip: number }>> {
   const PAGE = 1000;
-  const counts = new Map<string, number>();
+  const counts = new Map<string, { filled: number; trip: number }>();
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await client.rpc("session_fill_counts").order("session_id").range(from, from + PAGE - 1);
     if (error) throw new Error(`Gagal memuat keterisian sesi: ${error.message}`);
-    for (const r of (data ?? []) as { session_id: string; filled: number }[]) counts.set(r.session_id, r.filled);
+    for (const r of (data ?? []) as { session_id: string; filled: number; trip_filled: number }[]) counts.set(r.session_id, { filled: r.filled, trip: r.trip_filled });
     if ((data?.length ?? 0) < PAGE) return counts;
   }
 }
@@ -185,6 +196,7 @@ type SessionRow = {
   capacity: number; price: number; points_per_attendance: number; status: demo.SessionStatus; publish_at: string | null;
   visibility: "public" | "members" | "link"; waitlist_enabled: boolean; members_only: boolean; show_on_homepage: boolean;
   recommended_levels: TennisLevel[]; series_id: string | null; kuy_booking_url: string | null; visible_until: string | null; cover_path: string | null; created_at: string;
+  trip_id: string | null; trip_order: number | null; sold_single: boolean; single_quota: number | null;
   venues: { name: string; courts: string[] } | null;
   session_crew: { role: string; staff_members: { full_name: string } | null }[];
 };
@@ -207,7 +219,7 @@ async function loadLive(): Promise<Dataset> {
     fetchAll<SessionRow>(
       client,
       "sessions",
-      "id, title, type_slug, description, court_label, starts_at, ends_at, capacity, price, points_per_attendance, status, publish_at, visibility, waitlist_enabled, members_only, show_on_homepage, recommended_levels, series_id, kuy_booking_url, visible_until, cover_path, created_at, venues(name, courts), session_crew(role, staff_members(full_name))",
+      "id, title, type_slug, description, court_label, starts_at, ends_at, capacity, price, points_per_attendance, status, publish_at, visibility, waitlist_enabled, members_only, show_on_homepage, recommended_levels, series_id, kuy_booking_url, visible_until, cover_path, created_at, trip_id, trip_order, sold_single, single_quota, venues(name, courts), session_crew(role, staff_members(full_name))",
       "starts_at",
     ),
     fetchAll<BookingRow>(client, "bookings", "session_id, member_id, status, payment_status, source, guests, checked_in_at, created_at", "created_at"),
@@ -269,6 +281,10 @@ async function loadLive(): Promise<Dataset> {
     repeatWeekly: Boolean(s.series_id),
     kuyUrl: s.kuy_booking_url,
     coverPath: s.cover_path,
+    tripId: s.trip_id ?? undefined,
+    tripOrder: s.trip_order ?? undefined,
+    soldSingle: s.sold_single,
+    singleQuota: s.single_quota,
     visibleUntil: s.visible_until ? new Date(s.visible_until) : null,
     createdAt: new Date(s.created_at),
     crew: s.session_crew.filter((c) => c.staff_members).map((c) => ({ name: c.staff_members!.full_name, role: CREW[c.role] ?? "Host" })),
@@ -369,7 +385,8 @@ async function loadLive(): Promise<Dataset> {
     sessionById,
     bookingsOf,
     bookingsOfSession,
-    filled: (id: string) => fillBySession.get(id) ?? 0,
+    filled: (id: string) => fillBySession.get(id)?.filled ?? 0,
+    tripFilled: (id: string) => fillBySession.get(id)?.trip ?? 0,
     ordersOf,
     stats,
   };

@@ -89,7 +89,11 @@ export function AdminSidebar({ memberCount, ordersToProcess, pendingRedemptions,
   return (
     <>
       <div className={styles.mobileBar}>
-        <Image src="/images/brand/logo-lime.webp" alt="Slay Club" width={85} height={24} />
+        {/* Logo + chip Admin juga di HP & tablet (sama dengan sidebar desktop). */}
+        <Link href="/admin" className={styles.brand} aria-label="Admin Slay Club — Overview">
+          <Image src="/images/brand/logo-lime.webp" alt="Slay Club" width={85} height={24} />
+          <span className={styles.adminChip}>Admin</span>
+        </Link>
         <button type="button" className={styles.menuButton} onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-controls="admin-sidebar">
           <AdminIcon name={open ? "x" : "list-bullets"} size={22} />
           <span className="visually-hidden">Menu admin</span>

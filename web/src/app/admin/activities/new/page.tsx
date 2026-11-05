@@ -14,6 +14,10 @@ export default async function AdminNewSessionPage({ searchParams }: PageProps<"/
   const fromId = Array.isArray(from) ? from[0] : from;
   const [draft, pointDefaults] = await Promise.all([getSessionDraft(fromId), attendancePointDefaults()]);
   // Sesi baru (bukan duplikat) memakai Slay Point default dari Aturan poin.
+  // Dari form Buat trip: pilih tipe lain → kembali ke form sesi dengan tipe itu.
+  const type = (await searchParams).type;
+  const typeSlug = Array.isArray(type) ? type[0] : type;
+  if (!fromId && typeSlug && typeSlug !== "tennis-escape" && activityTypeOptions().some((t) => t.slug === typeSlug)) draft.typeSlug = typeSlug;
   if (!fromId) draft.pointsPerAttendance = pointDefaults[draft.typeSlug] ?? draft.pointsPerAttendance;
 
   return (
