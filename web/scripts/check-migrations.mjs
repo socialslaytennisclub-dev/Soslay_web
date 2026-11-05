@@ -824,5 +824,34 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert(items.n === 0 && visible.n > 0, "Pencatat: transaksi terlihat, pos neraca tidak");
   await as(null);
   await db.exec(`reset role`);
+
+  // Keterisian sesi (session_fill_counts): daftar peserta (termasuk ghost) + booking aktif di luar daftar itu;
+  // batal / waitlist tidak dihitung. Angka sama untuk semua role staf, kosong untuk non-staf.
+  const fillSid = (await one(
+    `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, points_per_attendance)
+     values ('fill-1', 'Mabar Isi', 'weekly-mabar', $1, now() + interval '3 days', now() + interval '3 days 2 hours', 10, 'published', 50) returning id`,
+    [venueId],
+  )).id;
+  const mk = async (name) => {
+    const id = (await one(`insert into auth.users default values returning id`)).id;
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, name, `${name.replace(/\s/g, "").toLowerCase()}@fill.test`]);
+    return id;
+  };
+  const [kuyMember, webMember, cancelled, waiting] = [await mk("Isi Kuy"), await mk("Isi Web"), await mk("Isi Batal"), await mk("Isi Tunggu")];
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username) values ($1, 'Ghost Satu', 'G1', 'ghost1'), ($1, 'Ghost Dua', 'G2', 'ghost2')`, [fillSid]);
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, member_id) values ($1, 'Isi Kuy', 'G3', 'isikuy', $2)`, [fillSid, kuyMember]);
+  await db.query(`insert into bookings (session_id, member_id, source, status) values ($1, $2, 'website', 'registered'), ($1, $3, 'website', 'cancelled'), ($1, $4, 'website', 'waitlisted')`, [fillSid, webMember, cancelled, waiting]);
+  const fillAs = async (who) => {
+    await db.exec(`set role authenticated`);
+    await as(who);
+    const row = await one(`select filled from session_fill_counts() where session_id = $1`, [fillSid]);
+    await as(null);
+    await db.exec(`reset role`);
+    return row?.filled ?? null;
+  };
+  await db.exec(`grant execute on function session_fill_counts() to authenticated`);
+  console.assert((await fillAs(fsa)) === 4, `keterisian Super Admin ${await fillAs(fsa)} (harus 4: 2 ghost + 1 member Kuyy + 1 booking website)`);
+  console.assert((await fillAs(rec)) === 4, "keterisian Pencatat keuangan beda dengan Super Admin");
+  console.assert((await fillAs(webMember)) === null, "non-staf bisa membaca keterisian sesi");
   console.log("✓ keuangan: import Kuyy, Tandai Lunas & order shop tercatat otomatis (+ koreksi), go-live dihormati, RLS Pencatat keuangan");
 }

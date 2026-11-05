@@ -58,8 +58,11 @@ export type Dataset = {
   sessionById: Map<string, DataSession>;
   bookingsOf: (memberId: string) => DataBooking[];
   bookingsOfSession: (sessionId: string) => DataBooking[];
-  /** Jumlah baris daftar peserta (impor Kuyy / roster) per sesi — termasuk ghost member tanpa booking. */
-  rosterCount: (sessionId: string) => number;
+  /**
+   * Keterisian sesi: daftar peserta (impor Kuyy / roster, termasuk ghost member) + booking aktif yang belum
+   * ada di daftar itu — satu angka untuk Activities, Overview & okupansi venue (SQL session_fill_counts).
+   */
+  filled: (sessionId: string) => number;
   ordersOf: (memberId: string) => DataOrder[];
   stats: (memberId: string) => MemberStats;
 };
@@ -90,6 +93,13 @@ function index(members: DataMember[], sessions: DataSession[], bookings: DataBoo
   };
 }
 
+/** Mode demo (tanpa daftar peserta): keterisian = booking aktif. */
+function activeBookingCounts(bookings: DataBooking[]) {
+  const counts = new Map<string, number>();
+  for (const b of bookings) if (b.status !== "cancelled" && b.status !== "waitlisted") counts.set(b.sessionId, (counts.get(b.sessionId) ?? 0) + 1);
+  return (id: string) => counts.get(id) ?? 0;
+}
+
 // ── Demo ────────────────────────────────────────────────────────────────────
 function buildDemoDataset(): Dataset {
   const members = demo.members.map((m) => ({ ...m, memberCode: demo.memberCode(m) }));
@@ -105,7 +115,7 @@ function buildDemoDataset(): Dataset {
     sessionById,
     bookingsOf,
     bookingsOfSession,
-    rosterCount: () => 0,
+    filled: activeBookingCounts(demo.bookings),
     ordersOf,
     stats: demo.memberStats,
   };
@@ -114,6 +124,18 @@ let demoDataset: Dataset | undefined;
 
 // ── Live (Supabase) ─────────────────────────────────────────────────────────
 /** PostgREST membatasi 1.000 baris per request → hitung dulu, lalu ambil semua halaman paralel. */
+/** Keterisian semua sesi (RPC session_fill_counts, satu baris per sesi, per halaman 1000). */
+async function fetchFillCounts(client: SupabaseClient): Promise<Map<string, number>> {
+  const PAGE = 1000;
+  const counts = new Map<string, number>();
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await client.rpc("session_fill_counts").order("session_id").range(from, from + PAGE - 1);
+    if (error) throw new Error(`Gagal memuat keterisian sesi: ${error.message}`);
+    for (const r of (data ?? []) as { session_id: string; filled: number }[]) counts.set(r.session_id, r.filled);
+    if ((data?.length ?? 0) < PAGE) return counts;
+  }
+}
+
 async function fetchAll<T>(client: SupabaseClient, table: string, columns: string, order: string, unique = "id"): Promise<T[]> {
   const PAGE = 1000;
   // Urutan wajib unik supaya halaman paralel tidak dobel / terlewat saat nilai `order` kembar.
@@ -179,7 +201,7 @@ async function loadLive(): Promise<Dataset> {
   // Sesi yang lewat jeda tapi belum tertutup (cron belum jalan) → tutup dulu supaya status & bonus sudah benar.
   await closeExpiredSessions(client);
 
-  const [profiles, statsRows, sessionRows, bookingRows, orderRows, rosterRows] = await Promise.all([
+  const [profiles, statsRows, sessionRows, bookingRows, orderRows, fillBySession] = await Promise.all([
     fetchAll<ProfileRow>(client, "profiles", "*", "joined_at"),
     fetchAll<StatsRow>(client, "member_stats", "member_id, points_balance, points_earned, total_spent", "member_id", "member_id"),
     fetchAll<SessionRow>(
@@ -195,10 +217,8 @@ async function loadLive(): Promise<Dataset> {
       "code, member_id, status, payment_status, payment_method, channel, subtotal, shipping_fee, discount, total, shipping_address, courier, tracking_number, placed_at, order_items(product_name, options, unit_price, quantity)",
       "placed_at",
     ),
-    fetchAll<{ session_id: string }>(client, "session_participants", "session_id", "id"),
+    fetchFillCounts(client),
   ]);
-  const rosterBySession = new Map<string, number>();
-  for (const r of rosterRows) rosterBySession.set(r.session_id, (rosterBySession.get(r.session_id) ?? 0) + 1);
 
   const members: DataMember[] = profiles.map((p, i) => ({
     id: p.id,
@@ -349,7 +369,7 @@ async function loadLive(): Promise<Dataset> {
     sessionById,
     bookingsOf,
     bookingsOfSession,
-    rosterCount: (id: string) => rosterBySession.get(id) ?? 0,
+    filled: (id: string) => fillBySession.get(id) ?? 0,
     ordersOf,
     stats,
   };

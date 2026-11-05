@@ -298,19 +298,26 @@ export async function saveLineup(sessionId: string, matches: Omit<SessionMatch, 
   if (!session) return { ok: false, error: "Sesi tidak ditemukan." };
   if (session.ended_at) return { ok: false, error: "Sesi sudah diakhiri — line-up terkunci." };
 
-  // Peserta booking (id = member id) → baris session_participants.
-  let { data: roster } = await supabase.from("session_participants").select("id, member_id").eq("session_id", sessionId);
-  if (!roster?.length) {
-    const { data: booked } = await supabase
+  // Peserta booking (id = member id) yang belum ada di daftar peserta → baris session_participants. Juga saat
+  // daftar sudah terisi impor Kuyy: booking website setelah impor ikut bisa masuk line-up.
+  const [{ data: existing }, { data: booked }] = await Promise.all([
+    supabase.from("session_participants").select("id, member_id").eq("session_id", sessionId),
+    supabase
       .from("bookings")
       .select("member_id, amount, source, profiles(full_name, email, phone, instagram, tennis_level)")
       .eq("session_id", sessionId)
-      .in("status", ["registered", "attended"]);
-    type Booked = { member_id: string; amount: number; source: "website" | "kuy" | "admin"; profiles: { full_name: string; email: string; phone: string | null; instagram: string | null; tennis_level: string | null } | null };
-    const rows = ((booked ?? []) as unknown as Booked[]).map((b, i) => ({
+      .in("status", ["registered", "attended"]),
+  ]);
+  let roster = existing ?? [];
+  const inRoster = new Set(roster.map((r) => r.member_id as string | null).filter(Boolean));
+  type Booked = { member_id: string; amount: number; source: "website" | "kuy" | "admin"; profiles: { full_name: string; email: string; phone: string | null; instagram: string | null; tennis_level: string | null } | null };
+  const rows = ((booked ?? []) as unknown as Booked[])
+    .filter((b) => !inRoster.has(b.member_id))
+    .map((b) => ({
       session_id: sessionId,
       member_id: b.member_id,
-      kuy_reg_no: `B${i + 1}`,
+      // Unik per member (nomor B1, B2… bisa bentrok dengan salinan sebelumnya).
+      kuy_reg_no: `B-${b.member_id}`,
       full_name: b.profiles?.full_name ?? "Member",
       email: b.profiles?.email ?? null,
       phone: b.profiles?.phone ?? null,
@@ -320,11 +327,10 @@ export async function saveLineup(sessionId: string, matches: Omit<SessionMatch, 
       // Ikut sumber booking-nya (website / admin) — bukan baris file Kuyy, jadi tidak dihitung sebagai uang Kuyy.
       source: b.source,
     }));
-    if (rows.length) {
-      const { data, error } = await supabase.from("session_participants").insert(rows).select("id, member_id");
-      if (error) return { ok: false, error: `Gagal menyiapkan peserta: ${error.message}` };
-      roster = data;
-    }
+  if (rows.length) {
+    const { data, error } = await supabase.from("session_participants").insert(rows).select("id, member_id");
+    if (error) return { ok: false, error: `Gagal menyiapkan peserta: ${error.message}` };
+    roster = [...roster, ...(data ?? [])];
   }
   const idOf = new Map<string, string>();
   for (const r of roster ?? []) {

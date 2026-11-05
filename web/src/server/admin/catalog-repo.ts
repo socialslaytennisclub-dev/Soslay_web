@@ -66,16 +66,14 @@ const loadVenueForms = cache(async (): Promise<VenueForm[]> => {
 });
 
 export async function listVenues(): Promise<AdminVenue[]> {
-  const [venues, { bookings, sessions, now }] = await Promise.all([loadVenueForms(), getDataset()]);
+  const [venues, { sessions, now, filled: filledOf }] = await Promise.all([loadVenueForms(), getDataset()]);
   const thisMonth = monthKey(now);
-  const booked = new Map<string, number>();
-  for (const b of bookings) if (b.status !== "cancelled" && b.status !== "waitlisted") booked.set(b.sessionId, (booked.get(b.sessionId) ?? 0) + 1);
 
   return venues.map((v) => {
     const all = sessions.filter((s) => s.venueName === v.name && s.status !== "cancelled" && s.status !== "draft");
     const month = all.filter((s) => monthKey(s.startsAt) === thisMonth);
     const seats = month.reduce((sum, s) => sum + s.capacity, 0);
-    const filled = month.reduce((sum, s) => sum + Math.min(booked.get(s.id) ?? 0, s.capacity), 0);
+    const filled = month.reduce((sum, s) => sum + Math.min(filledOf(s.id), s.capacity), 0);
     return {
       slug: v.slug,
       name: v.name,

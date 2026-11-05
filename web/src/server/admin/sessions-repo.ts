@@ -22,19 +22,10 @@ function venueMeta(name: string) {
   return venue ? { city: venue.city, type: venue.type, image: venue.image } : ALTITUDE;
 }
 
-/**
- * Terisi = daftar peserta (impor Kuyy / roster) bila sesi sudah punya — termasuk ghost member yang tidak
- * punya booking — selain itu booking aktif. Aturan yang sama dengan "Terdaftar" di halaman edit sesi
- * (peserta impor menggantikan daftar booking).
- */
+/** Terisi (Dataset.filled — daftar peserta + booking aktif di luar daftar itu) & jumlah waitlist. */
 function fill(d: Dataset, sessionId: string) {
-  let booked = 0;
-  let waitlisted = 0;
-  for (const b of d.bookingsOfSession(sessionId)) {
-    if (b.status === "waitlisted") waitlisted++;
-    else if (b.status !== "cancelled") booked++;
-  }
-  return { booked: d.rosterCount(sessionId) || booked, waitlisted };
+  const waitlisted = d.bookingsOfSession(sessionId).filter((b) => b.status === "waitlisted").length;
+  return { booked: d.filled(sessionId), waitlisted };
 }
 
 /**
@@ -189,8 +180,10 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
       };
     });
   const { play, roster, hosts, matches, photos } = await loadSessionPlay(s, d.live);
-  // Peserta hasil import Kuyy menggantikan daftar booking begitu ada.
-  const participants = roster ?? fromBookings;
+  // Daftar peserta (impor Kuyy) menggantikan daftar booking begitu ada; booking yang member-nya belum ada di
+  // daftar itu (mis. booking website setelah impor) tetap ikut — sama dengan session_roster & session_fill_counts.
+  const inRoster = new Set(roster?.map((p) => p.memberId).filter(Boolean));
+  const participants = roster ? [...roster, ...fromBookings.filter((p) => !inRoster.has(p.memberId))] : fromBookings;
   if (!d.live && usesLineup(play.matchFormat)) matches.push(...demoLineup(id, participants, play));
   const seed = Number(id.replace(/\D/g, "")) || 0;
   return {
