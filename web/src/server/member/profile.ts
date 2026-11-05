@@ -1,7 +1,9 @@
 import "server-only";
 import { cache } from "react";
-import { genderOptions, handOptions, playingFormatOptions, playingFrequencyOptions, tennisLevelOptions, type MemberProfile, type MemberTier } from "@/content/member";
+import { genderOptions, handOptions, playingFormatOptions, playingFrequencyOptions, type MemberProfile, type MemberTier } from "@/content/member";
+import { LEVEL_LABEL } from "@/lib/levels";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import type { TennisLevel } from "@/server/admin/types";
 import { localPhone } from "@/lib/wa-invite";
 import { getMemberSession } from "./user";
 
@@ -12,7 +14,6 @@ import { getMemberSession } from "./user";
  */
 
 export const GENDER = ["male", "female", "undisclosed"] as const;
-export const LEVEL = ["beginner", "beginner_intermediate", "intermediate", "intermediate_advanced", "advanced"] as const;
 export const FREQUENCY = ["rarely", "monthly", "weekly", "twice_weekly", "often"] as const;
 export const FORMAT = ["singles", "doubles", "both"] as const;
 export const HAND = ["right", "left", "both"] as const;
@@ -81,7 +82,7 @@ export const getMyMember = cache(async (): Promise<MyMember | null> => {
       reclubId: p.reclub_id ?? "",
       instagram: p.instagram ?? "",
       email: p.email,
-      tennisLevel: toLabel(LEVEL, tennisLevelOptions, p.tennis_level),
+      tennisLevel: p.tennis_level ? (LEVEL_LABEL[p.tennis_level as TennisLevel] ?? "") : "",
       playingFrequency: toLabel(FREQUENCY, playingFrequencyOptions, p.play_frequency),
       playingFormat: toLabel(FORMAT, playingFormatOptions, p.play_format),
       hand: toLabel(HAND, handOptions, p.dominant_hand),

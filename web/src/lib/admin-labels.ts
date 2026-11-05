@@ -7,7 +7,6 @@ import type {
   PointsReason,
   RedemptionStatus,
   RewardCategory,
-  TennisLevel,
   Tier,
 } from "@/server/admin/types";
 
@@ -20,13 +19,7 @@ export const PARTICIPANT_SOURCE_LABEL: Record<"website" | "kuy" | "admin", strin
 /** Jalur bayar peserta impor Kuyy: lewat Kuyy atau langsung (transfer, mis. BCA). */
 export const PAYMENT_CHANNEL_LABEL: Record<"kuy" | "manual", string> = { kuy: "Kuy", manual: "Manual" };
 
-export const LEVEL_LABEL: Record<TennisLevel, string> = {
-  beginner: "Beginner",
-  beginner_intermediate: "Upper Beginner",
-  intermediate: "Intermediate",
-  intermediate_advanced: "Upper Intermediate",
-  advanced: "Advanced",
-};
+export { LEVEL_LABEL } from "./levels";
 
 export const MEMBER_STATUS_LABEL: Record<MemberStatus, string> = { active: "Aktif", inactive: "Tidak aktif", suspended: "Ditangguhkan" };
 

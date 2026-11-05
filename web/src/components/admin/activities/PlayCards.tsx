@@ -7,7 +7,7 @@ import { cx } from "@/lib/cx";
 import { useScoreDraft } from "@/hooks/useScoreDraft";
 import { saveLineup, saveMatchScore } from "@/server/admin/actions/play";
 import type { MatchFormat, SessionMatch, SessionParticipant, TennisLevel } from "@/server/admin/types";
-import { FormCard, Toggle } from "../ui/AdminForm";
+import { FormCard, SingleChips, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge, MemberAvatar } from "../ui/AdminUI";
 import { toast } from "../ui/Toaster";
@@ -67,17 +67,13 @@ export function FormatCard({ value, onChange, locked }: { value: PlayForm; onCha
 
       {scored && (
         <>
-          <fieldset className={editor.fieldset}>
-            <legend className={editor.label}>Format leaderboard *</legend>
-            <div className={editor.segmentWrap}>
-              {RANKINGS.map((r) => (
-                <button key={r.value} type="button" aria-pressed={value.leaderboardMode === r.value} className={cx(editor.option, value.leaderboardMode === r.value && editor.optionOn)} onClick={() => set({ leaderboardMode: r.value })}>
-                  {r.label}
-                </button>
-              ))}
-            </div>
-            <span className={editor.muted}>Win: peringkat dari jumlah menang · Point: dari total poin</span>
-          </fieldset>
+          <SingleChips
+            label="Format leaderboard *"
+            options={RANKINGS}
+            value={value.leaderboardMode}
+            onChange={(leaderboardMode) => set({ leaderboardMode })}
+            hint={<span className={editor.muted}>Win: peringkat dari jumlah menang · Point: dari total poin</span>}
+          />
 
           <div className={withTarget ? editor.cols3 : editor.cols2}>
             <NumberField label="Jumlah court" suffix="court" value={value.courtCount} onChange={(v) => set({ courtCount: v })} disabled={locked} />

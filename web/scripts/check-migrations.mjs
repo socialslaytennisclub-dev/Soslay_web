@@ -238,6 +238,18 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.query(`select save_match_score($1, 6::smallint, 4::smallint)`, [match]);
   console.assert((await one(`select score_a, score_b from session_matches where id = $1`, [match])).score_b === 4, "rotating: skor bebas ditolak");
   console.assert(await fails(`select save_match_score($1, 0::smallint, 0::smallint)`, [match]), "rotating: 0–0 diterima!");
+  // Aplikasi membaca HINT (bukan teks pesan) untuk pesan error Panel Host.
+  const hintOf = async (a, b) => db.query(`select save_match_score($1, ${a}::smallint, ${b}::smallint)`, [match]).then(() => null, (e) => e.hint);
+  console.assert((await hintOf(0, 0)) === "score_zero", "HINT score_zero hilang");
+  // Format lain selain Americano juga tanpa target poin.
+  await as(null);
+  await db.query(`update sessions set match_format = 'round_robin' where id = $1`, [s]);
+  await as(hostId);
+  await db.query(`select save_match_score($1, 5::smallint, 3::smallint)`, [match]);
+  await as(null);
+  await db.query(`update sessions set match_format = 'americano' where id = $1`, [s]);
+  await as(hostId);
+  console.assert((await hintOf(12, 8)) === "score_total", "HINT score_total hilang");
   await as(null);
   await db.query(`update sessions set match_format = 'americano' where id = $1`, [s]);
   await as(hostId);
@@ -706,6 +718,16 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await net("kuyy_import")) === 0 && (await net("ticket_manual_paid")) === 140000 && manualAcc?.system_key === "bank_main", `A-8 via Manual → akun bayar manual ${JSON.stringify(manualAcc)}`);
   const legs = await one(`select count(distinct date)::int n from finance_transactions where source_ref = $1 and (source = 'ticket_manual_paid' or amount < 0)`, ['sp:' + p1]);
   console.assert(legs.n === 1, `pindah jalur: koreksi & pemasukan beda tanggal (${legs.n})`);
+  // Bukan lagi baris file Kuyy (username dihapus) → dikoreksi; trigger update harus melihat is_kuy_import berubah.
+  await db.query(`update session_participants set kuy_username = null where id = $1`, [p1]);
+  console.assert((await net("ticket_manual_paid")) === 0, "A-8 baris jadi bukan file Kuyy → koreksi");
+  await db.query(`update session_participants set kuy_username = 'pesertaa' where id = $1`, [p1]);
+  console.assert((await net("ticket_manual_paid")) === 140000, "A-8 baris file Kuyy lagi → tercatat lagi");
+  // Import ulang dengan nilai sama tidak menambah transaksi.
+  const txCount = async () => Number((await one(`select count(*) n from finance_transactions`)).n);
+  const before = await txCount();
+  await db.query(`update session_participants set amount = amount, payment_status = payment_status where id = $1`, [p1]);
+  console.assert((await txCount()) === before, "import ulang tanpa perubahan menambah transaksi");
   await db.query(`delete from session_participants where id = $1`, [p1]);
   console.assert((await net("kuyy_import")) === 0 && (await net("ticket_manual_paid")) === 0, "A-8 hapus peserta → koreksi");
   // Nominal yang diubah admin tidak tertimpa import ulang file Kuyy (yang menulis amount tanpa amount_edited_at).

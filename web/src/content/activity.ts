@@ -1,4 +1,4 @@
-import { LEVEL_LABEL } from "@/lib/admin-labels";
+import { LEVEL_LABEL } from "@/lib/levels";
 import { CITY_TIMEZONE, type City } from "@/lib/format";
 
 /**

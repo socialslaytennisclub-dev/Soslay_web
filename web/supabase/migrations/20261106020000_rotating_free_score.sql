@@ -1,6 +1,7 @@
 -- Rotating Partner tidak memakai target poin: match tidak harus berakhir di total tertentu, skor
 -- diisi bebas sesuai hasil di lapangan (mis. 6–4). Americano tetap: total kedua tim = target poin.
--- Sama dengan web/src/lib/americano.ts (hasTargetTotal).
+-- Sama dengan web/src/lib/americano.ts (hasTargetTotal). HINT score_total / score_zero dibaca aplikasi
+-- (server/member/actions) — pesan boleh diubah tanpa merusak pesan error di Panel Host.
 create or replace function save_match_score(p_match uuid, p_score_a smallint, p_score_b smallint)
 returns void language plpgsql security definer set search_path = public as $$
 declare
@@ -19,9 +20,9 @@ begin
   end if;
   -- Hanya Americano yang memakai target total; format lain (Rotating Partner) skor bebas, asal bukan 0–0.
   if v_format = 'americano' then
-    if p_score_a + p_score_b <> v_target then raise exception 'Total poin harus %', v_target; end if;
+    if p_score_a + p_score_b <> v_target then raise exception 'Total poin harus %', v_target using hint = 'score_total'; end if;
   elsif p_score_a + p_score_b = 0 then
-    raise exception 'Skor masih 0–0';
+    raise exception 'Skor masih 0–0' using hint = 'score_zero';
   end if;
   update session_matches
   set score_a = p_score_a, score_b = p_score_b, scored_by = auth.uid(), scored_at = now()

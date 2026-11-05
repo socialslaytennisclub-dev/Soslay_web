@@ -1,4 +1,5 @@
 import "server-only";
+import { levelFromLabel } from "@/lib/levels";
 import { localPhone } from "@/lib/wa-invite";
 import type { TennisLevel } from "./types";
 import { readFirstSheet } from "./xlsx";
@@ -50,8 +51,10 @@ const HEADERS = {
 
 
 export function parseLevel(raw: string): TennisLevel | null {
+  // Nama level persis (sekarang / lama, lib/levels) dulu; selain itu tebak dari kata kuncinya.
+  const exact = levelFromLabel(raw);
+  if (exact) return exact;
   const t = raw.toLowerCase();
-  // Nama level sekarang: Upper Beginner (dulu Beginner–Intermediate), Upper Intermediate (dulu Intermediate–Advanced).
   if (t.includes("upper") && t.includes("beginner")) return "beginner_intermediate";
   if (t.includes("upper") && t.includes("intermediate")) return "intermediate_advanced";
   const beg = t.includes("beginner") || t.includes("pemula");
