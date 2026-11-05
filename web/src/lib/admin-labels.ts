@@ -7,6 +7,7 @@ import type {
   PointsReason,
   RedemptionStatus,
   RewardCategory,
+  SessionDisplayStatus,
   Tier,
 } from "@/server/admin/types";
 
@@ -79,3 +80,14 @@ export const BONUS_LABEL: Record<BonusKey, { label: string; hint: string }> = {
 
 /** "1.250 pts" / "−300 pts"; `signed` menambah "+" untuk angka positif. */
 export const formatPoints = (n: number, signed = false) => `${n < 0 ? "−" : signed && n > 0 ? "+" : ""}${Math.abs(n).toLocaleString("id-ID")} pts`;
+
+/** Status tampilan sesi di daftar Activities. */
+export const SESSION_STATUS_LABEL: Record<SessionDisplayStatus, string> = {
+  almost_full: "Hampir penuh",
+  published: "Published",
+  full: "Penuh",
+  draft: "Draft",
+  scheduled: "Terjadwal",
+  completed: "Selesai",
+  cancelled: "Dibatalkan",
+};

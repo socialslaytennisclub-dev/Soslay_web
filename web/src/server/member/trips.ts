@@ -1,8 +1,9 @@
 import "server-only";
 import { cache } from "react";
 import { socialLinks } from "@/content/site";
+import { wibParts } from "@/lib/format";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { bookingMoney, dayLabel, settlementDue, shortDate, todayWib, type BookingMoney, type TripPaymentKind } from "@/lib/trips";
+import { bookingMoney, dayLabel, settlementDue, shortDate, todayWib, type BookingMoney, type TripPaymentKind, TRIP_PLACEHOLDER } from "@/lib/trips";
 import { demoTrip, demoTripBookings, demoTripRundown } from "@/server/admin/trip-demo";
 import { getMemberSession } from "./user";
 
@@ -29,20 +30,18 @@ export type MemberTrip = {
   activities: MemberTripActivity[];
   /** Kosong untuk peserta satuan / rundown disembunyikan admin. */
   rundown: MemberTripRundown[];
-  /** "Jum 17 Okt · 05.30 penjemputan, 07.00 Lapangan Maya Ubud". */
+  /** "Sab 17 Okt · 05.30 Penjemputan di hotel…, 07.00 Lapangan Maya Ubud". */
   next: string | null;
   adminWa: string;
 };
 
 const ADMIN_WA = socialLinks.find((l) => l.label === "WhatsApp")?.href ?? "https://wa.me/62642424792";
-const PLACEHOLDER = "/images/activity/featured-altitude.webp";
-const wib = (iso: string, from: number, to: number) => new Date(new Date(iso).getTime() + 7 * 3600_000).toISOString().slice(from, to);
 
 /** Agenda berikutnya: hari rundown pertama yang belum lewat, dua acara pertamanya. */
 function nextAgenda(rundown: MemberTripRundown[], activities: MemberTripActivity[], today: string): string | null {
   const day = rundown.find((r) => r.day >= today)?.day ?? activities.find((a) => a.day >= today)?.day;
   if (!day) return null;
-  const items = rundown.length ? rundown.filter((r) => r.day === day).slice(0, 2).map((r) => `${r.time.split(" ")[0]} ${r.title.toLowerCase().startsWith("penjemputan") ? "penjemputan" : r.title}`) : activities.filter((a) => a.day === day).map((a) => `${a.start} ${a.title}`);
+  const items = rundown.length ? rundown.filter((r) => r.day === day).slice(0, 2).map((r) => `${r.time.split(" ")[0]} ${r.title.length > 28 ? `${r.title.slice(0, 27)}…` : r.title}`) : activities.filter((a) => a.day === day).map((a) => `${a.start} ${a.title}`);
   return `${dayLabel(day).replace(",", "")} · ${items.join(", ")}`;
 }
 
@@ -69,7 +68,7 @@ function demoTrips(): MemberTrip[] {
       area: demoTrip.area,
       startsOn: demoTrip.startsOn,
       endsOn: demoTrip.endsOn,
-      image: PLACEHOLDER,
+      image: TRIP_PLACEHOLDER,
       inclusions: demoTrip.inclusions,
       package: { ...money, due: shortDate(settlementDue(demoTrip.startsOn)) },
       activities,
@@ -111,7 +110,7 @@ export const getMyTrips = cache(async (): Promise<MemberTrip[]> => {
     const order = new Map(all.map((s, i) => [s.id, i + 1]));
     const activities = all
       .filter((s) => booking || mine.has(s.id))
-      .map((s) => ({ slug: mine.has(s.id) ? s.slug : null, order: order.get(s.id)!, title: s.title, venue: s.venues?.name ?? "", day: wib(s.starts_at, 0, 10), start: wib(s.starts_at, 11, 16), end: wib(s.ends_at, 11, 16) }));
+      .map((s) => ({ slug: mine.has(s.id) ? s.slug : null, order: order.get(s.id)!, title: s.title, venue: s.venues?.name ?? "", day: wibParts(s.starts_at).date, start: wibParts(s.starts_at).time, end: wibParts(s.ends_at).time }));
     const bySession = new Map(all.map((s) => [s.id, s]));
     const items =
       booking && t.show_rundown
@@ -131,7 +130,7 @@ export const getMyTrips = cache(async (): Promise<MemberTrip[]> => {
       area: t.area,
       startsOn: t.starts_on,
       endsOn: t.ends_on,
-      image: t.cover_path || all[0]?.cover_path || all[0]?.venues?.cover_path || PLACEHOLDER,
+      image: t.cover_path || all[0]?.cover_path || all[0]?.venues?.cover_path || TRIP_PLACEHOLDER,
       inclusions: booking ? t.inclusions : [],
       package: booking ? { ...bookingMoney(pricing, pays, today), due: shortDate(settlementDue(t.starts_on)) } : null,
       activities,

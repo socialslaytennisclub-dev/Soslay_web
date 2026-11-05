@@ -1,11 +1,13 @@
 import "server-only";
 import { cache } from "react";
-import { bookingMoney, settlementDue, todayWib, type TripPaymentKind } from "@/lib/trips";
+import { SESSION_STATUS_LABEL } from "@/lib/admin-labels";
+import { wibParts } from "@/lib/format";
+import { bookingMoney, todayWib, TRIP_PLACEHOLDER, type TripPaymentKind } from "@/lib/trips";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDataset, type Dataset } from "./dataset";
 import { toRow } from "./session-rows";
 import { demoTrip, demoTripBookings, demoTripRundown } from "./trip-demo";
-import type { TripActivity, TripBooking, TripDetail, TripStatus, TripSummary } from "./types";
+import type { TripActivity, TripBooking, TripCandidate, TripDetail, TripStatus, TripSummary } from "./types";
 
 /**
  * Tennis Escape = Trip (BR-22): trip + activity (sesi bertautan trip_id) + rundown + paket bundling &
@@ -27,8 +29,6 @@ type RundownRowDb = { id: string; trip_id: string; day: string; time_label: stri
 
 type RawTrip = Omit<TripDetail, "activities" | "bookings" | "image"> & { bookings: Omit<TripBooking, "money" | "memberCode">[] };
 
-const PLACEHOLDER = "/images/activity/featured-altitude.webp";
-
 /** Activity trip dari dataset (urut nomor activity, lalu jadwal). */
 function activitiesOf(d: Dataset, tripId: string): TripActivity[] {
   return d.sessions
@@ -49,7 +49,7 @@ function assemble(d: Dataset, raw: RawTrip): TripDetail {
     memberCode: b.memberId ? (d.memberById.get(b.memberId)?.memberCode ?? "") : "",
     money: bookingMoney(raw, b.payments, today),
   }));
-  return { ...raw, image: raw.coverPath || activities[0]?.image || PLACEHOLDER, activities, bookings };
+  return { ...raw, image: raw.coverPath || activities[0]?.image || TRIP_PLACEHOLDER, activities, bookings };
 }
 
 async function loadLiveTrips(): Promise<RawTrip[]> {
@@ -65,8 +65,19 @@ async function loadLiveTrips(): Promise<RawTrip[]> {
     supabase.from("trip_rundown_items").select("id, trip_id, day, time_label, title, location, session_id, sort").order("day").order("sort").returns<RundownRowDb[]>(),
   ]);
   if (trips.error) throw new Error(`Gagal memuat trip: ${trips.error.message}`);
-  const paymentsOf = new Map<string, PaymentRowDb[]>();
-  for (const p of payments.data ?? []) paymentsOf.set(p.booking_id, [...(paymentsOf.get(p.booking_id) ?? []), p]);
+  // Kelompokkan sekali (bukan filter per trip / salin array per baris).
+  const group = <T,>(rows: T[] | null, key: (r: T) => string) => {
+    const map = new Map<string, T[]>();
+    for (const r of rows ?? []) {
+      const list = map.get(key(r));
+      if (list) list.push(r);
+      else map.set(key(r), [r]);
+    }
+    return map;
+  };
+  const paymentsOf = group(payments.data, (p) => p.booking_id);
+  const rundownOf = group(rundown.data, (r) => r.trip_id);
+  const bookingsOf = group(bookings.data, (b) => b.trip_id);
   return (trips.data ?? []).map((t) => ({
     id: t.id,
     slug: t.slug,
@@ -86,9 +97,8 @@ async function loadLiveTrips(): Promise<RawTrip[]> {
     packageQuota: t.package_quota,
     minDp: t.min_dp,
     inclusions: t.inclusions ?? [],
-    rundown: (rundown.data ?? []).filter((r) => r.trip_id === t.id).map((r) => ({ id: r.id, day: r.day, time: r.time_label, title: r.title, location: r.location, sessionId: r.session_id })),
-    bookings: (bookings.data ?? [])
-      .filter((b) => b.trip_id === t.id)
+    rundown: (rundownOf.get(t.id) ?? []).map((r) => ({ id: r.id, day: r.day, time: r.time_label, title: r.title, location: r.location, sessionId: r.session_id })),
+    bookings: (bookingsOf.get(t.id) ?? [])
       .map((b) => ({
         id: b.id,
         memberId: b.member_id,
@@ -129,21 +139,21 @@ export async function getTrip(id: string): Promise<TripDetail | null> {
 
 /** Ringkasan baris induk: paket terjual, peserta satuan, belum lunas, uang masuk & sisa tagihan. */
 export function tripSummary(t: TripDetail): TripSummary {
-  const active = t.bookings.filter((b) => !b.cancelled);
-  const unpaid = active.filter((b) => b.money.status !== "paid");
-  return {
-    sold: active.length,
-    earlyBird: active.filter((b) => b.money.plan === "early_bird").length,
-    normal: active.filter((b) => b.money.plan === "normal").length,
-    singles: t.activities.reduce((sum, a) => sum + a.singles, 0),
-    unpaid: unpaid.length,
-    paidIn: active.reduce((sum, b) => sum + b.money.paid, 0),
-    outstanding: unpaid.reduce((sum, b) => sum + b.money.remaining, 0),
-    fullyPaid: active.length - unpaid.length,
-    dp: active.filter((b) => b.money.status === "dp").length,
-    notPaid: active.filter((b) => b.money.status === "unpaid").length,
-    venues: new Set(t.activities.map((a) => a.venueName)).size,
-  };
+  const s = { sold: 0, earlyBird: 0, normal: 0, unpaid: 0, paidIn: 0, outstanding: 0, fullyPaid: 0, dp: 0 };
+  for (const b of t.bookings) {
+    if (b.cancelled) continue;
+    const m = b.money;
+    s.sold++;
+    s[m.plan === "early_bird" ? "earlyBird" : "normal"]++;
+    s.paidIn += m.paid;
+    if (m.status === "paid") s.fullyPaid++;
+    else {
+      s.unpaid++;
+      s.outstanding += m.remaining;
+      if (m.status === "dp") s.dp++;
+    }
+  }
+  return { ...s, singles: t.activities.reduce((sum, a) => sum + a.singles, 0), venues: new Set(t.activities.map((a) => a.venueName)).size };
 }
 
 /** Status tampilan trip: draft · published · selesai (lewat tanggal selesai) · arsip. */
@@ -152,15 +162,10 @@ export function tripDisplayStatus(t: TripDetail, today: string): TripStatus {
   return t.endsOn < today ? "completed" : "published";
 }
 
-export { settlementDue };
-
-const STATUS_LABEL: Record<string, string> = { published: "Published", draft: "Draft", scheduled: "Terjadwal", completed: "Selesai", full: "Penuh", almost_full: "Hampir penuh", cancelled: "Dibatalkan" };
-const wibPart = (d: Date, from: number, to: number) => new Date(d.getTime() + 7 * 3600_000).toISOString().slice(from, to);
 
 /** Sesi yang bisa diambil ke trip (modal 05x-5): belum dibatalkan / selesai; yang sudah di trip lain ditandai. */
-export async function tripCandidates(tripId: string | null): Promise<import("@/components/admin/activities/TripEditor").TripCandidate[]> {
-  const d = await getDataset();
-  const trips = await listTripDetails();
+export async function tripCandidates(tripId: string | null): Promise<TripCandidate[]> {
+  const [d, trips] = await Promise.all([getDataset(), listTripDetails()]);
   const titleOf = new Map(trips.map((t) => [t.id, t.title]));
   return d.sessions
     .filter((s) => s.status !== "cancelled" && s.status !== "completed" && s.endsAt > d.now && s.tripId !== tripId)
@@ -168,18 +173,19 @@ export async function tripCandidates(tripId: string | null): Promise<import("@/c
     .slice(0, 300)
     .map((s) => {
       const row = toRow(d, s);
+      const start = wibParts(s.startsAt);
       return {
         id: s.id,
         title: s.title,
         typeLabel: row.typeLabel,
-        date: wibPart(s.startsAt, 0, 10),
-        start: wibPart(s.startsAt, 11, 16),
-        end: wibPart(s.endsAt, 11, 16),
+        date: start.date,
+        start: start.time,
+        end: wibParts(s.endsAt).time,
         venueName: s.venueName,
         capacity: s.capacity,
         booked: row.booked,
         price: s.price,
-        statusLabel: STATUS_LABEL[row.displayStatus] ?? row.displayStatus,
+        statusLabel: SESSION_STATUS_LABEL[row.displayStatus],
         kuyUrl: s.kuyUrl ?? "",
         otherTrip: s.tripId ? (titleOf.get(s.tripId) ?? "trip lain") : null,
       };

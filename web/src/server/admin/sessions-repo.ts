@@ -58,7 +58,7 @@ export async function listSessions(query: SessionsQuery): Promise<SessionsResult
     .filter((s) => !q || s.title.toLowerCase().includes(q) || s.venueName.toLowerCase().includes(q))
     .filter((s) => !query.type || s.typeSlug === query.type)
     .filter((s) => !query.venue || s.venueName === query.venue)
-    .map((s) => ({ kind: "session" as const, row: toRow(d, s), startsAt: s.startsAt.getTime(), title: s.title, created: createdAt(s).getTime() }));
+    .map((s) => ({ kind: "session" as const, session: s, startsAt: s.startsAt.getTime(), title: s.title, created: createdAt(s).getTime() }));
 
   // Trip: satu baris induk di tanggal mulai trip (filter Tipe "Trip" = hanya trip).
   const today = isoDay(now);
@@ -82,7 +82,7 @@ export async function listSessions(query: SessionsQuery): Promise<SessionsResult
   const rows = [...sessionsOnly, ...tripRows]
     .sort((a, b) => sign * SORT_KEY[sort](a, b))
     .slice(0, 60)
-    .map((r): ActivityListRow => (r.kind === "session" ? { kind: "session", session: r.row } : { kind: "trip", item: r.item }));
+    .map((r): ActivityListRow => (r.kind === "session" ? { kind: "session", session: toRow(d, r.session) } : { kind: "trip", item: r.item }));
 
   return {
     rows,

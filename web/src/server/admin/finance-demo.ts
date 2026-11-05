@@ -1,5 +1,6 @@
 import "server-only";
 import { addMonths, lastDay } from "@/lib/finance/reports";
+import { PAYMENT_KIND_LABEL } from "@/lib/trips";
 import { demoTrip, demoTripBookings } from "./trip-demo";
 import type { BalanceItem, FinAccount, FinCategory, FinSession, FinTx, FinanceData, TxSource, TxType } from "@/lib/finance/types";
 
@@ -157,7 +158,7 @@ export function buildFinanceDemo(sessions: FinSession[]): FinanceData {
   // Pembayaran paket trip "Rally in Paradise · Bali" (A-10, Tennis Escape).
   for (const b of demoTripBookings) {
     for (const p of b.payments) {
-      const label = p.kind === "dp" ? "DP" : p.kind === "installment" ? "Cicilan" : "Pelunasan";
+      const label = PAYMENT_KIND_LABEL[p.kind];
       push({ type: "income", date: p.receivedOn, amount: p.amount, categoryId: "cat-ticket", accountId: "acc-bca", description: `${label} · ${b.name} · ${demoTrip.title}`, source: "trip_payment", tripId: demoTrip.id, term: p.kind, proof: false });
     }
   }

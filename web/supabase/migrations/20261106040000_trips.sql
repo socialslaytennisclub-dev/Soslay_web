@@ -93,54 +93,51 @@ create index trip_payments_booking_idx on trip_payments (booking_id);
 alter table session_participants drop constraint session_participants_source_check;
 alter table session_participants add constraint session_participants_source_check check (source in ('kuy', 'admin', 'website', 'trip'));
 
-create function trip_add_bundle_participants(p_session uuid, p_trip uuid, p_booking uuid default null)
+-- Satu pernyataan untuk semua activity trip (p_session null) atau satu activity, semua pembeli paket
+-- (p_booking null) atau satu pembeli.
+create function trip_add_bundle_participants(p_trip uuid, p_session uuid default null, p_booking uuid default null)
 returns void language sql security definer set search_path = public as $$
   insert into session_participants (session_id, member_id, full_name, phone, email, kuy_reg_no, source, amount)
-  select p_session, b.member_id, b.full_name, b.phone, b.email, 'T-' || b.id, 'trip', 0
-  from trip_bookings b
-  where b.trip_id = p_trip and b.cancelled_at is null and (p_booking is null or b.id = p_booking)
+  select s.id, b.member_id, b.full_name, b.phone, b.email, 'T-' || b.id, 'trip', 0
+  from sessions s
+  join trip_bookings b on b.trip_id = s.trip_id
+  where s.trip_id = p_trip and (p_session is null or s.id = p_session)
+    and b.cancelled_at is null and (p_booking is null or b.id = p_booking)
     and not exists (
       select 1 from session_participants p
-      where p.session_id = p_session and b.member_id is not null and p.member_id = b.member_id and p.kuy_reg_no is distinct from 'T-' || b.id
+      where p.session_id = s.id and b.member_id is not null and p.member_id = b.member_id and p.kuy_reg_no is distinct from 'T-' || b.id
     )
   on conflict (session_id, kuy_reg_no) do update
     set member_id = excluded.member_id, full_name = excluded.full_name, phone = excluded.phone, email = excluded.email;
 $$;
 
--- Keluarkan peserta paket dari sesi (booking member yang dibuat untuknya & belum hadir ikut dihapus).
-create function trip_remove_bundle_participants(p_session uuid, p_trip uuid, p_booking uuid default null)
-returns void language plpgsql security definer set search_path = public as $$
-declare
-  removed uuid[];
-begin
+-- Keluarkan peserta paket (booking member yang dibuat untuknya & belum hadir ikut dihapus). p_session /
+-- p_booking null = semua. p_trip = trip asal (activity yang baru dilepas sudah tidak punya trip_id).
+create function trip_remove_bundle_participants(p_trip uuid, p_session uuid default null, p_booking uuid default null)
+returns void language sql security definer set search_path = public as $$
   with gone as (
     delete from session_participants p
     using trip_bookings b
-    where p.session_id = p_session and p.source = 'trip' and p.kuy_reg_no = 'T-' || b.id
-      and b.trip_id = p_trip and (p_booking is null or b.id = p_booking)
-    returning p.member_id
+    where p.source = 'trip' and p.kuy_reg_no = 'T-' || b.id and b.trip_id = p_trip
+      and (p_session is null or p.session_id = p_session) and (p_booking is null or b.id = p_booking)
+    returning p.session_id, p.member_id
   )
-  select array_agg(member_id) filter (where member_id is not null) into removed from gone;
-  if removed is not null then
-    delete from bookings where session_id = p_session and member_id = any (removed) and status = 'registered' and source in ('kuy', 'admin');
-  end if;
-end $$;
+  delete from bookings bk using gone g
+  where bk.session_id = g.session_id and bk.member_id = g.member_id and bk.status = 'registered' and bk.source in ('kuy', 'admin');
+$$;
 revoke all on function trip_add_bundle_participants(uuid, uuid, uuid) from public;
 revoke all on function trip_remove_bundle_participants(uuid, uuid, uuid) from public;
 
--- Pembeli paket baru / dibatalkan / data diubah → semua activity trip ikut.
+-- Pembeli paket baru / dibatalkan / data diubah → semua activity trip ikut (satu pernyataan).
 create function trip_bookings_sync() returns trigger language plpgsql security definer set search_path = public as $$
 declare
-  s record;
   b trip_bookings := case when tg_op = 'DELETE' then old else new end;
 begin
-  for s in select id from sessions where trip_id = b.trip_id loop
-    if tg_op = 'DELETE' or b.cancelled_at is not null then
-      perform trip_remove_bundle_participants(s.id, b.trip_id, b.id);
-    else
-      perform trip_add_bundle_participants(s.id, b.trip_id, b.id);
-    end if;
-  end loop;
+  if tg_op = 'DELETE' or b.cancelled_at is not null then
+    perform trip_remove_bundle_participants(b.trip_id, null, b.id);
+  else
+    perform trip_add_bundle_participants(b.trip_id, null, b.id);
+  end if;
   return null;
 end $$;
 create trigger trip_bookings_sync after insert or update of cancelled_at, member_id, full_name, phone, email or delete on trip_bookings
@@ -150,10 +147,10 @@ create trigger trip_bookings_sync after insert or update of cancelled_at, member
 create function sessions_trip_link() returns trigger language plpgsql security definer set search_path = public as $$
 begin
   if tg_op = 'UPDATE' and old.trip_id is not null then
-    perform trip_remove_bundle_participants(new.id, old.trip_id);
+    perform trip_remove_bundle_participants(old.trip_id, new.id);
   end if;
   if new.trip_id is not null then
-    perform trip_add_bundle_participants(new.id, new.trip_id);
+    perform trip_add_bundle_participants(new.trip_id, new.id);
   end if;
   return null;
 end $$;
@@ -172,28 +169,55 @@ alter table finance_transactions add constraint finance_transactions_source_chec
   'manual', 'import', 'ticket', 'ticket_manual_paid', 'kuyy_import', 'shop_order_verified',
   'refund', 'pg_payout', 'transfer_fee', 'adjustment', 'trip_payment'));
 
+-- finance_sync_auto mendapat trip & termin opsional (diisi saat transaksi dibuat — tanpa update susulan).
+drop function finance_sync_auto(text, text, bigint, text, uuid, text, uuid, timestamptz);
+create function finance_sync_auto(
+  p_source text, p_ref text, p_target bigint, p_category_key text, p_account_id uuid,
+  p_description text, p_session_id uuid, p_at timestamptz, p_trip_id uuid default null, p_term text default null
+) returns void language plpgsql security definer set search_path = public as $$
+declare
+  current_net bigint;
+  diff        bigint;
+  category    uuid;
+  original    uuid;
+  wib_date    date := (p_at at time zone 'Asia/Jakarta')::date;
+begin
+  if p_account_id is null or wib_date < (select go_live_date from finance_settings) then return; end if;
+  select coalesce(sum(amount), 0), (array_agg(id order by created_at) filter (where amount > 0))[1]
+    into current_net, original
+  from finance_transactions
+  where source = p_source and source_ref = p_ref and deleted_at is null;
+  diff := coalesce(p_target, 0) - current_net;
+  if diff = 0 then return; end if;
+  select id into category from finance_categories where system_key = p_category_key;
+  insert into finance_transactions (type, date, recognized_on, amount, category_id, account_id, description, activity_session_id, trip_id, term, source, source_ref, corrects_transaction_id)
+  values ('income', wib_date, wib_date, diff, category, p_account_id,
+          case when diff < 0 then 'Koreksi · ' || p_description else p_description end,
+          p_session_id, p_trip_id, p_term, p_source, p_ref, case when diff < 0 then original end);
+end $$;
+revoke all on function finance_sync_auto(text, text, bigint, text, uuid, text, uuid, timestamptz, uuid, text) from public;
+
 -- Ref per akun ('tp:<id>:<akun>'): akun pembayaran diganti → koreksi minus di akun lama + pemasukan di akun baru.
 create function finance_on_trip_payment() returns trigger language plpgsql security definer set search_path = public as $$
 declare
-  p   trip_payments := case when tg_op = 'DELETE' then old else new end;
-  b   trip_bookings;
-  t   trips;
-  ref text := 'tp:' || p.id || ':' || p.account_id;
+  p     trip_payments := case when tg_op = 'DELETE' then old else new end;
+  b     trip_bookings;
+  t     trips;
+  ref   text := 'tp:' || p.id || ':' || p.account_id;
   label text;
 begin
   select * into b from trip_bookings where id = p.booking_id;
   select * into t from trips where id = b.trip_id;
   label := (case p.kind when 'dp' then 'DP' when 'installment' then 'Cicilan' else 'Pelunasan' end) || ' · ' || coalesce(b.full_name, 'peserta') || ' · ' || coalesce(t.title, 'trip');
   if tg_op = 'UPDATE' and old.account_id is distinct from new.account_id then
-    perform finance_sync_auto('trip_payment', 'tp:' || old.id || ':' || old.account_id, 0, 'ticket', old.account_id, label, null, now());
+    perform finance_sync_auto('trip_payment', 'tp:' || old.id || ':' || old.account_id, 0, 'ticket', old.account_id, label, null, now(), t.id, old.kind);
   end if;
   perform finance_sync_auto('trip_payment', ref,
     case when tg_op = 'DELETE' or p.voided_at is not null then 0 else p.amount end,
     'ticket', p.account_id, label, null,
     case when exists (select 1 from finance_transactions where source = 'trip_payment' and source_ref = ref and deleted_at is null)
-         then now() else (p.received_on + time '12:00') at time zone 'Asia/Jakarta' end);
-  update finance_transactions set trip_id = t.id, term = p.kind
-  where source = 'trip_payment' and source_ref like 'tp:' || p.id || ':%' and trip_id is null;
+         then now() else (p.received_on + time '12:00') at time zone 'Asia/Jakarta' end,
+    t.id, p.kind);
   return null;
 end $$;
 create trigger trip_payments_finance after insert or update of amount, account_id, voided_at or delete on trip_payments
@@ -251,3 +275,17 @@ begin
 end $$;
 revoke execute on function save_trip_rundown(uuid, jsonb) from public, anon;
 grant execute on function save_trip_rundown(uuid, jsonb) to authenticated;
+
+-- Trip → activity-nya: visibilitas selalu ikut; dipublikasikan → activity draft ikut tampil. Satu aturan di
+-- database (bukan hanya di form trip).
+create function trips_cascade_to_sessions() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  update sessions set
+    visibility = new.visibility::session_visibility,
+    status = case when new.status = 'published' and status = 'draft' then 'published'::session_status else status end
+  where trip_id = new.id
+    and (visibility::text is distinct from new.visibility or (new.status = 'published' and status = 'draft'));
+  return null;
+end $$;
+create trigger trips_cascade_to_sessions after insert or update of status, visibility on trips
+  for each row execute function trips_cascade_to_sessions();

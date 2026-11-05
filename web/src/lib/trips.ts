@@ -1,3 +1,7 @@
+import { formatRupiahShort } from "./admin-labels";
+import { dateLabel, todayWib } from "./finance/format";
+import { firstName } from "./text";
+
 /**
  * Tennis Escape = Trip (BR-22): aturan paket bundling yang dipakai admin & member. Murni (tanpa I/O).
  *
@@ -24,8 +28,12 @@ export const PAYMENT_KIND_LABEL: Record<TripPaymentKind, string> = { dp: "DP", i
 export const PLAN_LABEL: Record<TripPlan, string> = { early_bird: "Early bird", normal: "Normal" };
 export const PAY_STATUS_LABEL: Record<TripPayStatus, string> = { paid: "Lunas", dp: "DP", unpaid: "Belum bayar" };
 
-/** Hari ini di WIB (YYYY-MM-DD). */
-export const todayWib = (now = new Date()) => new Date(now.getTime() + 7 * 3600_000).toISOString().slice(0, 10);
+export { todayWib };
+
+/** Tipe sesi yang membuka form Buat trip (BR-22). */
+export const TRIP_TYPE = "tennis-escape";
+/** Foto pengganti bila trip & activity-nya belum punya foto. */
+export const TRIP_PLACEHOLDER = "/images/activity/featured-altitude.webp";
 
 /** Tanggal (YYYY-MM-DD) ± n hari. */
 export function addDays(day: string, n: number): string {
@@ -38,7 +46,7 @@ export function addDays(day: string, n: number): string {
 export const settlementDue = (startsOn: string) => addDays(startsOn, -14);
 
 /** Paket & harga satu pembeli. */
-export function planFor(pricing: TripPricing, payments: TripPaymentLike[], today: string): { plan: TripPlan; price: number; locked: boolean } {
+function planFor(pricing: TripPricing, payments: TripPaymentLike[], today: string): { plan: TripPlan; price: number; locked: boolean } {
   const first = payments
     .filter((p) => !p.voided)
     .map((p) => p.receivedOn)
@@ -64,8 +72,6 @@ export const tripDays = (startsOn: string, endsOn: string) => Math.round((Date.p
 export const tripDates = (startsOn: string, endsOn: string) => Array.from({ length: Math.max(tripDays(startsOn, endsOn), 1) }, (_, i) => addDays(startsOn, i));
 
 const dayFmt = new Intl.DateTimeFormat("id-ID", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
-const dayNumFmt = new Intl.DateTimeFormat("id-ID", { day: "numeric", timeZone: "UTC" });
-const monthFmt = new Intl.DateTimeFormat("id-ID", { month: "short", timeZone: "UTC" });
 const yearFmt = new Intl.DateTimeFormat("id-ID", { year: "numeric", timeZone: "UTC" });
 const weekdayFmt = new Intl.DateTimeFormat("id-ID", { weekday: "short", timeZone: "UTC" });
 const clean = (s: string) => s.replace(/\./g, "");
@@ -74,7 +80,7 @@ const at = (day: string) => new Date(`${day}T00:00:00Z`);
 /** "Jum, 17 Okt" */
 export const dayLabel = (day: string) => clean(dayFmt.format(at(day)));
 /** "17 Okt" */
-export const shortDate = (day: string) => `${dayNumFmt.format(at(day))} ${clean(monthFmt.format(at(day)))}`;
+export const shortDate = (day: string) => dateLabel(day, false);
 /** "Jum" */
 export const weekday = (day: string) => clean(weekdayFmt.format(at(day)));
 
@@ -82,17 +88,17 @@ export const weekday = (day: string) => clean(weekdayFmt.format(at(day)));
 export function tripRange(startsOn: string, endsOn: string, withYear = true): string {
   const year = withYear ? ` ${yearFmt.format(at(endsOn))}` : "";
   if (startsOn === endsOn) return `${shortDate(startsOn)}${year}`;
-  if (startsOn.slice(0, 7) === endsOn.slice(0, 7)) return `${dayNumFmt.format(at(startsOn))}–${shortDate(endsOn)}${year}`;
+  if (startsOn.slice(0, 7) === endsOn.slice(0, 7)) return `${Number(startsOn.slice(8))}–${shortDate(endsOn)}${year}`;
   return `${shortDate(startsOn)} – ${shortDate(endsOn)}${year}`;
 }
 
 /** "Jum–Min" */
 export const weekdayRange = (startsOn: string, endsOn: string) => (startsOn === endsOn ? weekday(startsOn) : `${weekday(startsOn)}–${weekday(endsOn)}`);
 
-/** "Rp3,2 jt" */
-export const rupiahShort = (n: number) => (n >= 1_000_000 ? `Rp${(n / 1_000_000).toLocaleString("id-ID", { maximumFractionDigits: 1 })} jt` : n >= 1000 ? `Rp${Math.round(n / 1000)}rb` : `Rp${n}`);
+/** "Rp3,2 jt" / "Rp450rb" (kartu ringkas). */
+export const rupiahShort = (n: number) => (n >= 1_000_000 ? formatRupiahShort(n) : n >= 1000 ? `Rp${Math.round(n / 1000)}rb` : `Rp${n}`);
 
 /** Template pengingat pelunasan (wa.me, dikirim manual oleh admin — BR-20). */
 export function reminderText(name: string, tripTitle: string, remaining: string, due: string) {
-  return `Halo ${name.split(" ")[0]}, ini dari Soslay. Pengingat pelunasan paket ${tripTitle}: sisa ${remaining}, jatuh tempo ${due}. Transfer ke rekening Soslay lalu kirim buktinya di sini ya. Terima kasih!`;
+  return `Halo ${firstName(name)}, ini dari Soslay. Pengingat pelunasan paket ${tripTitle}: sisa ${remaining}, jatuh tempo ${due}. Transfer ke rekening Soslay lalu kirim buktinya di sini ya. Terima kasih!`;
 }

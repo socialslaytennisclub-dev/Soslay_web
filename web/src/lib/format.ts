@@ -108,3 +108,12 @@ const thousands = new Intl.NumberFormat("id-ID");
 export function formatAngka(value: number): string {
   return thousands.format(value);
 }
+
+/** Tanggal + jam WIB ("2026-10-17", "07:00") → Date. */
+export const wibAt = (date: string, time: string) => new Date(`${date}T${time}:00+07:00`);
+
+/** ISO / Date → tanggal ("2026-10-17") & jam ("07:00") WIB. */
+export function wibParts(at: string | Date): { date: string; time: string } {
+  const iso = new Date(new Date(at).getTime() + 7 * 3600_000).toISOString();
+  return { date: iso.slice(0, 10), time: iso.slice(11, 16) };
+}

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { formatRupiahPlain, LEVEL_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
+import { TRIP_TYPE } from "@/lib/trips";
 import { shrinkImage } from "@/lib/image-resize";
 import { participantsLockReason } from "@/lib/session-lock";
 import { memberInviteWaLink } from "@/lib/wa-invite";
@@ -87,7 +88,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   // Poin ikut default tipe baru selama admin belum mengubahnya sendiri.
   const changeType = (slug: string) => {
     // Tennis Escape = trip (BR-22): form sesi baru berubah jadi form Buat trip.
-    if (mode === "new" && slug === "tennis-escape") return router.push("/admin/activities/trip/new");
+    if (mode === "new" && slug === TRIP_TYPE) return router.push("/admin/activities/trip/new");
     if (pointDefaults && points === String(pointDefaults[typeSlug] ?? "") && pointDefaults[slug] !== undefined) setPoints(String(pointDefaults[slug]));
     setTypeSlug(slug);
   };

@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
-import { amountDigits, amountDisplay } from "@/lib/finance/format";
+import { waLink } from "@/lib/wa-invite";
+import { amountDigits, amountDisplay, num } from "@/lib/finance/format";
 import { PAY_STATUS_LABEL, PAYMENT_KIND_LABEL, PLAN_LABEL, reminderText, shortDate, todayWib, type TripPayStatus } from "@/lib/trips";
 import { addTripBooking, cancelTripBooking, recordTripPayment, voidTripPayment } from "@/server/admin/actions/trips";
 import type { TripBooking } from "@/server/admin/types";
@@ -20,7 +21,6 @@ type Account = { id: string; name: string };
 type Filter = "all" | TripPayStatus;
 
 const STATUS_TONE: Record<TripPayStatus, BadgeTone> = { paid: "lime", dp: "indigo", unpaid: "pink" };
-const num = (n: number) => n.toLocaleString("id-ID");
 const fmtDay = (iso: string) => shortDate(iso.slice(0, 10));
 
 /** Subjudul baris: "DP 20 Agu · lunas 10 Sep" / "Daftar 22 Sep · belum DP". */
@@ -146,8 +146,7 @@ export function TripPayments({ tripId, tripTitle, activities, quota, due, minDp,
       }
     });
 
-  const wa = (b: TripBooking) =>
-    b.phone ? `https://wa.me/62${b.phone.replace(/^0/, "")}?text=${encodeURIComponent(reminderText(b.name, tripTitle, formatRupiahPlain(b.money.remaining), due))}` : null;
+  const wa = (b: TripBooking) => (b.phone ? waLink(b.phone, reminderText(b.name, tripTitle, formatRupiahPlain(b.money.remaining), due)) : null);
 
   const filters: { value: Filter; label: string }[] = [
     { value: "all", label: "Semua" },

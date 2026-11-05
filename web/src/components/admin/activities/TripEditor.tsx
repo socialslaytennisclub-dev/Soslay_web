@@ -7,10 +7,11 @@ import { useMemo, useState, useTransition } from "react";
 import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { amountDigits, amountDisplay } from "@/lib/finance/format";
-import { addDays, dayLabel, settlementDue, shortDate, tripDates, tripDays, tripRange } from "@/lib/trips";
+import { wibParts } from "@/lib/format";
+import { addDays, dayLabel, settlementDue, shortDate, TRIP_PLACEHOLDER, TRIP_TYPE, tripDates, tripDays, tripRange } from "@/lib/trips";
 import { discardSessionUploads, uploadSessionCover } from "@/server/admin/actions/sessions";
 import { saveTrip, type TripActivityInput, type TripInput, type TripRundownInput } from "@/server/admin/actions/trips";
-import type { TripDetail } from "@/server/admin/types";
+import type { TripCandidate, TripDetail } from "@/server/admin/types";
 import { FormCard, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge, PickerInput } from "../ui/AdminUI";
@@ -20,30 +21,9 @@ import { useUploadCleanup } from "../ui/useUploadCleanup";
 import styles from "./SessionEditor.module.css";
 import trip from "./Trip.module.css";
 
-/** Sesi yang bisa diambil ke trip (modal 05x-5). */
-export type TripCandidate = {
-  id: string;
-  title: string;
-  typeLabel: string;
-  date: string;
-  start: string;
-  end: string;
-  venueName: string;
-  capacity: number;
-  booked: number;
-  price: number;
-  statusLabel: string;
-  kuyUrl: string;
-  /** Sudah terhubung ke trip lain → tidak bisa dipilih. */
-  otherTrip: string | null;
-};
-
 type ActivityForm = { key: string; id?: string; title: string; venueName: string; date: string; start: string; end: string; capacity: string; soldSingle: boolean; price: string; singleQuota: string; kuyUrl: string; meta?: string };
 type RundownForm = { key: string; day: string; time: string; title: string; location: string; activityKey: string | null };
 
-const WIB_OFFSET = 7 * 3600_000;
-const wibDate = (iso: string) => new Date(new Date(iso).getTime() + WIB_OFFSET).toISOString().slice(0, 10);
-const wibTime = (iso: string) => new Date(new Date(iso).getTime() + WIB_OFFSET).toISOString().slice(11, 16);
 const num = (s: string) => Number(s || 0);
 let seq = 0;
 const newKey = () => `k${Date.now().toString(36)}${(seq++).toString(36)}`;
@@ -85,9 +65,9 @@ export function TripEditor({ initial, venues, types, candidates }: Props) {
         id: a.id,
         title: a.title,
         venueName: a.venueName,
-        date: wibDate(a.startsAt),
-        start: wibTime(a.startsAt),
-        end: wibTime(a.endsAt),
+        date: wibParts(a.startsAt).date,
+        start: wibParts(a.startsAt).time,
+        end: wibParts(a.endsAt).time,
         capacity: String(a.capacity),
         soldSingle: a.soldSingle,
         price: String(a.price),
@@ -109,8 +89,8 @@ export function TripEditor({ initial, venues, types, candidates }: Props) {
 
   const days = startsOn && endsOn && endsOn >= startsOn ? tripDates(startsOn, endsOn) : [];
   const activeDay = days.includes(rundownDay) ? rundownDay : (days[0] ?? "");
-  const venueImage = (name: string) => venues.find((v) => v.name === name)?.image ?? "/images/activity/featured-altitude.webp";
-  const coverSrc = cover ?? (activities[0] ? venueImage(activities[0].venueName) : "/images/activity/featured-altitude.webp");
+  const venueImage = (name: string) => venues.find((v) => v.name === name)?.image ?? TRIP_PLACEHOLDER;
+  const coverSrc = cover ?? (activities[0] ? venueImage(activities[0].venueName) : TRIP_PLACEHOLDER);
   const patch = (key: string, p: Partial<ActivityForm>) => setActivities((list) => list.map((a) => (a.key === key ? { ...a, ...p } : a)));
 
   const addNewActivity = () => {
@@ -275,11 +255,11 @@ export function TripEditor({ initial, venues, types, candidates }: Props) {
                   <button
                     key={t.slug}
                     type="button"
-                    aria-pressed={t.slug === "tennis-escape"}
-                    className={cx(styles.option, t.slug === "tennis-escape" && styles.optionOn)}
-                    disabled={Boolean(initial) && t.slug !== "tennis-escape"}
-                    title={initial && t.slug !== "tennis-escape" ? "Trip yang sudah dibuat tidak bisa diubah jadi sesi biasa" : undefined}
-                    onClick={() => t.slug !== "tennis-escape" && router.push(`/admin/activities/new?type=${t.slug}`)}
+                    aria-pressed={t.slug === TRIP_TYPE}
+                    className={cx(styles.option, t.slug === TRIP_TYPE && styles.optionOn)}
+                    disabled={Boolean(initial) && t.slug !== TRIP_TYPE}
+                    title={initial && t.slug !== TRIP_TYPE ? "Trip yang sudah dibuat tidak bisa diubah jadi sesi biasa" : undefined}
+                    onClick={() => t.slug !== TRIP_TYPE && router.push(`/admin/activities/new?type=${t.slug}`)}
                   >
                     {t.label}
                   </button>

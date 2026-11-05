@@ -3,7 +3,9 @@
 import { DEFAULT_TARGET_POINTS, hasTargetTotal, SCORE_MAX } from "@/lib/americano";
 import { redirect } from "next/navigation";
 import { isActivityType } from "@/content/activity";
+import { wibAt } from "@/lib/format";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { slugify } from "@/lib/text";
 import { discardUploads, isOwnUpload, uploadPublicImage } from "../../storage";
 import { monthKey } from "../time";
 import type { MatchFormat, TennisLevel } from "../types";
@@ -68,8 +70,6 @@ function normalizeBookingUrl(raw: string): string | null {
   }
 }
 
-const wib = (date: string, time: string) => new Date(`${date}T${time}:00+07:00`);
-const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 
 function refresh(id?: string) {
   // Website: daftar aktivitas, halaman per tipe (/activity/mabar …), detail venue & homepage.
@@ -80,7 +80,7 @@ function validate(input: SessionInput): string | null {
   if (!input.title.trim()) return "Judul sesi wajib diisi.";
   if (!isActivityType(input.typeSlug)) return "Tipe sesi tidak dikenal.";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || !/^\d{2}:\d{2}$/.test(input.start) || !/^\d{2}:\d{2}$/.test(input.end)) return "Tanggal/jam tidak valid.";
-  if (!(wib(input.date, input.end) > wib(input.date, input.start))) return "Jam selesai harus setelah jam mulai.";
+  if (!(wibAt(input.date, input.end) > wibAt(input.date, input.start))) return "Jam selesai harus setelah jam mulai.";
   if (!Number.isInteger(input.price) || input.price < 0) return "Harga tidak valid.";
   if (!Number.isInteger(input.capacity) || input.capacity < 1) return "Kapasitas minimal 1.";
   if (!Number.isInteger(input.points) || input.points < 0) return "Slay Point tidak valid.";
@@ -147,8 +147,8 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
   const { data: venue } = await supabase.from("venues").select("id").eq("name", input.venueName).maybeSingle();
   if (!venue) return { ok: false, error: `Venue "${input.venueName}" tidak ditemukan.` };
 
-  const startsAt = wib(input.date, input.start);
-  const endsAt = wib(input.date, input.end);
+  const startsAt = wibAt(input.date, input.start);
+  const endsAt = wibAt(input.date, input.end);
   const bookingUrl = normalizeBookingUrl(input.kuyUrl);
   if (bookingUrl === null) return { ok: false, error: "Link booking Kuy tidak valid — contoh: https://kuy.id/soslay/nama-event" };
 

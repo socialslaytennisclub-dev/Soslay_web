@@ -1,21 +1,20 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
-import { blurProps } from "@/lib/image";
 import { rupiahShort, settlementDue, shortDate, tripDays, tripRange, weekdayRange } from "@/lib/trips";
 import { archiveTrip, duplicateTrip } from "@/server/admin/actions/trips";
-import type { TripActivity, TripDetail, TripStatus, TripSummary } from "@/server/admin/types";
+import type { TripDetail, TripStatus, TripSummary } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
 import { Badge, type BadgeTone } from "../ui/AdminUI";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { RowMenu, type RowMenuItem } from "../ui/RowMenu";
 import { toast } from "../ui/Toaster";
 import styles from "./Activities.module.css";
+import { CapacityBar, schedule, StatusBadge, Thumb } from "./ActivityCells";
 
 export type TripListItem = { trip: TripDetail; summary: TripSummary; display: TripStatus };
 
@@ -25,10 +24,6 @@ const TRIP_STATUS: Record<TripStatus, { label: string; tone: BadgeTone }> = {
   completed: { label: "Selesai", tone: "neutral" },
   cancelled: { label: "Arsip", tone: "pink" },
 };
-
-const day = new Intl.DateTimeFormat("id-ID", { weekday: "short", day: "2-digit", month: "short", timeZone: "Asia/Jakarta" });
-const time = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
-const when = (a: TripActivity) => ({ date: day.format(new Date(a.startsAt)).replace(/\./g, ""), time: `${time.format(new Date(a.startsAt))}–${time.format(new Date(a.endsAt))}` });
 
 /** Menu ⋮ trip (Figma 04c-3). */
 function useTripMenu(trip: TripDetail): [RowMenuItem[], React.ReactNode] {
@@ -77,32 +72,6 @@ function useTripMenu(trip: TripDetail): [RowMenuItem[], React.ReactNode] {
   return [items, dialog];
 }
 
-function Thumb({ src }: { src: string }) {
-  return (
-    <span className={styles.thumb}>
-      <Image src={src} alt="" fill sizes="56px" {...blurProps(src)} />
-    </span>
-  );
-}
-
-function Bar({ value, max }: { value: number; max: number }) {
-  return (
-    <span className={styles.capacityTrack}>
-      <span className={cx(styles.capacityBar, value >= max && styles.capacityFull)} style={{ width: `${max ? Math.min(value / max, 1) * 100 : 0}%` }} />
-    </span>
-  );
-}
-
-const SESSION_STATUS: Record<string, { label: string; tone: BadgeTone }> = {
-  almost_full: { label: "Hampir penuh", tone: "pink" },
-  published: { label: "Published", tone: "lime" },
-  full: { label: "Penuh", tone: "indigo" },
-  draft: { label: "Draft", tone: "neutral" },
-  scheduled: { label: "Terjadwal", tone: "indigo" },
-  completed: { label: "Selesai", tone: "neutral" },
-  cancelled: { label: "Dibatalkan", tone: "pink" },
-};
-
 /** Baris induk trip + baris activity per lapangan (Figma 04c / 04c-2). Klik panah = buka/tutup. */
 export function TripRows({ item }: { item: TripListItem }) {
   const { trip, summary, display } = item;
@@ -148,7 +117,7 @@ export function TripRows({ item }: { item: TripListItem }) {
               </span>
               {summary.singles > 0 && <span className={styles.waitlist}>+{summary.singles} satuan</span>}
             </span>
-            <Bar value={summary.sold} max={trip.packageQuota} />
+            <CapacityBar value={summary.sold} max={trip.packageQuota} />
           </span>
         </td>
         <td>
@@ -168,7 +137,7 @@ export function TripRows({ item }: { item: TripListItem }) {
       </tr>
       {open &&
         trip.activities.map((a, i) => {
-          const w = when(a);
+          const w = schedule(a);
           const last = i === trip.activities.length - 1;
           return (
             <tr key={a.id} className={cx(styles.tripChild, last && styles.tripChildLast)}>
@@ -201,7 +170,7 @@ export function TripRows({ item }: { item: TripListItem }) {
                       {a.bundled} paket{a.soldSingle ? ` + ${a.singles} satuan` : ""}
                     </span>
                   </span>
-                  <Bar value={a.booked} max={a.capacity} />
+                  <CapacityBar value={a.booked} max={a.capacity} />
                 </span>
               </td>
               <td>
@@ -218,9 +187,7 @@ export function TripRows({ item }: { item: TripListItem }) {
                 )}
               </td>
               <td>
-                <Badge tone={SESSION_STATUS[a.displayStatus].tone} dot>
-                  {SESSION_STATUS[a.displayStatus].label}
-                </Badge>
+                <StatusBadge status={a.displayStatus} />
               </td>
               <td>
                 <Link href={`/admin/activities/${a.id}`} className={styles.iconLink} aria-label={`Edit ${a.title}`}>
@@ -285,7 +252,7 @@ export function TripCard({ item }: { item: TripListItem }) {
       {open && (
         <ol className={styles.tripCardList}>
           {trip.activities.map((a) => {
-            const w = when(a);
+            const w = schedule(a);
             const full = a.booked >= a.capacity;
             return (
               <li key={a.id}>

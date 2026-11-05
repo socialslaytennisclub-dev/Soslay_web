@@ -917,6 +917,12 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const rd = await one(`select count(*)::int n, max(sort)::int m from trip_rundown_items where trip_id = $1`, [trip]);
   console.assert(rd.n === 2 && rd.m === 1, `rundown ${JSON.stringify(rd)}`);
   await db.query(`update trips set visibility = 'link' where id = $1`, [trip]);
+  // Status & visibilitas trip diteruskan ke activity-nya.
+  console.assert((await one(`select count(*)::int n from sessions where trip_id = $1 and visibility::text <> 'link'`, [trip])).n === 0, "visibilitas trip tidak diteruskan ke activity");
+  await db.query(`update sessions set status = 'draft' where id = $1`, [s2]);
+  await db.query(`update trips set status = 'draft' where id = $1`, [trip]);
+  await db.query(`update trips set status = 'published' where id = $1`, [trip]);
+  console.assert((await one(`select status::text s from sessions where id = $1`, [s2])).s === "published", "publikasikan trip tidak mempublikasikan activity draft");
   await db.exec(`grant select on trips, trip_bookings, sessions, bookings to anon, authenticated`);
   const visibleTo = async (uid) => {
     await db.exec(`set role ${uid ? "authenticated" : "anon"}`);

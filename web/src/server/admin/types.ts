@@ -725,6 +725,23 @@ export type TripSummary = {
   outstanding: number;
   fullyPaid: number;
   dp: number;
-  notPaid: number;
   venues: number;
+};
+
+/** Sesi yang bisa diambil ke trip (modal 05x-5). */
+export type TripCandidate = {
+  id: string;
+  title: string;
+  typeLabel: string;
+  date: string;
+  start: string;
+  end: string;
+  venueName: string;
+  capacity: number;
+  booked: number;
+  price: number;
+  statusLabel: string;
+  kuyUrl: string;
+  /** Sudah terhubung ke trip lain → tidak bisa dipilih. */
+  otherTrip: string | null;
 };

@@ -45,6 +45,7 @@ export function customCursor(cursor: HTMLElement, scope: HTMLElement) {
   };
 
   let visible = false;
+  let last: { x: number; y: number } | null = null;
   const onMove = (event: PointerEvent) => {
     if (!visible) {
       // Gerakan pertama: lompat langsung ke posisi kursor, lalu munculkan.
@@ -52,6 +53,7 @@ export function customCursor(cursor: HTMLElement, scope: HTMLElement) {
       gsap.to(cursor, { scale: 1, duration: 0.4 });
       visible = true;
     }
+    last = { x: event.clientX, y: event.clientY };
     xTo(event.clientX);
     yTo(event.clientY);
     sync(event.target);
@@ -62,19 +64,24 @@ export function customCursor(cursor: HTMLElement, scope: HTMLElement) {
     gsap.to(cursor, { scale: 0, duration: 0.3 });
   };
   // Scroll tanpa menggerakkan mouse juga bisa memindahkan elemen di bawah kursor.
-  let last: { x: number; y: number } | null = null;
-  const trackLast = (event: PointerEvent) => void (last = { x: event.clientX, y: event.clientY });
-  const onScroll = () => last && sync(document.elementFromPoint(last.x, last.y));
+  // Maks. sekali per frame (elementFromPoint memaksa hit-test).
+  let frame = 0;
+  const onScroll = () => {
+    if (frame || !last) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      if (last) sync(document.elementFromPoint(last.x, last.y));
+    });
+  };
 
   window.addEventListener("pointermove", onMove);
-  window.addEventListener("pointermove", trackLast, { passive: true });
   window.addEventListener("scroll", onScroll, { passive: true });
   document.documentElement.addEventListener("pointerenter", onEnterPage);
   document.documentElement.addEventListener("pointerleave", onLeavePage);
 
   return () => {
     window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointermove", trackLast);
+    cancelAnimationFrame(frame);
     window.removeEventListener("scroll", onScroll);
     document.documentElement.removeEventListener("pointerenter", onEnterPage);
     document.documentElement.removeEventListener("pointerleave", onLeavePage);

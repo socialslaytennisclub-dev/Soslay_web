@@ -1,5 +1,6 @@
 "use server";
 
+import { slugify } from "@/lib/text";
 import { redirect } from "next/navigation";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -10,7 +11,6 @@ import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } fro
 
 /** Simpan Products & Venues dari admin ke Supabase; website Shop / Venue ikut diperbarui. */
 
-const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 const isImagePath = (p: string) => /^(\/images\/|https:\/\/)/.test(p);
 
 // ── Products ────────────────────────────────────────────────────────────────

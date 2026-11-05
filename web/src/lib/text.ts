@@ -10,3 +10,6 @@ export const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 
 /** Nama tim ganda dari nama depan: ["Arya Putra", "Ratna Sari"] → "Arya + Ratna". */
 export const teamName = (team: string[]) => team.map(firstName).join(" + ");
+
+/** "Rally in Paradise · Bali" → "rally-in-paradise-bali" (maks 60 karakter). */
+export const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
