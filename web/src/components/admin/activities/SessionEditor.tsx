@@ -17,7 +17,7 @@ import { FormCard, MultiChips, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge, desktopOnlyClass, MemberAvatar, MobileCard, MobileCardList, PickerInput } from "../ui/AdminUI";
 import { CrewDrawer } from "./CrewDrawer";
-import { canEditPayment, PaymentCell, useParticipantPayment, viaLabel } from "./ParticipantPayment";
+import { PaymentCell, useParticipantPayment, viaLabel } from "./ParticipantPayment";
 import { ParticipantsDrawer } from "./ParticipantsDrawer";
 import { WaInviteLink } from "./WaInviteLink";
 import { FormatCard, LineupCard, type PlayForm } from "./PlayCards";
@@ -47,7 +47,7 @@ const toDate = (iso: string) => new Date(new Date(iso).getTime() + WIB).toISOStr
 const toTime = (iso: string) => new Date(new Date(iso).getTime() + WIB).toISOString().slice(11, 16);
 const fromWib = (date: string, time: string) => new Date(`${date}T${time}:00+07:00`);
 
-const LEVELS = (Object.keys(LEVEL_LABEL) as TennisLevel[]).map((value) => ({ value, label: LEVEL_LABEL[value] }));
+const LEVELS = (Object.entries(LEVEL_LABEL) as [TennisLevel, string][]).map(([value, label]) => ({ value, label }));
 
 const STATUS_OPTIONS = [
   { value: "draft", label: "Draft" },
@@ -62,7 +62,6 @@ const VISIBILITY = [
   { value: "link", label: "Link" },
 ] as const;
 
-const SOURCE_LABEL: Record<SessionParticipant["source"], string> = { website: "Website", kuy: "Kuy", admin: "Admin" };
 const PREVIEW_ROWS = 5;
 
 const longDate = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" });
@@ -293,6 +292,13 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
       </Badge>
     );
 
+  /** Format permainan diubah tapi belum disimpan → line-up menunggu "Simpan perubahan". */
+  const playDirty =
+    session.play.matchFormat !== play.matchFormat ||
+    String(session.play.courtCount) !== play.courtCount ||
+    String(session.play.roundCount) !== play.roundCount ||
+    (hasTargetTotal(play.matchFormat) && String(session.play.targetPoints) !== play.targetPoints);
+
   // ── Hapus peserta & absensi (terkunci begitu aktivitas sudah dikerjakan) ──
   const [confirm, confirmDialog] = useConfirm();
   const [editPayment, paymentDrawer] = useParticipantPayment(session.id, session.displayStatus === "completed");
@@ -403,7 +409,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     <RowMenu
       label={`Aksi untuk ${p.name}`}
       items={[
-        ...(canEditPayment(p) ? [{ label: "Ubah pembayaran", icon: "pencil-simple" as const, onSelect: () => editPayment(p) }] : []),
+        ...(p.kuyPayment ? [{ label: "Ubah pembayaran", icon: "pencil-simple" as const, onSelect: () => editPayment(p) }] : []),
         { label: "Hapus dari sesi", icon: "trash" as const, danger: true, disabledReason: removeLock(p), disabled: removing !== null, onSelect: () => removeMany([p]) },
       ]}
     />
@@ -640,7 +646,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
               disabledReason={
                 mode === "new"
                   ? "Simpan sesi dulu, lalu impor peserta dari Kuyy untuk membuat line-up."
-                  : session.play.matchFormat !== play.matchFormat || String(session.play.courtCount) !== play.courtCount || String(session.play.roundCount) !== play.roundCount || (hasTargetTotal(play.matchFormat) && String(session.play.targetPoints) !== play.targetPoints)
+                  : playDirty
                     ? "Format berubah — klik \"Simpan perubahan\" dulu, lalu atur line-up."
                     : undefined
               }
@@ -764,7 +770,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                         meta={[
                           { label: "Level", value: p.level ? LEVEL_LABEL[p.level] : "—" },
                           { label: "Bayar", value: <PaymentCell participant={p} /> },
-                          { label: "Via", value: viaLabel(p, SOURCE_LABEL[p.source]) },
+                          { label: "Via", value: viaLabel(p) },
                         ]}
                       />
                     ))}
@@ -800,7 +806,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                               <PaymentCell participant={p} />
                             </td>
                             <td>
-                              {viaLabel(p, SOURCE_LABEL[p.source])}
+                              {viaLabel(p)}
                             </td>
                             <td>{checkInButton(p)}</td>
                             <td>{rowMenu(p)}</td>

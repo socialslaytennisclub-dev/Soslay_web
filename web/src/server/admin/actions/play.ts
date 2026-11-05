@@ -1,6 +1,6 @@
 "use server";
 
-import { formatRupiahPlain } from "@/lib/admin-labels";
+import { formatRupiahPlain, PAYMENT_CHANNEL_LABEL, PAYMENT_LABEL } from "@/lib/admin-labels";
 import { isEmail } from "@/lib/auth";
 import { isSessionFinished, participantsLockReason } from "@/lib/session-lock";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -498,13 +498,12 @@ export async function updateParticipantPayment(sessionId: string, participantId:
     .update({ amount, payment_status: payment, payment_channel: via, amount_edited_at: new Date().toISOString() })
     .eq("id", participantId)
     .eq("session_id", sessionId)
-    .eq("source", "kuy")
-    .not("kuy_username", "is", null)
+    .eq("is_kuy_import", true)
     .select("full_name")
     .maybeSingle();
   if (error) return { ok: false, error: `Gagal menyimpan: ${error.message}` };
   if (!data) return { ok: false, error: "Peserta impor Kuyy tidak ditemukan — muat ulang halaman." };
-  const status = `${payment === "paid" ? "lunas" : "menunggu"} · via ${via === "kuy" ? "Kuy" : "Manual"}`;
+  const status = `${PAYMENT_LABEL[payment].toLowerCase()} · via ${PAYMENT_CHANNEL_LABEL[via]}`;
   await audit(auth.userId, `mengubah pembayaran ${data.full_name}: ${formatRupiahPlain(amount)} · ${status}`, "session", sessionId);
   refreshPaths(`/admin/activities/${sessionId}`);
   return { ok: true, message: `Pembayaran ${data.full_name} disimpan · ${formatRupiahPlain(amount)} · ${status}.` };

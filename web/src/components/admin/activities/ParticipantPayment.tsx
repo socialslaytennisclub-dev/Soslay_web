@@ -1,13 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition, type ReactNode } from "react";
+import { useImperativeHandle, useRef, useState, useTransition, type ReactNode, type Ref } from "react";
 import { useDialog } from "@/hooks/useDialog";
-import { formatRupiahPlain } from "@/lib/admin-labels";
-import { cx } from "@/lib/cx";
+import { formatRupiahPlain, PARTICIPANT_SOURCE_LABEL, PAYMENT_CHANNEL_LABEL, PAYMENT_LABEL } from "@/lib/admin-labels";
 import { amountDigits, amountDisplay } from "@/lib/finance/format";
 import { updateParticipantPayment } from "@/server/admin/actions/play";
 import type { SessionParticipant } from "@/server/admin/types";
+import { SingleChips } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, PaymentBadge } from "../ui/AdminUI";
 import { Drawer } from "../ui/Drawer";
@@ -15,44 +15,21 @@ import { toast } from "../ui/Toaster";
 import styles from "./SessionEditor.module.css";
 
 type Payment = "paid" | "pending";
-type Via = SessionParticipant["paidVia"];
-const PAYMENT_OPTIONS: { value: Payment; label: string }[] = [
-  { value: "paid", label: "Lunas" },
-  { value: "pending", label: "Menunggu" },
-];
-const VIA_OPTIONS: { value: Via; label: string }[] = [
-  { value: "kuy", label: "Kuy" },
-  { value: "manual", label: "Manual" },
-];
+type Via = NonNullable<SessionParticipant["kuyPayment"]>["via"];
+const PAYMENT_OPTIONS = (["paid", "pending"] as const).map((value) => ({ value, label: PAYMENT_LABEL[value] }));
+const VIA_OPTIONS = (["kuy", "manual"] as const).map((value) => ({ value, label: PAYMENT_CHANNEL_LABEL[value] }));
 
-/** Label kolom "Via" — peserta impor Kuyy yang bayar langsung tampil "Manual". */
-export const viaLabel = (p: SessionParticipant, sourceLabel: string) => (p.kuyImport && p.paidVia === "manual" ? "Manual" : sourceLabel);
+/** Kolom "Via": peserta file Kuyy → jalur bayarnya (Kuy / Manual); lainnya → asal peserta. */
+export const viaLabel = (p: SessionParticipant) => (p.kuyPayment ? PAYMENT_CHANNEL_LABEL[p.kuyPayment.via] : PARTICIPANT_SOURCE_LABEL[p.source]);
 
-/** Pilihan tunggal berbentuk tombol (pola segment di editor sesi). */
-function Segment<T extends string>({ label, options, value, onChange }: { label: string; options: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
-  return (
-    <div className={styles.field}>
-      <span className={styles.label}>{label}</span>
-      <div className={styles.segmentWrap} role="radiogroup" aria-label={label}>
-        {options.map((o) => (
-          <button key={o.value} type="button" role="radio" aria-checked={value === o.value} className={cx(styles.option, value === o.value && styles.optionOn)} onClick={() => onChange(o.value)}>
-            {o.label}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** Peserta dari file Kuyy → nominal, status & jalur bayarnya bisa diubah admin. */
-export const canEditPayment = (p: SessionParticipant) => p.kuyImport;
+type PaymentDrawerHandle = { open: (p: SessionParticipant) => void };
 
 /**
- * Ubah nominal & status bayar peserta hasil impor Excel Kuyy. Nominal peserta lunas masuk Keuangan
- * (Tiket activity · Saldo Kuyy) begitu activity selesai; perubahan sesudahnya dicatat sebagai koreksi.
- * Pola sama dengan useConfirm: `[edit(peserta), drawer]`.
+ * Drawer "Ubah pembayaran" peserta hasil impor Excel Kuyy. State form tinggal di sini (bukan di editor sesi)
+ * supaya mengetik nominal tidak merender ulang seluruh halaman. Nominal peserta lunas masuk Keuangan begitu
+ * activity selesai; perubahan sesudahnya dicatat sebagai koreksi.
  */
-export function useParticipantPayment(sessionId: string, finished: boolean): [(p: SessionParticipant) => void, ReactNode] {
+function PaymentDrawer({ sessionId, finished, ref }: { sessionId: string; finished: boolean; ref: Ref<PaymentDrawerHandle> }) {
   const dialog = useDialog();
   const router = useRouter();
   const [target, setTarget] = useState<SessionParticipant | null>(null);
@@ -60,14 +37,22 @@ export function useParticipantPayment(sessionId: string, finished: boolean): [(p
   const [payment, setPayment] = useState<Payment>("paid");
   const [via, setVia] = useState<Via>("kuy");
   const [saving, start] = useTransition();
+  const openDialog = dialog.open;
 
-  const edit = (p: SessionParticipant) => {
-    setTarget(p);
-    setAmount(String(p.amount ?? 0));
-    setPayment(p.payment === "pending" ? "pending" : "paid");
-    setVia(p.paidVia);
-    dialog.open();
-  };
+  useImperativeHandle(
+    ref,
+    () => ({
+      open(p) {
+        if (!p.kuyPayment) return;
+        setTarget(p);
+        setAmount(String(p.kuyPayment.amount));
+        setPayment(p.payment === "pending" ? "pending" : "paid");
+        setVia(p.kuyPayment.via);
+        openDialog();
+      },
+    }),
+    [openDialog],
+  );
 
   const save = () =>
     target &&
@@ -80,9 +65,9 @@ export function useParticipantPayment(sessionId: string, finished: boolean): [(p
       }
     });
 
-  const unchanged = target !== null && Number(amount || 0) === target.amount && payment === target.payment && via === target.paidVia;
+  const unchanged = target?.kuyPayment != null && Number(amount || 0) === target.kuyPayment.amount && payment === target.payment && via === target.kuyPayment.via;
 
-  const drawer = (
+  return (
     <Drawer
       dialogRef={dialog.dialogRef}
       title="Ubah pembayaran"
@@ -106,8 +91,8 @@ export function useParticipantPayment(sessionId: string, finished: boolean): [(p
             <input inputMode="numeric" value={amountDisplay(amount)} onChange={(e) => setAmount(amountDigits(e.target.value))} aria-label="Nominal bayar" />
           </span>
         </label>
-        <Segment label="Status bayar" options={PAYMENT_OPTIONS} value={payment} onChange={setPayment} />
-        <Segment label="Via" options={VIA_OPTIONS} value={via} onChange={setVia} />
+        <SingleChips label="Status bayar" options={PAYMENT_OPTIONS} value={payment} onChange={setPayment} />
+        <SingleChips label="Via" options={VIA_OPTIONS} value={via} onChange={setVia} />
         <p className={styles.muted}>
           <AdminIcon name="hand-coins" size={12} />{" "}
           Masuk Keuangan sebagai Tiket activity ke {via === "kuy" ? "Saldo Kuyy" : "akun bayar manual (bawaan: Bank BCA, atur di Pengaturan Keuangan)"}
@@ -116,17 +101,21 @@ export function useParticipantPayment(sessionId: string, finished: boolean): [(p
       </div>
     </Drawer>
   );
-
-  return [edit, drawer];
 }
 
-/** Sel "Bayar": badge status + nominal (peserta impor Kuyy). Diubah lewat menu ⋮ → Ubah pembayaran. */
+/** Pola sama dengan useConfirm: `[edit(peserta), drawer]`. */
+export function useParticipantPayment(sessionId: string, finished: boolean): [(p: SessionParticipant) => void, ReactNode] {
+  const ref = useRef<PaymentDrawerHandle>(null);
+  return [(p) => ref.current?.open(p), <PaymentDrawer key="payment-drawer" ref={ref} sessionId={sessionId} finished={finished} />];
+}
+
+/** Sel "Bayar": badge status + nominal (peserta file Kuyy). Diubah lewat menu ⋮ → Ubah pembayaran. */
 export function PaymentCell({ participant: p }: { participant: SessionParticipant }) {
-  if (!canEditPayment(p)) return <PaymentBadge status={p.payment} />;
+  if (!p.kuyPayment) return <PaymentBadge status={p.payment} />;
   return (
     <span className={styles.paymentCell}>
       <PaymentBadge status={p.payment} />
-      <span>{formatRupiahPlain(p.amount ?? 0)}</span>
+      <span>{formatRupiahPlain(p.kuyPayment.amount)}</span>
     </span>
   );
 }

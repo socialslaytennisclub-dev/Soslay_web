@@ -17,10 +17,11 @@ begin
   if p_score_a is null or p_score_b is null or p_score_a < 0 or p_score_b < 0 then
     raise exception 'Skor tidak valid';
   end if;
-  if v_format = 'rotating' then
-    if p_score_a + p_score_b = 0 then raise exception 'Skor masih 0–0'; end if;
-  elsif p_score_a + p_score_b <> v_target then
-    raise exception 'Total poin harus %', v_target;
+  -- Hanya Americano yang memakai target total; format lain (Rotating Partner) skor bebas, asal bukan 0–0.
+  if v_format = 'americano' then
+    if p_score_a + p_score_b <> v_target then raise exception 'Total poin harus %', v_target; end if;
+  elsif p_score_a + p_score_b = 0 then
+    raise exception 'Skor masih 0–0';
   end if;
   update session_matches
   set score_a = p_score_a, score_b = p_score_b, scored_by = auth.uid(), scored_at = now()

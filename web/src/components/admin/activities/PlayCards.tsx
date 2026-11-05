@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { generateLineup, hasTargetTotal, lineupStats, playableCourts, type LevelWeights, type LineupMatch } from "@/lib/americano";
 import { cx } from "@/lib/cx";
+import { useScoreDraft } from "@/hooks/useScoreDraft";
 import { saveLineup, saveMatchScore } from "@/server/admin/actions/play";
 import type { MatchFormat, SessionMatch, SessionParticipant, TennisLevel } from "@/server/admin/types";
 import { FormCard, Toggle } from "../ui/AdminForm";
@@ -450,11 +451,7 @@ function ScoreInput({
   onCancel: () => void;
   onSave: (a: number, b: number) => void;
 }) {
-  const [a, setA] = useState(initial ?? (target === null ? 0 : Math.ceil(target / 2)));
-  const [freeB, setFreeB] = useState(initialB ?? 0);
-  const max = target ?? 99;
-  const clamp = (n: number) => Math.max(0, Math.min(max, Number.isFinite(n) ? Math.round(n) : 0));
-  const b = target === null ? freeB : target - a;
+  const { a, b, max, valid, setA, setB } = useScoreDraft(target, initial, initialB);
 
   const row = (label: string, value: number, set: (n: number) => void) => (
     <div className={styles.scoreRow}>
@@ -473,14 +470,14 @@ function ScoreInput({
 
   return (
     <div className={styles.scoreInput}>
-      {row(teamA, a, (n) => setA(clamp(n)))}
-      {row(teamB, b, (n) => (target === null ? setFreeB(clamp(n)) : setA(target - clamp(n))))}
+      {row(teamA, a, setA)}
+      {row(teamB, b, setB)}
       <span className={editor.muted}>{target === null ? "Isi skor kedua tim sesuai hasil di lapangan" : `Total ${a + b} / ${target} · skor tim lawan terisi otomatis`}</span>
       <span className={styles.actions}>
         <AdminButton size="sm" onClick={onCancel} disabled={busy}>
           Batal
         </AdminButton>
-        <AdminButton variant="primary" size="sm" icon="check-bold" onClick={() => onSave(a, b)} disabled={busy || a + b === 0}>
+        <AdminButton variant="primary" size="sm" icon="check-bold" onClick={() => onSave(a, b)} disabled={busy || !valid}>
           {busy ? "Menyimpan…" : "Simpan & verifikasi"}
         </AdminButton>
       </span>

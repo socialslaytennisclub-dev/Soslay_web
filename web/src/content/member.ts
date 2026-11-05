@@ -1,3 +1,4 @@
+import { LEVEL_LABEL } from "@/lib/admin-labels";
 import { shiftDemoDates } from "@/lib/demo-dates";
 import type { City } from "@/lib/format";
 
@@ -276,13 +277,8 @@ export const genderOptions = ["Laki-laki", "Perempuan", "Tidak ingin menyebutkan
 
 export const playingDurationOptions = ["Kurang dari 6 bulan", "6–12 bulan", "1–3 tahun", "3–5 tahun", "Lebih dari 5 tahun"];
 
-export const tennisLevelOptions = [
-  "Beginner",
-  "Upper Beginner",
-  "Intermediate",
-  "Upper Intermediate",
-  "Advanced",
-];
+/** Urutan sama dengan enum tennis_level (dipetakan per indeks oleh server/member/profile). */
+export const tennisLevelOptions = Object.values(LEVEL_LABEL);
 
 export const playingFrequencyOptions = ["First time / Rarely", "1–2x/month", "1x/week", "2–3x/week", "4x+/week"];
 

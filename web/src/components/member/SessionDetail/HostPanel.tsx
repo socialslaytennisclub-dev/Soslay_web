@@ -4,6 +4,7 @@ import { Minus, Play, Plus, ShieldCheck, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useDialog } from "@/hooks/useDialog";
+import { useScoreDraft } from "@/hooks/useScoreDraft";
 import { cx } from "@/lib/cx";
 import { isUnstarted, roundList, roundStatusWord, type RoundPlan, type RoundStatus } from "@/lib/rounds";
 import { teamName } from "@/lib/text";
@@ -60,10 +61,8 @@ function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { det
   const { dialogRef: scoreRef, open: openScore, close: closeScore, onBackdropClick: onScoreBackdrop } = useDialog();
   const { dialogRef: endRef, open: openEnd, close: closeEnd, onBackdropClick: onEndBackdrop } = useDialog();
   const [editing, setEditing] = useState<DetailMatch | null>(null);
-  const [scoreA, setScoreA] = useState(0);
   // Tanpa target (Rotating Partner): skor tim B diisi sendiri, tidak dihitung dari target.
-  const [freeB, setFreeB] = useState(0);
-  const max = target ?? 99;
+  const { a: scoreA, b: scoreB, max, valid, setA: setScoreA, setB: setScoreB, reset: resetScore } = useScoreDraft(target);
   const [saved, setSaved] = useState<Saved | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, startBusy] = useTransition();
@@ -73,7 +72,6 @@ function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { det
   const next = plan.rounds.includes(selected + 1) && isUnstarted(plan.statusOf(selected + 1)) ? selected + 1 : null;
   const last = selected === plan.rounds.at(-1);
   const courts = matches.filter((m) => m.round === selected);
-  const scoreB = target === null ? freeB : target - scoreA;
 
   const startRound = (round: number) =>
     startBusy(async () => {
@@ -86,8 +84,7 @@ function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { det
 
   const edit = (m: DetailMatch) => {
     setEditing(m);
-    setScoreA(m.scoreA ?? (target === null ? 0 : Math.ceil(target / 2)));
-    setFreeB(m.scoreB ?? 0);
+    resetScore(m.scoreA, m.scoreB);
     setError(null);
     openScore();
   };
@@ -247,8 +244,8 @@ function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { det
               </button>
             </header>
             {[
-              { label: "Tim A", team: editing.a, value: scoreA, set: (v: number) => setScoreA(v) },
-              { label: "Tim B", team: editing.b, value: scoreB, set: (v: number) => (target === null ? setFreeB(v) : setScoreA(target - v)) },
+              { label: "Tim A", team: editing.a, value: scoreA, set: setScoreA },
+              { label: "Tim B", team: editing.b, value: scoreB, set: setScoreB },
             ].map(({ label, team, value, set }) => (
               <div key={label} className={styles.stepRow}>
                 <span className={styles.stepTeam}>
@@ -286,7 +283,7 @@ function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { det
               <button type="button" className={styles.btnOutline} onClick={closeScore}>
                 Batal
               </button>
-              <button type="button" className={styles.btnNavy} onClick={save} disabled={busy || scoreA + scoreB === 0}>
+              <button type="button" className={styles.btnNavy} onClick={save} disabled={busy || !valid}>
                 {busy ? "Menyimpan…" : "Simpan skor"}
               </button>
             </div>

@@ -65,6 +65,32 @@ export function TextArea({ label, value, onChange, maxLength, required, error, r
   );
 }
 
+type SingleChipsProps<T extends string> = {
+  label: string;
+  options: readonly { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+  /** Keterangan di bawah pilihan. */
+  hint?: ReactNode;
+};
+
+/** Chip pilihan tunggal (status & jalur bayar, format leaderboard) — gaya sama dengan MultiChips. */
+export function SingleChips<T extends string>({ label, options, value, onChange, hint }: SingleChipsProps<T>) {
+  return (
+    <fieldset className={styles.chipGroup}>
+      <legend className={styles.label}>{label}</legend>
+      <div className={styles.chips}>
+        {options.map((o) => (
+          <button key={o.value} type="button" aria-pressed={value === o.value} className={cx(styles.chip, value === o.value && styles.chipOn)} onClick={() => onChange(o.value)}>
+            {o.label}
+          </button>
+        ))}
+      </div>
+      {hint}
+    </fieldset>
+  );
+}
+
 type MultiChipsProps<T extends string> = {
   label: string;
   options: readonly { value: T; label: string }[];

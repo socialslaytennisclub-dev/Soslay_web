@@ -3,7 +3,7 @@ import { scoreTarget } from "@/lib/americano";
 import { cache } from "react";
 import QRCode from "qrcode";
 import { memberSessions } from "@/content/member";
-import { LEVEL_LABEL } from "@/lib/admin-labels";
+import { LEVEL_LABEL, PARTICIPANT_SOURCE_LABEL } from "@/lib/admin-labels";
 import { cityOf, type City } from "@/lib/format";
 import { sessionClosesAt } from "@/lib/session-close";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -117,7 +117,6 @@ const FORMAT_LABEL: Record<string, string> = {
   knockout: "Knockout",
 };
 
-const SOURCE_LABEL: Record<string, string> = { kuy: "Kuy", admin: "Admin", website: "Website" };
 
 type SessionRow = {
   id: string;
@@ -285,7 +284,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
       id: p.id,
       name: p.name,
       level: p.tennis_level ? LEVEL_LABEL[p.tennis_level] : "Level belum diisi",
-      source: SOURCE_LABEL[p.source] ?? "Website",
+      source: PARTICIPANT_SOURCE_LABEL[p.source as keyof typeof PARTICIPANT_SOURCE_LABEL] ?? "Website",
       me: p.member_id === user.id,
       checkedIn: p.checked_in,
       member: p.member_id !== null,

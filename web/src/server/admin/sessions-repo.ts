@@ -136,12 +136,18 @@ function demoLineup(sessionId: string, participants: SessionParticipant[], play:
   let seed = [...sessionId].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
   const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
   const players = participants.filter((p) => p.status !== "waitlisted").map((p) => p.id);
+  const target = scoreTarget(play.matchFormat, play.targetPoints);
+  const randInt = (max: number) => Math.floor(rand() * (max + 1));
   return generateLineup({ players, courts: play.courtCount, rounds: play.roundCount }, { rand, attempts: 8 }).map((m) => {
-    const target = scoreTarget(play.matchFormat, play.targetPoints);
-    const a = m.round <= 2 ? Math.floor(rand() * ((target ?? 7) + 1)) : null;
-    // Tanpa target (Rotating Partner): skor bebas, mis. 6–4.
-    const b = a === null ? null : target === null ? (a === 6 ? Math.floor(rand() * 6) : 6) : target - a;
-    return { ...m, id: `${sessionId}-r${m.round}-c${m.court}`, scoreA: a, scoreB: b };
+    const id = `${sessionId}-r${m.round}-c${m.court}`;
+    if (m.round > 2) return { ...m, id, scoreA: null, scoreB: null };
+    if (target !== null) {
+      const a = randInt(target);
+      return { ...m, id, scoreA: a, scoreB: target - a };
+    }
+    // Tanpa target (Rotating Partner): satu tim menang 6, lawannya 0–5.
+    const [a, b] = rand() < 0.5 ? [6, randInt(5)] : [randInt(5), 6];
+    return { ...m, id, scoreA: a, scoreB: b };
   });
 }
 
@@ -172,9 +178,7 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
         status: b.status,
         source,
         // Demo: peserta "Kuy" memakai harga sesi supaya form ubah nominal bisa dicoba.
-        amount: source === "kuy" ? s.price : null,
-        paidVia: "kuy",
-        kuyImport: source === "kuy",
+        kuyPayment: source === "kuy" ? { amount: s.price, via: "kuy" } : null,
         checkedIn: b.checkedIn ?? b.status === "attended",
         guests: b.guests ?? (i % 9 === 3 ? 1 : 0),
       };

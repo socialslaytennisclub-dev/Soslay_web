@@ -1,3 +1,4 @@
+import { LEVEL_LABEL } from "@/lib/admin-labels";
 import { CITY_TIMEZONE, type City } from "@/lib/format";
 
 /**
@@ -42,13 +43,6 @@ export type Session = {
 
 export type TennisLevel = "beginner" | "beginner_intermediate" | "intermediate" | "intermediate_advanced" | "advanced";
 
-const LEVEL_LABEL: Record<TennisLevel, string> = {
-  beginner: "Beginner",
-  beginner_intermediate: "Upper Beginner",
-  intermediate: "Intermediate",
-  intermediate_advanced: "Upper Intermediate",
-  advanced: "Advanced",
-};
 
 const LEVEL_ORDER = Object.keys(LEVEL_LABEL) as TennisLevel[];
 

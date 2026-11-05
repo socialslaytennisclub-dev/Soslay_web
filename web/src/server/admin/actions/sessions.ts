@@ -1,6 +1,6 @@
 "use server";
 
-import { hasTargetTotal } from "@/lib/americano";
+import { DEFAULT_TARGET_POINTS, hasTargetTotal, SCORE_MAX } from "@/lib/americano";
 import { redirect } from "next/navigation";
 import { isActivityType } from "@/content/activity";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -96,7 +96,7 @@ function validate(input: SessionInput): string | null {
   if (matchFormat !== "none") {
     if (!Number.isInteger(courtCount) || courtCount < 1 || courtCount > 12) return "Jumlah court 1–12.";
     if (!Number.isInteger(roundCount) || roundCount < 1 || roundCount > 40) return "Jumlah ronde 1–40.";
-    if (hasTargetTotal(matchFormat) && (!Number.isInteger(targetPoints) || targetPoints < 1 || targetPoints > 99)) return "Target poin 1–99.";
+    if (hasTargetTotal(matchFormat) && (!Number.isInteger(targetPoints) || targetPoints < 1 || targetPoints > SCORE_MAX)) return `Target poin 1–${SCORE_MAX}.`;
     if (input.play.leaderboardMode !== "points" && input.play.leaderboardMode !== "wins") return "Format leaderboard tidak dikenal.";
   }
   return null;
@@ -194,8 +194,8 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
     match_format: input.play.matchFormat,
     court_count: input.play.courtCount,
     round_count: input.play.roundCount,
-    // Rotating Partner tidak memakai target poin; nilai lama disimpan apa adanya (tetap 1–99).
-    target_points: input.play.targetPoints >= 1 && input.play.targetPoints <= 99 ? input.play.targetPoints : 21,
+    // Rotating Partner tidak memakai target poin — isian kosong disimpan sebagai target bawaan.
+    target_points: hasTargetTotal(input.play.matchFormat) || (input.play.targetPoints >= 1 && input.play.targetPoints <= SCORE_MAX) ? input.play.targetPoints : DEFAULT_TARGET_POINTS,
     // v1: skor hanya diisi host/admin.
     score_entry: "host",
     leaderboard_mode: input.play.leaderboardMode,

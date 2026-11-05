@@ -53,3 +53,7 @@
 .list .danger {
   color: var(--color-pink-500);
 }
+
+.wrap {
+  display: contents;
+}

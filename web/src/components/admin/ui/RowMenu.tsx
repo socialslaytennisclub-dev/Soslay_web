@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useClickOutside } from "@/hooks/useClickOutside";
 import { cx } from "@/lib/cx";
 import { AdminIcon, type AdminIconName } from "./AdminIcon";
 import styles from "./RowMenu.module.css";
@@ -21,6 +22,7 @@ export type RowMenuItem = {
  * gulir, atau ubah ukuran.
  */
 export function RowMenu({ label, items }: { label: string; items: RowMenuItem[] }) {
+  const wrapRef = useRef<HTMLSpanElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; right: number; anchorTop: number } | null>(null);
@@ -33,30 +35,26 @@ export function RowMenu({ label, items }: { label: string; items: RowMenuItem[] 
     if (pos.top + h > window.innerHeight - 8) list.style.top = `${Math.max(8, pos.anchorTop - h - 4)}px`;
   }, [pos]);
 
+  const close = useCallback(() => setPos(null), []);
+  useClickOutside(wrapRef, close, Boolean(pos));
+
   useEffect(() => {
     if (!pos) return;
-    const close = () => setPos(null);
-    const onPointer = (e: PointerEvent) => {
-      const t = e.target as Node;
-      if (!listRef.current?.contains(t) && !buttonRef.current?.contains(t)) close();
-    };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       close();
       buttonRef.current?.focus();
     };
-    document.addEventListener("pointerdown", onPointer);
     document.addEventListener("keydown", onKey);
     window.addEventListener("scroll", close, true);
     window.addEventListener("resize", close);
     listRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
     return () => {
-      document.removeEventListener("pointerdown", onPointer);
       document.removeEventListener("keydown", onKey);
       window.removeEventListener("scroll", close, true);
       window.removeEventListener("resize", close);
     };
-  }, [pos]);
+  }, [pos, close]);
 
   const toggle = () => {
     if (pos) return setPos(null);
@@ -65,7 +63,7 @@ export function RowMenu({ label, items }: { label: string; items: RowMenuItem[] 
   };
 
   return (
-    <>
+    <span ref={wrapRef} className={styles.wrap}>
       <button ref={buttonRef} type="button" className={styles.trigger} aria-label={label} aria-haspopup="menu" aria-expanded={Boolean(pos)} onClick={toggle}>
         <AdminIcon name="dots-three-vertical-bold" size={18} />
       </button>
@@ -90,6 +88,6 @@ export function RowMenu({ label, items }: { label: string; items: RowMenuItem[] 
           ))}
         </div>
       )}
-    </>
+    </span>
   );
 }

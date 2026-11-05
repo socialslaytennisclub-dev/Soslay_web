@@ -18,6 +18,10 @@ export const usesLineup = (format: string) => format === "americano" || format =
  */
 export const hasTargetTotal = (format: string) => format === "americano";
 
+/** Batas target poin (dan skor satu tim) per match; target bawaan form sesi baru. */
+export const SCORE_MAX = 99;
+export const DEFAULT_TARGET_POINTS = 21;
+
 /** Target poin per match, atau null bila format ini tanpa target (skor bebas). */
 export const scoreTarget = (format: string, targetPoints: number): number | null => (hasTargetTotal(format) ? targetPoints : null);
 

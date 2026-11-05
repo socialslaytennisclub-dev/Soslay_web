@@ -15,6 +15,11 @@ import type {
 
 export const TIER_LABEL: Record<Tier, string> = { basic: "Basic", silver: "Silver", gold: "Gold", platinum: "Platinum" };
 
+/** Asal peserta sesi (kolom "Via"). */
+export const PARTICIPANT_SOURCE_LABEL: Record<"website" | "kuy" | "admin", string> = { website: "Website", kuy: "Kuy", admin: "Admin" };
+/** Jalur bayar peserta impor Kuyy: lewat Kuyy atau langsung (transfer, mis. BCA). */
+export const PAYMENT_CHANNEL_LABEL: Record<"kuy" | "manual", string> = { kuy: "Kuy", manual: "Manual" };
+
 export const LEVEL_LABEL: Record<TennisLevel, string> = {
   beginner: "Beginner",
   beginner_intermediate: "Upper Beginner",

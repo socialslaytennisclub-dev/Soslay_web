@@ -205,13 +205,12 @@ export type SessionParticipant = {
   phone: string;
   level: TennisLevel | null;
   payment: PaymentStatus;
-  /** Nominal tiket dari impor Kuyy (Rp) — null untuk peserta dari booking website. Bisa diubah admin
-   *  bersama status bayarnya; masuk Keuangan setelah activity selesai & lunas. */
-  amount: number | null;
-  /** Baris dari file Kuyy (source kuy + username Kuyy) — nominal, status & jalur bayarnya bisa diubah admin. */
-  kuyImport: boolean;
-  /** Jalur bayar peserta impor Kuyy: lewat Kuyy (Saldo Kuyy) atau manual (transfer langsung → akun bayar manual, mis. BCA). */
-  paidVia: "kuy" | "manual";
+  /**
+   * Baris dari file Kuyy: nominal tiket & jalur bayarnya (Kuy → Saldo Kuyy, Manual → akun bayar manual, mis.
+   * BCA). Bisa diubah admin bersama status bayar; masuk Keuangan setelah activity selesai & lunas.
+   * null = bukan baris file Kuyy (booking website, tambahan admin).
+   */
+  kuyPayment: { amount: number; via: "kuy" | "manual" } | null;
   status: BookingStatus;
   source: "website" | "kuy" | "admin";
   checkedIn: boolean;
