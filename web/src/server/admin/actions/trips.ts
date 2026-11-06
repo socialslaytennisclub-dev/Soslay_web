@@ -8,7 +8,7 @@ import { normalizeBookingUrl, slugify } from "@/lib/text";
 import { localPhone } from "@/lib/wa-invite";
 import { uploadPrivateFile } from "@/server/storage";
 import { FINANCE_PROOF_BUCKET } from "../finance-repo";
-import { findMemberById, findMemberByIdentifier } from "../identity";
+import { findMemberById, findMemberByIdentifier, searchMembers } from "../identity";
 import { getTrip } from "../trips-repo";
 import { audit, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, type ActionResult } from "./common";
 
@@ -232,6 +232,23 @@ export async function duplicateTrip(id: string): Promise<SaveResult> {
 }
 
 /** Tambah pembeli paket: member Soslay (ID Soslay / Kuy ID / no. HP) atau tamu (nama + no. HP). */
+export type TripMemberOption = { id: string; fullName: string; memberCode: string; phone: string; matchedBy: string; alreadyIn: boolean };
+
+/** Saran member untuk "Tambah peserta bundling" (nama, ID Soslay, Kuy ID, nomor HP). */
+export async function searchTripMembers(tripId: string, query: string): Promise<{ ok: true; members: TripMemberOption[] } | { ok: false; error: string }> {
+  const auth = await requireEditor("activities");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const members = await searchMembers(query);
+  if (!members.length) return { ok: true, members: [] };
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase.from("trip_bookings").select("member_id").eq("trip_id", tripId).is("cancelled_at", null).in("member_id", members.map((m) => m.id));
+  const taken = new Set((data ?? []).map((r) => r.member_id as string));
+  return {
+    ok: true,
+    members: members.map((m) => ({ id: m.id, fullName: m.fullName, memberCode: m.memberCode, phone: m.phone, matchedBy: m.matchedBy, alreadyIn: taken.has(m.id) })),
+  };
+}
+
 export async function addTripBooking(tripId: string, input: { query?: string; memberId?: string; name?: string; phone?: string }): Promise<ActionResult> {
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };

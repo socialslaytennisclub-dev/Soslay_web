@@ -1,13 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { waLink } from "@/lib/wa-invite";
 import { amountDigits, amountDisplay, num } from "@/lib/finance/format";
 import { PAY_STATUS_LABEL, PAYMENT_KIND_LABEL, PLAN_LABEL, reminderText, shortDate, todayWib, type TripPayStatus } from "@/lib/trips";
-import { addTripBooking, cancelTripBooking, recordTripPayment, voidTripPayment } from "@/server/admin/actions/trips";
+import { addTripBooking, cancelTripBooking, recordTripPayment, searchTripMembers, voidTripPayment, type TripMemberOption } from "@/server/admin/actions/trips";
 import type { TripBooking } from "@/server/admin/types";
 import { FinanceModal } from "../finance/FinanceModal";
 import { AdminIcon } from "../ui/AdminIcon";
@@ -135,14 +135,46 @@ export function TripPayments({ tripId, tripTitle, activities, quota, due, minDp,
   // ── Tambah peserta ──
   const [query, setQuery] = useState("");
   const [guest, setGuest] = useState({ name: "", phone: "" });
+  // Saran member saat mengetik (nama / ID Soslay / Kuy ID / nomor HP); null = belum dicari.
+  const [results, setResults] = useState<TripMemberOption[] | null>(null);
+  const [picked, setPicked] = useState<TripMemberOption | null>(null);
+  const [searching, setSearching] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const searchSeq = useRef(0);
+  const typeQuery = (value: string) => {
+    setQuery(value);
+    setPicked(null);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (value.trim().length < 2) {
+      setResults(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const seq = ++searchSeq.current;
+    searchTimer.current = setTimeout(async () => {
+      const r = await searchTripMembers(tripId, value).catch(() => ({ ok: false as const, error: "Pencarian gagal — coba lagi." }));
+      if (seq !== searchSeq.current) return; // sudah ada ketikan yang lebih baru
+      setSearching(false);
+      setResults(r.ok ? r.members : []);
+      if (!r.ok) toast.error(r.error);
+    }, 300);
+  };
+  const resetAdd = () => {
+    setAdding(false);
+    setQuery("");
+    setGuest({ name: "", phone: "" });
+    setResults(null);
+    setPicked(null);
+  };
+  const usingMember = query.trim() !== "";
+  const canAdd = usingMember ? Boolean(picked && !picked.alreadyIn) : guest.name.trim() !== "";
   const addBooking = () =>
     start(async () => {
-      const r = await addTripBooking(tripId, query.trim() ? { query } : { name: guest.name, phone: guest.phone });
+      const r = await addTripBooking(tripId, picked ? { memberId: picked.id } : { name: guest.name, phone: guest.phone });
       toast.result(r);
       if (r.ok) {
-        setAdding(false);
-        setQuery("");
-        setGuest({ name: "", phone: "" });
+        resetAdd();
         router.refresh();
       }
     });
@@ -398,7 +430,7 @@ export function TripPayments({ tripId, tripTitle, activities, quota, due, minDp,
 
       <FinanceModal
         open={adding}
-        onClose={() => setAdding(false)}
+        onClose={resetAdd}
         title="Tambah peserta bundling"
         subtitle={`Otomatis terdaftar di semua ${activities} activity trip.`}
         footer={
@@ -407,8 +439,8 @@ export function TripPayments({ tripId, tripTitle, activities, quota, due, minDp,
               {active.length}/{quota || "∞"} paket terisi
             </span>
             <span className={styles.modalActions}>
-              <AdminButton onClick={() => setAdding(false)}>Batal</AdminButton>
-              <AdminButton variant="primary" icon="plus-bold" onClick={addBooking} disabled={busy || (!query.trim() && !guest.name.trim())}>
+              <AdminButton onClick={resetAdd}>Batal</AdminButton>
+              <AdminButton variant="primary" icon="plus-bold" onClick={addBooking} disabled={busy || !canAdd}>
                 Tambahkan
               </AdminButton>
             </span>
@@ -419,18 +451,51 @@ export function TripPayments({ tripId, tripTitle, activities, quota, due, minDp,
           <span className={editor.label}>Member Soslay</span>
           <span className={editor.affix}>
             <AdminIcon name="magnifying-glass" size={16} />
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ID Soslay, Kuy ID, atau nomor HP" />
+            <input value={query} onChange={(e) => typeQuery(e.target.value)} placeholder="Nama, ID Soslay, Kuy ID, atau nomor HP" autoComplete="off" />
           </span>
         </label>
+        {usingMember && (
+          <ul className={styles.results} aria-label="Hasil pencarian member" aria-busy={searching}>
+            {picked ? (
+              <li>
+                <div className={cx(styles.result, styles.picked)}>
+                  <span>
+                    <strong>{picked.fullName}</strong>
+                    <small>{[picked.memberCode, picked.phone].filter(Boolean).join(" · ")}</small>
+                  </span>
+                  <button type="button" className={styles.link} onClick={() => setPicked(null)}>
+                    Ganti
+                  </button>
+                </div>
+              </li>
+            ) : searching || results === null ? (
+              <li className={editor.muted}>{query.trim().length < 2 ? "Ketik minimal 2 huruf…" : "Mencari member…"}</li>
+            ) : results.length === 0 ? (
+              <li className={editor.muted}>Member tidak ditemukan — kosongkan pencarian lalu isi sebagai tamu di bawah.</li>
+            ) : (
+              results.map((m) => (
+                <li key={m.id}>
+                  <button type="button" className={styles.result} disabled={m.alreadyIn} onClick={() => setPicked(m)}>
+                    <span>
+                      <strong>{m.fullName}</strong>
+                      <small>{[m.memberCode, m.phone].filter(Boolean).join(" · ")}</small>
+                    </span>
+                    {m.alreadyIn ? <Badge tone="neutral">Sudah terdaftar</Badge> : <AdminIcon name="plus-bold" size={14} />}
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        )}
         <p className={styles.or}>atau tamu (belum member)</p>
         <div className={editor.cols2}>
           <label className={editor.field}>
             <span className={editor.label}>Nama</span>
-            <input className={editor.input} value={guest.name} disabled={Boolean(query.trim())} onChange={(e) => setGuest({ ...guest, name: e.target.value })} />
+            <input className={editor.input} value={guest.name} disabled={usingMember} onChange={(e) => setGuest({ ...guest, name: e.target.value })} />
           </label>
           <label className={editor.field}>
             <span className={editor.label}>Nomor HP (WhatsApp)</span>
-            <input className={editor.input} inputMode="tel" value={guest.phone} disabled={Boolean(query.trim())} onChange={(e) => setGuest({ ...guest, phone: e.target.value })} />
+            <input className={editor.input} inputMode="tel" value={guest.phone} disabled={usingMember} onChange={(e) => setGuest({ ...guest, phone: e.target.value })} />
           </label>
         </div>
       </FinanceModal>
