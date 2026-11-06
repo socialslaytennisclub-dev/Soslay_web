@@ -103,8 +103,17 @@ export async function listVenues(): Promise<AdminVenue[]> {
 }
 
 /** Pilihan venue untuk editor sesi (termasuk yang disembunyikan). */
+const toVenueChoice = (v: VenueForm) => ({ name: v.name, city: v.city, image: v.coverPath || "/images/home/venue-common-grounds.webp", courts: v.courts });
+
 export async function venueChoices() {
-  return (await loadVenueForms()).map((v) => ({ name: v.name, city: v.city, image: v.coverPath || "/images/home/venue-common-grounds.webp", courts: v.courts }));
+  return (await loadVenueForms()).map(toVenueChoice);
+}
+
+/** Venue awal form "Buat sesi": venue aktif pertama di List of Venue (sama dengan daftar Activities). */
+export async function defaultSessionVenue() {
+  const forms = await loadVenueForms();
+  const v = forms.find((f) => f.active) ?? forms[0];
+  return v ? { ...toVenueChoice(v), type: v.type } : null;
 }
 
 export async function getVenueForm(slug: string): Promise<VenueForm | null> {
