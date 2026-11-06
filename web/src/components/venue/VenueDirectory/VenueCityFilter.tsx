@@ -26,13 +26,16 @@ export function VenueCityFilter({ venues, initialCity, heading }: { venues: Venu
   const [changed, setChanged] = useState(false);
 
   useEffect(() => {
-    const onPop = () => {
+    const sync = () => {
       setCity(cityOf(window.location.href));
       setChanged(true);
     };
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
+    // Back ke entri hasil pushState memulihkan tree halaman asal (kota awal bisa beda dengan URL),
+    // jadi saat dipasang kota disamakan dengan URL; setelahnya ikuti Back/Forward.
+    if (cityOf(window.location.href) !== initialCity) sync();
+    window.addEventListener("popstate", sync);
+    return () => window.removeEventListener("popstate", sync);
+  }, [initialCity]);
 
   const select = (event: MouseEvent<HTMLElement>) => {
     const link = (event.target as HTMLElement).closest("a");

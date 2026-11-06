@@ -62,9 +62,10 @@ await check("/activity?type=social", { status: 307, location: "/activity/social"
 for (const type of ["mabar", "event", "escape", "coaching", "social"]) await check(`/activity/${type}`, { includes: ["Soslay Activities"] });
 await check("/activity/tidak-ada", { status: 404 });
 const venues = await check("/venue");
-// ?city= dilayani halaman statis per kota (rewrite) → HTML awal sudah terfilter.
-const bali = await check("/venue?city=bali", { includes: ["Kula Mani Tennis Village"] });
-if (bali.includes(">AYANA Midplaza Jakarta</h3>")) {
+// ?city= dilayani halaman statis per kota (rewrite) → HTML awal sudah terfilter. Nama venue hanya
+// pasti di data demo; di live cukup cek halamannya terbuka.
+const bali = await check("/venue?city=bali", { includes: demo ? ["Kula Mani Tennis Village"] : [] });
+if (demo && bali.includes(">AYANA Midplaza Jakarta</h3>")) {
   failures.push("/venue?city=bali → HTML awal masih berisi venue Jakarta");
   console.log(`✗ ${"/venue?city=bali (terfilter)".padEnd(48)} masih ada venue Jakarta`);
 }
