@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode, type Ref } from "react";
+import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { AdminIcon } from "@/components/admin/ui/AdminIcon";
 import { cx } from "@/lib/cx";
 import styles from "./Finance.module.css";
@@ -25,6 +25,15 @@ type FinanceModalProps = {
  */
 export function FinanceModal({ open, onClose, title, subtitle, wide, footer, action, formRef, children }: FinanceModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
+  // Naik setiap browser menutup dialog sendiri (mis. Chrome mengabaikan preventDefault pada Esc
+  // kedua). Effect di bawah lalu jalan lagi setelah state induk ter-commit: bila induk tetap
+  // membiarkan terbuka (konfirmasi dibatalkan), dialog ditampilkan lagi.
+  const [nativeCloses, setNativeCloses] = useState(0);
+  const onNativeClose = () => {
+    if (!open) return;
+    setNativeCloses((n) => n + 1);
+    onClose();
+  };
 
   useEffect(() => {
     const dialog = ref.current;
@@ -39,7 +48,7 @@ export function FinanceModal({ open, onClose, title, subtitle, wide, footer, act
     return () => {
       document.documentElement.style.overflow = previous;
     };
-  }, [open]);
+  }, [open, nativeCloses]);
 
   const inner = (
     <>
@@ -58,7 +67,7 @@ export function FinanceModal({ open, onClose, title, subtitle, wide, footer, act
   );
 
   return (
-    <dialog ref={ref} className={cx(styles.modal, wide && styles.modalWide)} aria-label={title} onClose={() => open && onClose()} onCancel={(e) => (e.preventDefault(), onClose())} onClick={(e) => e.target === ref.current && onClose()}>
+    <dialog ref={ref} className={cx(styles.modal, wide && styles.modalWide)} aria-label={title} onClose={onNativeClose} onCancel={(e) => (e.preventDefault(), onClose())} onClick={(e) => e.target === ref.current && onClose()}>
       {action ? (
         <form ref={formRef} action={action} className={styles.modalInner} noValidate>
           {inner}

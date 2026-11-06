@@ -7,7 +7,7 @@ import { AdminButton, PickerInput } from "@/components/admin/ui/AdminUI";
 import { toast } from "@/components/admin/ui/Toaster";
 import { amountDigits, amountDisplay, rp } from "@/lib/finance/format";
 import type { BalanceItem, BalanceItemKey } from "@/lib/finance/types";
-import { deleteBalanceItem, saveBalanceItem, saveOpeningBalance } from "@/server/admin/actions/finance";
+import { deleteBalanceItem, saveBalanceItem, saveOpeningBalances } from "@/server/admin/actions/finance";
 import styles from "./Finance.module.css";
 import { FinanceModal } from "./FinanceModal";
 
@@ -48,12 +48,23 @@ export function BalanceSetupButton({ accounts, items, autoOpen = false }: { acco
   const formFilled = !!form && (!!form.id || num(form.amount) !== 0);
   const unsaved = changedAccounts.length > 0 || formFilled;
 
-  /** Simpan saldo awal akun yang berubah (paralel). Jumlah yang tersimpan & apakah semuanya berhasil. */
+  /**
+   * Simpan saldo awal akun yang berubah dalam satu server action. `attempted` = ada yang dikirim
+   * (sebagian bisa tersimpan walau hasilnya gagal → pemanggil tetap me-refresh).
+   */
   const persistOpening = async () => {
-    const results = await Promise.all(changedAccounts.map((a) => saveOpeningBalance(a.id, num(opening[a.id]), openingDate)));
-    const failed = results.filter((r) => !r.ok);
-    if (failed[0] && !failed[0].ok) toast.error(failed[0].error);
-    return { ok: failed.length === 0, saved: results.length - failed.length };
+    if (!changedAccounts.length) return { ok: true, attempted: false };
+    const r = await saveOpeningBalances(changedAccounts.map((a) => ({ accountId: a.id, amount: num(opening[a.id]) })), openingDate);
+    if (!r.ok) toast.error(r.error);
+    return { ok: r.ok, attempted: true };
+  };
+
+  /** Buang isian yang belum disimpan → kembali ke nilai tersimpan. */
+  const resetInputs = () => {
+    setOpening(Object.fromEntries(accounts.map((a) => [a.id, String(a.openingBalance)])));
+    setOpeningDate(accounts[0]?.openingDate ?? "2025-09-01");
+    setDateTouched(false);
+    setForm(null);
   };
 
   const persistItem = async () => {
@@ -79,9 +90,9 @@ export function BalanceSetupButton({ accounts, items, autoOpen = false }: { acco
   const saveOpening = () =>
     start(async () => {
       if (!changedAccounts.length) return toast.success("Tidak ada perubahan saldo awal.");
-      const { ok, saved } = await persistOpening();
+      const { ok } = await persistOpening();
       // Sebagian bisa sudah tersimpan walau ada yang gagal → tetap segarkan data.
-      if (saved) router.refresh();
+      router.refresh();
       if (ok) toast.success("Saldo awal akun tersimpan.");
     });
 
@@ -100,7 +111,7 @@ export function BalanceSetupButton({ accounts, items, autoOpen = false }: { acco
       const saved = await persistOpening();
       const itemOk = saved.ok && (!formFilled || (await persistItem()));
       // Refresh juga saat gagal sebagian, supaya yang sudah tersimpan tidak dianggap "belum disimpan".
-      if (saved.saved || (formFilled && itemOk)) router.refresh();
+      if (saved.attempted || (formFilled && itemOk)) router.refresh();
       if (!saved.ok || !itemOk) return;
       toast.success("Saldo awal & penyesuaian tersimpan.");
       setOpen(false);
@@ -108,7 +119,10 @@ export function BalanceSetupButton({ accounts, items, autoOpen = false }: { acco
 
   // Tutup lewat X, klik di luar, atau Esc: minta konfirmasi bila ada isian yang belum disimpan.
   const requestClose = () => {
-    if (unsaved && !window.confirm("Ada isian yang belum disimpan. Tutup tanpa menyimpan?")) return;
+    if (unsaved) {
+      if (!window.confirm("Ada isian yang belum disimpan. Tutup tanpa menyimpan?")) return;
+      resetInputs();
+    }
     setOpen(false);
   };
 
