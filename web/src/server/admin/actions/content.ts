@@ -171,9 +171,9 @@ export async function saveInstagramPost(id: string, input: PostInput): Promise<A
       handle,
       text,
       href: input.href.trim(),
-      // Tanpa foto → kartu navy berisi kutipan.
-      image: input.image || undefined,
-      imagePosition: input.image && input.image === before?.image ? before?.imagePosition : undefined,
+      // Threads selalu kartu navy berisi kutipan (tanpa foto); IG / TikTok tanpa foto juga begitu.
+      image: input.platform === "threads" ? undefined : input.image || undefined,
+      imagePosition: input.platform !== "threads" && input.image && input.image === before?.image ? before?.imagePosition : undefined,
       visible: input.visible,
       memberId: input.memberId || null,
     };
@@ -202,7 +202,7 @@ export async function deleteInstagramPost(id: string): Promise<ActionResult> {
 const POST_BUCKET = "community-posts";
 
 // Foto preview link (og:image) hanya diambil dari domain ini — server tidak mengikuti URL sembarangan.
-const PREVIEW_PAGE_HOSTS = ["instagram.com", "tiktok.com", "threads.net", "threads.com"];
+const PREVIEW_PAGE_HOSTS = ["instagram.com", "tiktok.com"];
 const PREVIEW_IMAGE_HOSTS = ["cdninstagram.com", "fbcdn.net", "tiktokcdn.com", "tiktokcdn-us.com", "tiktokcdn-eu.com", "ibyteimg.com", "byteimg.com"];
 const PLATFORM_LABEL: Record<PostPlatform, string> = { instagram: "Instagram", tiktok: "TikTok", threads: "Threads" };
 const PREVIEW_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
@@ -224,6 +224,7 @@ const decodeHtml = (v: string) => v.replace(/&amp;/g, "&").replace(/&#x2F;/g, "/
 export async function fetchPostPhoto(platform: PostPlatform, href: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const auth = await requireEditor("content");
   if ("error" in auth) return { ok: false, error: auth.error };
+  if (platform === "threads") return { ok: false, error: "Post Threads tidak memakai foto." };
   if (postLinkError(platform, href)) return { ok: false, error: "Link belum valid." };
   const failed = { ok: false as const, error: `Foto tidak bisa diambil otomatis dari ${PLATFORM_LABEL[platform]} — upload foto manual.` };
   try {

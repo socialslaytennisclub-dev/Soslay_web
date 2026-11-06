@@ -170,7 +170,8 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
   const fetchSeq = useRef(0);
   const autoFetch = (platform: PostPlatform, href: string, image: string) => {
     if (fetchTimer.current) clearTimeout(fetchTimer.current);
-    if (postLinkError(platform, href) || (image && image !== autoImage.current)) return setFetching("idle");
+    // Threads tidak pakai foto (kartu navy berisi kutipan) — link hanya untuk membuka post-nya.
+    if (platform === "threads" || postLinkError(platform, href) || (image && image !== autoImage.current)) return setFetching("idle");
     setFetching("busy");
     const seq = ++fetchSeq.current;
     fetchTimer.current = setTimeout(async () => {
@@ -283,6 +284,9 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
           </datalist>
         </label>
 
+        {form.platform === "threads" ? (
+          <p className={ordersStyles.muted}>Post Threads tampil sebagai kartu navy berisi kutipan (tanpa foto). Link hanya untuk membuka post di Threads.</p>
+        ) : (
         <div className={settingsStyles.field}>
           <span className={settingsStyles.label}>Foto post</span>
           {fetching === "busy" ? (
@@ -323,6 +327,7 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
             <AdminIcon name="upload-simple" size={16} /> {uploading ? "Mengupload…" : form.image ? "Ganti dengan foto sendiri" : "Upload foto manual"} · JPG/PNG/WebP, maks 5 MB
           </label>
         </div>
+        )}
 
         <Toggle label="Tampil di homepage" hint="Feed “See You on the Court!”" checked={form.visible} onChange={(v) => set("visible", v)} />
       </div>

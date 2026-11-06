@@ -149,7 +149,8 @@ export const getHomepage = cache(async (): Promise<Homepage> => {
       // Post dari admin (Konten → Testimoni & IG); belum pernah diedit → konten statis + hiddenPosts lama.
       posts: postsFromSection(instagram as InstagramSectionJson)
         .filter((p) => p.visible)
-        .map((p) => ({ platform: p.platform, text: [p.text], handle: p.handle, image: p.image, imagePosition: p.imagePosition, href: p.href })),
+        // Threads selalu kartu navy berisi kutipan (tanpa foto).
+        .map((p) => ({ platform: p.platform, text: [p.text], handle: p.handle, image: p.platform === "threads" ? undefined : p.image, imagePosition: p.imagePosition, href: p.href })),
     },
   };
 });
