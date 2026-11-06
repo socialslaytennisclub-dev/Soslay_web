@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { isActivityType } from "@/content/activity";
 import { wibAt } from "@/lib/format";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { slugify } from "@/lib/text";
+import { normalizeBookingUrl, slugify } from "@/lib/text";
 import { discardUploads, isOwnUpload, uploadPublicImage } from "../../storage";
 import { monthKey } from "../time";
 import type { MatchFormat, TennisLevel } from "../types";
@@ -58,17 +58,6 @@ const ENABLED_FORMATS: MatchFormat[] = ["none", "americano", "rotating"];
 const WEEK = 7 * 86_400_000;
 const LEVELS: TennisLevel[] = ["beginner", "beginner_intermediate", "intermediate", "intermediate_advanced", "advanced"];
 const CREW_ROLE = { Host: "host", Coach: "coach", Fotografer: "photographer" } as const;
-/** "kuy.id/soslay/x" → "https://kuy.id/soslay/x"; null kalau bukan URL http(s). */
-function normalizeBookingUrl(raw: string): string | null {
-  const value = raw.trim();
-  if (!value) return "";
-  try {
-    const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
-    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
-  } catch {
-    return null;
-  }
-}
 
 
 function refresh(id?: string) {

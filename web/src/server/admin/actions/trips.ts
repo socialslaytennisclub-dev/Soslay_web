@@ -1,10 +1,10 @@
 "use server";
 
 import { formatRupiahPlain } from "@/lib/admin-labels";
-import { bookingMoney, PAYMENT_KIND_LABEL, todayWib, TRIP_TYPE, type TripPaymentKind } from "@/lib/trips";
+import { PAYMENT_KIND_LABEL, TRIP_TYPE, type TripPaymentKind } from "@/lib/trips";
 import { wibAt } from "@/lib/format";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { slugify } from "@/lib/text";
+import { normalizeBookingUrl, slugify } from "@/lib/text";
 import { localPhone } from "@/lib/wa-invite";
 import { uploadPrivateFile } from "@/server/storage";
 import { FINANCE_PROOF_BUCKET } from "../finance-repo";
@@ -60,6 +60,15 @@ export type TripInput = {
 
 type SaveResult = ({ ok: true; message: string; id: string } | { ok: false; error: string });
 
+/** Pesan aturan database (kuota paket, trip diarsipkan, melebihi sisa tagihan…) — sudah siap ditampilkan. */
+function guardMessage(error: { hint?: string | null; details?: string | null; message: string }): string | null {
+  if (error.hint === "trip_overpaid") {
+    const remaining = Number(error.details);
+    return remaining > 0 ? `Jumlah melebihi sisa tagihan (${formatRupiahPlain(remaining)}).` : "Peserta ini sudah lunas.";
+  }
+  return error.hint?.startsWith("trip_") ? error.message : null;
+}
+
 const DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_RE = /^\d{2}:\d{2}$/;
 const okInt = (n: number, min = 0) => Number.isInteger(n) && n >= min && n <= 1_000_000_000;
@@ -80,6 +89,7 @@ function validate(input: TripInput): string | null {
     if (a.date < input.startsOn || a.date > input.endsOn) return `${n}: tanggal harus di dalam tanggal trip.`;
     if (!okInt(a.capacity, 1)) return `${n}: kapasitas minimal 1.`;
     if (a.soldSingle && (!okInt(a.price) || (a.singleQuota !== null && !okInt(a.singleQuota)))) return `${n}: harga & kuota satuan harus angka.`;
+    if (a.soldSingle && normalizeBookingUrl(a.kuyUrl) === null) return `${n}: link Kuy harus URL http(s).`;
   }
   for (const r of input.rundown) {
     if (!r.title.trim() || !r.time.trim()) return "Setiap baris rundown butuh jam & kegiatan.";
@@ -143,90 +153,39 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
     min_dp: input.minDp,
     inclusions: input.inclusions.map((s) => s.trim()).filter(Boolean),
   };
-  // Simpan tidak dalam satu transaksi: gagal di tengah → buang trip / activity yang baru dibuat di simpan ini
-  // supaya menekan Simpan lagi tidak membuat trip & activity ganda.
-  const created: string[] = [];
-  let newTrip: string | null = null;
-  const fail = async (error: string): Promise<SaveResult> => {
-    if (created.length) await supabase.from("sessions").delete().in("id", created);
-    if (newTrip) await supabase.from("trips").delete().eq("id", newTrip);
-    return { ok: false, error };
-  };
-  let id = input.id;
-  if (id) {
-    const { error } = await supabase.from("trips").update(tripRow).eq("id", id);
-    if (error) return { ok: false, error: `Gagal menyimpan trip: ${error.message}` };
-  } else {
-    const { data, error } = await supabase
-      .from("trips")
-      .insert({ ...tripRow, slug: `${slugify(input.title)}-${crypto.randomUUID().slice(0, 4)}`, created_by: auth.userId })
-      .select("id")
-      .single();
-    if (error || !data) return { ok: false, error: `Gagal membuat trip: ${error?.message ?? "coba lagi"}` };
-    id = newTrip = data.id as string;
-  }
-
+  // Info trip, activity (baru / diambil / dilepas) & rundown disimpan dalam satu transaksi (RPC save_trip):
+  // gagal di tengah → tidak ada yang berubah. Status & visibilitas trip diteruskan ke activity oleh trigger.
   // Activity: data inti diatur di trip; detail lain (foto, format, crew, level…) di Edit activity.
-  const keyToSession = new Map<string, string>();
-  for (const [i, a] of input.activities.entries()) {
-    const core = {
-      title: a.title.trim(),
-      venue_id: venueId.get(a.venueName),
-      starts_at: wibAt(a.date, a.start).toISOString(),
-      ends_at: wibAt(a.date, a.end).toISOString(),
-      capacity: a.capacity,
-      sold_single: a.soldSingle,
-      price: a.soldSingle ? a.price : 0,
-      single_quota: a.soldSingle ? a.singleQuota : null,
-      kuy_booking_url: a.soldSingle && a.kuyUrl.trim() ? (/^https?:\/\//i.test(a.kuyUrl.trim()) ? a.kuyUrl.trim() : `https://${a.kuyUrl.trim()}`) : null,
-      trip_id: id,
-      trip_order: i + 1,
-    };
-    if (a.id) {
-      const { error } = await supabase.from("sessions").update(core).eq("id", a.id);
-      if (error) return fail(`Gagal menyimpan ${a.title}: ${error.message}`);
-      keyToSession.set(a.key, a.id);
-    } else {
-      const { data, error } = await supabase
-        .from("sessions")
-        .insert({
-          ...core,
-          slug: `${slugify(`${a.title}-${a.date}`)}-${crypto.randomUUID().slice(0, 4)}`,
-          type_slug: TRIP_TYPE,
-          status: input.status,
-          visibility: input.visibility,
-          points_per_attendance: 150,
-          waitlist_enabled: false,
-          created_by: auth.userId,
-        })
-        .select("id")
-        .single();
-      if (error || !data) return fail(`Gagal membuat ${a.title}: ${error?.message ?? "coba lagi"}`);
-      created.push(data.id as string);
-      keyToSession.set(a.key, data.id as string);
-    }
-  }
-  // Activity yang dikeluarkan dari daftar → lepas dari trip (sesinya tetap ada, peserta paket dikeluarkan).
-  const keep = [...keyToSession.values()];
-  const detach = supabase.from("sessions").update({ trip_id: null, trip_order: null }).eq("trip_id", id);
-  const { error: detachError } = keep.length ? await detach.not("id", "in", `(${keep.join(",")})`) : await detach;
-  if (detachError) return fail(`Gagal melepas activity: ${detachError.message}`);
-
-  // Status & visibilitas trip diteruskan ke activity-nya oleh trigger (trips_cascade_to_sessions; activity
-  // yang baru ditautkan: sessions_trip_link).
-
-  // Rundown diganti seluruhnya dalam satu transaksi (gagal → rundown lama tetap utuh).
-  const { error: rundownError } = await supabase.rpc("save_trip_rundown", {
-    p_trip: id,
-    p_items: input.rundown.map((r) => ({
+  const activities = input.activities.map((a, i) => ({
+    id: a.id ?? null,
+    key: a.key,
+    slug: a.id ? null : `${slugify(`${a.title}-${a.date}`)}-${crypto.randomUUID().slice(0, 4)}`,
+    type_slug: TRIP_TYPE,
+    title: a.title.trim(),
+    venue_id: venueId.get(a.venueName),
+    starts_at: wibAt(a.date, a.start).toISOString(),
+    ends_at: wibAt(a.date, a.end).toISOString(),
+    capacity: a.capacity,
+    sold_single: a.soldSingle,
+    price: a.soldSingle ? a.price : 0,
+    single_quota: a.soldSingle ? a.singleQuota : null,
+    kuy_booking_url: a.soldSingle ? normalizeBookingUrl(a.kuyUrl) || null : null,
+    trip_order: i + 1,
+  }));
+  const { data: savedId, error } = await supabase.rpc("save_trip", {
+    p_trip: input.id ?? null,
+    p_info: input.id ? tripRow : { ...tripRow, slug: `${slugify(input.title)}-${crypto.randomUUID().slice(0, 4)}` },
+    p_activities: activities,
+    p_rundown: input.rundown.map((r) => ({
       day: r.day,
       time_label: r.time.trim(),
       title: r.title.trim(),
       location: r.location.trim(),
-      session_id: r.activityKey ? (keyToSession.get(r.activityKey) ?? null) : null,
+      activity_key: r.activityKey,
     })),
   });
-  if (rundownError) return fail(`Gagal menyimpan rundown: ${rundownError.message}`);
+  if (error || !savedId) return { ok: false, error: `Gagal menyimpan trip: ${error?.message ?? "coba lagi"} — tidak ada perubahan yang tersimpan.` };
+  const id = savedId as string;
 
   await audit(auth.userId, `${input.id ? "mengubah" : "membuat"} trip ${tripRow.title}`, "trip", id);
   refreshPaths("/admin/activities", `/admin/activities/trip/${id}`);
@@ -276,17 +235,17 @@ export async function duplicateTrip(id: string): Promise<SaveResult> {
 export async function addTripBooking(tripId: string, input: { query?: string; memberId?: string; name?: string; phone?: string }): Promise<ActionResult> {
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
-  // Hanya yang dibutuhkan: kuota & judul trip, jumlah activity, pembeli aktif (tanpa memuat semua trip).
+  // Hanya yang dibutuhkan: judul trip, jumlah activity, pembeli aktif. Kuota paket & trip diarsipkan dijaga
+  // trigger trip_bookings_guard (aman dari dua admin menambah bersamaan) — pesannya lewat guardMessage.
   const supabase = await createSupabaseServerClient();
   const [{ data: trip }, { count: activityCount }, { data: activeRows }, member] = await Promise.all([
-    supabase.from("trips").select("title, package_quota").eq("id", tripId).maybeSingle(),
+    supabase.from("trips").select("title").eq("id", tripId).maybeSingle(),
     supabase.from("sessions").select("id", { count: "exact", head: true }).eq("trip_id", tripId),
     supabase.from("trip_bookings").select("member_id").eq("trip_id", tripId).is("cancelled_at", null),
     input.memberId ? findMemberById(input.memberId) : input.query ? findMemberByIdentifier(input.query) : Promise.resolve(null),
   ]);
   if (!trip) return { ok: false, error: "Trip tidak ditemukan." };
   const active = activeRows ?? [];
-  if (trip.package_quota && active.length >= trip.package_quota) return { ok: false, error: `Kuota paket (${trip.package_quota}) sudah penuh — naikkan kuota di Edit trip dulu.` };
   if (input.query && !member) return { ok: false, error: "Member tidak ditemukan — isi nama & nomor HP untuk tamu." };
   if (member && active.some((b) => b.member_id === member.id)) return { ok: false, error: `${member.fullName} sudah terdaftar di paket ini.` };
   const name = member?.fullName ?? input.name?.trim() ?? "";
@@ -299,7 +258,7 @@ export async function addTripBooking(tripId: string, input: { query?: string; me
     phone: member?.phone || (input.phone ? localPhone(input.phone) : "") || null,
     email: member?.email || null,
   });
-  if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
+  if (error) return { ok: false, error: guardMessage(error) ?? `Gagal menambah peserta: ${error.message}` };
   await audit(auth.userId, `menambah ${name} ke paket ${trip.title}`, "trip", tripId);
   refreshPaths(`/admin/activities/trip/${tripId}/peserta`, "/admin/activities");
   return { ok: true, message: `${name} terdaftar di paket & semua ${activityCount ?? 0} activity.` };
@@ -335,33 +294,28 @@ export async function recordTripPayment(formData: FormData): Promise<ActionResul
   if (!accountId) return { ok: false, error: "Pilih akun penerima." };
 
   const supabase = await createSupabaseServerClient();
-  // Satu booking + harga trip + pembayarannya — cukup untuk menghitung sisa (tanpa memuat semua trip).
-  const [{ data: booking }, { data: paid }] = await Promise.all([
-    supabase.from("trip_bookings").select("id, trip_id, full_name, cancelled_at, trips(price_normal, price_early_bird, early_bird_until)").eq("id", bookingId).maybeSingle(),
-    supabase.from("trip_payments").select("amount, received_on, voided_at").eq("booking_id", bookingId),
-  ]);
+  // Sisa tagihan (harga early bird / normal, tidak melebihi) dijaga trigger trip_payments_guard — satu aturan,
+  // aman dari dua kali simpan bersamaan. Di sini cukup data untuk pesan & audit.
+  const { data: booking } = await supabase.from("trip_bookings").select("trip_id, full_name, cancelled_at").eq("id", bookingId).maybeSingle();
   if (!booking || booking.cancelled_at) return { ok: false, error: "Peserta paket tidak ditemukan." };
-  const t = booking.trips as unknown as { price_normal: number; price_early_bird: number | null; early_bird_until: string | null } | null;
-  // Tidak boleh melebihi sisa tagihan (salah ketik langsung masuk Keuangan). Harga paket (early bird /
-  // normal) dihitung dengan pembayaran ini ikut — tanggal diterima bisa mundur ke masa early bird.
-  const pricing = t ? { priceNormal: t.price_normal, priceEarlyBird: t.price_early_bird, earlyBirdUntil: t.early_bird_until } : null;
-  const before = (paid ?? []).map((p) => ({ amount: p.amount as number, receivedOn: p.received_on as string, voided: Boolean(p.voided_at) }));
-  const remaining = pricing ? Math.max(bookingMoney(pricing, [...before, { amount, receivedOn, voided: false }], todayWib()).price - bookingMoney(pricing, before, receivedOn).paid, 0) : 0;
-  if (remaining <= 0) return { ok: false, error: `${booking.full_name} sudah lunas.` };
-  if (amount > remaining) return { ok: false, error: `Jumlah melebihi sisa tagihan (${formatRupiahPlain(remaining)}).` };
 
-  let proof: { proof_path: string; proof_name: string } | null = null;
+  // Simpan dulu, baru unggah bukti: pembayaran yang ditolak (melebihi sisa, dua kali simpan) tidak mengunggah file.
+  const { data: payment, error } = await supabase
+    .from("trip_payments")
+    .insert({ booking_id: bookingId, kind, amount, received_on: receivedOn, account_id: accountId, created_by: auth.userId })
+    .select("id")
+    .single();
+  if (error || !payment) return { ok: false, error: (error && guardMessage(error)) ?? `Gagal mencatat pembayaran: ${error?.message ?? "coba lagi"}` };
+  let proofNote = "";
   const file = formData.get("proof");
   if (file instanceof File && file.size > 0) {
     const up = await uploadPrivateFile({ bucket: FINANCE_PROOF_BUCKET, file, folder: `trip/${receivedOn.slice(0, 7)}`, maxBytes: MAX_PROOF, types: PROOF_TYPES });
-    if (!up.ok) return { ok: false, error: up.error };
-    proof = { proof_path: up.path, proof_name: file.name.slice(0, 120) };
+    const attached = up.ok && !(await supabase.from("trip_payments").update({ proof_path: up.path, proof_name: file.name.slice(0, 120) }).eq("id", payment.id)).error;
+    if (!attached) proofNote = ` Bukti gagal diunggah${up.ok ? "" : ` (${up.error})`} — pembayaran tetap tercatat.`;
   }
-  const { error } = await supabase.from("trip_payments").insert({ booking_id: bookingId, kind, amount, received_on: receivedOn, account_id: accountId, created_by: auth.userId, ...proof });
-  if (error) return { ok: false, error: `Gagal mencatat pembayaran: ${error.message}` };
   await audit(auth.userId, `mencatat ${PAYMENT_KIND_LABEL[kind]} ${formatRupiahPlain(amount)} · ${booking.full_name}`, "trip", booking.trip_id as string);
   refreshPaths(`/admin/activities/trip/${booking.trip_id}/peserta`, "/admin/activities", "/admin/keuangan");
-  return { ok: true, message: `${PAYMENT_KIND_LABEL[kind]} ${formatRupiahPlain(amount)} dari ${booking.full_name} tercatat · masuk Keuangan.` };
+  return { ok: true, message: `${PAYMENT_KIND_LABEL[kind]} ${formatRupiahPlain(amount)} dari ${booking.full_name} tercatat · masuk Keuangan.${proofNote}` };
 }
 
 /** Batalkan pembayaran (salah input / dana dikembalikan) — Keuangan dikoreksi otomatis. */

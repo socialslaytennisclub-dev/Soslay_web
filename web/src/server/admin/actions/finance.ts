@@ -168,8 +168,9 @@ export async function saveTransaction(formData: FormData): Promise<TxResult> {
   }
 
   // Biaya transfer → pengeluaran terpisah di akun tujuan (Biaya platform Kuyy / Biaya payment gateway).
+  // Transfer diubah: biaya lama selalu diganti — juga bila diubah jadi jenis lain (tanpa biaya transfer).
+  if (existing?.type === "transfer") await supabase.from("finance_transactions").update({ deleted_at: new Date().toISOString(), deleted_reason: replacedFeeReason(txId!) }).eq("parent_id", txId).is("deleted_at", null);
   if (type === "transfer") {
-    await supabase.from("finance_transactions").update({ deleted_at: new Date().toISOString(), deleted_reason: "diganti saat transfer diubah" }).eq("parent_id", txId).is("deleted_at", null);
     if (fee > 0) {
       const fromKuyy = data.accounts.find((a) => a.id === accountId)?.systemKey === "kuyy";
       const feeCat = data.categories.find((c) => c.systemKey === (fromKuyy ? "kuyy_fee" : "pg_fee"));
@@ -216,14 +217,23 @@ export async function deleteTransaction(id: string, reason?: string): Promise<Ac
 
 /** Penanda biaya transfer yang terhapus bersama transfer induknya (bukan yang diganti saat transfer diedit). */
 const childDeletedReason = (parentId: string) => `ikut dihapus bersama ${parentId}`;
+/** Penanda biaya transfer lama yang diganti saat transfer induknya diubah. Memuat id induk (bukan teks yang
+ *  mungkin diketik user sebagai alasan hapus) — sama seperti childDeletedReason. */
+const replacedFeeReason = (parentId: string) => `diganti saat transfer ${parentId} diubah`;
 
 /** "Batalkan" pada toast (12k): pulihkan transaksi yang baru dihapus. */
 export async function restoreTransaction(id: string): Promise<ActionResult> {
   const auth = await requireFinance("record");
   if ("error" in auth) return fail(auth.error);
   const supabase = await createSupabaseServerClient();
-  const { data: tx } = await supabase.from("finance_transactions").select("code, deleted_at, created_by").eq("id", id).maybeSingle();
+  const { data: tx } = await supabase.from("finance_transactions").select("code, deleted_at, deleted_reason, created_by, parent_id, import_batches:finance_import_batches(status)").eq("id", id).maybeSingle();
   if (!tx?.deleted_at) return fail("Transaksi tidak ditemukan.");
+  // Yang dihapus sistem tidak dipulihkan satu per satu: biaya transfer yang ikut / diganti bersama induknya
+  // (dipulihkan lewat induknya) dan transaksi dari import yang sudah dibatalkan.
+  const batch = tx.import_batches as unknown as { status: string } | null;
+  const parentId = tx.parent_id as string | null;
+  const systemDeleted = batch?.status === "undone" || (parentId !== null && [childDeletedReason(parentId), replacedFeeReason(parentId)].includes(tx.deleted_reason as string));
+  if (systemDeleted) return fail(`${tx.code} tidak bisa dipulihkan.`);
   if (auth.role === "recorder" && tx.created_by !== auth.userId) return fail("Tidak bisa memulihkan transaksi milik orang lain.");
   const { error } = await supabase.from("finance_transactions").update({ deleted_at: null, deleted_reason: null }).eq("id", id);
   if (error) return fail(`Gagal memulihkan: ${error.message}`);
