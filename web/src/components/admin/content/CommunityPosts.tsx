@@ -1,12 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { normalizeHandle, postLinkError, type PostPlatform } from "@/lib/community-posts";
 import { cx } from "@/lib/cx";
 import { shrinkImage } from "@/lib/image-resize";
-import { deleteInstagramPost, saveInstagramPost, setInstagramPostVisible, uploadPostImage, type PostInput } from "@/server/admin/actions/content";
-import type { CommunityPost } from "@/server/admin/types";
+import { deleteInstagramPost, fetchPostPhoto, saveInstagramPost, setInstagramPostVisible, uploadPostImage, type PostInput } from "@/server/admin/actions/content";
+import type { CommunityPost, MemberChoice } from "@/server/admin/types";
 import ordersStyles from "../orders/Orders.module.css";
 import settingsStyles from "../settings/Settings.module.css";
 import { TextArea, Toggle } from "../ui/AdminForm";
@@ -16,15 +16,19 @@ import styles from "./Content.module.css";
 import t from "./Testimonials.module.css";
 import { toast } from "../ui/Toaster";
 
-const KIND: Record<PostPlatform, { label: string; icon: AdminIconName; tone: BadgeTone; link: string; placeholder: string }> = {
+type KindMeta = { label: string; icon: AdminIconName; tone: BadgeTone; link: string; placeholder: string };
+const KIND: Record<PostPlatform, KindMeta> = {
   instagram: { label: "Instagram", icon: "instagram-logo", tone: "pink", link: "Link post Instagram", placeholder: "https://www.instagram.com/p/…" },
-  threads: { label: "Threads", icon: "chat-circle-text", tone: "neutral", link: "Link Threads", placeholder: "https://www.threads.net/@user/post/…" },
+  tiktok: { label: "TikTok", icon: "tiktok-logo", tone: "neutral", link: "Link video TikTok", placeholder: "https://www.tiktok.com/@user/video/…" },
 };
+/** Post lama dari Threads (sebelum diganti TikTok) — tetap tampil; saat diedit pilih Instagram / TikTok. */
+const LEGACY_THREADS: KindMeta = { label: "Threads", icon: "chat-circle-text", tone: "neutral", link: "", placeholder: "" };
+const kindOf = (platform: CommunityPost["platform"]) => (platform === "threads" ? LEGACY_THREADS : KIND[platform]);
 
 const EMPTY: CommunityPost = { id: "", platform: "instagram", handle: "", text: "", href: "", visible: true };
 
-/** Tab Testimoni & IG: post Instagram & Threads di feed "See You on the Court!" homepage — tambah / ubah / hapus. */
-export function CommunityPosts({ initial }: { initial: CommunityPost[] }) {
+/** Tab Testimoni & IG: post Instagram & TikTok di feed "See You on the Court!" homepage — tambah / ubah / hapus. */
+export function CommunityPosts({ initial, members }: { initial: CommunityPost[]; members: MemberChoice[] }) {
   const [posts, setPosts] = useState(initial);
   const [filter, setFilter] = useState<"all" | "visible" | "hidden">("all");
   const [editing, setEditing] = useState<CommunityPost | null>(null);
@@ -65,7 +69,7 @@ export function CommunityPosts({ initial }: { initial: CommunityPost[] }) {
       <section className={styles.card}>
         <header className={styles.cardHeader}>
           <div>
-            <h2 className={styles.cardTitle}>Post Instagram & Threads</h2>
+            <h2 className={styles.cardTitle}>Post Instagram & TikTok</h2>
             <p className={styles.muted}>{posts.filter((p) => p.visible).length} tampil di homepage · langsung tersimpan</p>
           </div>
           <div className={styles.filterPills} role="group" aria-label="Filter">
@@ -86,11 +90,11 @@ export function CommunityPosts({ initial }: { initial: CommunityPost[] }) {
           </div>
         </header>
         {shown.length === 0 ? (
-          <p className={ordersStyles.empty}>{posts.length ? "Tidak ada post dengan filter ini." : "Belum ada post. Tambahkan post Instagram atau Threads pertama."}</p>
+          <p className={ordersStyles.empty}>{posts.length ? "Tidak ada post dengan filter ini." : "Belum ada post. Tambahkan post Instagram atau TikTok pertama."}</p>
         ) : (
           <ul className={styles.posts}>
             {shown.map((p) => {
-              const kind = KIND[p.platform];
+              const kind = kindOf(p.platform);
               return (
                 <li key={p.id} className={cx(styles.post, !p.visible && styles.sectionOff, editing?.id === p.id && t.rowActive)}>
                   {p.image ? (
@@ -106,6 +110,7 @@ export function CommunityPosts({ initial }: { initial: CommunityPost[] }) {
                     <span className={styles.postMeta}>
                       <Badge tone={kind.tone}>{kind.label}</Badge>
                       <span className={styles.sectionName}>{p.handle}</span>
+                      {p.memberId && <Badge tone="indigo">Member</Badge>}
                     </span>
                     <span className={styles.postQuoteText}>“{p.text}”</span>
                   </button>
@@ -133,19 +138,60 @@ export function CommunityPosts({ initial }: { initial: CommunityPost[] }) {
         )}
       </section>
 
-      {editing && <PostEditor key={editing.id || "new"} post={editing} onClose={() => setEditing(null)} onSaved={saved} onDelete={() => remove(editing)} />}
+      {editing && <PostEditor key={editing.id || "new"} post={editing} members={members} onClose={() => setEditing(null)} onSaved={saved} onDelete={() => remove(editing)} />}
     </div>
   );
 }
 
-function PostEditor({ post, onClose, onSaved, onDelete }: { post: CommunityPost; onClose: () => void; onSaved: (p: CommunityPost) => void; onDelete: () => void }) {
+function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: CommunityPost; members: MemberChoice[]; onClose: () => void; onSaved: (p: CommunityPost) => void; onDelete: () => void }) {
   const isNew = !post.id;
-  const [form, setForm] = useState<PostInput>({ platform: post.platform, handle: post.handle, text: post.text, href: post.href, image: post.image ?? "", visible: post.visible });
+  const [form, setForm] = useState<PostInput>({
+    platform: post.platform === "threads" ? "instagram" : post.platform,
+    handle: post.handle,
+    text: post.text,
+    href: post.href,
+    image: post.image ?? "",
+    visible: post.visible,
+    memberId: post.memberId ?? null,
+  });
   const [saving, start] = useTransition();
   const [uploading, setUploading] = useState(false);
   const set = <K extends keyof PostInput>(key: K, value: PostInput[K]) => setForm((f) => ({ ...f, [key]: value }));
   const kind = KIND[form.platform];
   const linkError = form.href.trim() ? postLinkError(form.platform, form.href) : null;
+
+  const memberLabel = (m: MemberChoice) => `${m.name} · ${m.code}`;
+  const linkedMember = useMemo(() => members.find((m) => m.id === form.memberId), [members, form.memberId]);
+  const [memberQuery, setMemberQuery] = useState(linkedMember ? memberLabel(linkedMember) : "");
+
+  // Foto otomatis dari link (foto preview Instagram / TikTok). Hanya mengganti foto yang kosong atau
+  // yang sebelumnya juga diambil otomatis — foto upload manual tidak ditimpa.
+  const [fetching, setFetching] = useState<"idle" | "busy" | "failed">("idle");
+  const autoImage = useRef<string | null>(null);
+  const fetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fetchSeq = useRef(0);
+  const autoFetch = (platform: PostPlatform, href: string, image: string) => {
+    if (fetchTimer.current) clearTimeout(fetchTimer.current);
+    if (postLinkError(platform, href) || (image && image !== autoImage.current)) return setFetching("idle");
+    setFetching("busy");
+    const seq = ++fetchSeq.current;
+    fetchTimer.current = setTimeout(async () => {
+      const r = await fetchPostPhoto(platform, href).catch(() => ({ ok: false as const, error: "" }));
+      if (seq !== fetchSeq.current) return;
+      if (!r.ok) return setFetching("failed");
+      autoImage.current = r.url;
+      setFetching("idle");
+      setForm((f) => ({ ...f, image: r.url }));
+    }, 600);
+  };
+  const changeLink = (href: string) => {
+    set("href", href);
+    autoFetch(form.platform, href, form.image);
+  };
+  const changePlatform = (platform: PostPlatform) => {
+    set("platform", platform);
+    autoFetch(platform, form.href, form.image);
+  };
 
   const upload = async (file: File | undefined) => {
     if (!file || uploading) return;
@@ -155,6 +201,7 @@ function PostEditor({ post, onClose, onSaved, onDelete }: { post: CommunityPost;
     const result = await uploadPostImage(body).catch(() => ({ ok: false as const, error: "Upload gagal — coba lagi." }));
     setUploading(false);
     if (!result.ok) return toast.error(result.error);
+    autoImage.current = null;
     set("image", result.url);
   };
 
@@ -181,8 +228,8 @@ function PostEditor({ post, onClose, onSaved, onDelete }: { post: CommunityPost;
         <fieldset className={t.fieldset}>
           <legend className={settingsStyles.label}>Jenis post</legend>
           <div className={t.segment}>
-            {(["instagram", "threads"] as const).map((p) => (
-              <button key={p} type="button" aria-pressed={form.platform === p} className={cx(t.segmentOption, form.platform === p && t.segmentOn)} onClick={() => set("platform", p)}>
+            {(["instagram", "tiktok"] as const).map((p) => (
+              <button key={p} type="button" aria-pressed={form.platform === p} className={cx(t.segmentOption, form.platform === p && t.segmentOn)} onClick={() => changePlatform(p)}>
                 <AdminIcon name={KIND[p].icon} size={16} />
                 {KIND[p].label}
               </button>
@@ -194,7 +241,7 @@ function PostEditor({ post, onClose, onSaved, onDelete }: { post: CommunityPost;
           <span className={settingsStyles.label}>{kind.link} *</span>
           <span className={settingsStyles.affix}>
             <AdminIcon name="link-simple" size={16} />
-            <input value={form.href} onChange={(e) => set("href", e.target.value)} placeholder={kind.placeholder} inputMode="url" />
+            <input value={form.href} onChange={(e) => changeLink(e.target.value)} placeholder={kind.placeholder} inputMode="url" />
           </span>
           {linkError ? (
             <span className={cx(t.detected, t.detectedError)}>{linkError}</span>
@@ -219,36 +266,65 @@ function PostEditor({ post, onClose, onSaved, onDelete }: { post: CommunityPost;
 
         <TextArea label="Kutipan *" value={form.text} onChange={(v) => set("text", v)} maxLength={280} rows={4} />
 
-        {form.platform === "instagram" ? (
-          <div className={settingsStyles.field}>
-            <span className={settingsStyles.label}>Foto post</span>
-            {form.image ? (
-              <div className={t.preview}>
-                <span className={styles.postImage}>
-                  <Image src={form.image} alt="" fill sizes="64px" />
-                </span>
-                <AdminButton size="sm" icon="trash" onClick={() => set("image", "")}>
-                  Hapus foto
-                </AdminButton>
-              </div>
-            ) : null}
-            <label className={ordersStyles.notice}>
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp"
-                className="visually-hidden"
-                disabled={uploading}
-                onChange={(e) => {
-                  upload(e.target.files?.[0]);
-                  e.target.value = "";
+        <label className={settingsStyles.field}>
+          <span className={settingsStyles.label}>Hubungkan ke member (opsional)</span>
+          <input
+            className={settingsStyles.input}
+            list="post-members"
+            value={memberQuery}
+            placeholder="Ketik nama atau no. member"
+            onChange={(e) => {
+              setMemberQuery(e.target.value);
+              set("memberId", members.find((m) => memberLabel(m) === e.target.value)?.id ?? null);
+            }}
+          />
+          <datalist id="post-members">
+            {members.map((m) => (
+              <option key={m.id} value={memberLabel(m)} />
+            ))}
+          </datalist>
+        </label>
+
+        <div className={settingsStyles.field}>
+          <span className={settingsStyles.label}>Foto post</span>
+          {fetching === "busy" ? (
+            <span className={t.detected}>Mengambil foto dari {kind.label}…</span>
+          ) : fetching === "failed" ? (
+            <span className={cx(t.detected, t.detectedError)}>Foto tidak bisa diambil otomatis dari {kind.label} (akun private / perlu login) — upload foto manual.</span>
+          ) : !form.image ? (
+            <span className={ordersStyles.muted}>Terisi otomatis dari link post. Tanpa foto, post tampil sebagai kartu navy berisi kutipan.</span>
+          ) : null}
+          {form.image ? (
+            <div className={t.preview}>
+              <span className={styles.postImage}>
+                <Image src={form.image} alt="" fill sizes="64px" />
+              </span>
+              <AdminButton
+                size="sm"
+                icon="trash"
+                onClick={() => {
+                  autoImage.current = null;
+                  set("image", "");
                 }}
-              />
-              <AdminIcon name="upload-simple" size={16} /> {uploading ? "Mengupload…" : form.image ? "Ganti foto" : "Upload foto post"} · JPG/PNG/WebP, maks 5 MB
-            </label>
-          </div>
-        ) : (
-          <p className={ordersStyles.muted}>Post Threads tampil sebagai kartu navy berisi kutipan (tanpa foto).</p>
-        )}
+              >
+                Hapus foto
+              </AdminButton>
+            </div>
+          ) : null}
+          <label className={ordersStyles.notice}>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="visually-hidden"
+              disabled={uploading}
+              onChange={(e) => {
+                upload(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+            <AdminIcon name="upload-simple" size={16} /> {uploading ? "Mengupload…" : form.image ? "Ganti dengan foto sendiri" : "Upload foto manual"} · JPG/PNG/WebP, maks 5 MB
+          </label>
+        </div>
 
         <Toggle label="Tampil di homepage" hint="Feed “See You on the Court!”" checked={form.visible} onChange={(v) => set("visible", v)} />
       </div>
@@ -262,7 +338,7 @@ function PostEditor({ post, onClose, onSaved, onDelete }: { post: CommunityPost;
         <AdminButton onClick={onClose} disabled={saving}>
           Batal
         </AdminButton>
-        <AdminButton variant="primary" icon="check-bold" onClick={save} disabled={saving || uploading}>
+        <AdminButton variant="primary" icon="check-bold" onClick={save} disabled={saving || uploading || fetching === "busy"}>
           {saving ? "Menyimpan…" : "Simpan"}
         </AdminButton>
       </div>

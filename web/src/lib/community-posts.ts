@@ -1,21 +1,24 @@
 import { instagram } from "@/content/home";
 
 /**
- * Post Instagram & Threads di feed "See You on the Court!" homepage. Disimpan di
+ * Post Instagram & TikTok di feed "See You on the Court!" homepage. Disimpan di
  * content_sections (page home, key instagram) → `posts`. Selama belum pernah diedit di admin,
  * daftar diambil dari konten statis (content/home) + `hiddenPosts` lama.
  */
-export type PostPlatform = "instagram" | "threads";
+export type PostPlatform = "instagram" | "tiktok";
 
 export type StoredPost = {
   id: string;
-  platform: PostPlatform;
+  /** "threads" = post lama sebelum Threads diganti TikTok — tetap tampil, diedit jadi IG / TikTok. */
+  platform: PostPlatform | "threads";
   handle: string;
   text: string;
   href: string;
   image?: string;
   imagePosition?: string;
   visible: boolean;
+  /** Member Soslay pemilik post (opsional). */
+  memberId?: string | null;
 };
 
 export type InstagramSectionJson = { posts?: StoredPost[]; hiddenPosts?: string[] } & Record<string, unknown>;
@@ -36,10 +39,10 @@ export function postsFromSection(json: InstagramSectionJson | null | undefined):
   }));
 }
 
-/** Link post sesuai platform: instagram.com/p|reel|tv/… atau threads.net|com/@user/post/…. */
+/** Link post sesuai platform: instagram.com/p|reel/… atau tiktok.com/@user/video/… (atau link pendek vt/vm). */
 export function postLinkError(platform: PostPlatform, href: string): string | null {
   const url = href.trim();
-  if (!url) return platform === "instagram" ? "Tempel link post Instagram." : "Tempel link Threads.";
+  if (!url) return platform === "instagram" ? "Tempel link post Instagram." : "Tempel link video TikTok.";
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -50,7 +53,9 @@ export function postLinkError(platform: PostPlatform, href: string): string | nu
   if (platform === "instagram") {
     return host === "instagram.com" && /^\/(p|reel|reels|tv)\/[\w-]+/.test(parsed.pathname) ? null : "Link harus post Instagram, mis. https://www.instagram.com/p/…";
   }
-  return (host === "threads.net" || host === "threads.com") && /^\/@[\w.]+\/post\/[\w-]+/.test(parsed.pathname) ? null : "Link harus post Threads, mis. https://www.threads.net/@user/post/…";
+  const full = (host === "tiktok.com" || host === "m.tiktok.com") && /^\/@[\w.-]+\/(video|photo)\/\d+/.test(parsed.pathname);
+  const short = (host === "vt.tiktok.com" || host === "vm.tiktok.com") && /^\/\w+/.test(parsed.pathname);
+  return full || short ? null : "Link harus video TikTok, mis. https://www.tiktok.com/@user/video/…";
 }
 
 /** "@user" dari isian admin ("user", "@user", "instagram.com/user"). */

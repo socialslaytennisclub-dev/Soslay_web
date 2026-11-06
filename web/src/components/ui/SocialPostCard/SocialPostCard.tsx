@@ -4,18 +4,25 @@ import { MediaCard } from "../MediaCard/MediaCard";
 import styles from "./SocialPostCard.module.css";
 
 export type SocialPostCardProps = {
-  platform: "instagram" | "threads";
+  /** "threads" = post lama (sebelum diganti TikTok). */
+  platform: "instagram" | "tiktok" | "threads";
   text: string[];
   handle: string;
-  /** Tanpa gambar → kartu navy (gaya post Threads). */
+  /** Tanpa gambar → kartu navy (kutipan saja). */
   image?: string;
   imagePosition?: string;
   href: string;
 };
 
-/** Figma: Card/Instagram — post IG (foto) atau Threads (navy, handle lime). */
+const PLATFORM = {
+  instagram: { label: "Instagram", icon: "instagram-logo" },
+  tiktok: { label: "TikTok", icon: "tiktok-logo" },
+  threads: { label: "Threads", icon: "threads-logo" },
+} as const;
+
+/** Figma: Card/Instagram — post IG / TikTok (foto) atau kutipan saja (navy, handle lime). */
 export function SocialPostCard({ platform, text, handle, image, imagePosition, href }: SocialPostCardProps) {
-  const label = platform === "instagram" ? "Instagram" : "Threads";
+  const { label, icon } = PLATFORM[platform];
 
   return (
     <a
@@ -33,7 +40,7 @@ export function SocialPostCard({ platform, text, handle, image, imagePosition, h
         objectPosition={imagePosition}
         radius="md"
         sizes="313px"
-        corner={<Icon name={platform === "instagram" ? "instagram-logo" : "threads-logo"} />}
+        corner={<Icon name={icon} />}
       >
         <div className={cx(styles.body, !image && styles.centered)}>
           {text.map((paragraph) => (

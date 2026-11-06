@@ -144,13 +144,13 @@ export async function setInstagramPostVisible(id: string, visible: boolean): Pro
   return done(visible ? `Post ${handle} tampil di homepage.` : `Post ${handle} disembunyikan dari homepage.`);
 }
 
-export type PostInput = { platform: PostPlatform; handle: string; text: string; href: string; image: string; visible: boolean };
+export type PostInput = { platform: PostPlatform; handle: string; text: string; href: string; image: string; visible: boolean; memberId: string | null };
 
-/** Tambah (id kosong) atau ubah post Instagram / Threads. */
+/** Tambah (id kosong) atau ubah post Instagram / TikTok. */
 export async function saveInstagramPost(id: string, input: PostInput): Promise<ActionResult & { post?: StoredPost }> {
   const auth = await requireEditor("content");
   if ("error" in auth) return fail(auth.error);
-  if (input.platform !== "instagram" && input.platform !== "threads") return fail("Pilih jenis post.");
+  if (input.platform !== "instagram" && input.platform !== "tiktok") return fail("Pilih jenis post.");
   const handle = normalizeHandle(input.handle);
   if (!handle) return fail("Isi username akun (mis. @socialslay).");
   const text = input.text.trim();
@@ -171,10 +171,11 @@ export async function saveInstagramPost(id: string, input: PostInput): Promise<A
       handle,
       text,
       href: input.href.trim(),
-      // Threads tampil sebagai kartu navy tanpa foto.
-      image: input.platform === "instagram" ? input.image || undefined : undefined,
-      imagePosition: input.platform === "instagram" && input.image === before?.image ? before?.imagePosition : undefined,
+      // Tanpa foto → kartu navy berisi kutipan.
+      image: input.image || undefined,
+      imagePosition: input.image && input.image === before?.image ? before?.imagePosition : undefined,
       visible: input.visible,
+      memberId: input.memberId || null,
     };
     return before ? posts.map((p) => (p.id === id ? saved! : p)) : [...posts, saved];
   });
@@ -200,7 +201,59 @@ export async function deleteInstagramPost(id: string): Promise<ActionResult> {
 
 const POST_BUCKET = "community-posts";
 
-/** Upload foto post Instagram ke Storage; URL tersimpan saat admin menekan Simpan. */
+// Foto preview link (og:image) hanya diambil dari domain ini — server tidak mengikuti URL sembarangan.
+const PREVIEW_PAGE_HOSTS = ["instagram.com", "tiktok.com"];
+const PREVIEW_IMAGE_HOSTS = ["cdninstagram.com", "fbcdn.net", "tiktokcdn.com", "tiktokcdn-us.com", "tiktokcdn-eu.com", "ibyteimg.com", "byteimg.com"];
+const PREVIEW_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+const hostIn = (url: string, hosts: string[]) => {
+  try {
+    const u = new URL(url);
+    return u.protocol === "https:" && hosts.some((h) => u.hostname === h || u.hostname.endsWith(`.${h}`));
+  } catch {
+    return false;
+  }
+};
+const decodeHtml = (v: string) => v.replace(/&amp;/g, "&").replace(/&#x2F;/g, "/").replace(/&quot;/g, '"').replace(/&#039;/g, "'");
+
+/**
+ * Ambil foto post dari link Instagram / TikTok (foto preview yang sama dengan saat link dibagikan di
+ * WhatsApp), lalu simpan ke Storage — URL foto dari Instagram/TikTok kedaluwarsa dalam beberapa hari.
+ * Bisa gagal (akun private, Instagram minta login, format halaman berubah) → admin upload manual.
+ */
+export async function fetchPostPhoto(platform: PostPlatform, href: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const auth = await requireEditor("content");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  if (postLinkError(platform, href)) return { ok: false, error: "Link belum valid." };
+  const failed = { ok: false as const, error: `Foto tidak bisa diambil otomatis dari ${platform === "instagram" ? "Instagram" : "TikTok"} — upload foto manual.` };
+  try {
+    const page = await fetch(href.trim(), {
+      headers: { "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)", Accept: "text/html" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(10_000),
+    });
+    // Link pendek (vt.tiktok.com) diarahkan ulang — hasil akhirnya tetap harus di domain yang sama.
+    if (!page.ok || !hostIn(page.url, PREVIEW_PAGE_HOSTS)) return failed;
+    const html = (await page.text()).slice(0, 2_000_000);
+    const meta = /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i.exec(html) ?? /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i.exec(html);
+    const imageUrl = meta ? decodeHtml(meta[1]) : "";
+    if (!imageUrl || !hostIn(imageUrl, PREVIEW_IMAGE_HOSTS)) return failed;
+
+    const img = await fetch(imageUrl, { signal: AbortSignal.timeout(10_000) });
+    const type = (img.headers.get("content-type") ?? "").split(";")[0].trim();
+    if (!img.ok || !PREVIEW_TYPES[type]) return failed;
+    const bytes = await img.arrayBuffer();
+    if (bytes.byteLength > 5 * 1024 * 1024) return failed;
+    const file = new File([bytes], `preview.${PREVIEW_TYPES[type]}`, { type });
+    const result = await uploadPublicImage({ bucket: POST_BUCKET, file, folder: new Date().toISOString().slice(0, 7), maxBytes: 5 * 1024 * 1024 });
+    if (!result.ok) return { ok: false, error: result.error };
+    await audit(auth.userId, "content.post_image_fetch", "post_image", result.path);
+    return { ok: true, url: result.url };
+  } catch {
+    return failed;
+  }
+}
+
+/** Upload foto post ke Storage; URL tersimpan saat admin menekan Simpan. */
 export async function uploadPostImage(formData: FormData): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const auth = await requireEditor("content");
   if ("error" in auth) return { ok: false, error: auth.error };
