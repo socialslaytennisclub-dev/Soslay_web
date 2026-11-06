@@ -166,8 +166,8 @@ export function UpcomingSessions({ data }: { data: OverviewData }) {
 }
 
 // ── Member terbaru ──────────────────────────────────────────────────────────
-/** "@kuyid · Jakarta" — akun Kuy member; tanpa Kuy ID → ditandai, kota hanya bila diisi. */
-const memberMeta = (m: OverviewData["newestMembers"][number]) => [m.kuyId ? `@${m.kuyId.replace(/^@/, "")}` : "Belum ada Kuy ID", m.city].filter(Boolean).join(" · ");
+/** Akun Kuy member ("@kuyid"); tanpa Kuy ID → ditandai. */
+const memberMeta = (m: OverviewData["newestMembers"][number]) => (m.kuyId ? `@${m.kuyId.replace(/^@/, "")}` : "Belum ada Kuy ID");
 
 export function NewestMembers({ data }: { data: OverviewData }) {
   return (
