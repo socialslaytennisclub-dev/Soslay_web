@@ -120,7 +120,7 @@ export function SessionsTable({ rows, sort, dir, sortHrefs }: SessionsTableProps
                   <td>
                     <span className={styles.cellName}>{s.venueName}</span>
                     <span className={styles.sessionMeta}>
-                      {s.venueCity} · {s.venueType}
+                      {[s.venueCity, s.venueType].filter(Boolean).join(" · ")}
                     </span>
                   </td>
                   <td>

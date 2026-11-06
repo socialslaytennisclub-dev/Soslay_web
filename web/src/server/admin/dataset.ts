@@ -28,6 +28,8 @@ export type DataSession = demo.DemoSession & {
   visibleUntil?: Date | null;
   crew?: { name: string; role: "Host" | "Coach" | "Fotografer" }[];
   courts?: string[];
+  /** Kota, tipe & foto venue dari tabel venues (List of Venue). Tanpa ini (mode demo) → content/venues. */
+  venue?: { city: string; type: string; image: string };
   /** Waktu sesi dibuat di admin (untuk urutan "Baru ditambahkan"). */
   createdAt?: Date;
 };
@@ -199,7 +201,7 @@ type SessionRow = {
   visibility: "public" | "members" | "link"; waitlist_enabled: boolean; members_only: boolean; show_on_homepage: boolean;
   recommended_levels: TennisLevel[]; series_id: string | null; kuy_booking_url: string | null; visible_until: string | null; cover_path: string | null; created_at: string;
   trip_id: string | null; trip_order: number | null; sold_single: boolean; single_quota: number | null;
-  venues: { name: string; courts: string[] } | null;
+  venues: { name: string; courts: string[]; city: string; venue_type: string | null; cover_path: string | null } | null;
   session_crew: { role: string; staff_members: { full_name: string } | null }[];
 };
 type BookingRow = { session_id: string; member_id: string; status: BookingStatus; payment_status: PaymentStatus; source: "website" | "kuy" | "admin"; guests: number; checked_in_at: string | null; created_at: string };
@@ -218,7 +220,7 @@ async function loadLive(): Promise<Dataset> {
     fetchAll<SessionRow>(
       client,
       "sessions",
-      "id, title, type_slug, description, court_label, starts_at, ends_at, capacity, price, points_per_attendance, status, publish_at, visibility, waitlist_enabled, members_only, show_on_homepage, recommended_levels, series_id, kuy_booking_url, visible_until, cover_path, created_at, trip_id, trip_order, sold_single, single_quota, venues(name, courts), session_crew(role, staff_members(full_name))",
+      "id, title, type_slug, description, court_label, starts_at, ends_at, capacity, price, points_per_attendance, status, publish_at, visibility, waitlist_enabled, members_only, show_on_homepage, recommended_levels, series_id, kuy_booking_url, visible_until, cover_path, created_at, trip_id, trip_order, sold_single, single_quota, venues(name, courts, city, venue_type, cover_path), session_crew(role, staff_members(full_name))",
       "starts_at",
     ),
     fetchAll<BookingRow>(client, "bookings", "session_id, member_id, status, payment_status, source, guests, checked_in_at, created_at", "created_at"),
@@ -268,6 +270,7 @@ async function loadLive(): Promise<Dataset> {
     typeSlug: s.type_slug,
     description: s.description ?? "",
     venueName: s.venues?.name ?? "—",
+    venue: s.venues ? { city: s.venues.city, type: s.venues.venue_type ?? "", image: s.venues.cover_path ?? "" } : undefined,
     court: s.court_label ?? "",
     courts: s.venues?.courts ?? [],
     startsAt: new Date(s.starts_at),

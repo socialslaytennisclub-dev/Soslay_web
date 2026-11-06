@@ -9,8 +9,13 @@ import type { SessionDisplayStatus, SessionRow } from "./types";
 
 const ALTITUDE = { city: "Bali", type: "Outdoor", image: "/images/activity/featured-altitude.webp" };
 
-export function venueMeta(name: string) {
-  const venue = venueList.find((v) => v.name === name);
+/** Kota · tipe · foto venue sesi: dari List of Venue (database); mode demo → data contoh content/venues. */
+export function venueMeta(s: Pick<DataSession, "venueName" | "venue">) {
+  if (s.venue) {
+    const fallback = venueList.find((v) => v.name === s.venueName)?.image ?? ALTITUDE.image;
+    return { city: s.venue.city, type: s.venue.type, image: s.venue.image || fallback };
+  }
+  const venue = venueList.find((v) => v.name === s.venueName);
   return venue ? { city: venue.city, type: venue.type, image: venue.image } : ALTITUDE;
 }
 
@@ -37,7 +42,7 @@ function displayStatus(s: DataSession, booked: number, now: Date): SessionDispla
 }
 
 export function toRow(d: Dataset, s: DataSession): SessionRow {
-  const meta = venueMeta(s.venueName);
+  const meta = venueMeta(s);
   const { booked, waitlisted } = fill(d, s.id);
   return {
     id: s.id,
