@@ -9,9 +9,9 @@ import { InstagramFeed } from "@/components/sections/InstagramFeed/InstagramFeed
 import { PageHero } from "@/components/sections/PageHero/PageHero";
 import { activityLandings, activityPage } from "@/content/activity";
 import { ACTIVITY_PATHS } from "@/content/activity-paths";
-import { instagram } from "@/content/home";
 import { filterByType, newestFirst, pastSessions, upcomingSessions } from "@/lib/sessions";
 import { getWebsiteSessions } from "@/server/public/sessions";
+import { getInstagramFeed } from "@/server/public/homepage";
 
 export function generateStaticParams() {
   return activityLandings.map((landing) => ({ type: ACTIVITY_PATHS[landing.type] }));
@@ -58,7 +58,7 @@ export default async function ActivityTypePage({ params }: PageProps<"/activity/
           />
           {"about" in landing && <ActivityAbout id="activity-about-title" {...landing.about} />}
           <SessionsSection upcoming={upcoming} past={past} />
-          <InstagramFeed {...instagram} />
+          <InstagramFeed {...await getInstagramFeed()} />
         </main>
         <Footer />
       </MotionProvider>

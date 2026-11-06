@@ -1,17 +1,18 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { normalizeHandle, postLinkError, type PostPlatform } from "@/lib/community-posts";
 import { cx } from "@/lib/cx";
 import { shrinkImage } from "@/lib/image-resize";
-import { deleteInstagramPost, fetchPostPhoto, saveInstagramPost, setInstagramPostVisible, uploadPostImage, type PostInput } from "@/server/admin/actions/content";
+import { deleteInstagramPost, discardPostImages, fetchPostPhoto, saveInstagramPost, setInstagramPostVisible, uploadPostImage, type PostInput } from "@/server/admin/actions/content";
 import type { CommunityPost, MemberChoice } from "@/server/admin/types";
 import ordersStyles from "../orders/Orders.module.css";
 import settingsStyles from "../settings/Settings.module.css";
 import { TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon, type AdminIconName } from "../ui/AdminIcon";
 import { AdminButton, Badge, type BadgeTone } from "../ui/AdminUI";
+import { useConfirm } from "../ui/ConfirmDialog";
 import styles from "./Content.module.css";
 import t from "./Testimonials.module.css";
 import { toast } from "../ui/Toaster";
@@ -31,6 +32,7 @@ export function CommunityPosts({ initial, members }: { initial: CommunityPost[];
   const [filter, setFilter] = useState<"all" | "visible" | "hidden">("all");
   const [editing, setEditing] = useState<CommunityPost | null>(null);
   const [pending, start] = useTransition();
+  const [confirm, confirmDialog] = useConfirm();
 
   const toggle = (p: CommunityPost) => {
     const next = !p.visible;
@@ -43,8 +45,9 @@ export function CommunityPosts({ initial, members }: { initial: CommunityPost[];
     });
   };
 
-  const remove = (p: CommunityPost) => {
-    if (!window.confirm(`Hapus post ${p.handle}? Tindakan ini tidak bisa dibatalkan.`)) return;
+  const remove = async (p: CommunityPost) => {
+    const ok = await confirm({ title: `Hapus post ${p.handle}?`, body: <p>Post hilang dari feed website. Tindakan ini tidak bisa dibatalkan.</p>, confirmLabel: "Hapus post" });
+    if (!ok) return;
     start(async () => {
       const result = await deleteInstagramPost(p.id);
       if (result.ok) {
@@ -64,6 +67,7 @@ export function CommunityPosts({ initial, members }: { initial: CommunityPost[];
 
   return (
     <div className={t.layout}>
+      {confirmDialog}
       <section className={styles.card}>
         <header className={styles.cardHeader}>
           <div>
@@ -168,14 +172,21 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
   const autoImage = useRef<string | null>(null);
   const fetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchSeq = useRef(0);
-  const autoFetch = (platform: PostPlatform, href: string, image: string) => {
+  /** Batalkan pengambilan yang sedang berjalan — hasilnya tidak lagi dipakai. */
+  const cancelFetch = () => {
     if (fetchTimer.current) clearTimeout(fetchTimer.current);
+    fetchSeq.current += 1;
+    setFetching("idle");
+  };
+  const autoFetch = (platform: PostPlatform, href: string, image: string) => {
+    cancelFetch();
     // Threads tidak pakai foto (kartu navy berisi kutipan) — link hanya untuk membuka post-nya.
-    if (platform === "threads" || postLinkError(platform, href) || (image && image !== autoImage.current)) return setFetching("idle");
+    if (platform === "threads" || postLinkError(platform, href) || (image && image !== autoImage.current)) return;
     setFetching("busy");
-    const seq = ++fetchSeq.current;
+    const seq = fetchSeq.current;
     fetchTimer.current = setTimeout(async () => {
       const r = await fetchPostPhoto(platform, href).catch(() => ({ ok: false as const, error: "" }));
+      if (r.ok) pendingImages.current.push(r.url);
       if (seq !== fetchSeq.current) return;
       if (!r.ok) return setFetching("failed");
       autoImage.current = r.url;
@@ -183,6 +194,17 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
       setForm((f) => ({ ...f, image: r.url }));
     }, 600);
   };
+
+  // Foto yang diambil / diupload di editor ini. Yang tidak jadi dipakai (diganti, Batal, pindah post)
+  // dibuang dari Storage — server hanya menghapus file yang tidak dipakai post mana pun.
+  const pendingImages = useRef<string[]>([]);
+  useEffect(() => {
+    const list = pendingImages.current;
+    return () => {
+      if (list.length) void discardPostImages(list.splice(0)).catch(() => undefined);
+    };
+  }, []);
+
   const changeLink = (href: string) => {
     set("href", href);
     autoFetch(form.platform, href, form.image);
@@ -200,6 +222,8 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
     const result = await uploadPostImage(body).catch(() => ({ ok: false as const, error: "Upload gagal — coba lagi." }));
     setUploading(false);
     if (!result.ok) return toast.error(result.error);
+    pendingImages.current.push(result.url);
+    cancelFetch();
     autoImage.current = null;
     set("image", result.url);
   };
@@ -208,7 +232,12 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
     start(async () => {
       const result = await saveInstagramPost(post.id, form);
       toast.result(result);
-      if (result.ok && result.post) onSaved(result.post);
+      if (result.ok && result.post) {
+        // Foto lama yang diganti + foto percobaan yang tidak dipakai → dibuang (yang dipakai tetap).
+        const unused = [...pendingImages.current.splice(0), ...(post.image ? [post.image] : [])];
+        if (unused.length) void discardPostImages(unused).catch(() => undefined);
+        onSaved(result.post);
+      }
     });
 
   return (
@@ -305,6 +334,7 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
                 size="sm"
                 icon="trash"
                 onClick={() => {
+                  cancelFetch();
                   autoImage.current = null;
                   set("image", "");
                 }}

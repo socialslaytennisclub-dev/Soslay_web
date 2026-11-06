@@ -33,6 +33,8 @@ export async function listHomepageSections(): Promise<ContentSection[]> {
       {
         ...base,
         name: r.label || base.name,
+        // Jumlah post diambil dari daftar yang dikelola di tab Testimoni & IG.
+        summary: r.key === "instagram" ? postSummary(r.published as InstagramSectionJson | null) : base.summary,
         enabled: r.is_enabled,
         title: d.title ?? base.title,
         description: d.description ?? base.description,
@@ -45,6 +47,12 @@ export async function listHomepageSections(): Promise<ContentSection[]> {
   });
   // Section baru di kode yang belum ada di tabel → tampil di akhir.
   return [...known, ...defaults.filter((d) => !rows.some((r) => r.key === d.key))];
+}
+
+/** "5 post · 4 tampil · kelola di Testimoni & IG" untuk kartu section Instagram. */
+function postSummary(json: InstagramSectionJson | null): string {
+  const posts = postsFromSection(json);
+  return `${posts.length} post · ${posts.filter((p) => p.visible).length} tampil · kelola di tab Testimoni & IG`;
 }
 
 function defaultHomepageSections(): ContentSection[] {
@@ -134,7 +142,7 @@ function defaultHomepageSections(): ContentSection[] {
       key: "instagram",
       name: "See You on the Court!",
       icon: "instagram-logo",
-      summary: `${instagram.posts.length} post Instagram · kurasi manual`,
+      summary: postSummary(null),
       enabled: true,
       title: instagram.title,
       description: instagram.description,

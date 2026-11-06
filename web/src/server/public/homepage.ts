@@ -73,6 +73,28 @@ function toStats(text: string): typeof home.stats {
     });
 }
 
+/** Feed "See You on the Court!": judul/CTA section + post dari admin (belum pernah diedit → konten statis + hiddenPosts lama). */
+function instagramFeed(json: SectionJson): Homepage["instagram"] {
+  const base = home.instagram;
+  return {
+    ...base,
+    title: json.title || base.title,
+    description: json.description ?? base.description,
+    cta: json.cta ?? base.cta,
+    posts: postsFromSection(json as InstagramSectionJson)
+      .filter((p) => p.visible)
+      // Threads selalu kartu navy berisi kutipan (tanpa foto).
+      .map((p) => ({ platform: p.platform, text: [p.text], handle: p.handle, image: p.platform === "threads" ? undefined : p.image, imagePosition: p.imagePosition, href: p.href })),
+  };
+}
+
+/** Feed yang sama untuk halaman lain (Activity, Shop) — hanya membaca section Instagram. */
+export const getInstagramFeed = cache(async (): Promise<Homepage["instagram"]> => {
+  if (!isSupabaseConfigured) return instagramFeed({});
+  const { data } = await createSupabasePublicClient().from("content_sections").select("published").eq("page", "home").eq("key", "instagram").maybeSingle();
+  return instagramFeed((data?.published ?? {}) as SectionJson);
+});
+
 export const getHomepage = cache(async (): Promise<Homepage> => {
   const base = staticHomepage();
   if (!isSupabaseConfigured) return base;
@@ -141,16 +163,6 @@ export const getHomepage = cache(async (): Promise<Homepage> => {
       // Figma: 2 kartu unggulan (Best Seller teratas).
       products: catalog.products.filter((p) => p.featured).slice(0, 2).map((p) => productCardProps(p, catalog.details[p.slug])),
     },
-    instagram: {
-      ...base.instagram,
-      title: instagram.title || base.instagram.title,
-      description: instagram.description ?? base.instagram.description,
-      cta: instagram.cta ?? base.instagram.cta,
-      // Post dari admin (Konten → Testimoni & IG); belum pernah diedit → konten statis + hiddenPosts lama.
-      posts: postsFromSection(instagram as InstagramSectionJson)
-        .filter((p) => p.visible)
-        // Threads selalu kartu navy berisi kutipan (tanpa foto).
-        .map((p) => ({ platform: p.platform, text: [p.text], handle: p.handle, image: p.platform === "threads" ? undefined : p.image, imagePosition: p.imagePosition, href: p.href })),
-    },
+    instagram: instagramFeed(instagram),
   };
 });

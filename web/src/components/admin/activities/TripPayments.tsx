@@ -146,6 +146,7 @@ export function TripPayments({ tripId, tripTitle, activities, quota, due, minDp,
     setPicked(null);
     if (searchTimer.current) clearTimeout(searchTimer.current);
     if (value.trim().length < 2) {
+      searchSeq.current += 1; // abaikan pencarian sebelumnya yang masih berjalan
       setResults(null);
       setSearching(false);
       return;

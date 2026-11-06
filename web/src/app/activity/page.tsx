@@ -7,9 +7,9 @@ import { Navbar } from "@/components/layout/Navbar/Navbar";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 import { InstagramFeed } from "@/components/sections/InstagramFeed/InstagramFeed";
 import { activityPage } from "@/content/activity";
-import { instagram } from "@/content/home";
 import { newestFirst, pastSessions, pickFeatured, upcomingSessions } from "@/lib/sessions";
 import { getWebsiteSessions } from "@/server/public/sessions";
+import { getInstagramFeed } from "@/server/public/homepage";
 
 export const metadata: Metadata = {
   title: "Activity — SOSLAY",
@@ -47,7 +47,7 @@ export default async function ActivityPage() {
             filter={<ActivityTypeFilter />}
             featuredShown={!!featured}
           />
-          <InstagramFeed {...instagram} />
+          <InstagramFeed {...await getInstagramFeed()} />
         </main>
         <Footer />
       </MotionProvider>

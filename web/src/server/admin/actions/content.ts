@@ -3,9 +3,10 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { normalizeHandle, postLinkError, postsFromSection, type InstagramSectionJson, type PostPlatform, type StoredPost } from "@/lib/community-posts";
 import { detectVideoPlatform } from "@/lib/video";
-import { uploadPublicImage } from "../../storage";
+import { removePublicImage, uploadPublicImage } from "../../storage";
+import { findMemberById } from "../identity";
 import type { AdminTestimonial, ContentSection } from "../types";
-import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } from "./common";
+import { audit, done, fail, refreshPaths, requireEditor, type ActionResult, type RefreshPath } from "./common";
 
 /** Konten & Galeri → homepage website (content_sections, testimonials). */
 
@@ -110,23 +111,41 @@ export async function deleteTestimonial(id: string): Promise<ActionResult> {
   return done(`Testimoni ${data[0].author_name} dihapus.`);
 }
 
-/** Post Instagram/Threads berasal dari konten statis; yang disembunyikan dicatat di section "instagram". */
-/** Baca daftar post (atau konten statis), ubah, lalu simpan ke draft & published section Instagram. */
+/** Halaman yang menampilkan feed post (InstagramFeed) — dimuat ulang setelah post diubah. */
+const FEED_PATHS: RefreshPath[] = ["/", "/activity", ["/activity/[type]", "page"], "/shop", ["/shop/[slug]", "page"], "/admin/konten"];
+
+/**
+ * Baca daftar post (atau konten statis), ubah, lalu simpan ke draft & published section Instagram.
+ * Disimpan hanya bila baris belum diubah orang lain sejak dibaca (updated_at sama) — kalau berubah,
+ * baca ulang & terapkan lagi, supaya dua admin yang menyimpan bersamaan tidak saling menimpa.
+ */
 async function writePosts(change: (posts: StoredPost[]) => StoredPost[] | string): Promise<{ error: string } | { posts: StoredPost[] }> {
   const supabase = await createSupabaseServerClient();
-  const { data: row, error: readError } = await supabase.from("content_sections").select("draft, published").eq("page", "home").eq("key", "instagram").maybeSingle();
-  if (readError || !row) return { error: "Section Instagram belum ada — publikasikan homepage sekali dulu." };
-  const next = change(postsFromSection(row.published as InstagramSectionJson | null));
-  if (typeof next === "string") return { error: next };
-  const apply = (json: unknown) => {
-    const { hiddenPosts: _old, ...rest } = (json ?? {}) as InstagramSectionJson;
-    void _old;
-    return { ...rest, posts: next };
-  };
-  const { error } = await supabase.from("content_sections").update({ draft: apply(row.draft), published: apply(row.published) }).eq("page", "home").eq("key", "instagram");
-  if (error) return { error: `Gagal menyimpan: ${error.message}` };
-  refreshPaths("/", "/admin/konten");
-  return { posts: next };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data: row, error: readError } = await supabase.from("content_sections").select("draft, published, updated_at").eq("page", "home").eq("key", "instagram").maybeSingle();
+    if (readError || !row) return { error: "Section Instagram belum ada — publikasikan homepage sekali dulu." };
+    const next = change(postsFromSection(row.published as InstagramSectionJson | null));
+    if (typeof next === "string") return { error: next };
+    // hiddenPosts lama tidak dipakai lagi setelah daftar post tersimpan.
+    const apply = (json: unknown) => {
+      const rest = { ...((json ?? {}) as InstagramSectionJson) };
+      delete rest.hiddenPosts;
+      return { ...rest, posts: next };
+    };
+    const { data: updated, error } = await supabase
+      .from("content_sections")
+      .update({ draft: apply(row.draft), published: apply(row.published), updated_at: new Date().toISOString() })
+      .eq("page", "home")
+      .eq("key", "instagram")
+      .eq("updated_at", row.updated_at)
+      .select("key");
+    if (error) return { error: `Gagal menyimpan: ${error.message}` };
+    if (updated?.length) {
+      refreshPaths(...FEED_PATHS);
+      return { posts: next };
+    }
+  }
+  return { error: "Post sedang diubah admin lain — muat ulang halaman lalu coba lagi." };
 }
 
 export async function setInstagramPostVisible(id: string, visible: boolean): Promise<ActionResult> {
@@ -159,6 +178,7 @@ export async function saveInstagramPost(id: string, input: PostInput): Promise<A
   const linkError = postLinkError(input.platform, input.href);
   if (linkError) return fail(linkError);
   if (input.image && !/^(\/images\/|https:\/\/)/.test(input.image)) return fail("Foto post tidak valid.");
+  if (input.memberId && !(await findMemberById(input.memberId))) return fail("Member yang dihubungkan tidak ditemukan — pilih ulang.");
 
   let saved: StoredPost | undefined;
   const r = await writePosts((posts) => {
@@ -188,18 +208,23 @@ export async function deleteInstagramPost(id: string): Promise<ActionResult> {
   const auth = await requireEditor("content");
   if ("error" in auth) return fail(auth.error);
   let handle = "";
+  let image: string | undefined;
   const r = await writePosts((posts) => {
     const post = posts.find((p) => p.id === id);
     if (!post) return "Post tidak ditemukan — muat ulang halaman.";
     handle = post.handle;
+    image = post.image;
     return posts.filter((p) => p.id !== id);
   });
   if ("error" in r) return fail(r.error);
+  // Foto upload post ini ikut dihapus dari Storage bila tidak dipakai post lain.
+  if (image && !r.posts.some((p) => p.image === image)) await removePublicImage(POST_BUCKET, image);
   await audit(auth.userId, `menghapus post ${handle}`, "content", "instagram");
   return done(`Post ${handle} dihapus.`);
 }
 
 const POST_BUCKET = "community-posts";
+const MAX_POST_IMAGE = 5 * 1024 * 1024;
 
 // Foto preview link (og:image) hanya diambil dari domain ini — server tidak mengikuti URL sembarangan.
 const PREVIEW_PAGE_HOSTS = ["instagram.com", "tiktok.com"];
@@ -228,25 +253,20 @@ export async function fetchPostPhoto(platform: PostPlatform, href: string): Prom
   if (postLinkError(platform, href)) return { ok: false, error: "Link belum valid." };
   const failed = { ok: false as const, error: `Foto tidak bisa diambil otomatis dari ${PLATFORM_LABEL[platform]} — upload foto manual.` };
   try {
-    const page = await fetch(href.trim(), {
-      headers: { "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)", Accept: "text/html" },
-      redirect: "follow",
-      signal: AbortSignal.timeout(10_000),
-    });
-    // Link pendek (vt.tiktok.com) diarahkan ulang — hasil akhirnya tetap harus di domain yang sama.
-    if (!page.ok || !hostIn(page.url, PREVIEW_PAGE_HOSTS)) return failed;
-    const html = (await page.text()).slice(0, 2_000_000);
+    const page = await fetchAllowed(href.trim(), PREVIEW_PAGE_HOSTS, { "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)", Accept: "text/html" });
+    if (!page?.ok) return failed;
+    const html = new TextDecoder().decode(await readCapped(page, 2 * 1024 * 1024));
     const meta = /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i.exec(html) ?? /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i.exec(html);
     const imageUrl = meta ? decodeHtml(meta[1]) : "";
-    if (!imageUrl || !hostIn(imageUrl, PREVIEW_IMAGE_HOSTS)) return failed;
+    if (!imageUrl) return failed;
 
-    const img = await fetch(imageUrl, { signal: AbortSignal.timeout(10_000) });
-    const type = (img.headers.get("content-type") ?? "").split(";")[0].trim();
-    if (!img.ok || !PREVIEW_TYPES[type]) return failed;
-    const bytes = await img.arrayBuffer();
-    if (bytes.byteLength > 5 * 1024 * 1024) return failed;
+    const img = await fetchAllowed(imageUrl, PREVIEW_IMAGE_HOSTS);
+    const type = (img?.headers.get("content-type") ?? "").split(";")[0].trim();
+    if (!img?.ok || !PREVIEW_TYPES[type]) return failed;
+    const bytes = await readCapped(img, MAX_POST_IMAGE);
+    if (!bytes.byteLength) return failed;
     const file = new File([bytes], `preview.${PREVIEW_TYPES[type]}`, { type });
-    const result = await uploadPublicImage({ bucket: POST_BUCKET, file, folder: new Date().toISOString().slice(0, 7), maxBytes: 5 * 1024 * 1024 });
+    const result = await uploadPublicImage({ bucket: POST_BUCKET, file, folder: new Date().toISOString().slice(0, 7), maxBytes: MAX_POST_IMAGE });
     if (!result.ok) return { ok: false, error: result.error };
     await audit(auth.userId, "content.post_image_fetch", "post_image", result.path);
     return { ok: true, url: result.url };
@@ -255,11 +275,67 @@ export async function fetchPostPhoto(platform: PostPlatform, href: string): Prom
   }
 }
 
+/**
+ * fetch yang mengikuti redirect sendiri (maks 3) dan memeriksa domain di SETIAP langkah — server
+ * tidak pernah meminta halaman di luar daftar, termasuk lewat redirect.
+ */
+async function fetchAllowed(url: string, hosts: string[], headers?: Record<string, string>): Promise<Response | null> {
+  let current = url;
+  for (let hop = 0; hop <= 3; hop++) {
+    if (!hostIn(current, hosts)) return null;
+    const res = await fetch(current, { headers, redirect: "manual", signal: AbortSignal.timeout(10_000) });
+    const location = res.status >= 300 && res.status < 400 ? res.headers.get("location") : null;
+    if (!location) return res;
+    await res.body?.cancel();
+    current = new URL(location, current).toString();
+  }
+  return null;
+}
+
+/** Baca body maksimal `max` byte; lebih dari itu → kosong (tanpa memuat seluruh respons ke memori). */
+async function readCapped(res: Response, max: number): Promise<Uint8Array<ArrayBuffer>> {
+  if (Number(res.headers.get("content-length") ?? 0) > max) {
+    await res.body?.cancel();
+    return new Uint8Array();
+  }
+  const reader = res.body?.getReader();
+  if (!reader) return new Uint8Array();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done: end, value } = await reader.read();
+    if (end) break;
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel();
+      return new Uint8Array();
+    }
+    chunks.push(value);
+  }
+  const out = new Uint8Array(size);
+  let offset = 0;
+  for (const c of chunks) {
+    out.set(c, offset);
+    offset += c.byteLength;
+  }
+  return out;
+}
+
+/** Buang foto post yang diupload / diambil otomatis tapi tidak jadi dipakai (diganti atau dibatalkan). */
+export async function discardPostImages(urls: string[]): Promise<void> {
+  const auth = await requireEditor("content");
+  if ("error" in auth || !urls.length) return;
+  const supabase = await createSupabaseServerClient();
+  const { data: row } = await supabase.from("content_sections").select("published").eq("page", "home").eq("key", "instagram").maybeSingle();
+  const used = new Set(postsFromSection(row?.published as InstagramSectionJson | null).map((p) => p.image));
+  await Promise.all([...new Set(urls)].filter((u) => !used.has(u)).map((u) => removePublicImage(POST_BUCKET, u)));
+}
+
 /** Upload foto post ke Storage; URL tersimpan saat admin menekan Simpan. */
 export async function uploadPostImage(formData: FormData): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const auth = await requireEditor("content");
   if ("error" in auth) return { ok: false, error: auth.error };
-  const result = await uploadPublicImage({ bucket: POST_BUCKET, file: formData.get("file"), folder: new Date().toISOString().slice(0, 7), maxBytes: 5 * 1024 * 1024 });
+  const result = await uploadPublicImage({ bucket: POST_BUCKET, file: formData.get("file"), folder: new Date().toISOString().slice(0, 7), maxBytes: MAX_POST_IMAGE });
   if (!result.ok) return result;
   await audit(auth.userId, "content.post_image_upload", "post_image", result.path);
   return { ok: true, url: result.url };
