@@ -3,6 +3,7 @@ import { cache } from "react";
 import { SESSION_STATUS_LABEL } from "@/lib/admin-labels";
 import { wibParts } from "@/lib/format";
 import { bookingMoney, todayWib, TRIP_PLACEHOLDER, type TripPaymentKind } from "@/lib/trips";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDataset, type Dataset } from "./dataset";
 import { getPaymentAccounts } from "./finance-repo";
@@ -129,8 +130,8 @@ const demoRaw = (): RawTrip[] => [{ ...demoTrip, rundown: demoTripRundown, booki
 
 /** Semua trip (termasuk draft & arsip), lengkap. */
 export const listTripDetails = cache(async (): Promise<TripDetail[]> => {
-  const d = await getDataset();
-  const raw = d.live ? await loadLiveTrips() : demoRaw();
+  // Trip & dataset admin dimuat paralel (dulu berurutan: dataset dulu, baru tabel trip).
+  const [d, raw] = await Promise.all([getDataset(), isSupabaseConfigured ? loadLiveTrips() : demoRaw()]);
   return raw.map((t) => assemble(d, t));
 });
 
