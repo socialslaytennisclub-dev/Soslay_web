@@ -51,8 +51,6 @@ const nextConfig: NextConfig = {
         has: [{ type: "query" as const, key: "city", value: slug }],
         destination: `/venue/kota/${slug}`,
       })),
-      afterFiles: [],
-      fallback: [],
     };
   },
 };

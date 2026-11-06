@@ -10,7 +10,7 @@ import { UpcomingActivities } from "@/components/venue/UpcomingActivities/Upcomi
 import { VenueGallery } from "@/components/venue/VenueGallery/VenueGallery";
 import { photosForVenue } from "@/content/gallery";
 import { findGuide, guideHref } from "@/content/guides";
-import { venueCities, venuePage } from "@/content/venues";
+import { cityHref, venueCities, venuePage } from "@/content/venues";
 import { formatTanggalISO } from "@/lib/format";
 import { upcomingSessions } from "@/lib/sessions";
 import { getWebsiteSessions } from "@/server/public/sessions";
@@ -57,7 +57,7 @@ export default async function VenueDetailPage({ params }: PageProps<"/venue/[slu
           <SpotlightHero
             breadcrumb={[
               { label: "Venue", href: "/venue" },
-              { label: venue.area ?? venue.city, href: city ? `/venue?city=${city.slug}#daftar-venue` : "/venue" },
+              { label: venue.area ?? venue.city, href: city ? `${cityHref(city.slug)}#daftar-venue` : cityHref() },
               { label: venue.name },
             ]}
             eyebrow={venuePage.detail.eyebrow}

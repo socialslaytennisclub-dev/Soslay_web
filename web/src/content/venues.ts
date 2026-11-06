@@ -47,6 +47,9 @@ export function isCitySlug(value: unknown): value is CitySlug {
   return venueCities.some((city) => city.slug === value);
 }
 
+/** Link daftar venue per kota (/venue?city=…; dilayani /venue/kota/[city] lewat rewrite di next.config). */
+export const cityHref = (slug?: CitySlug) => (slug ? `/venue?city=${slug}` : "/venue");
+
 export function venueHref(venue: Venue): string {
   return `/venue/${venue.slug}`;
 }

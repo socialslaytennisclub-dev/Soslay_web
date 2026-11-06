@@ -12,7 +12,7 @@ const demo = process.argv.includes("--demo");
 const failures = [];
 let passed = 0;
 
-async function check(path, { status = 200, includes = [], location, contentType } = {}) {
+async function check(path, { status = 200, includes = [], excludes = [], location, contentType } = {}) {
   const started = Date.now();
   let res;
   let body = "";
@@ -30,6 +30,7 @@ async function check(path, { status = 200, includes = [], location, contentType 
   if (location && !(res.headers.get("location") ?? "").startsWith(location)) problems.push(`redirect ke ${res.headers.get("location")} (harusnya ${location}…)`);
   if (contentType && !(res.headers.get("content-type") ?? "").includes(contentType)) problems.push(`content-type ${res.headers.get("content-type")}`);
   for (const text of includes) if (!body.includes(text)) problems.push(`tidak ada teks "${text}"`);
+  for (const text of excludes) if (body.includes(text)) problems.push(`masih ada teks "${text}"`);
   const ms = Date.now() - started;
   if (problems.length) {
     failures.push(`${path} → ${problems.join("; ")}`);
@@ -64,11 +65,7 @@ await check("/activity/tidak-ada", { status: 404 });
 const venues = await check("/venue");
 // ?city= dilayani halaman statis per kota (rewrite) → HTML awal sudah terfilter. Nama venue hanya
 // pasti di data demo; di live cukup cek halamannya terbuka.
-const bali = await check("/venue?city=bali", { includes: demo ? ["Kula Mani Tennis Village"] : [] });
-if (demo && bali.includes(">AYANA Midplaza Jakarta</h3>")) {
-  failures.push("/venue?city=bali → HTML awal masih berisi venue Jakarta");
-  console.log(`✗ ${"/venue?city=bali (terfilter)".padEnd(48)} masih ada venue Jakarta`);
-}
+await check("/venue?city=bali", demo ? { includes: ["Kula Mani Tennis Village"], excludes: [">AYANA Midplaza Jakarta</h3>"] } : {});
 const venuePath = firstHref(venues, "/venue/");
 if (venuePath) await check(venuePath, { includes: ["Upcoming", "Moments from"] });
 else failures.push("/venue → tidak ada link venue");

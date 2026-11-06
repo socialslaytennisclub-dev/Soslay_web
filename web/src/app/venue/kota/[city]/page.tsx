@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { VenuePageContent } from "@/components/venue/VenueDirectory/VenuePageContent";
-import { isCitySlug, venueCities } from "@/content/venues";
+import { cityHref, isCitySlug, venueCities } from "@/content/venues";
 
 /**
  * Halaman Venue terfilter per kota, statis + ISR. Pengunjung membukanya lewat /venue?city=bali
@@ -21,7 +21,7 @@ export async function generateMetadata({ params }: PageProps<"/venue/kota/[city]
   return {
     title: `Venue ${city.label} — SOSLAY`,
     description: `Soslay's curated tennis courts in ${city.label}.`,
-    alternates: { canonical: `/venue?city=${city.slug}` },
+    alternates: { canonical: cityHref(city.slug) },
   };
 }
 

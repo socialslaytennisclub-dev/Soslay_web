@@ -178,7 +178,6 @@ export function isActivityType(value: unknown): value is ActivityTypeSlug {
  */
 export const activityLandings = [
   {
-    path: ACTIVITY_PATHS["weekly-mabar"],
     type: "weekly-mabar",
     wordmark: "Mabar",
     title: "Weekly MABAR for Every Level",
@@ -202,7 +201,6 @@ export const activityLandings = [
     },
   },
   {
-    path: ACTIVITY_PATHS["match-day"],
     type: "match-day",
     wordmark: "Event",
     title: "Tennis Events Worth Showing Up For",
@@ -226,7 +224,6 @@ export const activityLandings = [
     },
   },
   {
-    path: ACTIVITY_PATHS["tennis-escape"],
     type: "tennis-escape",
     wordmark: "Escape",
     title: "Tennis Escapes to Beautiful Courts",
@@ -250,7 +247,6 @@ export const activityLandings = [
     },
   },
   {
-    path: ACTIVITY_PATHS["beginner-coaching"],
     type: "beginner-coaching",
     wordmark: "Coaching",
     title: "Beginner Coaching, No Pressure",
@@ -260,7 +256,6 @@ export const activityLandings = [
     image: { src: "/images/home/activity-beginner-coaching.webp", alt: "A coach guiding beginners on court", position: "50% 85%" },
   },
   {
-    path: ACTIVITY_PATHS.social,
     type: "social",
     wordmark: "Social",
     title: "Social Sessions, Good Company",
@@ -270,7 +265,6 @@ export const activityLandings = [
     image: { src: "/images/home/community-court.webp", alt: "Soslay members together on court", position: "50% 50%" },
   },
 ] as const satisfies {
-  path: string;
   type: ActivityTypeSlug;
   wordmark: string;
   title: string;

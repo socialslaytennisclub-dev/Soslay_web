@@ -7,7 +7,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { discardUploads, uploadPublicImage } from "../../storage";
 import { monthKey } from "../time";
 import type { ProductForm, VenueForm } from "../types";
-import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } from "./common";
+import { audit, done, fail, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, type ActionResult } from "./common";
 
 /** Simpan Products & Venues dari admin ke Supabase; website Shop / Venue ikut diperbarui. */
 
@@ -127,7 +127,7 @@ export async function deleteProduct(id: string): Promise<ActionResult> {
 
 // ── Venues ──────────────────────────────────────────────────────────────────
 function refreshVenues(slug?: string) {
-  refreshPaths("/venue", ["/venue/kota/[city]", "page"], "/", "/activity", ["/venue/[slug]", "page"], "/admin/venues", ...(slug ? [`/admin/venues/${slug}`] : []));
+  refreshPaths("/venue", ["/venue/kota/[city]", "page"], ...PUBLIC_SESSION_PATHS, "/admin/venues", ...(slug ? [`/admin/venues/${slug}`] : []));
 }
 
 function validateVenue(v: VenueForm): string | null {

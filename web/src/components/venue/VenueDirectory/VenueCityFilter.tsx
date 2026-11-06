@@ -2,11 +2,10 @@
 
 import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
 import { FilterChips, VenueCard, type FilterChip } from "@/components/ui";
-import { isCitySlug, venueCities, venueHref, type CitySlug, type Venue } from "@/content/venues";
+import { cityHref, isCitySlug, venueCities, venueHref, type CitySlug, type Venue } from "@/content/venues";
 import { splitInHalf } from "@/lib/array";
 import styles from "./VenueDirectory.module.css";
 
-const cityHref = (slug?: CitySlug) => (slug ? `/venue?city=${slug}` : "/venue");
 const cityOf = (href: string) => {
   const city = new URL(href, window.location.href).searchParams.get("city");
   return isCitySlug(city) ? city : undefined;
@@ -24,12 +23,14 @@ const cityOf = (href: string) => {
 export function VenueCityFilter({ venues, initialCity, heading }: { venues: Venue[]; initialCity?: CitySlug; heading: ReactNode }) {
   const [city, setCity] = useState(initialCity);
   const [changed, setChanged] = useState(false);
+  /** Ganti kota setelah tampilan awal (kartu baru tanpa animasi reveal). */
+  const show = (next: CitySlug | undefined) => {
+    setCity(next);
+    setChanged(true);
+  };
 
   useEffect(() => {
-    const sync = () => {
-      setCity(cityOf(window.location.href));
-      setChanged(true);
-    };
+    const sync = () => show(cityOf(window.location.href));
     // Back ke entri hasil pushState memulihkan tree halaman asal (kota awal bisa beda dengan URL),
     // jadi saat dipasang kota disamakan dengan URL; setelahnya ikuti Back/Forward.
     if (cityOf(window.location.href) !== initialCity) sync();
@@ -44,8 +45,7 @@ export function VenueCityFilter({ venues, initialCity, heading }: { venues: Venu
     event.preventDefault();
     const href = link.getAttribute("href") ?? cityHref();
     window.history.pushState(null, "", href);
-    setCity(cityOf(href));
-    setChanged(true);
+    show(cityOf(href));
   };
 
   const chips: FilterChip[] = [
