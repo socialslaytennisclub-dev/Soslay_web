@@ -190,6 +190,8 @@ type ProfileRow = {
   play_frequency: string | null; play_format: string | null; dominant_hand: string | null; playing_since: string | null;
   looking_for: string[]; event_types: string[]; joined_at: string;
 };
+const PROFILE_COLUMNS =
+  "id, member_code, full_name, email, phone, city, birth_date, gender, kuy_id, instagram, tier, status, tennis_level, play_frequency, play_format, dominant_hand, playing_since, looking_for, event_types, joined_at";
 type StatsRow = { member_id: string; points_balance: number; points_earned: number; total_spent: number };
 type SessionRow = {
   id: string; title: string; type_slug: string; description: string | null; court_label: string | null; starts_at: string; ends_at: string;
@@ -210,11 +212,8 @@ type OrderRowDb = {
 async function loadLive(): Promise<Dataset> {
   const client = await createSupabaseServerClient();
   const now = new Date();
-  // Sesi yang lewat jeda tapi belum tertutup (cron belum jalan) → tutup dulu supaya status & bonus sudah benar.
-  await closeExpiredSessions(client);
-
-  const [profiles, statsRows, sessionRows, bookingRows, orderRows, fillBySession] = await Promise.all([
-    fetchAll<ProfileRow>(client, "profiles", "*", "joined_at"),
+  const fetchRows = () => Promise.all([
+    fetchAll<ProfileRow>(client, "profiles", PROFILE_COLUMNS, "joined_at"),
     fetchAll<StatsRow>(client, "member_stats", "member_id, points_balance, points_earned, total_spent", "member_id", "member_id"),
     fetchAll<SessionRow>(
       client,
@@ -231,6 +230,11 @@ async function loadLive(): Promise<Dataset> {
     ),
     fetchFillCounts(client),
   ]);
+  // Sesi yang lewat jeda tapi belum tertutup (cron belum jalan) ditutup paralel dengan pemuatan data —
+  // biasanya tidak ada yang ditutup, jadi tidak perlu menunggu RPC ini dulu. Kalau ada yang baru
+  // ditutup (status & bonus berubah), muat ulang sekali supaya data tetap benar.
+  const [closed, loaded] = await Promise.all([closeExpiredSessions(client), fetchRows()]);
+  const [profiles, statsRows, sessionRows, bookingRows, orderRows, fillBySession] = closed ? await fetchRows() : loaded;
 
   const members: DataMember[] = profiles.map((p, i) => ({
     id: p.id,

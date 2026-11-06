@@ -29,7 +29,7 @@ export function StatusBadge({ status }: { status: SessionDisplayStatus }) {
 export function Thumb({ src }: { src: string }) {
   return (
     <span className={styles.thumb}>
-      <Image src={src} alt="" fill sizes="56px" {...blurProps(src)} />
+      <Image src={src} alt="" width={56} height={40} {...blurProps(src)} />
     </span>
   );
 }

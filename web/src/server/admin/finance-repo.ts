@@ -30,6 +30,39 @@ export const getFinanceAccess = cache(async () => {
   return { session, role: financeRole(session), userId: session.mode === "live" ? session.userId : "demo" };
 });
 
+type FinSessionRow = { id: string; title: string; type_slug: string; starts_at: string; ends_at: string; venues: { name: string } | null; bookings: { status: string }[] };
+
+/**
+ * Versi live: satu query ringan (sesi + venue + status booking), bukan seluruh dataset admin
+ * (member, booking, order, stats) yang dulu dimuat setiap kali membuka halaman Keuangan.
+ */
+async function liveFinanceSessions(supabase: SupabaseClient): Promise<FinSession[]> {
+  const PAGE = 1000;
+  const rows: FinSessionRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("sessions")
+      .select("id, title, type_slug, starts_at, ends_at, venues(name), bookings(status)")
+      .neq("status", "draft")
+      .order("starts_at", { ascending: false })
+      .order("id")
+      .range(from, from + PAGE - 1);
+    if (error) throw new Error(`Gagal memuat sesi: ${error.message}`);
+    rows.push(...((data ?? []) as unknown as FinSessionRow[]));
+    if ((data?.length ?? 0) < PAGE) break;
+  }
+  return rows.map((s) => ({
+    id: s.id,
+    title: s.title,
+    typeSlug: s.type_slug,
+    typeLabel: activityTypeLabels[s.type_slug] ?? s.type_slug,
+    venueName: s.venues?.name ?? "—",
+    startsAt: new Date(s.starts_at).toISOString(),
+    endsAt: new Date(s.ends_at).toISOString(),
+    participants: s.bookings.filter((b) => b.status !== "cancelled" && b.status !== "waitlisted").length,
+  }));
+}
+
 /** Sesi Activities untuk "Kaitkan ke sesi" & laporan Per event. */
 async function financeSessions(): Promise<FinSession[]> {
   const ds = await getDataset();
@@ -89,7 +122,7 @@ export const getFinanceData = cache(async (): Promise<FinanceData> => {
     supabase.from("finance_settings").select("*").maybeSingle(),
     supabase.from("finance_targets").select("*"),
     supabase.from("finance_import_batches").select("id, file_name, tx_total, imported_at, undo_until, status").order("imported_at", { ascending: false }).limit(20),
-    financeSessions(),
+    liveFinanceSessions(supabase),
   ]);
   for (const r of [accounts, categories, items, settings, targets]) if (r.error) throw new Error(`Gagal memuat keuangan: ${r.error.message}`);
   const s = settings.data;
