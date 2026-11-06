@@ -1,4 +1,5 @@
 import { LEVEL_LABEL } from "@/lib/levels";
+import { ACTIVITY_PATHS } from "./activity-paths";
 import { CITY_TIMEZONE, type City } from "@/lib/format";
 
 /**
@@ -177,7 +178,7 @@ export function isActivityType(value: unknown): value is ActivityTypeSlug {
  */
 export const activityLandings = [
   {
-    path: "mabar",
+    path: ACTIVITY_PATHS["weekly-mabar"],
     type: "weekly-mabar",
     wordmark: "Mabar",
     title: "Weekly MABAR for Every Level",
@@ -201,7 +202,7 @@ export const activityLandings = [
     },
   },
   {
-    path: "event",
+    path: ACTIVITY_PATHS["match-day"],
     type: "match-day",
     wordmark: "Event",
     title: "Tennis Events Worth Showing Up For",
@@ -225,7 +226,7 @@ export const activityLandings = [
     },
   },
   {
-    path: "escape",
+    path: ACTIVITY_PATHS["tennis-escape"],
     type: "tennis-escape",
     wordmark: "Escape",
     title: "Tennis Escapes to Beautiful Courts",
@@ -249,7 +250,7 @@ export const activityLandings = [
     },
   },
   {
-    path: "coaching",
+    path: ACTIVITY_PATHS["beginner-coaching"],
     type: "beginner-coaching",
     wordmark: "Coaching",
     title: "Beginner Coaching, No Pressure",
@@ -257,6 +258,16 @@ export const activityLandings = [
     description: "New to tennis? Learn the basics, build your confidence, and start playing with the community.",
     meta: ["Small groups", "Beginner friendly", "Rackets available"],
     image: { src: "/images/home/activity-beginner-coaching.webp", alt: "A coach guiding beginners on court", position: "50% 85%" },
+  },
+  {
+    path: ACTIVITY_PATHS.social,
+    type: "social",
+    wordmark: "Social",
+    title: "Social Sessions, Good Company",
+    highlight: "Good Company",
+    description: "Laid-back sessions to hit, hang out, and meet the community — come for the rallies, stay for the people.",
+    meta: ["Relaxed vibes", "All levels", "Jakarta & Bali"],
+    image: { src: "/images/home/community-court.webp", alt: "Soslay members together on court", position: "50% 50%" },
   },
 ] as const satisfies {
   path: string;
@@ -282,10 +293,12 @@ export type ActivityAbout = {
 
 export type ActivityLanding = (typeof activityLandings)[number];
 
-/** Link tipe aktivitas: halaman khusus bila ada, selain itu filter di /activity. */
+// Setiap tipe wajib punya path & halaman sendiri (/activity statis tidak membaca ?type=).
+ACTIVITY_PATHS satisfies Record<ActivityTypeSlug, string>;
+
+/** Link tipe aktivitas: halaman khusus /activity/<path>. */
 export function activityTypeHref(slug: ActivityTypeSlug): string {
-  const landing = activityLandings.find((l) => l.type === slug);
-  return landing ? `/activity/${landing.path}` : `/activity?type=${slug}`;
+  return `/activity/${ACTIVITY_PATHS[slug]}`;
 }
 
 export function activityTypeLabel(slug: ActivityTypeSlug): string {

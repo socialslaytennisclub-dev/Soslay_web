@@ -18,9 +18,9 @@ export const metadata: Metadata = {
 
 /**
  * Statis + ISR (bukan render per request) supaya pindah halaman cepat dari cache Vercel. Jadwal
- * dihitung dari jam sekarang → render ulang tiap 10 menit (dan saat admin menyimpan sesi).
+ * dihitung dari jam sekarang → render ulang tiap menit (dan saat admin menyimpan sesi atau trip).
  */
-export const revalidate = 600;
+export const revalidate = 60;
 
 /**
  * Halaman Activity (Figma 25:493). Hanya menyusun data + section. Filter per tipe ada di halaman

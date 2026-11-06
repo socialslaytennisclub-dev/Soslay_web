@@ -1,4 +1,7 @@
 import type { NextConfig } from "next";
+// Import relatif tanpa alias "@/": next.config dimuat sebelum path alias tsconfig berlaku.
+import { ACTIVITY_PATHS } from "./src/content/activity-paths";
+import { venueCities } from "./src/content/venues";
 
 const nextConfig: NextConfig = {
   // Dev server bisa dibuka dari perangkat lain di jaringan lokal (HP, tablet) lewat IP 192.168.x.x.
@@ -29,19 +32,28 @@ const nextConfig: NextConfig = {
       // Ikon tas belanja di navbar → keranjang ada di tab Order member area.
       { source: "/keranjang", destination: "/akun/order", permanent: false },
       // Link lama filter /activity?type=… → halaman per tipe (/activity statis, tidak membaca query).
-      // Sama dengan activityLandings di src/content/activity.ts.
-      ...[
-        ["weekly-mabar", "mabar"],
-        ["match-day", "event"],
-        ["tennis-escape", "escape"],
-        ["beginner-coaching", "coaching"],
-      ].map(([type, path]) => ({
+      ...Object.entries(ACTIVITY_PATHS).map(([type, path]) => ({
         source: "/activity",
         has: [{ type: "query" as const, key: "type", value: type }],
         destination: `/activity/${path}`,
         permanent: false,
       })),
     ];
+  },
+
+  // /venue?city=bali dilayani halaman statis per kota (URL tetap ?city=…) — HTML awal sudah
+  // terfilter, jadi tidak ada kilasan "semua venue" sebelum JavaScript jalan. beforeFiles: /venue
+  // sendiri halaman statis, jadi rewrite harus dicek sebelum file statis itu dilayani.
+  async rewrites() {
+    return {
+      beforeFiles: venueCities.map(({ slug }) => ({
+        source: "/venue",
+        has: [{ type: "query" as const, key: "city", value: slug }],
+        destination: `/venue/kota/${slug}`,
+      })),
+      afterFiles: [],
+      fallback: [],
+    };
   },
 };
 

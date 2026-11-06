@@ -18,8 +18,8 @@ export function generateStaticParams() {
 
 export const dynamicParams = false;
 
-/** Jadwal dihitung dari jam sekarang → render ulang tiap jam (dan saat admin menyimpan sesi). */
-export const revalidate = 3600;
+/** Jadwal dihitung dari jam sekarang → render ulang tiap menit (dan saat admin menyimpan sesi atau trip). */
+export const revalidate = 60;
 
 const findLanding = (path: string) => activityLandings.find((landing) => landing.path === path);
 

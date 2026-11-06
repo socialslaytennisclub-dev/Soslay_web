@@ -1,40 +1,11 @@
-/* Kerangka loading halaman publik — kilau sama dengan MemberSkeleton. */
-.bone {
-  position: relative;
-  display: block;
-  max-width: 100%;
-  overflow: hidden;
-  border-radius: var(--radius-md);
-  background: var(--color-indigo-140);
-}
-
-.dark {
+/* Kerangka loading halaman publik — tulang & kilau dari MemberSkeleton (.bone), di sini hanya varian
+   gelap untuk hero navy. Selektor dua kelas supaya menang atas .bone milik MemberSkeleton. */
+.hero .dark {
   background: rgb(255 255 255 / 0.12);
 }
 
-.bone::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.5), transparent);
-  transform: translateX(-100%);
-  animation: page-shimmer 1.3s ease-in-out infinite;
-}
-
-.dark::after {
+.hero .dark::after {
   background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.14), transparent);
-}
-
-@keyframes page-shimmer {
-  to {
-    transform: translateX(100%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bone::after {
-    animation: none;
-  }
 }
 
 .hero {
@@ -73,7 +44,7 @@
   gap: var(--space-24);
 }
 
-.card {
+.grid .card {
   aspect-ratio: 4 / 3;
   border-radius: var(--radius-lg);
 }

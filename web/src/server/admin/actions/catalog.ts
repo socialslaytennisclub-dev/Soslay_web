@@ -127,7 +127,7 @@ export async function deleteProduct(id: string): Promise<ActionResult> {
 
 // ── Venues ──────────────────────────────────────────────────────────────────
 function refreshVenues(slug?: string) {
-  refreshPaths("/venue", "/", "/activity", ["/venue/[slug]", "page"], "/admin/venues", ...(slug ? [`/admin/venues/${slug}`] : []));
+  refreshPaths("/venue", ["/venue/kota/[city]", "page"], "/", "/activity", ["/venue/[slug]", "page"], "/admin/venues", ...(slug ? [`/admin/venues/${slug}`] : []));
 }
 
 function validateVenue(v: VenueForm): string | null {

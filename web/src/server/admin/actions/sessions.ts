@@ -9,7 +9,7 @@ import { normalizeBookingUrl, slugify } from "@/lib/text";
 import { discardUploads, isOwnUpload, uploadPublicImage } from "../../storage";
 import { monthKey } from "../time";
 import type { MatchFormat, TennisLevel } from "../types";
-import { audit, refreshPaths, requireEditor, type ActionResult } from "./common";
+import { audit, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, type ActionResult } from "./common";
 
 /**
  * Tulis sesi dari Activity Editor ke Supabase. Izin dicek dua kali: di sini (pesan yang
@@ -62,7 +62,7 @@ const CREW_ROLE = { Host: "host", Coach: "coach", Fotografer: "photographer" } a
 
 function refresh(id?: string) {
   // Website: daftar aktivitas, halaman per tipe (/activity/mabar …), detail venue & homepage.
-  refreshPaths("/", "/activity", ["/activity/[type]", "page"], ["/venue/[slug]", "page"], ...(id ? [`/admin/activities/${id}`] : []));
+  refreshPaths(...PUBLIC_SESSION_PATHS, ...(id ? [`/admin/activities/${id}`] : []));
 }
 
 function validate(input: SessionInput): string | null {

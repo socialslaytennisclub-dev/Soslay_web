@@ -58,10 +58,16 @@ if (activity && !demo && !/Book a Session|No upcoming sessions yet|No sessions i
 }
 // Link lama filter tipe → halaman per tipe (next.config redirects).
 await check("/activity?type=weekly-mabar", { status: 307, location: "/activity/mabar" });
-for (const type of ["mabar", "event", "escape", "coaching"]) await check(`/activity/${type}`, { includes: ["Soslay Activities"] });
+await check("/activity?type=social", { status: 307, location: "/activity/social" });
+for (const type of ["mabar", "event", "escape", "coaching", "social"]) await check(`/activity/${type}`, { includes: ["Soslay Activities"] });
 await check("/activity/tidak-ada", { status: 404 });
 const venues = await check("/venue");
-await check("/venue?city=bali");
+// ?city= dilayani halaman statis per kota (rewrite) → HTML awal sudah terfilter.
+const bali = await check("/venue?city=bali", { includes: ["Kula Mani Tennis Village"] });
+if (bali.includes(">AYANA Midplaza Jakarta</h3>")) {
+  failures.push("/venue?city=bali → HTML awal masih berisi venue Jakarta");
+  console.log(`✗ ${"/venue?city=bali (terfilter)".padEnd(48)} masih ada venue Jakarta`);
+}
 const venuePath = firstHref(venues, "/venue/");
 if (venuePath) await check(venuePath, { includes: ["Upcoming", "Moments from"] });
 else failures.push("/venue → tidak ada link venue");
