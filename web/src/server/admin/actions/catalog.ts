@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { discardUploads, uploadPublicImage } from "../../storage";
+import { isKnownCity, isVenueTimezone, VENUE_FACILITIES, VENUE_SURFACES } from "@/lib/venue-options";
 import { monthKey } from "../time";
 import type { ProductForm, VenueForm } from "../types";
 import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } from "./common";
@@ -132,11 +133,19 @@ function refreshVenues(slug?: string) {
 
 function validateVenue(v: VenueForm): string | null {
   if (!v.name.trim()) return "Nama venue wajib diisi.";
-  if (!["Jakarta", "Bali"].includes(v.city)) return "Kota harus Jakarta atau Bali.";
+  if (!isKnownCity(v.city)) return "Pilih kota dari daftar.";
+  if (!isVenueTimezone(v.timezone)) return "Pilih zona waktu.";
+  if (!v.type.trim()) return "Pilih tipe court.";
+  if (!v.address.trim()) return "Alamat lengkap wajib diisi.";
+  if (!v.mapsUrl.trim()) return "Link Google Maps wajib diisi.";
+  if (!(VENUE_SURFACES as readonly string[]).includes(v.surface)) return "Pilih permukaan lapangan.";
+  if (v.facilities.some((f) => !(VENUE_FACILITIES as readonly string[]).includes(f))) return "Fasilitas tidak valid.";
   if (v.coverPath && !isImagePath(v.coverPath)) return "Path foto cover harus diawali /images/ atau https://.";
   if (v.heroPath && !isImagePath(v.heroPath)) return "Path foto hero harus diawali /images/ atau https://.";
   if (v.mapsUrl && !/^https:\/\//.test(v.mapsUrl)) return "Link Maps harus https://.";
-  if (!v.courts.filter((c) => c.trim()).length) return "Minimal satu lapangan.";
+  if (!v.courts.length) return "Minimal satu lapangan.";
+  if (v.courts.some((c) => !c.trim())) return "Isi nama semua lapangan.";
+  if (new Set(v.courts.map((c) => c.trim().toLowerCase())).size !== v.courts.length) return "Nama lapangan tidak boleh sama.";
   return null;
 }
 
@@ -154,6 +163,10 @@ export async function saveVenue(input: VenueForm): Promise<ActionResult> {
     venue_type: input.type.trim() || null,
     address: input.address.trim() || null,
     maps_url: input.mapsUrl.trim() || null,
+    landmark: input.landmark.trim() || null,
+    timezone: input.timezone,
+    surface: input.surface,
+    facilities: input.facilities,
     tagline: input.tagline.trim() || null,
     description: input.description.trim() || null,
     cover_path: input.coverPath || null,

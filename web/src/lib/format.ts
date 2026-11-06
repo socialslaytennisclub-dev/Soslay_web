@@ -1,3 +1,4 @@
+import { websiteRegion } from "./venue-options";
 const rupiah = new Intl.NumberFormat("id-ID");
 
 /** 220000 → "Rp. 220.000" (format harga di desain Soslay). */
@@ -21,8 +22,8 @@ export const CITY_TIMEZONE = {
 
 export type City = keyof typeof CITY_TIMEZONE;
 
-/** Kota venue dari database ("Bali" / lainnya → Jakarta). */
-export const cityOf = (city: string): City => (city === "Bali" ? "Bali" : "Jakarta");
+/** Wilayah zona waktu dari kota venue di database: Bali & Denpasar → "Bali" (WITA), lainnya → Jakarta (WIB). */
+export const cityOf = (city: string): City => (websiteRegion(city) === "Bali" ? "Bali" : "Jakarta");
 
 const dateFormatters = new Map<string, Intl.DateTimeFormat>();
 

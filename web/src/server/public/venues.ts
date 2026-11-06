@@ -3,6 +3,7 @@ import { cache } from "react";
 import { venueList, type Venue } from "@/content/venues";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabasePublicClient } from "@/lib/supabase/public";
+import { websiteRegion } from "@/lib/venue-options";
 
 /**
  * Venue untuk website (halaman Venue, detail, homepage). Dengan Supabase: venue aktif yang
@@ -40,13 +41,17 @@ export const getWebsiteVenues = cache(async (): Promise<WebsiteVenue[]> => {
   }
 
   return (data as Row[])
-    .filter((v) => v.city === "Jakarta" || v.city === "Bali")
+    // Website baru punya wilayah Jakarta (Jabodetabek) & Bali — kota venue dipetakan ke wilayahnya.
+    .flatMap((v) => {
+      const region = websiteRegion(v.city);
+      return region ? [{ ...v, city: region }] : [];
+    })
     .map((v) => {
       const content = venueList.find((c) => c.slug === v.slug);
       return {
         slug: v.slug,
         name: v.name,
-        city: v.city as Venue["city"],
+        city: v.city,
         type: v.venue_type ?? "",
         image: v.cover_path ?? content?.image ?? "/images/home/venue-common-grounds.webp",
         imagePosition: content?.imagePosition ?? "50% 50%",

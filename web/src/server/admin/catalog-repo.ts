@@ -3,6 +3,7 @@ import { cache } from "react";
 import { LOW_STOCK, productCategories, productDetails, products as contentProducts } from "@/content/products";
 import { venueList } from "@/content/venues";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { timezoneForCity } from "@/lib/venue-options";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDataset } from "./dataset";
 import { monthKey } from "./time";
@@ -23,6 +24,9 @@ const DEMO_COURTS: Record<string, number> = {
   "swan-paradise-pramana": 2,
 };
 
+/** Kota lama (wilayah) → kota default di dropdown; sama dengan migration 20261107000000_venue_form. */
+const LEGACY_CITY: Record<string, string> = { Jakarta: "Jakarta Pusat", Bali: "Denpasar" };
+
 const loadVenueForms = cache(async (): Promise<VenueForm[]> => {
   if (isSupabaseConfigured) {
     const supabase = await createSupabaseServerClient();
@@ -32,11 +36,15 @@ const loadVenueForms = cache(async (): Promise<VenueForm[]> => {
       id: v.id,
       slug: v.slug,
       name: v.name,
-      city: v.city === "Bali" ? "Bali" : "Jakarta",
+      city: LEGACY_CITY[v.city] ?? v.city,
       area: v.area ?? "",
       type: v.venue_type ?? "",
       address: v.address ?? "",
       mapsUrl: v.maps_url ?? "",
+      landmark: v.landmark ?? "",
+      timezone: v.timezone ?? timezoneForCity(LEGACY_CITY[v.city] ?? v.city) ?? "Asia/Jakarta",
+      surface: v.surface ?? "",
+      facilities: v.facilities ?? [],
       tagline: v.tagline ?? "",
       description: v.description ?? "",
       coverPath: v.cover_path ?? "",
@@ -50,11 +58,15 @@ const loadVenueForms = cache(async (): Promise<VenueForm[]> => {
     id: null,
     slug: v.slug,
     name: v.name,
-    city: v.city,
+    city: LEGACY_CITY[v.city] ?? v.city,
     area: "",
     type: v.type,
     address: "",
     mapsUrl: "",
+    landmark: "",
+    timezone: timezoneForCity(LEGACY_CITY[v.city] ?? v.city) ?? "Asia/Jakarta",
+    surface: "Hard Court",
+    facilities: [],
     tagline: v.tagline,
     description: v.description,
     coverPath: v.image,
@@ -91,17 +103,8 @@ export async function listVenues(): Promise<AdminVenue[]> {
 }
 
 /** Pilihan venue untuk editor sesi (termasuk yang disembunyikan). */
-const toVenueChoice = (v: VenueForm) => ({ name: v.name, city: v.city, image: v.coverPath || "/images/home/venue-common-grounds.webp", courts: v.courts });
-
 export async function venueChoices() {
-  return (await loadVenueForms()).map(toVenueChoice);
-}
-
-/** Venue awal form "Buat sesi": venue aktif pertama di List of Venue (sama dengan daftar Activities). */
-export async function defaultSessionVenue() {
-  const forms = await loadVenueForms();
-  const v = forms.find((f) => f.active) ?? forms[0];
-  return v ? { ...toVenueChoice(v), type: v.type } : null;
+  return (await loadVenueForms()).map((v) => ({ name: v.name, city: v.city, image: v.coverPath || "/images/home/venue-common-grounds.webp", courts: v.courts }));
 }
 
 export async function getVenueForm(slug: string): Promise<VenueForm | null> {
@@ -109,7 +112,7 @@ export async function getVenueForm(slug: string): Promise<VenueForm | null> {
 }
 
 export function emptyVenueForm(): VenueForm {
-  return { id: null, slug: "", name: "", city: "Jakarta", area: "", type: "Outdoor", address: "", mapsUrl: "", tagline: "", description: "", coverPath: "", heroPath: "", courts: ["Court 1"], active: false, homepage: false };
+  return { id: null, slug: "", name: "", city: "", area: "", type: "Outdoor", address: "", mapsUrl: "", landmark: "", timezone: "Asia/Jakarta", surface: "", facilities: [], tagline: "", description: "", coverPath: "", heroPath: "", courts: ["Court 1"], active: false, homepage: false };
 }
 
 /** Foto yang sudah ada di website — pilihan cover sampai upload (Supabase Storage) tersedia. */
