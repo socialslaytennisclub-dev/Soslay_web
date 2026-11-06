@@ -163,7 +163,17 @@ export async function setInstagramPostVisible(id: string, visible: boolean): Pro
   return done(visible ? `Post ${handle} tampil di homepage.` : `Post ${handle} disembunyikan dari homepage.`);
 }
 
-export type PostInput = { platform: PostPlatform; handle: string; text: string; href: string; image: string; visible: boolean; memberId: string | null };
+export type PostInput = {
+  platform: PostPlatform;
+  handle: string;
+  text: string;
+  href: string;
+  image: string;
+  /** Foto diambil otomatis dari link (boleh diganti saat link berubah) — bukan upload manual. */
+  imageAuto: boolean;
+  visible: boolean;
+  memberId: string | null;
+};
 
 /** Tambah (id kosong) atau ubah post Instagram / TikTok / Threads. */
 export async function saveInstagramPost(id: string, input: PostInput): Promise<ActionResult & { post?: StoredPost }> {
@@ -194,6 +204,7 @@ export async function saveInstagramPost(id: string, input: PostInput): Promise<A
       // Threads selalu kartu navy berisi kutipan (tanpa foto); IG / TikTok tanpa foto juga begitu.
       image: input.platform === "threads" ? undefined : input.image || undefined,
       imagePosition: input.platform !== "threads" && input.image && input.image === before?.image ? before?.imagePosition : undefined,
+      imageAuto: input.platform !== "threads" && Boolean(input.image) && input.imageAuto,
       visible: input.visible,
       memberId: input.memberId || null,
     };
@@ -254,11 +265,14 @@ export async function fetchPostPhoto(platform: PostPlatform, href: string): Prom
   const failed = { ok: false as const, error: `Foto tidak bisa diambil otomatis dari ${PLATFORM_LABEL[platform]} — upload foto manual.` };
   try {
     const page = await fetchAllowed(href.trim(), PREVIEW_PAGE_HOSTS, { "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)", Accept: "text/html" });
-    if (!page?.ok) return failed;
-    const html = new TextDecoder().decode(await readCapped(page, 2 * 1024 * 1024));
+    // Dialihkan ke halaman login (akun private / Instagram minta login) → foto preview-nya hanya logo umum.
+    if (!page?.ok || /^\/(accounts\/)?login/i.test(new URL(page.url).pathname)) return failed;
+    // og:image ada di <head> — cukup baca 2 MB pertama.
+    const html = new TextDecoder().decode(await readCapped(page, 2 * 1024 * 1024, true));
     const meta = /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i.exec(html) ?? /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i.exec(html);
     const imageUrl = meta ? decodeHtml(meta[1]) : "";
-    if (!imageUrl) return failed;
+    // static.cdninstagram.com / static.tiktok… = aset umum situs (logo), bukan foto post.
+    if (!imageUrl || /^https:\/\/static\./i.test(imageUrl)) return failed;
 
     const img = await fetchAllowed(imageUrl, PREVIEW_IMAGE_HOSTS);
     const type = (img?.headers.get("content-type") ?? "").split(";")[0].trim();
@@ -292,9 +306,12 @@ async function fetchAllowed(url: string, hosts: string[], headers?: Record<strin
   return null;
 }
 
-/** Baca body maksimal `max` byte; lebih dari itu → kosong (tanpa memuat seluruh respons ke memori). */
-async function readCapped(res: Response, max: number): Promise<Uint8Array<ArrayBuffer>> {
-  if (Number(res.headers.get("content-length") ?? 0) > max) {
+/**
+ * Baca body maksimal `max` byte tanpa memuat seluruh respons ke memori. Lebih dari itu: `truncate`
+ * → kembalikan `max` byte pertama (HTML), selain itu → kosong (gambar terlalu besar).
+ */
+async function readCapped(res: Response, max: number, truncate = false): Promise<Uint8Array<ArrayBuffer>> {
+  if (!truncate && Number(res.headers.get("content-length") ?? 0) > max) {
     await res.body?.cancel();
     return new Uint8Array();
   }
@@ -305,11 +322,14 @@ async function readCapped(res: Response, max: number): Promise<Uint8Array<ArrayB
   for (;;) {
     const { done: end, value } = await reader.read();
     if (end) break;
-    size += value.byteLength;
-    if (size > max) {
+    if (size + value.byteLength > max) {
       await reader.cancel();
-      return new Uint8Array();
+      if (!truncate) return new Uint8Array();
+      chunks.push(value.subarray(0, max - size));
+      size = max;
+      break;
     }
+    size += value.byteLength;
     chunks.push(value);
   }
   const out = new Uint8Array(size);

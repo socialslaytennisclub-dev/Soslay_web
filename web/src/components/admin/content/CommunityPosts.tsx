@@ -153,6 +153,7 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
     text: post.text,
     href: post.href,
     image: post.image ?? "",
+    imageAuto: Boolean(post.imageAuto),
     visible: post.visible,
     memberId: post.memberId ?? null,
   });
@@ -166,10 +167,23 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
   const linkedMember = useMemo(() => members.find((m) => m.id === form.memberId), [members, form.memberId]);
   const [memberQuery, setMemberQuery] = useState(linkedMember ? memberLabel(linkedMember) : "");
 
+  // Foto yang diambil / diupload di editor ini. Yang tidak jadi dipakai (diganti, Batal, pindah post)
+  // dibuang dari Storage — server hanya menghapus file yang tidak dipakai post mana pun.
+  const pendingImages = useRef<string[]>([]);
+  const mounted = useRef(true);
+  useEffect(() => {
+    const list = pendingImages.current;
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      if (list.length) void discardPostImages(list.splice(0)).catch(() => undefined);
+    };
+  }, []);
+
   // Foto otomatis dari link (foto preview Instagram / TikTok). Hanya mengganti foto yang kosong atau
-  // yang sebelumnya juga diambil otomatis — foto upload manual tidak ditimpa.
+  // yang juga diambil otomatis (termasuk foto otomatis yang sudah tersimpan) — upload manual tidak ditimpa.
   const [fetching, setFetching] = useState<"idle" | "busy" | "failed">("idle");
-  const autoImage = useRef<string | null>(null);
+  const autoImage = useRef<string | null>(post.imageAuto ? (post.image ?? null) : null);
   const fetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const fetchSeq = useRef(0);
   /** Batalkan pengambilan yang sedang berjalan — hasilnya tidak lagi dipakai. */
@@ -186,7 +200,11 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
     const seq = fetchSeq.current;
     fetchTimer.current = setTimeout(async () => {
       const r = await fetchPostPhoto(platform, href).catch(() => ({ ok: false as const, error: "" }));
-      if (r.ok) pendingImages.current.push(r.url);
+      if (r.ok) {
+        // Editor sudah ditutup saat foto selesai diambil → langsung dibuang.
+        if (!mounted.current) return void discardPostImages([r.url]).catch(() => undefined);
+        pendingImages.current.push(r.url);
+      }
       if (seq !== fetchSeq.current) return;
       if (!r.ok) return setFetching("failed");
       autoImage.current = r.url;
@@ -194,16 +212,6 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
       setForm((f) => ({ ...f, image: r.url }));
     }, 600);
   };
-
-  // Foto yang diambil / diupload di editor ini. Yang tidak jadi dipakai (diganti, Batal, pindah post)
-  // dibuang dari Storage — server hanya menghapus file yang tidak dipakai post mana pun.
-  const pendingImages = useRef<string[]>([]);
-  useEffect(() => {
-    const list = pendingImages.current;
-    return () => {
-      if (list.length) void discardPostImages(list.splice(0)).catch(() => undefined);
-    };
-  }, []);
 
   const changeLink = (href: string) => {
     set("href", href);
@@ -230,7 +238,7 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
 
   const save = () =>
     start(async () => {
-      const result = await saveInstagramPost(post.id, form);
+      const result = await saveInstagramPost(post.id, { ...form, imageAuto: Boolean(form.image) && form.image === autoImage.current });
       toast.result(result);
       if (result.ok && result.post) {
         // Foto lama yang diganti + foto percobaan yang tidak dipakai → dibuang (yang dipakai tetap).

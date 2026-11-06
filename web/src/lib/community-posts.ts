@@ -15,6 +15,8 @@ export type StoredPost = {
   href: string;
   image?: string;
   imagePosition?: string;
+  /** Foto diambil otomatis dari link post (bukan upload manual). */
+  imageAuto?: boolean;
   visible: boolean;
   /** Member Soslay pemilik post (opsional). */
   memberId?: string | null;

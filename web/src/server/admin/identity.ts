@@ -83,10 +83,13 @@ export async function findMemberByIdentifier(raw: string): Promise<MemberIdentit
 export async function searchMembers(raw: string, limit = 6): Promise<MemberIdentity[]> {
   const q = raw.trim().replace(/^@/, "");
   if (q.length < 2 || !isSupabaseConfigured) return [];
-  const exact = await findMemberByIdentifier(q);
   const db = await readClient();
   const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-  const { data } = await db.from("profiles").select(PROFILE_FIELDS).ilike("full_name", pattern).order("full_name").limit(limit).returns<ProfileRow[]>();
+  // Identifier persis & nama dicari bersamaan.
+  const [exact, { data }] = await Promise.all([
+    findMemberByIdentifier(q),
+    db.from("profiles").select(PROFILE_FIELDS).ilike("full_name", pattern).order("full_name").limit(limit).returns<ProfileRow[]>(),
+  ]);
   const byName = (data ?? []).map((p) => toIdentity(p, "nama")).filter((m) => m.id !== exact?.id);
   return [...(exact ? [exact] : []), ...byName].slice(0, limit);
 }
