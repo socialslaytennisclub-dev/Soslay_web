@@ -4,19 +4,27 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { cx } from "@/lib/cx";
+import { INDONESIA_CITIES, MAX_COURTS, timezoneForCity, VENUE_FACILITIES, VENUE_SURFACES, VENUE_TIMEZONES, VENUE_TYPES, websiteRegion } from "@/lib/venue-options";
 import { shrinkImage } from "@/lib/image-resize";
 import { deleteVenue, discardVenueUploads, saveVenue, uploadVenuePhoto } from "@/server/admin/actions/catalog";
 import type { VenueForm } from "@/server/admin/types";
 import styles from "../activities/SessionEditor.module.css";
-import { FormCard, TextArea, Toggle } from "../ui/AdminForm";
+import { FormCard, MultiChips, SingleChips, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge } from "../ui/AdminUI";
 import { useConfirm } from "../ui/ConfirmDialog";
 import { useUploadCleanup } from "../ui/useUploadCleanup";
-import own from "./Catalog.module.css";
 import { toast, ToastOnMount } from "../ui/Toaster";
 
-const TYPES = ["Indoor", "Outdoor", "Rooftop", "Premium", "Tropical"];
+const typeOptions = VENUE_TYPES.map((t) => ({ value: t, label: t }));
+const facilityOptions = VENUE_FACILITIES.map((f) => ({ value: f, label: f }));
+
+/** Ubah jumlah lapangan: nama yang sudah diisi dipertahankan, lapangan baru diberi nama "Court n" yang belum dipakai. */
+function resizeCourts(courts: string[], count: number): string[] {
+  const next = courts.slice(0, count);
+  for (let n = 1; next.length < count; n++) if (!next.includes(`Court ${n}`)) next.push(`Court ${n}`);
+  return next;
+}
 
 /** Tambah / edit venue — tampil di halaman Venue, detail venue, dan homepage. */
 export function VenueEditor({ initial, imageOptions, initialNotice }: { initial: VenueForm; imageOptions: string[]; initialNotice?: string }) {
@@ -134,73 +142,120 @@ export function VenueEditor({ initial, imageOptions, initialNotice }: { initial:
 
       <div className={styles.grid}>
         <div className={styles.main}>
-          <FormCard title="Info venue">
+          <FormCard title="Info venue" subtitle="Tampil di halaman Venue & Venue Detail">
+            <label className={styles.field}>
+              <span className={styles.label}>Nama venue *</span>
+              <input className={styles.input} value={v.name} onChange={(e) => set("name", e.target.value)} placeholder="mis. Common Grounds Menteng" />
+            </label>
             <div className={styles.cols2}>
               <label className={styles.field}>
-                <span className={styles.label}>Nama venue *</span>
-                <input className={styles.input} value={v.name} onChange={(e) => set("name", e.target.value)} placeholder="mis. Common Grounds Menteng" />
+                <span className={styles.label}>Kota *</span>
+                <span className={styles.selectWrap}>
+                  <select
+                    className={cx(styles.input, styles.select)}
+                    value={v.city}
+                    onChange={(e) => setV((prev) => ({ ...prev, city: e.target.value, timezone: timezoneForCity(e.target.value) ?? prev.timezone }))}
+                  >
+                    {!v.city && <option value="">Pilih kota…</option>}
+                    {/* Venue lama tersimpan dengan wilayah "Jakarta" / "Bali" — tetap bisa disimpan, tapi sebaiknya pilih kotanya. */}
+                    {v.city && !INDONESIA_CITIES.some((c) => c.city === v.city) && <option value={v.city}>{v.city} (data lama — pilih kotanya)</option>}
+                    {INDONESIA_CITIES.map((c) => (
+                      <option key={c.city} value={c.city}>
+                        {c.city} — {c.province}
+                      </option>
+                    ))}
+                  </select>
+                  <AdminIcon name="caret-down" size={14} />
+                </span>
+                {v.city && !websiteRegion(v.city) && <span className={styles.muted}>Website baru menampilkan venue di Jakarta (Jabodetabek) & Bali — venue di kota ini belum tampil di halaman Venue.</span>}
               </label>
               <label className={styles.field}>
                 <span className={styles.label}>Area</span>
-                <input className={styles.input} value={v.area} onChange={(e) => set("area", e.target.value)} placeholder="mis. Jakarta Pusat" />
+                <input className={styles.input} value={v.area} onChange={(e) => set("area", e.target.value)} placeholder="mis. Menteng, Jakarta Pusat" />
+              </label>
+            </div>
+            <SingleChips label="Tipe court *" options={typeOptions} value={v.type as (typeof VENUE_TYPES)[number]} onChange={(t) => set("type", t)} />
+            <TextArea label="Deskripsi" value={v.description} onChange={(x) => set("description", x)} maxLength={500} rows={4} />
+            <TextArea label="Tagline (hero detail venue)" value={v.tagline} onChange={(x) => set("tagline", x)} maxLength={140} rows={2} />
+          </FormCard>
+
+          <FormCard title="Lokasi" subtitle="Dipakai untuk peta & petunjuk arah peserta">
+            <TextArea label="Alamat lengkap" required value={v.address} onChange={(x) => set("address", x)} maxLength={300} rows={3} />
+            <div className={styles.cols2}>
+              <label className={styles.field}>
+                <span className={styles.label}>Link Google Maps *</span>
+                <span className={styles.affix}>
+                  <AdminIcon name="link-simple" size={16} />
+                  <input value={v.mapsUrl} onChange={(e) => set("mapsUrl", e.target.value)} placeholder="https://maps.app.goo.gl/…" />
+                </span>
+              </label>
+              <label className={styles.field}>
+                <span className={styles.label}>Patokan</span>
+                <input className={styles.input} value={v.landmark} onChange={(e) => set("landmark", e.target.value)} placeholder="mis. Seberang Taman Suropati" />
+              </label>
+            </div>
+            <label className={styles.field}>
+              <span className={styles.label}>Zona waktu *</span>
+              <span className={styles.selectWrap}>
+                <select className={cx(styles.input, styles.select)} value={v.timezone} onChange={(e) => set("timezone", e.target.value)}>
+                  {VENUE_TIMEZONES.map((t) => (
+                    <option key={t.value} value={t.value}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+                <AdminIcon name="caret-down" size={14} />
+              </span>
+              <span className={styles.muted}>Terisi otomatis dari kota — ganti bila perlu. Contoh: (GMT+08:00) WITA untuk venue di Bali.</span>
+            </label>
+          </FormCard>
+
+          <FormCard title="Lapangan & fasilitas">
+            <div className={styles.cols2}>
+              <label className={styles.field}>
+                <span className={styles.label}>Jumlah lapangan *</span>
+                <span className={styles.selectWrap}>
+                  <select className={cx(styles.input, styles.select)} value={v.courts.length} onChange={(e) => set("courts", resizeCourts(v.courts, Number(e.target.value)))}>
+                    {Array.from({ length: Math.max(MAX_COURTS, v.courts.length) }, (_, i) => (
+                      <option key={i + 1} value={i + 1}>
+                        {i + 1}
+                      </option>
+                    ))}
+                  </select>
+                  <AdminIcon name="caret-down" size={14} />
+                </span>
+              </label>
+              <label className={styles.field}>
+                <span className={styles.label}>Permukaan *</span>
+                <span className={styles.selectWrap}>
+                  <select className={cx(styles.input, styles.select)} value={v.surface} onChange={(e) => set("surface", e.target.value)}>
+                    {!v.surface && <option value="">Pilih permukaan…</option>}
+                    {VENUE_SURFACES.map((x) => (
+                      <option key={x} value={x}>
+                        {x}
+                      </option>
+                    ))}
+                  </select>
+                  <AdminIcon name="caret-down" size={14} />
+                </span>
               </label>
             </div>
             <fieldset className={styles.fieldset}>
-              <legend className={styles.label}>Kota</legend>
-              <div className={styles.segmentWrap}>
-                {(["Jakarta", "Bali"] as const).map((c) => (
-                  <button key={c} type="button" aria-pressed={v.city === c} className={cx(styles.option, v.city === c && styles.optionOn)} onClick={() => set("city", c)}>
-                    {c}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            <fieldset className={styles.fieldset}>
-              <legend className={styles.label}>Tipe</legend>
-              <div className={styles.segmentWrap}>
-                {TYPES.map((t) => (
-                  <button key={t} type="button" aria-pressed={v.type === t} className={cx(styles.option, v.type === t && styles.optionOn)} onClick={() => set("type", t)}>
-                    {t}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            <TextArea label="Tagline (hero detail venue)" value={v.tagline} onChange={(x) => set("tagline", x)} maxLength={140} rows={2} />
-            <TextArea label="Deskripsi" value={v.description} onChange={(x) => set("description", x)} maxLength={500} rows={4} />
-          </FormCard>
-
-          <FormCard title="Lokasi & lapangan">
-            <label className={styles.field}>
-              <span className={styles.label}>Alamat</span>
-              <input className={styles.input} value={v.address} onChange={(e) => set("address", e.target.value)} />
-            </label>
-            <label className={styles.field}>
-              <span className={styles.label}>Link Google Maps</span>
-              <span className={styles.affix}>
-                <AdminIcon name="link-simple" size={16} />
-                <input value={v.mapsUrl} onChange={(e) => set("mapsUrl", e.target.value)} placeholder="https://maps.app.goo.gl/…" />
-              </span>
-            </label>
-            <div className={styles.field}>
-              <span className={styles.label}>Lapangan (dipakai di pilihan “Lapangan” saat membuat sesi)</span>
-              <ul className={own.variantList}>
+              <legend className={styles.label}>Nama lapangan * (dipakai di pilihan “Lapangan” saat membuat sesi)</legend>
+              <div className={styles.cols2}>
                 {v.courts.map((court, i) => (
-                  <li key={i} className={own.variantRow}>
-                    <input className={styles.input} aria-label={`Lapangan ${i + 1}`} value={court} onChange={(e) => set("courts", v.courts.map((c, j) => (j === i ? e.target.value : c)))} />
-                    <span />
-                    {v.courts.length > 1 && (
-                      <button type="button" className={styles.iconButton} aria-label={`Hapus ${court}`} onClick={() => set("courts", v.courts.filter((_, j) => j !== i))}>
-                        <AdminIcon name="x" size={14} />
-                      </button>
-                    )}
-                  </li>
+                  <input
+                    key={i}
+                    className={styles.input}
+                    aria-label={`Nama lapangan ${i + 1}`}
+                    value={court}
+                    placeholder={`Court ${i + 1}`}
+                    onChange={(e) => set("courts", v.courts.map((c, j) => (j === i ? e.target.value : c)))}
+                  />
                 ))}
-              </ul>
-              <button type="button" className={styles.addCrew} onClick={() => set("courts", [...v.courts, `Court ${v.courts.length + 1}`])}>
-                <AdminIcon name="plus-bold" size={14} />
-                Tambah lapangan
-              </button>
-            </div>
+              </div>
+            </fieldset>
+            <MultiChips label="Fasilitas" options={facilityOptions} values={v.facilities as (typeof VENUE_FACILITIES)[number][]} onChange={(x) => set("facilities", x)} />
           </FormCard>
         </div>
 

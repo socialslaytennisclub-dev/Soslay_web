@@ -529,11 +529,19 @@ export type VenueForm = {
   id: string | null;
   slug: string;
   name: string;
-  city: "Jakarta" | "Bali";
+  /** "Jakarta" / "Bali" (wilayah website) atau kota lain di Indonesia (lib/venue-options). */
+  city: string;
   area: string;
   type: string;
   address: string;
   mapsUrl: string;
+  /** Patokan lokasi, mis. "Seberang Taman Suropati". */
+  landmark: string;
+  /** Zona waktu IANA: Asia/Jakarta (WIB) · Asia/Makassar (WITA) · Asia/Jayapura (WIT). */
+  timezone: string;
+  /** Permukaan lapangan ("Hard Court", …) — kosong untuk venue lama sebelum diisi. */
+  surface: string;
+  facilities: string[];
   tagline: string;
   description: string;
   coverPath: string;

@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { cx } from "@/lib/cx";
+import { websiteRegion } from "@/lib/venue-options";
 import { setVenueVisible } from "@/server/admin/actions/catalog";
 import type { AdminVenue } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
@@ -36,9 +37,11 @@ export function VenueGrid({ initial, monthLabel }: { initial: AdminVenue[]; mont
     });
   };
 
-  const cities = ["Jakarta", "Bali"];
+  // Tab kota: wilayah website (Jakarta & Jabodetabek, Bali) + kota lain yang punya venue.
+  const groupOf = (c: string) => websiteRegion(c) ?? c;
+  const cities = [...new Set(["Jakarta", "Bali", ...venues.map((v) => groupOf(v.city))])];
   const shown = venues
-    .filter((v) => city === "all" || v.city === city)
+    .filter((v) => city === "all" || groupOf(v.city) === city)
     .sort((a, b) =>
       sort === "name" ? a.name.localeCompare(b.name) : sort === "sessions" ? b.sessionsThisMonth - a.sessionsThisMonth : (b.occupancy ?? -1) - (a.occupancy ?? -1),
     );
@@ -47,7 +50,7 @@ export function VenueGrid({ initial, monthLabel }: { initial: AdminVenue[]; mont
     <>
       <div className={styles.toolbar}>
         <div className={styles.pillTabs} role="group" aria-label="Kota">
-          {[["all", "Semua", venues.length] as const, ...cities.map((c) => [c, c, venues.filter((v) => v.city === c).length] as const)].map(([value, label, count]) => (
+          {[["all", "Semua", venues.length] as const, ...cities.map((c) => [c, c, venues.filter((v) => groupOf(v.city) === c).length] as const)].map(([value, label, count]) => (
             <button key={value} type="button" aria-pressed={city === value} className={cx(styles.pillTab, city === value && styles.pillTabActive)} onClick={() => setCity(value)}>
               {label}
               <span className={styles.tabCount}>{count}</span>
