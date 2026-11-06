@@ -8,8 +8,6 @@ import styles from "./Finance.module.css";
 type FinanceModalProps = {
   open: boolean;
   onClose: () => void;
-  /** Ada isian belum disimpan → tutup lewat X / klik latar / Esc minta konfirmasi dulu. */
-  dirty?: boolean;
   title: string;
   subtitle?: ReactNode;
   wide?: boolean;
@@ -25,20 +23,8 @@ type FinanceModalProps = {
  * Modal tengah modul Keuangan (Figma 12c, 12l, 12n, 12o, 12q, 13h) di atas <dialog> native:
  * fokus terkunci, Esc & klik latar menutup, scroll halaman dikunci selama terbuka.
  */
-export function FinanceModal({ open, onClose, dirty = false, title, subtitle, wide, footer, action, formRef, children }: FinanceModalProps) {
+export function FinanceModal({ open, onClose, title, subtitle, wide, footer, action, formRef, children }: FinanceModalProps) {
   const ref = useRef<HTMLDialogElement>(null);
-  /** Tutup diminta (X, klik latar, Esc): bila ada isian belum disimpan, konfirmasi dulu. */
-  const confirmClose = () => !dirty || window.confirm("Ada isian yang belum disimpan. Tutup tanpa menyimpan?");
-  const requestClose = () => {
-    if (confirmClose()) onClose();
-  };
-  // Browser bisa menutup dialog sendiri (Chrome mengabaikan preventDefault pada Esc kedua):
-  // konfirmasi dibatalkan → tampilkan lagi supaya tidak macet (state induk masih terbuka).
-  const onNativeClose = () => {
-    if (!open) return;
-    if (confirmClose()) onClose();
-    else ref.current?.showModal();
-  };
 
   useEffect(() => {
     const dialog = ref.current;
@@ -62,7 +48,7 @@ export function FinanceModal({ open, onClose, dirty = false, title, subtitle, wi
           <h2 className={styles.panelTitle}>{title}</h2>
           {subtitle && <p className={styles.panelSub}>{subtitle}</p>}
         </div>
-        <button type="button" className={styles.close} onClick={requestClose} aria-label="Tutup">
+        <button type="button" className={styles.close} onClick={onClose} aria-label="Tutup">
           <AdminIcon name="x" size={18} />
         </button>
       </div>
@@ -72,7 +58,7 @@ export function FinanceModal({ open, onClose, dirty = false, title, subtitle, wi
   );
 
   return (
-    <dialog ref={ref} className={cx(styles.modal, wide && styles.modalWide)} aria-label={title} onClose={onNativeClose} onCancel={(e) => (e.preventDefault(), requestClose())} onClick={(e) => e.target === ref.current && requestClose()}>
+    <dialog ref={ref} className={cx(styles.modal, wide && styles.modalWide)} aria-label={title} onClose={onClose} onClick={(e) => e.target === ref.current && onClose()}>
       {action ? (
         <form ref={formRef} action={action} className={styles.modalInner} noValidate>
           {inner}

@@ -6,9 +6,8 @@ import { AdminIcon } from "@/components/admin/ui/AdminIcon";
 import { AdminButton, PickerInput } from "@/components/admin/ui/AdminUI";
 import { toast } from "@/components/admin/ui/Toaster";
 import { amountDigits, amountDisplay, rp } from "@/lib/finance/format";
-import { parseAmount } from "@/lib/finance/journal";
 import type { BalanceItem, BalanceItemKey } from "@/lib/finance/types";
-import { deleteBalanceItem, saveBalanceItem, saveOpeningBalances } from "@/server/admin/actions/finance";
+import { deleteBalanceItem, saveBalanceItem, saveOpeningBalance } from "@/server/admin/actions/finance";
 import styles from "./Finance.module.css";
 import { FinanceModal } from "./FinanceModal";
 
@@ -29,100 +28,56 @@ type Account = { id: string; name: string; openingBalance: number; openingDate: 
 /** Admin / 12n — Saldo awal akun & pos manual neraca (modal, peralatan, piutang, utang vendor). */
 export function BalanceSetupButton({ accounts, items, autoOpen = false }: { accounts: Account[]; items: BalanceItem[]; autoOpen?: boolean }) {
   const router = useRouter();
-  const initialOpening = () => Object.fromEntries(accounts.map((a) => [a.id, String(a.openingBalance)]));
-  // Satu isian "Per tanggal" untuk semua akun, diawali tanggal akun pertama.
-  const initialDate = accounts[0]?.openingDate ?? "2025-09-01";
   const [open, setOpen] = useState(autoOpen);
   const [pending, start] = useTransition();
-  const [opening, setOpening] = useState(initialOpening);
-  const [openingDate, setOpeningDate] = useState(initialDate);
+  const [opening, setOpening] = useState(() => Object.fromEntries(accounts.map((a) => [a.id, String(a.openingBalance)])));
+  const [openingDate, setOpeningDate] = useState(accounts[0]?.openingDate ?? "2025-09-01");
   const [form, setForm] = useState<{ id?: string; key: BalanceItemKey; label: string; amount: string; effectiveDate: string; salvage: string; lifeMonths: string; note: string } | null>(null);
 
-  // Tanggal hanya dianggap berubah bila admin mengubah isiannya — akun lain boleh bertanggal beda.
-  const dateChanged = openingDate !== initialDate;
-  // Saldo awal akun yang diketik tapi belum disimpan.
-  const changedAccounts = accounts.filter((a) => parseAmount(opening[a.id] ?? "") !== a.openingBalance || (dateChanged && openingDate !== a.openingDate));
-  // Form pos manual yang sedang terbuka & sudah diisi.
-  const formFilled = !!form && (!!form.id || parseAmount(form.amount) !== 0);
-  const unsaved = changedAccounts.length > 0 || formFilled;
-
-  /** Simpan saldo awal akun yang berubah dalam satu server action. */
-  const persistOpening = async () => {
-    if (!changedAccounts.length) return true;
-    const r = await saveOpeningBalances(changedAccounts.map((a) => ({ accountId: a.id, amount: parseAmount(opening[a.id] ?? "") })), openingDate);
-    if (!r.ok) toast.error(r.error);
-    return r.ok;
-  };
-
-  const persistItem = async () => {
-    if (!form) return true;
-    const r = await saveBalanceItem({
-      id: form.id,
-      key: form.key,
-      label: form.label,
-      amount: parseAmount(form.amount),
-      effectiveDate: form.effectiveDate,
-      salvage: parseAmount(form.salvage),
-      lifeMonths: parseAmount(form.lifeMonths),
-      note: form.note,
-    });
-    if (!r.ok) {
-      toast.error(r.error);
-      return false;
-    }
-    setForm(null);
-    return true;
-  };
 
   const saveOpening = () =>
     start(async () => {
-      if (!changedAccounts.length) return toast.success("Tidak ada perubahan saldo awal.");
-      const ok = await persistOpening();
-      // Sebagian bisa sudah tersimpan walau ada yang gagal → tetap segarkan data.
+      for (const a of accounts) {
+        const v = Number(opening[a.id] || 0);
+        if (v === a.openingBalance && openingDate === a.openingDate) continue;
+        const r = await saveOpeningBalance(a.id, v, openingDate);
+        if (!r.ok) return toast.error(r.error);
+      }
+      toast.success("Saldo awal akun tersimpan.");
       router.refresh();
-      if (ok) toast.success("Saldo awal akun tersimpan.");
     });
 
   const saveItem = () =>
+    form &&
     start(async () => {
-      if (!(await persistItem())) return;
-      toast.success(`${form?.label ?? "Pos"} tersimpan.`);
-      router.refresh();
+      const r = await saveBalanceItem({
+        id: form.id,
+        key: form.key,
+        label: form.label,
+        amount: Number(form.amount || 0),
+        effectiveDate: form.effectiveDate,
+        salvage: Number(form.salvage || 0),
+        lifeMonths: Number(form.lifeMonths || 0),
+        note: form.note,
+      });
+      toast.result(r);
+      if (r.ok) {
+        setForm(null);
+        router.refresh();
+      }
     });
-
-  // Tombol bawah ikut menyimpan isian yang belum disimpan — dulu "Selesai" hanya menutup jendela
-  // sehingga angka yang diketik hilang tanpa pesan.
-  const saveAndClose = () =>
-    start(async () => {
-      if (!unsaved) return setOpen(false);
-      const openingOk = await persistOpening();
-      const itemOk = openingOk && (!formFilled || (await persistItem()));
-      // Refresh juga saat gagal sebagian, supaya yang sudah tersimpan tidak dianggap "belum disimpan".
-      if (changedAccounts.length || (formFilled && itemOk)) router.refresh();
-      if (!openingOk || !itemOk) return;
-      toast.success("Saldo awal & penyesuaian tersimpan.");
-      setOpen(false);
-    });
-
-  // Ditutup tanpa menyimpan (konfirmasinya di FinanceModal lewat `dirty`) → buang isian.
-  const discardAndClose = () => {
-    setOpening(initialOpening());
-    setOpeningDate(initialDate);
-    setForm(null);
-    setOpen(false);
-  };
 
   return (
     <>
       <AdminButton icon="pencil-simple" onClick={() => setOpen(true)}>
         Saldo awal & penyesuaian
       </AdminButton>
-      <FinanceModal open={open} onClose={discardAndClose} dirty={unsaved} title="Saldo awal & penyesuaian" subtitle="Pos manual neraca. Semua perubahan tercatat di log." wide
+      <FinanceModal open={open} onClose={() => setOpen(false)} title="Saldo awal & penyesuaian" subtitle="Pos manual neraca. Semua perubahan tercatat di log." wide
         footer={
           <>
-          <span className={styles.muted}>{unsaved ? "Ada isian yang belum disimpan." : ""}</span>
-          <AdminButton variant="primary" disabled={pending} onClick={saveAndClose}>
-            {unsaved ? "Simpan & tutup" : "Selesai"}
+          <span />
+          <AdminButton variant="primary" onClick={() => setOpen(false)}>
+            Selesai
           </AdminButton>
           </>
         }
@@ -199,7 +154,7 @@ export function BalanceSetupButton({ accounts, items, autoOpen = false }: { acco
                 <label className={styles.field}>
                   <span>Masa manfaat (bulan)</span>
                   <input className={styles.input} inputMode="numeric" value={form.lifeMonths} onChange={(e) => setForm({ ...form, lifeMonths: digits(e.target.value) })} />
-                  {parseAmount(form.lifeMonths) > 0 && parseAmount(form.amount) > 0 && <small>Penyusutan {rp(Math.round((parseAmount(form.amount) - parseAmount(form.salvage)) / parseAmount(form.lifeMonths)))} / bulan</small>}
+                  {Number(form.lifeMonths) > 0 && Number(form.amount) > 0 && <small>Penyusutan {rp(Math.round((Number(form.amount) - Number(form.salvage || 0)) / Number(form.lifeMonths)))} / bulan</small>}
                 </label>
               </div>
             )}

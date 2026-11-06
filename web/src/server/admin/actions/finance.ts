@@ -432,36 +432,19 @@ export async function saveFinanceSettings(input: {
 }
 
 // ── Neraca: saldo awal & pos manual (12n) ────────────────────────────────────
-/**
- * Simpan saldo awal beberapa akun sekaligus — satu server action (server function dari client
- * berjalan bergiliran, jadi memanggil per akun = satu round-trip per akun) dan satu revalidate.
- */
-export async function saveOpeningBalances(rows: { accountId: string; amount: number }[], openingDate: string): Promise<ActionResult> {
+export async function saveOpeningBalance(accountId: string, amount: number, openingDate: string): Promise<ActionResult> {
   const auth = await requireFinance("full");
   if ("error" in auth) return fail(auth.error);
-  if (!rows.length) return done("Tidak ada perubahan saldo awal.");
-  if (rows.some((r) => !Number.isInteger(r.amount))) return fail("Saldo harus angka Rupiah.");
+  if (!Number.isInteger(amount)) return fail("Saldo harus angka Rupiah.");
   if (!ymd.test(openingDate)) return fail("Tanggal saldo awal tidak valid.");
   const supabase = await createSupabaseServerClient();
-  const { data: before, error: loadError } = await supabase.from("finance_accounts").select("id, name, opening_balance, opening_date").in("id", rows.map((r) => r.accountId));
-  if (loadError) return fail(`Gagal memuat akun: ${loadError.message}`);
-  const byId = new Map((before ?? []).map((a) => [a.id as string, a]));
-  const results = await Promise.all(
-    rows.map(async ({ accountId, amount }) => {
-      const prev = byId.get(accountId);
-      if (!prev) return `Akun tidak ditemukan.`;
-      const { error } = await supabase.from("finance_accounts").update({ opening_balance: amount, opening_date: openingDate }).eq("id", accountId);
-      if (error) return `${prev.name}: ${error.message}`;
-      const { name, opening_balance, opening_date } = prev;
-      await financeLog(auth.userId, "account", accountId, `saldo awal ${name}`, { name, opening_balance, opening_date }, { opening_balance: amount, opening_date: openingDate });
-      return null;
-    }),
-  );
-  const errors = results.filter((e): e is string => e !== null);
-  // Sebagian bisa sudah tersimpan walau ada yang gagal → tetap segarkan.
-  if (errors.length < rows.length) refresh();
-  if (errors.length) return fail(`Gagal menyimpan ${errors.length} dari ${rows.length} akun — ${errors.join("; ")}`);
-  return done(rows.length === 1 ? `Saldo awal ${byId.get(rows[0].accountId)?.name} tersimpan.` : `Saldo awal ${rows.length} akun tersimpan.`);
+  const { data: before } = await supabase.from("finance_accounts").select("name, opening_balance, opening_date").eq("id", accountId).maybeSingle();
+  if (!before) return fail("Akun tidak ditemukan.");
+  const { error } = await supabase.from("finance_accounts").update({ opening_balance: amount, opening_date: openingDate }).eq("id", accountId);
+  if (error) return fail(`Gagal menyimpan: ${error.message}`);
+  await financeLog(auth.userId, "account", accountId, `saldo awal ${before.name}`, before, { opening_balance: amount, opening_date: openingDate });
+  refresh();
+  return done(`Saldo awal ${before.name} tersimpan.`);
 }
 
 const ITEM_KEYS: BalanceItemKey[] = ["capital", "equipment", "receivable", "payable", "retained_earnings_opening", "other_asset", "other_liability"];
