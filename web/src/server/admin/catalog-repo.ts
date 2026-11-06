@@ -95,6 +95,13 @@ export async function venueChoices() {
   return (await loadVenueForms()).map((v) => ({ name: v.name, city: v.city, image: v.coverPath || "/images/home/venue-common-grounds.webp", courts: v.courts }));
 }
 
+/** Venue awal form "Buat sesi": venue aktif pertama di List of Venue (sama dengan daftar Activities). */
+export async function defaultSessionVenue() {
+  const forms = await loadVenueForms();
+  const v = forms.find((f) => f.active) ?? forms[0];
+  return v ? { name: v.name, city: v.city, type: v.type, image: v.coverPath || "/images/home/venue-common-grounds.webp", courts: v.courts } : null;
+}
+
 export async function getVenueForm(slug: string): Promise<VenueForm | null> {
   return (await loadVenueForms()).find((v) => v.slug === slug) ?? null;
 }

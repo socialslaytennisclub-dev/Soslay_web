@@ -58,7 +58,7 @@ export function FinanceModal({ open, onClose, title, subtitle, wide, footer, act
   );
 
   return (
-    <dialog ref={ref} className={cx(styles.modal, wide && styles.modalWide)} aria-label={title} onClose={onClose} onClick={(e) => e.target === ref.current && onClose()}>
+    <dialog ref={ref} className={cx(styles.modal, wide && styles.modalWide)} aria-label={title} onClose={() => open && onClose()} onCancel={(e) => (e.preventDefault(), onClose())} onClick={(e) => e.target === ref.current && onClose()}>
       {action ? (
         <form ref={formRef} action={action} className={styles.modalInner} noValidate>
           {inner}

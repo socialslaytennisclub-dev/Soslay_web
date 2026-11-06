@@ -1,7 +1,7 @@
 import "server-only";
 import { generateLineup, usesLineup, scoreTarget } from "@/lib/americano";
 import { sessionClosesAt } from "@/lib/session-close";
-import { venueChoices } from "./catalog-repo";
+import { defaultSessionVenue, venueChoices } from "./catalog-repo";
 import { getDataset, type DataSession } from "./dataset";
 import { venueList } from "@/content/venues";
 import { activityTypeLabels } from "./demo-data";
@@ -237,7 +237,9 @@ export async function getSessionDraft(fromId?: string): Promise<SessionDetail> {
   const start = new Date(now);
   start.setUTCDate(start.getUTCDate() + ((6 - start.getUTCDay() + 7) % 7 || 7));
   start.setUTCHours(0, 0, 0, 0);
-  const venue = venueList[0];
+  // Venue dari List of Venue (database) — sama dengan sumber kota & tipe di daftar Activities.
+  const fallback = venueList[0];
+  const venue = (await defaultSessionVenue()) ?? { name: fallback.name, city: fallback.city, type: fallback.type, image: fallback.image, courts: [] as string[] };
   return {
     id: "",
     title: "",
@@ -257,8 +259,8 @@ export async function getSessionDraft(fromId?: string): Promise<SessionDetail> {
     displayStatus: "draft",
     description: "",
     coverPath: null,
-    court: "Court 1",
-    courts: ["Court 1", "Court 2", "Court 2 & 3", "Center court"],
+    court: venue.courts[0] ?? "Court 1",
+    courts: venue.courts.length ? venue.courts : ["Court 1", "Court 2", "Court 2 & 3", "Center court"],
     pointsPerAttendance: 50,
     visibility: "public",
     publishAt: null,
