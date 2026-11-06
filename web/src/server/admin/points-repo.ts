@@ -317,7 +317,12 @@ export async function exportLedger(reason?: PointsReason): Promise<LedgerEntry[]
 export async function pendingRedemptionCount(): Promise<number> {
   // Badge saja — jangan sampai gagal memuat penukaran membuat seluruh admin error.
   try {
-    return (await loadRedemptions()).filter((r) => r.status === "pending").length;
+    if (!isSupabaseConfigured) return (await loadRedemptions()).filter((r) => r.status === "pending").length;
+    // Cukup hitungan (HEAD) — dulu memuat semua penukaran + 500 riwayat (join staf) hanya untuk badge layout.
+    const supabase = await createSupabaseServerClient();
+    const { count, error } = await supabase.from("reward_redemptions").select("code", { count: "exact", head: true }).eq("status", "pending");
+    if (error) throw error;
+    return count ?? 0;
   } catch {
     return 0;
   }

@@ -46,9 +46,11 @@ export async function proxy(request: NextRequest) {
     },
   });
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims: refresh token bila kedaluwarsa (cookie baru lewat setAll), lalu verifikasi JWT secara
+  // lokal dengan JWKS project (ES256, di-cache per proses). getUser() round-trip ke Supabase Auth
+  // (±200 ms) di SETIAP request, termasuk prefetch & navigasi admin.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims.sub;
 
   // Belum login → ke halaman Masuk, lalu kembali ke halaman tujuan (?next=).
   const isProtected = ["/admin", "/akun"].some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));

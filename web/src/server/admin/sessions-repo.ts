@@ -38,7 +38,7 @@ const SORT_KEY: Record<SessionSort, (a: Sortable, b: Sortable) => number> = {
 };
 
 export async function listSessions(query: SessionsQuery): Promise<SessionsResult> {
-  const d = await getDataset();
+  const [d, tripDetails] = await Promise.all([getDataset(), listTripDetails()]);
   const { sessions, now } = d;
   const tab = query.tab ?? "upcoming";
   // Tab Mendatang default 30 hari ke depan; tab lain tanpa batas tanggal kecuali dipilih.
@@ -62,7 +62,7 @@ export async function listSessions(query: SessionsQuery): Promise<SessionsResult
 
   // Trip: satu baris induk di tanggal mulai trip (filter Tipe "Trip" = hanya trip).
   const today = isoDay(now);
-  const trips = (await listTripDetails()).map((trip) => ({ trip, display: tripDisplayStatus(trip, today) }));
+  const trips = tripDetails.map((trip) => ({ trip, display: tripDisplayStatus(trip, today) }));
   const tripInTab = (t: (typeof trips)[number], which: SessionsQuery["tab"]) =>
     which === "draft" ? t.display === "draft" : which === "archived" ? t.display === "cancelled" : which === "completed" ? t.display === "completed" : t.display === "published";
   const tripRows = trips

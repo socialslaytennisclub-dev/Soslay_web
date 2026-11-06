@@ -12,7 +12,7 @@ const placed = (iso: string) => when.format(new Date(iso));
 function Customer({ o }: { o: OrderListItem }) {
   return (
     <span className={styles.customer}>
-      <span className={styles.thumb}>{o.image && <Image src={o.image} alt="" fill sizes="40px" />}</span>
+      <span className={styles.thumb}>{o.image && <Image src={o.image} alt="" width={40} height={40} />}</span>
       <span className={styles.customerText}>
         <span className={styles.strong}>{o.customer}</span>
         <span className={styles.muted}>{o.summary}</span>
