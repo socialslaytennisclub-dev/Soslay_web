@@ -243,7 +243,7 @@ export async function getSessionDraft(fromId?: string): Promise<SessionDetail> {
     id: "",
     title: "",
     typeSlug: "weekly-mabar",
-    typeLabel: activityTypeLabels["weekly-mabar"] ?? "Weekly MABAR",
+    typeLabel: activityTypeLabels["weekly-mabar"] ?? "Mabar Session",
     image: venue.image,
     startsAt: start.toISOString(),
     endsAt: new Date(start.getTime() + 4 * 3600_000).toISOString(),
