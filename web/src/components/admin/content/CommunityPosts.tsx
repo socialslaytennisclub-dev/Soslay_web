@@ -20,7 +20,7 @@ type KindMeta = { label: string; icon: AdminIconName; tone: BadgeTone; link: str
 const KIND: Record<PostPlatform, KindMeta> = {
   instagram: { label: "Instagram", icon: "instagram-logo", tone: "pink", link: "Link post Instagram", placeholder: "https://www.instagram.com/p/…" },
   tiktok: { label: "TikTok", icon: "tiktok-logo", tone: "neutral", link: "Link video TikTok", placeholder: "https://www.tiktok.com/@user/video/…" },
-  threads: { label: "Threads", icon: "chat-circle-text", tone: "indigo", link: "Link post Threads", placeholder: "https://www.threads.net/@user/post/…" },
+  threads: { label: "Threads", icon: "threads-logo", tone: "indigo", link: "Link post Threads", placeholder: "https://www.threads.net/@user/post/…" },
 };
 
 const EMPTY: CommunityPost = { id: "", platform: "instagram", handle: "", text: "", href: "", visible: true };
