@@ -7,7 +7,8 @@ import { getDataset } from "./dataset";
 import { DAY } from "./time";
 import { activityTypeLabels, DEMO_NOW } from "./demo-data";
 import type { AdminTestimonial, CommunityPost, ContentSection, PhotoAlbum, SitePage } from "./types";
-import { postsFromSection, type InstagramSectionJson } from "@/lib/community-posts";
+import type { InstagramSectionJson } from "@/lib/community-posts";
+import { postsFromSection, readInstagramSection } from "../community-posts";
 
 /**
  * Data Konten & Galeri (content_sections, photo_albums, photos, testimonials). Isi awal diambil
@@ -204,12 +205,10 @@ export async function listAlbums(limit?: number): Promise<{ albums: PhotoAlbum[]
   };
 }
 
-/** Post Instagram & Threads di feed "See You on the Court!" (tambah / ubah / hapus / tampil). */
+/** Post Instagram, TikTok & Threads di feed "See You on the Court!" (tambah / ubah / hapus / tampil). */
 export async function listCommunityPosts(): Promise<CommunityPost[]> {
   if (!isSupabaseConfigured) return postsFromSection(null);
-  const supabase = await createSupabaseServerClient();
-  const { data: ig } = await supabase.from("content_sections").select("published").eq("page", "home").eq("key", "instagram").maybeSingle();
-  return postsFromSection(ig?.published as InstagramSectionJson | null);
+  return postsFromSection(await readInstagramSection(await createSupabaseServerClient()));
 }
 
 /** Testimoni untuk tab Testimoni & IG (CRUD). Demo: kutipan statis homepage + 2 contoh tersembunyi. */

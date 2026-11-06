@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { normalizeHandle, postLinkError, type PostPlatform } from "@/lib/community-posts";
+import { useEffect, useRef, useState, useTransition } from "react";
+import { normalizeHandle, POST_PLATFORM_KEYS, POST_PLATFORMS, postLinkError, type PostPlatform } from "@/lib/community-posts";
 import { cx } from "@/lib/cx";
 import { shrinkImage } from "@/lib/image-resize";
 import { deleteInstagramPost, discardPostImages, fetchPostPhoto, saveInstagramPost, setInstagramPostVisible, uploadPostImage, type PostInput } from "@/server/admin/actions/content";
@@ -13,15 +13,16 @@ import { TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon, type AdminIconName } from "../ui/AdminIcon";
 import { AdminButton, Badge, type BadgeTone } from "../ui/AdminUI";
 import { useConfirm } from "../ui/ConfirmDialog";
+import { MemberLinkField } from "./MemberLinkField";
 import styles from "./Content.module.css";
 import t from "./Testimonials.module.css";
 import { toast } from "../ui/Toaster";
 
-type KindMeta = { label: string; icon: AdminIconName; tone: BadgeTone; link: string; placeholder: string };
-const KIND: Record<PostPlatform, KindMeta> = {
-  instagram: { label: "Instagram", icon: "instagram-logo", tone: "pink", link: "Link post Instagram", placeholder: "https://www.instagram.com/p/…" },
-  tiktok: { label: "TikTok", icon: "tiktok-logo", tone: "neutral", link: "Link video TikTok", placeholder: "https://www.tiktok.com/@user/video/…" },
-  threads: { label: "Threads", icon: "threads-logo", tone: "indigo", link: "Link post Threads", placeholder: "https://www.threads.net/@user/post/…" },
+/** Label, link & foto per platform dari POST_PLATFORMS; di sini hanya ikon & warna badge admin. */
+const KIND: Record<PostPlatform, { icon: AdminIconName; tone: BadgeTone }> = {
+  instagram: { icon: "instagram-logo", tone: "pink" },
+  tiktok: { icon: "tiktok-logo", tone: "neutral" },
+  threads: { icon: "threads-logo", tone: "indigo" },
 };
 
 const EMPTY: CommunityPost = { id: "", platform: "instagram", handle: "", text: "", href: "", visible: true };
@@ -96,7 +97,7 @@ export function CommunityPosts({ initial, members }: { initial: CommunityPost[];
         ) : (
           <ul className={styles.posts}>
             {shown.map((p) => {
-              const kind = KIND[p.platform];
+              const kind = { ...KIND[p.platform], ...POST_PLATFORMS[p.platform] };
               return (
                 <li key={p.id} className={cx(styles.post, !p.visible && styles.sectionOff, editing?.id === p.id && t.rowActive)}>
                   {p.image ? (
@@ -147,25 +148,22 @@ export function CommunityPosts({ initial, members }: { initial: CommunityPost[];
 
 function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: CommunityPost; members: MemberChoice[]; onClose: () => void; onSaved: (p: CommunityPost) => void; onDelete: () => void }) {
   const isNew = !post.id;
-  const [form, setForm] = useState<PostInput>({
+  // imageAuto tidak disimpan di form — dihitung saat Simpan dari autoImage (sumber kebenarannya).
+  const [form, setForm] = useState<Omit<PostInput, "imageAuto">>({
     platform: post.platform,
     handle: post.handle,
     text: post.text,
     href: post.href,
     image: post.image ?? "",
-    imageAuto: Boolean(post.imageAuto),
     visible: post.visible,
     memberId: post.memberId ?? null,
   });
   const [saving, start] = useTransition();
   const [uploading, setUploading] = useState(false);
-  const set = <K extends keyof PostInput>(key: K, value: PostInput[K]) => setForm((f) => ({ ...f, [key]: value }));
-  const kind = KIND[form.platform];
+  const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
+  const kind = { ...KIND[form.platform], ...POST_PLATFORMS[form.platform] };
   const linkError = form.href.trim() ? postLinkError(form.platform, form.href) : null;
 
-  const memberLabel = (m: MemberChoice) => `${m.name} · ${m.code}`;
-  const linkedMember = useMemo(() => members.find((m) => m.id === form.memberId), [members, form.memberId]);
-  const [memberQuery, setMemberQuery] = useState(linkedMember ? memberLabel(linkedMember) : "");
 
   // Foto yang diambil / diupload di editor ini. Yang tidak jadi dipakai (diganti, Batal, pindah post)
   // dibuang dari Storage — server hanya menghapus file yang tidak dipakai post mana pun.
@@ -195,7 +193,7 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
   const autoFetch = (platform: PostPlatform, href: string, image: string) => {
     cancelFetch();
     // Threads tidak pakai foto (kartu navy berisi kutipan) — link hanya untuk membuka post-nya.
-    if (platform === "threads" || postLinkError(platform, href) || (image && image !== autoImage.current)) return;
+    if (!POST_PLATFORMS[platform].usesImage || postLinkError(platform, href) || (image && image !== autoImage.current)) return;
     setFetching("busy");
     const seq = fetchSeq.current;
     fetchTimer.current = setTimeout(async () => {
@@ -264,17 +262,17 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
         <fieldset className={t.fieldset}>
           <legend className={settingsStyles.label}>Jenis post</legend>
           <div className={t.segment}>
-            {(["instagram", "tiktok", "threads"] as const).map((p) => (
+            {POST_PLATFORM_KEYS.map((p) => (
               <button key={p} type="button" aria-pressed={form.platform === p} className={cx(t.segmentOption, form.platform === p && t.segmentOn)} onClick={() => changePlatform(p)}>
                 <AdminIcon name={KIND[p].icon} size={16} />
-                {KIND[p].label}
+                {POST_PLATFORMS[p].label}
               </button>
             ))}
           </div>
         </fieldset>
 
         <label className={settingsStyles.field}>
-          <span className={settingsStyles.label}>{kind.link} *</span>
+          <span className={settingsStyles.label}>{kind.linkLabel} *</span>
           <span className={settingsStyles.affix}>
             <AdminIcon name="link-simple" size={16} />
             <input value={form.href} onChange={(e) => changeLink(e.target.value)} placeholder={kind.placeholder} inputMode="url" />
@@ -302,27 +300,10 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
 
         <TextArea label="Kutipan *" value={form.text} onChange={(v) => set("text", v)} maxLength={280} rows={4} />
 
-        <label className={settingsStyles.field}>
-          <span className={settingsStyles.label}>Hubungkan ke member (opsional)</span>
-          <input
-            className={settingsStyles.input}
-            list="post-members"
-            value={memberQuery}
-            placeholder="Ketik nama atau no. member"
-            onChange={(e) => {
-              setMemberQuery(e.target.value);
-              set("memberId", members.find((m) => memberLabel(m) === e.target.value)?.id ?? null);
-            }}
-          />
-          <datalist id="post-members">
-            {members.map((m) => (
-              <option key={m.id} value={memberLabel(m)} />
-            ))}
-          </datalist>
-        </label>
+        <MemberLinkField members={members} value={form.memberId} onChange={(id) => set("memberId", id)} />
 
-        {form.platform === "threads" ? (
-          <p className={ordersStyles.muted}>Post Threads tampil sebagai kartu navy berisi kutipan (tanpa foto). Link hanya untuk membuka post di Threads.</p>
+        {!kind.usesImage ? (
+          <p className={ordersStyles.muted}>Post {kind.label} tampil sebagai kartu navy berisi kutipan (tanpa foto). Link hanya untuk membuka post di {kind.label}.</p>
         ) : (
         <div className={settingsStyles.field}>
           <span className={settingsStyles.label}>Foto post</span>

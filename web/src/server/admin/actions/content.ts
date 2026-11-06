@@ -1,14 +1,16 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { normalizeHandle, postLinkError, postsFromSection, type InstagramSectionJson, type PostPlatform, type StoredPost } from "@/lib/community-posts";
+import { isPostPlatform, normalizeHandle, POST_PLATFORMS, postLinkError, type InstagramSectionJson, type PostPlatform, type StoredPost } from "@/lib/community-posts";
 import { detectVideoPlatform } from "@/lib/video";
-import { removePublicImage, uploadPublicImage } from "../../storage";
+import { IMAGE_TYPES, removeOwnUploads, uploadPublicImage } from "../../storage";
+import { postsFromSection, readInstagramSection } from "../../community-posts";
 import { findMemberById } from "../identity";
 import type { AdminTestimonial, ContentSection } from "../types";
-import { audit, done, fail, refreshPaths, requireEditor, type ActionResult, type RefreshPath } from "./common";
+import { revalidatePath } from "next/cache";
+import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } from "./common";
 
-/** Konten & Galeri → homepage website (content_sections, testimonials). */
+/** Konten & Galeri → homepage website (content_sections, testimonials, post Instagram/TikTok/Threads). */
 
 const isLink = (href: string) => /^(\/|https:\/\/)/.test(href);
 
@@ -24,18 +26,13 @@ export async function publishHomepage(sections: ContentSection[]): Promise<Actio
   }
 
   const supabase = await createSupabaseServerClient();
-  // Post Instagram & Threads (posts / hiddenPosts lama) dikelola terpisah — pertahankan dari versi tersimpan.
+  // Isi tersimpan yang tidak diedit di sini (mis. daftar post Instagram) tetap dipertahankan.
   const { data: current } = await supabase.from("content_sections").select("key, published").eq("page", "home");
-  const postsByKey = new Map(
-    (current ?? []).map((r) => {
-      const json = (r.published ?? {}) as InstagramSectionJson;
-      return [r.key as string, { ...(json.posts ? { posts: json.posts } : {}), ...(json.hiddenPosts ? { hiddenPosts: json.hiddenPosts } : {}) }];
-    }),
-  );
+  const storedByKey = new Map((current ?? []).map((r) => [r.key as string, (r.published ?? {}) as Record<string, unknown>]));
   const now = new Date().toISOString();
 
   const rows = sections.map((s, i) => {
-    const body = { title: s.title.trim(), description: s.description.trim(), cta: s.cta ?? null, image: s.image ?? null, overlay: s.overlay ?? null, ...postsByKey.get(s.key) };
+    const body = { ...storedByKey.get(s.key), title: s.title.trim(), description: s.description.trim(), cta: s.cta ?? null, image: s.image ?? null, overlay: s.overlay ?? null };
     return { page: "home", key: s.key, label: s.name, draft: body, published: body, is_enabled: s.enabled, sort_order: i, updated_by: auth.userId, updated_at: now, published_at: now };
   });
   const { error } = await supabase.from("content_sections").upsert(rows, { onConflict: "page,key" });
@@ -111,8 +108,15 @@ export async function deleteTestimonial(id: string): Promise<ActionResult> {
   return done(`Testimoni ${data[0].author_name} dihapus.`);
 }
 
-/** Halaman yang menampilkan feed post (InstagramFeed) — dimuat ulang setelah post diubah. */
-const FEED_PATHS: RefreshPath[] = ["/", "/activity", ["/activity/[type]", "page"], "/shop", ["/shop/[slug]", "page"], "/admin/konten"];
+/**
+ * Halaman yang menampilkan feed post (InstagramFeed) — dimuat ulang setelah post diubah. Tanpa
+ * refreshPaths: post tidak ada di dataset admin, jadi cache dataset tidak perlu dibuang.
+ */
+function refreshFeed() {
+  for (const path of ["/", "/activity", "/shop", "/admin/konten"]) revalidatePath(path);
+  revalidatePath("/activity/[type]", "page");
+  revalidatePath("/shop/[slug]", "page");
+}
 
 /**
  * Baca daftar post (atau konten statis), ubah, lalu simpan ke draft & published section Instagram.
@@ -141,7 +145,7 @@ async function writePosts(change: (posts: StoredPost[]) => StoredPost[] | string
       .select("key");
     if (error) return { error: `Gagal menyimpan: ${error.message}` };
     if (updated?.length) {
-      refreshPaths(...FEED_PATHS);
+      refreshFeed();
       return { posts: next };
     }
   }
@@ -179,7 +183,7 @@ export type PostInput = {
 export async function saveInstagramPost(id: string, input: PostInput): Promise<ActionResult & { post?: StoredPost }> {
   const auth = await requireEditor("content");
   if ("error" in auth) return fail(auth.error);
-  if (!["instagram", "tiktok", "threads"].includes(input.platform)) return fail("Pilih jenis post.");
+  if (!isPostPlatform(input.platform)) return fail("Pilih jenis post.");
   const handle = normalizeHandle(input.handle);
   if (!handle) return fail("Isi username akun (mis. @socialslay).");
   const text = input.text.trim();
@@ -189,6 +193,9 @@ export async function saveInstagramPost(id: string, input: PostInput): Promise<A
   if (linkError) return fail(linkError);
   if (input.image && !/^(\/images\/|https:\/\/)/.test(input.image)) return fail("Foto post tidak valid.");
   if (input.memberId && !(await findMemberById(input.memberId))) return fail("Member yang dihubungkan tidak ditemukan — pilih ulang.");
+
+  // Satu-satunya tempat aturan foto per platform (Threads: kutipan saja) — pembaca percaya data tersimpan.
+  const image = POST_PLATFORMS[input.platform].usesImage ? input.image || undefined : undefined;
 
   let saved: StoredPost | undefined;
   const r = await writePosts((posts) => {
@@ -201,10 +208,9 @@ export async function saveInstagramPost(id: string, input: PostInput): Promise<A
       handle,
       text,
       href: input.href.trim(),
-      // Threads selalu kartu navy berisi kutipan (tanpa foto); IG / TikTok tanpa foto juga begitu.
-      image: input.platform === "threads" ? undefined : input.image || undefined,
-      imagePosition: input.platform !== "threads" && input.image && input.image === before?.image ? before?.imagePosition : undefined,
-      imageAuto: input.platform !== "threads" && Boolean(input.image) && input.imageAuto,
+      image,
+      imagePosition: image && image === before?.image ? before?.imagePosition : undefined,
+      imageAuto: Boolean(image) && input.imageAuto,
       visible: input.visible,
       memberId: input.memberId || null,
     };
@@ -229,19 +235,18 @@ export async function deleteInstagramPost(id: string): Promise<ActionResult> {
   });
   if ("error" in r) return fail(r.error);
   // Foto upload post ini ikut dihapus dari Storage bila tidak dipakai post lain.
-  if (image && !r.posts.some((p) => p.image === image)) await removePublicImage(POST_BUCKET, image);
+  if (image && !r.posts.some((p) => p.image === image)) await removeOwnUploads(POST_BUCKET, [image]);
   await audit(auth.userId, `menghapus post ${handle}`, "content", "instagram");
   return done(`Post ${handle} dihapus.`);
 }
 
 const POST_BUCKET = "community-posts";
 const MAX_POST_IMAGE = 5 * 1024 * 1024;
+const storePostImage = (file: FormDataEntryValue | null) => uploadPublicImage({ bucket: POST_BUCKET, file, folder: new Date().toISOString().slice(0, 7), maxBytes: MAX_POST_IMAGE });
 
 // Foto preview link (og:image) hanya diambil dari domain ini — server tidak mengikuti URL sembarangan.
 const PREVIEW_PAGE_HOSTS = ["instagram.com", "tiktok.com"];
 const PREVIEW_IMAGE_HOSTS = ["cdninstagram.com", "fbcdn.net", "tiktokcdn.com", "tiktokcdn-us.com", "tiktokcdn-eu.com", "ibyteimg.com", "byteimg.com"];
-const PLATFORM_LABEL: Record<PostPlatform, string> = { instagram: "Instagram", tiktok: "TikTok", threads: "Threads" };
-const PREVIEW_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 const hostIn = (url: string, hosts: string[]) => {
   try {
     const u = new URL(url);
@@ -260,9 +265,9 @@ const decodeHtml = (v: string) => v.replace(/&amp;/g, "&").replace(/&#x2F;/g, "/
 export async function fetchPostPhoto(platform: PostPlatform, href: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const auth = await requireEditor("content");
   if ("error" in auth) return { ok: false, error: auth.error };
-  if (platform === "threads") return { ok: false, error: "Post Threads tidak memakai foto." };
+  if (!POST_PLATFORMS[platform].usesImage) return { ok: false, error: `Post ${POST_PLATFORMS[platform].label} tidak memakai foto.` };
   if (postLinkError(platform, href)) return { ok: false, error: "Link belum valid." };
-  const failed = { ok: false as const, error: `Foto tidak bisa diambil otomatis dari ${PLATFORM_LABEL[platform]} — upload foto manual.` };
+  const failed = { ok: false as const, error: `Foto tidak bisa diambil otomatis dari ${POST_PLATFORMS[platform].label} — upload foto manual.` };
   try {
     const page = await fetchAllowed(href.trim(), PREVIEW_PAGE_HOSTS, { "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)", Accept: "text/html" });
     // Dialihkan ke halaman login (akun private / Instagram minta login) → foto preview-nya hanya logo umum.
@@ -276,11 +281,10 @@ export async function fetchPostPhoto(platform: PostPlatform, href: string): Prom
 
     const img = await fetchAllowed(imageUrl, PREVIEW_IMAGE_HOSTS);
     const type = (img?.headers.get("content-type") ?? "").split(";")[0].trim();
-    if (!img?.ok || !PREVIEW_TYPES[type]) return failed;
+    if (!img?.ok || !IMAGE_TYPES[type]) return failed;
     const bytes = await readCapped(img, MAX_POST_IMAGE);
     if (!bytes.byteLength) return failed;
-    const file = new File([bytes], `preview.${PREVIEW_TYPES[type]}`, { type });
-    const result = await uploadPublicImage({ bucket: POST_BUCKET, file, folder: new Date().toISOString().slice(0, 7), maxBytes: MAX_POST_IMAGE });
+    const result = await storePostImage(new File([bytes], `preview.${IMAGE_TYPES[type]}`, { type }));
     if (!result.ok) return { ok: false, error: result.error };
     await audit(auth.userId, "content.post_image_fetch", "post_image", result.path);
     return { ok: true, url: result.url };
@@ -345,17 +349,15 @@ async function readCapped(res: Response, max: number, truncate = false): Promise
 export async function discardPostImages(urls: string[]): Promise<void> {
   const auth = await requireEditor("content");
   if ("error" in auth || !urls.length) return;
-  const supabase = await createSupabaseServerClient();
-  const { data: row } = await supabase.from("content_sections").select("published").eq("page", "home").eq("key", "instagram").maybeSingle();
-  const used = new Set(postsFromSection(row?.published as InstagramSectionJson | null).map((p) => p.image));
-  await Promise.all([...new Set(urls)].filter((u) => !used.has(u)).map((u) => removePublicImage(POST_BUCKET, u)));
+  const used = new Set(postsFromSection(await readInstagramSection(await createSupabaseServerClient())).map((p) => p.image));
+  await removeOwnUploads(POST_BUCKET, urls.filter((u) => !used.has(u)));
 }
 
 /** Upload foto post ke Storage; URL tersimpan saat admin menekan Simpan. */
 export async function uploadPostImage(formData: FormData): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   const auth = await requireEditor("content");
   if ("error" in auth) return { ok: false, error: auth.error };
-  const result = await uploadPublicImage({ bucket: POST_BUCKET, file: formData.get("file"), folder: new Date().toISOString().slice(0, 7), maxBytes: MAX_POST_IMAGE });
+  const result = await storePostImage(formData.get("file"));
   if (!result.ok) return result;
   await audit(auth.userId, "content.post_image_upload", "post_image", result.path);
   return { ok: true, url: result.url };

@@ -460,10 +460,7 @@ export function TripPayments({ tripId, tripTitle, activities, quota, due, minDp,
             {picked ? (
               <li>
                 <div className={cx(styles.result, styles.picked)}>
-                  <span>
-                    <strong>{picked.fullName}</strong>
-                    <small>{[picked.memberCode, picked.phone].filter(Boolean).join(" · ")}</small>
-                  </span>
+                  <MemberLine m={picked} />
                   <button type="button" className={styles.link} onClick={() => setPicked(null)}>
                     Ganti
                   </button>
@@ -477,10 +474,7 @@ export function TripPayments({ tripId, tripTitle, activities, quota, due, minDp,
               results.map((m) => (
                 <li key={m.id}>
                   <button type="button" className={styles.result} disabled={m.alreadyIn} onClick={() => setPicked(m)}>
-                    <span>
-                      <strong>{m.fullName}</strong>
-                      <small>{[m.memberCode, m.phone].filter(Boolean).join(" · ")}</small>
-                    </span>
+                    <MemberLine m={m} />
                     {m.alreadyIn ? <Badge tone="neutral">Sudah terdaftar</Badge> : <AdminIcon name="plus-bold" size={14} />}
                   </button>
                 </li>
@@ -501,5 +495,15 @@ export function TripPayments({ tripId, tripTitle, activities, quota, due, minDp,
         </div>
       </FinanceModal>
     </section>
+  );
+}
+
+/** Nama + "ID Soslay · no. HP" di saran & pilihan member "Tambah peserta bundling". */
+function MemberLine({ m }: { m: TripMemberOption }) {
+  return (
+    <span>
+      <strong>{m.fullName}</strong>
+      <small>{[m.memberCode, m.phone].filter(Boolean).join(" · ")}</small>
+    </span>
   );
 }

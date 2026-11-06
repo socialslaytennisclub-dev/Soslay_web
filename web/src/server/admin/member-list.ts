@@ -1,5 +1,6 @@
 import "server-only";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { likeEscape } from "@/lib/text";
 import { FREQUENCY } from "./dataset";
 import { DAY } from "./time";
 import type { MemberListItem, MembersQuery, MembersResult, TennisLevel } from "./types";
@@ -25,7 +26,6 @@ const FREQUENCY_VALUE = Object.fromEntries(Object.entries(FREQUENCY).map(([value
 /** Nilai di dalam filter `or=(…)` PostgREST: kutip supaya spasi/koma/kurung aman. */
 const quote = (value: string) => `"${value.replace(/[\\"]/g, "\\$&")}"`;
 /** Wildcard LIKE dari ketikan admin (%, _) dianggap huruf biasa. */
-const likeEscape = (value: string) => value.replace(/[\\%_]/g, "\\$&");
 
 type Client = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 /** Bagian builder PostgREST yang dipakai di sini — tipe lengkap supabase-js terlalu dalam untuk di-generik-kan. */

@@ -25,3 +25,6 @@ export function normalizeBookingUrl(raw: string): string | null {
 
 /** "Rally in Paradise · Bali" → "rally-in-paradise-bali" (maks 60 karakter). */
 export const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
+
+/** Escape karakter wildcard LIKE/ILIKE (\ % _) supaya isian dicari apa adanya. */
+export const likeEscape = (value: string) => value.replace(/[\\%_]/g, "\\$&");

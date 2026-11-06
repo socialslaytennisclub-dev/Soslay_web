@@ -1,10 +1,11 @@
+import { POST_PLATFORMS, type PostPlatform } from "@/lib/community-posts";
 import { cx } from "@/lib/cx";
 import { Icon } from "../Icon/Icon";
 import { MediaCard } from "../MediaCard/MediaCard";
 import styles from "./SocialPostCard.module.css";
 
 export type SocialPostCardProps = {
-  platform: "instagram" | "tiktok" | "threads";
+  platform: PostPlatform;
   text: string[];
   handle: string;
   /** Tanpa gambar → kartu navy (kutipan saja). */
@@ -13,15 +14,12 @@ export type SocialPostCardProps = {
   href: string;
 };
 
-const PLATFORM = {
-  instagram: { label: "Instagram", icon: "instagram-logo" },
-  tiktok: { label: "TikTok", icon: "tiktok-logo" },
-  threads: { label: "Threads", icon: "threads-logo" },
-} as const;
+const ICON = { instagram: "instagram-logo", tiktok: "tiktok-logo", threads: "threads-logo" } as const;
 
 /** Figma: Card/Instagram — post IG / TikTok (foto) atau kutipan saja (navy, handle lime). */
 export function SocialPostCard({ platform, text, handle, image, imagePosition, href }: SocialPostCardProps) {
-  const { label, icon } = PLATFORM[platform];
+  const label = POST_PLATFORMS[platform].label;
+  const icon = ICON[platform];
 
   return (
     <a

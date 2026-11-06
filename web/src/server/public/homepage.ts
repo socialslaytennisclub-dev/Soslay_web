@@ -6,7 +6,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabasePublicClient } from "@/lib/supabase/public";
 import { getShopCatalog } from "./products";
 import { getWebsiteVenues } from "./venues";
-import { postsFromSection, type InstagramSectionJson } from "@/lib/community-posts";
+import type { InstagramSectionJson } from "@/lib/community-posts";
+import { postsFromSection, readInstagramSection } from "../community-posts";
 import type { SocialPostCardProps } from "@/components/ui";
 
 /**
@@ -83,16 +84,14 @@ function instagramFeed(json: SectionJson): Homepage["instagram"] {
     cta: json.cta ?? base.cta,
     posts: postsFromSection(json as InstagramSectionJson)
       .filter((p) => p.visible)
-      // Threads selalu kartu navy berisi kutipan (tanpa foto).
-      .map((p) => ({ platform: p.platform, text: [p.text], handle: p.handle, image: p.platform === "threads" ? undefined : p.image, imagePosition: p.imagePosition, href: p.href })),
+      .map((p) => ({ platform: p.platform, text: [p.text], handle: p.handle, image: p.image, imagePosition: p.imagePosition, href: p.href })),
   };
 }
 
 /** Feed yang sama untuk halaman lain (Activity, Shop) — hanya membaca section Instagram. */
 export const getInstagramFeed = cache(async (): Promise<Homepage["instagram"]> => {
   if (!isSupabaseConfigured) return instagramFeed({});
-  const { data } = await createSupabasePublicClient().from("content_sections").select("published").eq("page", "home").eq("key", "instagram").maybeSingle();
-  return instagramFeed((data?.published ?? {}) as SectionJson);
+  return instagramFeed(((await readInstagramSection(createSupabasePublicClient())) ?? {}) as SectionJson);
 });
 
 export const getHomepage = cache(async (): Promise<Homepage> => {

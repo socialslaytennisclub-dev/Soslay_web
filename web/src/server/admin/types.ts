@@ -391,8 +391,8 @@ export type PhotoAlbum = {
   status: "published" | "draft" | "empty";
 };
 
-/** Post Instagram & Threads di feed homepage (lib/community-posts). */
-export type CommunityPost = import("@/lib/community-posts").StoredPost;
+/** Post Instagram, TikTok & Threads di feed homepage (lib/community-posts). */
+export type { StoredPost as CommunityPost } from "@/lib/community-posts";
 
 /** Testimoni komunitas (Figma 09b–09f) — teks atau video pendek 9:16. */
 export type AdminTestimonial = {

@@ -27,7 +27,7 @@ export const revalidate = 60;
  * /activity/[type]; link lama /activity?type=… dialihkan ke sana (next.config).
  */
 export default async function ActivityPage() {
-  const sessions = await getWebsiteSessions();
+  const [sessions, feed] = await Promise.all([getWebsiteSessions(), getInstagramFeed()]);
   const now = new Date();
   const upcoming = upcomingSessions(sessions, now);
   const featured = pickFeatured(upcoming);
@@ -47,7 +47,7 @@ export default async function ActivityPage() {
             filter={<ActivityTypeFilter />}
             featuredShown={!!featured}
           />
-          <InstagramFeed {...await getInstagramFeed()} />
+          <InstagramFeed {...feed} />
         </main>
         <Footer />
       </MotionProvider>

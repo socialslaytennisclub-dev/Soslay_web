@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: PageProps<"/shop/[slug]">): P
 /** Product detail (Figma 25:1603). */
 export default async function ProductPage({ params }: PageProps<"/shop/[slug]">) {
   const { slug } = await params;
-  const { product, detail } = await findShopProduct(slug);
+  const [{ product, detail }, feed] = await Promise.all([findShopProduct(slug), getInstagramFeed()]);
   if (!product || !detail) notFound();
 
   return (
@@ -48,7 +48,7 @@ export default async function ProductPage({ params }: PageProps<"/shop/[slug]">)
         <main>
           <ProductDetailSection product={product} detail={detail} />
           <TrustSection {...productPage.trust} />
-          <InstagramFeed {...await getInstagramFeed()} />
+          <InstagramFeed {...feed} />
         </main>
         <Footer />
       </MotionProvider>

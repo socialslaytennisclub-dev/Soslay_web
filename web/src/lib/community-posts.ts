@@ -1,11 +1,20 @@
-import { instagram } from "@/content/home";
-
 /**
- * Post Instagram, TikTok & Threads di feed "See You on the Court!" homepage. Disimpan di
- * content_sections (page home, key instagram) → `posts`. Selama belum pernah diedit di admin,
- * daftar diambil dari konten statis (content/home) + `hiddenPosts` lama.
+ * Post Instagram, TikTok & Threads di feed "See You on the Court!" (homepage, Activity, Shop).
+ * Modul ini aman untuk browser (tanpa konten statis) — daftar tersimpan & fallback statis ada di
+ * server/community-posts.ts.
  */
-export type PostPlatform = "instagram" | "tiktok" | "threads";
+
+/** Satu tabel platform: daftar pilihan, label, dan apakah post memakai foto. */
+export const POST_PLATFORMS = {
+  instagram: { label: "Instagram", usesImage: true, linkLabel: "Link post Instagram", placeholder: "https://www.instagram.com/p/…" },
+  tiktok: { label: "TikTok", usesImage: true, linkLabel: "Link video TikTok", placeholder: "https://www.tiktok.com/@user/video/…" },
+  // Threads selalu kartu navy berisi kutipan — link hanya untuk membuka post-nya.
+  threads: { label: "Threads", usesImage: false, linkLabel: "Link post Threads", placeholder: "https://www.threads.net/@user/post/…" },
+} as const;
+
+export type PostPlatform = keyof typeof POST_PLATFORMS;
+export const POST_PLATFORM_KEYS = Object.keys(POST_PLATFORMS) as PostPlatform[];
+export const isPostPlatform = (value: string): value is PostPlatform => value in POST_PLATFORMS;
 
 export type StoredPost = {
   id: string;
@@ -24,26 +33,10 @@ export type StoredPost = {
 
 export type InstagramSectionJson = { posts?: StoredPost[]; hiddenPosts?: string[] } & Record<string, unknown>;
 
-/** Daftar post tersimpan, atau konten statis bila admin belum pernah mengedit. */
-export function postsFromSection(json: InstagramSectionJson | null | undefined): StoredPost[] {
-  if (Array.isArray(json?.posts)) return json.posts;
-  const hidden = new Set(json?.hiddenPosts ?? []);
-  return instagram.posts.map((p) => ({
-    id: `ig:${p.handle}`,
-    platform: p.platform,
-    handle: p.handle,
-    text: p.text.join(" "),
-    href: p.href,
-    image: "image" in p ? p.image : undefined,
-    imagePosition: "imagePosition" in p ? p.imagePosition : undefined,
-    visible: !hidden.has(p.handle),
-  }));
-}
-
 /** Link post sesuai platform: instagram.com/p|reel/…, tiktok.com/@user/video/… (atau vt/vm), threads.net|com/@user/post/…. */
 export function postLinkError(platform: PostPlatform, href: string): string | null {
   const url = href.trim();
-  if (!url) return platform === "instagram" ? "Tempel link post Instagram." : platform === "tiktok" ? "Tempel link video TikTok." : "Tempel link post Threads.";
+  if (!url) return `Tempel ${POST_PLATFORMS[platform].linkLabel.replace(/^Link/, "link")}.`;
   let parsed: URL;
   try {
     parsed = new URL(url);

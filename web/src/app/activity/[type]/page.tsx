@@ -35,7 +35,7 @@ export default async function ActivityTypePage({ params }: PageProps<"/activity/
   const landing = findLanding((await params).type);
   if (!landing) notFound();
 
-  const sessions = await getWebsiteSessions();
+  const [sessions, feed] = await Promise.all([getWebsiteSessions(), getInstagramFeed()]);
   const now = new Date();
   const upcoming = newestFirst(filterByType(upcomingSessions(sessions, now), landing.type));
   const past = filterByType(pastSessions(sessions, now), landing.type).slice(0, activityPage.past.limit);
@@ -58,7 +58,7 @@ export default async function ActivityTypePage({ params }: PageProps<"/activity/
           />
           {"about" in landing && <ActivityAbout id="activity-about-title" {...landing.about} />}
           <SessionsSection upcoming={upcoming} past={past} />
-          <InstagramFeed {...await getInstagramFeed()} />
+          <InstagramFeed {...feed} />
         </main>
         <Footer />
       </MotionProvider>

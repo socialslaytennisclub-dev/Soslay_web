@@ -20,7 +20,7 @@ export const metadata: Metadata = {
  * productCategories, kategori kosong disembunyikan) · marquee · Best Seller · Instagram.
  */
 export default async function ShopPage() {
-  const { products, details } = await getShopCatalog();
+  const [{ products, details }, feed] = await Promise.all([getShopCatalog(), getInstagramFeed()]);
   const sections = productCategories
     .map((category) => ({ ...category, products: products.filter((p) => p.category === category.slug) }))
     .filter((section) => section.products.length > 0);
@@ -41,7 +41,7 @@ export default async function ShopPage() {
           {bestSellers.length > 0 && (
             <ShopCategorySection id="best-seller" layout="carousel" products={bestSellers} details={details} {...shopPage.bestSeller} />
           )}
-          <InstagramFeed {...await getInstagramFeed()} />
+          <InstagramFeed {...feed} />
         </main>
         <Footer />
       </MotionProvider>

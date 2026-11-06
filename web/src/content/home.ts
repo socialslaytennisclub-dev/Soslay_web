@@ -1,6 +1,7 @@
 import type { IconName } from "@/components/ui";
 import { featuredProducts, productCardProps, productDetails } from "./products";
 import { venueList } from "./venues";
+import type { PostPlatform } from "@/lib/community-posts";
 
 /**
  * Konten homepage (copy, gambar, link) — terpisah dari markup.
@@ -145,7 +146,7 @@ export const shop = {
 };
 
 export type SocialPost = {
-  platform: "instagram" | "threads";
+  platform: PostPlatform;
   text: string[];
   handle: string;
   image?: string;

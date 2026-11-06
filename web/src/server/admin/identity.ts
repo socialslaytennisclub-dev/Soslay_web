@@ -2,6 +2,7 @@ import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { likeEscape } from "@/lib/text";
 import { localPhone } from "@/lib/wa-invite";
 import type { TennisLevel } from "./types";
 
@@ -73,7 +74,9 @@ export async function findMemberByIdentifier(raw: string): Promise<MemberIdentit
   if (code) return one("member_code", code, "ID Soslay");
   const phone = normalizeIndoPhone(q);
   if (phone) return findMemberByPhone(phone);
-  return (await one("kuy_id", q, "Kuy ID")) || (await one("reclub_id", q, "Reclub ID"));
+  // Kuy ID & Reclub ID dicek bersamaan; Kuy ID diutamakan bila keduanya cocok.
+  const [kuy, reclub] = await Promise.all([one("kuy_id", q, "Kuy ID"), one("reclub_id", q, "Reclub ID")]);
+  return kuy ?? reclub;
 }
 
 /**
@@ -84,7 +87,7 @@ export async function searchMembers(raw: string, limit = 6): Promise<MemberIdent
   const q = raw.trim().replace(/^@/, "");
   if (q.length < 2 || !isSupabaseConfigured) return [];
   const db = await readClient();
-  const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const pattern = `%${likeEscape(q)}%`;
   // Identifier persis & nama dicari bersamaan.
   const [exact, { data }] = await Promise.all([
     findMemberByIdentifier(q),
