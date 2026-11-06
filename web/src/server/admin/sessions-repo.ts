@@ -238,8 +238,7 @@ export async function getSessionDraft(fromId?: string): Promise<SessionDetail> {
   start.setUTCDate(start.getUTCDate() + ((6 - start.getUTCDay() + 7) % 7 || 7));
   start.setUTCHours(0, 0, 0, 0);
   // Venue dari List of Venue (database) — sama dengan sumber kota & tipe di daftar Activities.
-  const fallback = venueList[0];
-  const venue = (await defaultSessionVenue()) ?? { name: fallback.name, city: fallback.city, type: fallback.type, image: fallback.image, courts: [] as string[] };
+  const venue = (await defaultSessionVenue()) ?? { ...venueList[0], courts: [] as string[] };
   return {
     id: "",
     title: "",

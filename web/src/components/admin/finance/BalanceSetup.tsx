@@ -6,6 +6,7 @@ import { AdminIcon } from "@/components/admin/ui/AdminIcon";
 import { AdminButton, PickerInput } from "@/components/admin/ui/AdminUI";
 import { toast } from "@/components/admin/ui/Toaster";
 import { amountDigits, amountDisplay, rp } from "@/lib/finance/format";
+import { parseAmount } from "@/lib/finance/journal";
 import type { BalanceItem, BalanceItemKey } from "@/lib/finance/types";
 import { deleteBalanceItem, saveBalanceItem, saveOpeningBalances } from "@/server/admin/actions/finance";
 import styles from "./Finance.module.css";
@@ -22,49 +23,35 @@ const KEYS: { key: BalanceItemKey; label: string; hint: string }[] = [
 ];
 const digits = (v: string) => amountDigits(v, true);
 const show = amountDisplay;
-/** Isian angka → number; isian setengah jadi ("-", kosong) dihitung 0, bukan NaN. */
-const num = (v: string | undefined) => {
-  const n = Number(v || 0);
-  return Number.isFinite(n) ? n : 0;
-};
 
 type Account = { id: string; name: string; openingBalance: number; openingDate: string };
 
 /** Admin / 12n — Saldo awal akun & pos manual neraca (modal, peralatan, piutang, utang vendor). */
 export function BalanceSetupButton({ accounts, items, autoOpen = false }: { accounts: Account[]; items: BalanceItem[]; autoOpen?: boolean }) {
   const router = useRouter();
+  const initialOpening = () => Object.fromEntries(accounts.map((a) => [a.id, String(a.openingBalance)]));
+  // Satu isian "Per tanggal" untuk semua akun, diawali tanggal akun pertama.
+  const initialDate = accounts[0]?.openingDate ?? "2025-09-01";
   const [open, setOpen] = useState(autoOpen);
   const [pending, start] = useTransition();
-  const [opening, setOpening] = useState(() => Object.fromEntries(accounts.map((a) => [a.id, String(a.openingBalance)])));
-  const [openingDate, setOpeningDate] = useState(accounts[0]?.openingDate ?? "2025-09-01");
-  // Tanggal "Per tanggal" hanya dianggap perubahan bila admin benar-benar mengubahnya — akun bisa
-  // punya tanggal berbeda, sementara isian ini memakai tanggal akun pertama sebagai awal.
-  const [dateTouched, setDateTouched] = useState(false);
+  const [opening, setOpening] = useState(initialOpening);
+  const [openingDate, setOpeningDate] = useState(initialDate);
   const [form, setForm] = useState<{ id?: string; key: BalanceItemKey; label: string; amount: string; effectiveDate: string; salvage: string; lifeMonths: string; note: string } | null>(null);
 
+  // Tanggal hanya dianggap berubah bila admin mengubah isiannya — akun lain boleh bertanggal beda.
+  const dateChanged = openingDate !== initialDate;
   // Saldo awal akun yang diketik tapi belum disimpan.
-  const changedAccounts = accounts.filter((a) => num(opening[a.id]) !== a.openingBalance || (dateTouched && openingDate !== a.openingDate));
+  const changedAccounts = accounts.filter((a) => parseAmount(opening[a.id] ?? "") !== a.openingBalance || (dateChanged && openingDate !== a.openingDate));
   // Form pos manual yang sedang terbuka & sudah diisi.
-  const formFilled = !!form && (!!form.id || num(form.amount) !== 0);
+  const formFilled = !!form && (!!form.id || parseAmount(form.amount) !== 0);
   const unsaved = changedAccounts.length > 0 || formFilled;
 
-  /**
-   * Simpan saldo awal akun yang berubah dalam satu server action. `attempted` = ada yang dikirim
-   * (sebagian bisa tersimpan walau hasilnya gagal → pemanggil tetap me-refresh).
-   */
+  /** Simpan saldo awal akun yang berubah dalam satu server action. */
   const persistOpening = async () => {
-    if (!changedAccounts.length) return { ok: true, attempted: false };
-    const r = await saveOpeningBalances(changedAccounts.map((a) => ({ accountId: a.id, amount: num(opening[a.id]) })), openingDate);
+    if (!changedAccounts.length) return true;
+    const r = await saveOpeningBalances(changedAccounts.map((a) => ({ accountId: a.id, amount: parseAmount(opening[a.id] ?? "") })), openingDate);
     if (!r.ok) toast.error(r.error);
-    return { ok: r.ok, attempted: true };
-  };
-
-  /** Buang isian yang belum disimpan → kembali ke nilai tersimpan. */
-  const resetInputs = () => {
-    setOpening(Object.fromEntries(accounts.map((a) => [a.id, String(a.openingBalance)])));
-    setOpeningDate(accounts[0]?.openingDate ?? "2025-09-01");
-    setDateTouched(false);
-    setForm(null);
+    return r.ok;
   };
 
   const persistItem = async () => {
@@ -73,10 +60,10 @@ export function BalanceSetupButton({ accounts, items, autoOpen = false }: { acco
       id: form.id,
       key: form.key,
       label: form.label,
-      amount: num(form.amount),
+      amount: parseAmount(form.amount),
       effectiveDate: form.effectiveDate,
-      salvage: num(form.salvage),
-      lifeMonths: num(form.lifeMonths),
+      salvage: parseAmount(form.salvage),
+      lifeMonths: parseAmount(form.lifeMonths),
       note: form.note,
     });
     if (!r.ok) {
@@ -90,7 +77,7 @@ export function BalanceSetupButton({ accounts, items, autoOpen = false }: { acco
   const saveOpening = () =>
     start(async () => {
       if (!changedAccounts.length) return toast.success("Tidak ada perubahan saldo awal.");
-      const { ok } = await persistOpening();
+      const ok = await persistOpening();
       // Sebagian bisa sudah tersimpan walau ada yang gagal → tetap segarkan data.
       router.refresh();
       if (ok) toast.success("Saldo awal akun tersimpan.");
@@ -108,21 +95,20 @@ export function BalanceSetupButton({ accounts, items, autoOpen = false }: { acco
   const saveAndClose = () =>
     start(async () => {
       if (!unsaved) return setOpen(false);
-      const saved = await persistOpening();
-      const itemOk = saved.ok && (!formFilled || (await persistItem()));
+      const openingOk = await persistOpening();
+      const itemOk = openingOk && (!formFilled || (await persistItem()));
       // Refresh juga saat gagal sebagian, supaya yang sudah tersimpan tidak dianggap "belum disimpan".
-      if (saved.attempted || (formFilled && itemOk)) router.refresh();
-      if (!saved.ok || !itemOk) return;
+      if (changedAccounts.length || (formFilled && itemOk)) router.refresh();
+      if (!openingOk || !itemOk) return;
       toast.success("Saldo awal & penyesuaian tersimpan.");
       setOpen(false);
     });
 
-  // Tutup lewat X, klik di luar, atau Esc: minta konfirmasi bila ada isian yang belum disimpan.
-  const requestClose = () => {
-    if (unsaved) {
-      if (!window.confirm("Ada isian yang belum disimpan. Tutup tanpa menyimpan?")) return;
-      resetInputs();
-    }
+  // Ditutup tanpa menyimpan (konfirmasinya di FinanceModal lewat `dirty`) → buang isian.
+  const discardAndClose = () => {
+    setOpening(initialOpening());
+    setOpeningDate(initialDate);
+    setForm(null);
     setOpen(false);
   };
 
@@ -131,7 +117,7 @@ export function BalanceSetupButton({ accounts, items, autoOpen = false }: { acco
       <AdminButton icon="pencil-simple" onClick={() => setOpen(true)}>
         Saldo awal & penyesuaian
       </AdminButton>
-      <FinanceModal open={open} onClose={requestClose} title="Saldo awal & penyesuaian" subtitle="Pos manual neraca. Semua perubahan tercatat di log." wide
+      <FinanceModal open={open} onClose={discardAndClose} dirty={unsaved} title="Saldo awal & penyesuaian" subtitle="Pos manual neraca. Semua perubahan tercatat di log." wide
         footer={
           <>
           <span className={styles.muted}>{unsaved ? "Ada isian yang belum disimpan." : ""}</span>
@@ -144,7 +130,7 @@ export function BalanceSetupButton({ accounts, items, autoOpen = false }: { acco
         <h3 className={styles.panelTitle}>Saldo awal akun</h3>
         <label className={styles.field} style={{ maxWidth: 240 }}>
           <span>Per tanggal</span>
-          <PickerInput type="date" className={styles.input} value={openingDate} onChange={(e) => (setOpeningDate(e.target.value), setDateTouched(true))} />
+          <PickerInput type="date" className={styles.input} value={openingDate} onChange={(e) => setOpeningDate(e.target.value)} />
         </label>
         <div className={styles.boxList}>
           {accounts.map((a) => (
@@ -213,7 +199,7 @@ export function BalanceSetupButton({ accounts, items, autoOpen = false }: { acco
                 <label className={styles.field}>
                   <span>Masa manfaat (bulan)</span>
                   <input className={styles.input} inputMode="numeric" value={form.lifeMonths} onChange={(e) => setForm({ ...form, lifeMonths: digits(e.target.value) })} />
-                  {Number(form.lifeMonths) > 0 && Number(form.amount) > 0 && <small>Penyusutan {rp(Math.round((Number(form.amount) - Number(form.salvage || 0)) / Number(form.lifeMonths)))} / bulan</small>}
+                  {parseAmount(form.lifeMonths) > 0 && parseAmount(form.amount) > 0 && <small>Penyusutan {rp(Math.round((parseAmount(form.amount) - parseAmount(form.salvage)) / parseAmount(form.lifeMonths)))} / bulan</small>}
                 </label>
               </div>
             )}
