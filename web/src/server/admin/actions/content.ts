@@ -1,7 +1,9 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { normalizeHandle, postLinkError, postsFromSection, type InstagramSectionJson, type PostPlatform, type StoredPost } from "@/lib/community-posts";
 import { detectVideoPlatform } from "@/lib/video";
+import { uploadPublicImage } from "../../storage";
 import type { AdminTestimonial, ContentSection } from "../types";
 import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } from "./common";
 
@@ -21,13 +23,18 @@ export async function publishHomepage(sections: ContentSection[]): Promise<Actio
   }
 
   const supabase = await createSupabaseServerClient();
-  // hiddenPosts (Instagram) dikelola terpisah — pertahankan dari versi tersimpan.
+  // Post Instagram & Threads (posts / hiddenPosts lama) dikelola terpisah — pertahankan dari versi tersimpan.
   const { data: current } = await supabase.from("content_sections").select("key, published").eq("page", "home");
-  const hiddenByKey = new Map((current ?? []).map((r) => [r.key as string, (r.published as { hiddenPosts?: string[] } | null)?.hiddenPosts]));
+  const postsByKey = new Map(
+    (current ?? []).map((r) => {
+      const json = (r.published ?? {}) as InstagramSectionJson;
+      return [r.key as string, { ...(json.posts ? { posts: json.posts } : {}), ...(json.hiddenPosts ? { hiddenPosts: json.hiddenPosts } : {}) }];
+    }),
+  );
   const now = new Date().toISOString();
 
   const rows = sections.map((s, i) => {
-    const body = { title: s.title.trim(), description: s.description.trim(), cta: s.cta ?? null, image: s.image ?? null, overlay: s.overlay ?? null, ...(hiddenByKey.get(s.key) ? { hiddenPosts: hiddenByKey.get(s.key) } : {}) };
+    const body = { title: s.title.trim(), description: s.description.trim(), cta: s.cta ?? null, image: s.image ?? null, overlay: s.overlay ?? null, ...postsByKey.get(s.key) };
     return { page: "home", key: s.key, label: s.name, draft: body, published: body, is_enabled: s.enabled, sort_order: i, updated_by: auth.userId, updated_at: now, published_at: now };
   });
   const { error } = await supabase.from("content_sections").upsert(rows, { onConflict: "page,key" });
@@ -104,23 +111,101 @@ export async function deleteTestimonial(id: string): Promise<ActionResult> {
 }
 
 /** Post Instagram/Threads berasal dari konten statis; yang disembunyikan dicatat di section "instagram". */
-export async function setInstagramPostVisible(handle: string, visible: boolean): Promise<ActionResult> {
-  const auth = await requireEditor("content");
-  if ("error" in auth) return fail(auth.error);
+/** Baca daftar post (atau konten statis), ubah, lalu simpan ke draft & published section Instagram. */
+async function writePosts(change: (posts: StoredPost[]) => StoredPost[] | string): Promise<{ error: string } | { posts: StoredPost[] }> {
   const supabase = await createSupabaseServerClient();
   const { data: row, error: readError } = await supabase.from("content_sections").select("draft, published").eq("page", "home").eq("key", "instagram").maybeSingle();
-  if (readError || !row) return fail("Section Instagram belum ada — publikasikan homepage sekali dulu.");
-
-  const update = (json: unknown) => {
-    const body = (json ?? {}) as { hiddenPosts?: string[] };
-    const hidden = new Set(body.hiddenPosts ?? []);
-    if (visible) hidden.delete(handle);
-    else hidden.add(handle);
-    return { ...body, hiddenPosts: [...hidden] };
+  if (readError || !row) return { error: "Section Instagram belum ada — publikasikan homepage sekali dulu." };
+  const next = change(postsFromSection(row.published as InstagramSectionJson | null));
+  if (typeof next === "string") return { error: next };
+  const apply = (json: unknown) => {
+    const { hiddenPosts: _old, ...rest } = (json ?? {}) as InstagramSectionJson;
+    void _old;
+    return { ...rest, posts: next };
   };
-  const { error } = await supabase.from("content_sections").update({ draft: update(row.draft), published: update(row.published) }).eq("page", "home").eq("key", "instagram");
-  if (error) return fail(`Gagal mengubah: ${error.message}`);
-  await audit(auth.userId, `${visible ? "menampilkan" : "menyembunyikan"} post ${handle}`, "content", "instagram");
+  const { error } = await supabase.from("content_sections").update({ draft: apply(row.draft), published: apply(row.published) }).eq("page", "home").eq("key", "instagram");
+  if (error) return { error: `Gagal menyimpan: ${error.message}` };
   refreshPaths("/", "/admin/konten");
+  return { posts: next };
+}
+
+export async function setInstagramPostVisible(id: string, visible: boolean): Promise<ActionResult> {
+  const auth = await requireEditor("content");
+  if ("error" in auth) return fail(auth.error);
+  let handle = "";
+  const r = await writePosts((posts) => {
+    const post = posts.find((p) => p.id === id);
+    if (!post) return "Post tidak ditemukan — muat ulang halaman.";
+    handle = post.handle;
+    return posts.map((p) => (p.id === id ? { ...p, visible } : p));
+  });
+  if ("error" in r) return fail(r.error);
+  await audit(auth.userId, `${visible ? "menampilkan" : "menyembunyikan"} post ${handle}`, "content", "instagram");
   return done(visible ? `Post ${handle} tampil di homepage.` : `Post ${handle} disembunyikan dari homepage.`);
+}
+
+export type PostInput = { platform: PostPlatform; handle: string; text: string; href: string; image: string; visible: boolean };
+
+/** Tambah (id kosong) atau ubah post Instagram / Threads. */
+export async function saveInstagramPost(id: string, input: PostInput): Promise<ActionResult & { post?: StoredPost }> {
+  const auth = await requireEditor("content");
+  if ("error" in auth) return fail(auth.error);
+  if (input.platform !== "instagram" && input.platform !== "threads") return fail("Pilih jenis post.");
+  const handle = normalizeHandle(input.handle);
+  if (!handle) return fail("Isi username akun (mis. @socialslay).");
+  const text = input.text.trim();
+  if (!text) return fail("Isi kutipan post.");
+  if (text.length > 280) return fail("Kutipan maksimal 280 karakter.");
+  const linkError = postLinkError(input.platform, input.href);
+  if (linkError) return fail(linkError);
+  if (input.image && !/^(\/images\/|https:\/\/)/.test(input.image)) return fail("Foto post tidak valid.");
+
+  let saved: StoredPost | undefined;
+  const r = await writePosts((posts) => {
+    const before = posts.find((p) => p.id === id);
+    if (id && !before) return "Post tidak ditemukan — muat ulang halaman.";
+    saved = {
+      ...before,
+      id: before?.id ?? `post:${crypto.randomUUID()}`,
+      platform: input.platform,
+      handle,
+      text,
+      href: input.href.trim(),
+      // Threads tampil sebagai kartu navy tanpa foto.
+      image: input.platform === "instagram" ? input.image || undefined : undefined,
+      imagePosition: input.platform === "instagram" && input.image === before?.image ? before?.imagePosition : undefined,
+      visible: input.visible,
+    };
+    return before ? posts.map((p) => (p.id === id ? saved! : p)) : [...posts, saved];
+  });
+  if ("error" in r) return fail(r.error);
+  await audit(auth.userId, `${id ? "mengubah" : "menambah"} post ${handle}`, "content", "instagram");
+  return { ...done(id ? `Post ${handle} tersimpan.` : `Post ${handle} ditambahkan.`), post: saved };
+}
+
+export async function deleteInstagramPost(id: string): Promise<ActionResult> {
+  const auth = await requireEditor("content");
+  if ("error" in auth) return fail(auth.error);
+  let handle = "";
+  const r = await writePosts((posts) => {
+    const post = posts.find((p) => p.id === id);
+    if (!post) return "Post tidak ditemukan — muat ulang halaman.";
+    handle = post.handle;
+    return posts.filter((p) => p.id !== id);
+  });
+  if ("error" in r) return fail(r.error);
+  await audit(auth.userId, `menghapus post ${handle}`, "content", "instagram");
+  return done(`Post ${handle} dihapus.`);
+}
+
+const POST_BUCKET = "community-posts";
+
+/** Upload foto post Instagram ke Storage; URL tersimpan saat admin menekan Simpan. */
+export async function uploadPostImage(formData: FormData): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const auth = await requireEditor("content");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const result = await uploadPublicImage({ bucket: POST_BUCKET, file: formData.get("file"), folder: new Date().toISOString().slice(0, 7), maxBytes: 5 * 1024 * 1024 });
+  if (!result.ok) return result;
+  await audit(auth.userId, "content.post_image_upload", "post_image", result.path);
+  return { ok: true, url: result.url };
 }

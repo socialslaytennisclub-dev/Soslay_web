@@ -6,6 +6,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabasePublicClient } from "@/lib/supabase/public";
 import { getShopCatalog } from "./products";
 import { getWebsiteVenues } from "./venues";
+import { postsFromSection, type InstagramSectionJson } from "@/lib/community-posts";
+import type { SocialPostCardProps } from "@/components/ui";
 
 /**
  * Isi homepage = versi "published" dari admin (Konten & Galeri) di atas konten statis.
@@ -33,7 +35,7 @@ export type Homepage = {
   community: typeof home.community;
   marquee: string;
   shop: typeof home.shop;
-  instagram: typeof home.instagram;
+  instagram: Omit<typeof home.instagram, "posts"> & { posts: SocialPostCardProps[] };
 };
 
 const DEFAULT_ORDER: HomeSectionKey[] = ["hero", "activities", "stats", "venues", "community", "marquee", "shop", "instagram"];
@@ -96,7 +98,6 @@ export const getHomepage = cache(async (): Promise<Homepage> => {
   const marquee = get("marquee");
   const shop = get("shop");
   const instagram = get("instagram");
-  const hidden = new Set(instagram.hiddenPosts ?? []);
 
   return {
     order: rows.filter((r) => r.is_enabled).map((r) => r.key as HomeSectionKey),
@@ -145,7 +146,10 @@ export const getHomepage = cache(async (): Promise<Homepage> => {
       title: instagram.title || base.instagram.title,
       description: instagram.description ?? base.instagram.description,
       cta: instagram.cta ?? base.instagram.cta,
-      posts: base.instagram.posts.filter((p) => !hidden.has(p.handle)),
+      // Post dari admin (Konten → Testimoni & IG); belum pernah diedit → konten statis + hiddenPosts lama.
+      posts: postsFromSection(instagram as InstagramSectionJson)
+        .filter((p) => p.visible)
+        .map((p) => ({ platform: p.platform, text: [p.text], handle: p.handle, image: p.image, imagePosition: p.imagePosition, href: p.href })),
     },
   };
 });
