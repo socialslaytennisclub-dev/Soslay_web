@@ -45,8 +45,16 @@ export async function audit(actorId: string, action: string, entityType: string,
   await supabase.from("admin_audit_log").insert({ actor_id: actorId, action, entity_type: entityType, entity_id: entityId ?? null });
 }
 
+type RefreshPath = string | [string, "page" | "layout"];
+
+/**
+ * Halaman website statis (ISR) yang menampilkan jadwal sesi — wajib di-revalidate setiap kali sesi
+ * berubah, termasuk lewat trip (status activity ikut status trip).
+ */
+export const PUBLIC_SESSION_PATHS: RefreshPath[] = ["/", "/activity", ["/activity/[type]", "page"], ["/venue/[slug]", "page"]];
+
 /** Segarkan admin (sidebar, daftar) + halaman website yang terdampak. */
-export function refreshPaths(...paths: (string | [string, "page" | "layout"])[]) {
+export function refreshPaths(...paths: RefreshPath[]) {
   invalidateDataset();
   revalidatePath("/admin", "layout");
   for (const p of paths) {

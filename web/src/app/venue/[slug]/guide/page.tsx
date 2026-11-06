@@ -13,7 +13,7 @@ import { Footer } from "@/components/layout/Footer/Footer";
 import { Navbar } from "@/components/layout/Navbar/Navbar";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 import { findGuide, participantGuides } from "@/content/guides";
-import { findVenue, venueCities, venueHref } from "@/content/venues";
+import { cityHref, findVenue, venueCities, venueHref } from "@/content/venues";
 
 /** Hanya venue yang punya panduan yang di-prerender; slug lain → 404. */
 export function generateStaticParams() {
@@ -47,7 +47,7 @@ export default async function ParticipantGuidePage({ params }: PageProps<"/venue
           <SpotlightHero
             breadcrumb={[
               { label: "Venue", href: "/venue" },
-              { label: venue.area ?? venue.city, href: `/venue?city=${venueCities.find((c) => c.city === venue.city)?.slug ?? ""}#daftar-venue` },
+              { label: venue.area ?? venue.city, href: `${cityHref(venueCities.find((c) => c.city === venue.city)?.slug)}#daftar-venue` },
               { label: guide.venueName, href: venueHref(venue) },
               { label: "Participant Guideline" },
             ]}

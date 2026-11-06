@@ -8,20 +8,21 @@ import { MotionProvider } from "@/components/motion/MotionProvider";
 import { InstagramFeed } from "@/components/sections/InstagramFeed/InstagramFeed";
 import { PageHero } from "@/components/sections/PageHero/PageHero";
 import { activityLandings, activityPage } from "@/content/activity";
+import { ACTIVITY_PATHS } from "@/content/activity-paths";
 import { instagram } from "@/content/home";
 import { filterByType, newestFirst, pastSessions, upcomingSessions } from "@/lib/sessions";
 import { getWebsiteSessions } from "@/server/public/sessions";
 
 export function generateStaticParams() {
-  return activityLandings.map((landing) => ({ type: landing.path }));
+  return activityLandings.map((landing) => ({ type: ACTIVITY_PATHS[landing.type] }));
 }
 
 export const dynamicParams = false;
 
-/** Jadwal dihitung dari jam sekarang → render ulang tiap jam (dan saat admin menyimpan sesi). */
-export const revalidate = 3600;
+/** Jadwal dihitung dari jam sekarang → render ulang tiap menit (dan saat admin menyimpan sesi atau trip). */
+export const revalidate = 60;
 
-const findLanding = (path: string) => activityLandings.find((landing) => landing.path === path);
+const findLanding = (path: string) => activityLandings.find((landing) => ACTIVITY_PATHS[landing.type] === path);
 
 export async function generateMetadata({ params }: PageProps<"/activity/[type]">): Promise<Metadata> {
   const landing = findLanding((await params).type);

@@ -1,0 +1,56 @@
+/* Kerangka loading halaman publik — tulang & kilau dari MemberSkeleton (.bone), di sini hanya varian
+   gelap untuk hero navy. Selektor dua kelas supaya menang atas .bone milik MemberSkeleton. */
+.hero .dark {
+  background: rgb(255 255 255 / 0.12);
+}
+
+.hero .dark::after {
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.14), transparent);
+}
+
+.hero {
+  min-height: min(70vh, 640px);
+  display: flex;
+  align-items: flex-end;
+  padding-block: calc(var(--nav-height) + var(--space-48)) var(--space-48);
+  background: var(--gradient-navy);
+}
+
+.heroInner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.body {
+  padding-block: var(--space-48) var(--space-80);
+}
+
+.bodyInner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-24);
+}
+
+.grid .card {
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-lg);
+}
+
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

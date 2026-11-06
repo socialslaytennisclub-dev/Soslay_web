@@ -31,6 +31,8 @@ const chillax = localFont({
 });
 
 export const metadata: Metadata = {
+  // Dasar URL absolut untuk canonical & Open Graph — selalu domain produksi, bukan domain preview Vercel.
+  metadataBase: new URL("https://www.slayclub.id"),
   title: "SOSLAY — Social Slay Tennis Club",
   description:
     "Not just a tennis community. A community to play, connect, and enjoy moments with the right people — in Jakarta & Bali.",

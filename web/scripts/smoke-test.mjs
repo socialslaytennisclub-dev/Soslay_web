@@ -12,7 +12,7 @@ const demo = process.argv.includes("--demo");
 const failures = [];
 let passed = 0;
 
-async function check(path, { status = 200, includes = [], location, contentType } = {}) {
+async function check(path, { status = 200, includes = [], excludes = [], location, contentType } = {}) {
   const started = Date.now();
   let res;
   let body = "";
@@ -30,6 +30,7 @@ async function check(path, { status = 200, includes = [], location, contentType 
   if (location && !(res.headers.get("location") ?? "").startsWith(location)) problems.push(`redirect ke ${res.headers.get("location")} (harusnya ${location}…)`);
   if (contentType && !(res.headers.get("content-type") ?? "").includes(contentType)) problems.push(`content-type ${res.headers.get("content-type")}`);
   for (const text of includes) if (!body.includes(text)) problems.push(`tidak ada teks "${text}"`);
+  for (const text of excludes) if (body.includes(text)) problems.push(`masih ada teks "${text}"`);
   const ms = Date.now() - started;
   if (problems.length) {
     failures.push(`${path} → ${problems.join("; ")}`);
@@ -56,11 +57,15 @@ if (activity && !demo && !/Book a Session|No upcoming sessions yet|No sessions i
   failures.push("/activity → tidak ada tombol booking maupun pesan jadwal kosong");
   console.log(`✗ ${"/activity (booking / jadwal kosong)".padEnd(48)} keduanya tidak ada`);
 }
-await check("/activity?type=weekly-mabar");
-for (const type of ["mabar", "event", "escape", "coaching"]) await check(`/activity/${type}`, { includes: ["Soslay Activities"] });
+// Link lama filter tipe → halaman per tipe (next.config redirects).
+await check("/activity?type=weekly-mabar", { status: 307, location: "/activity/mabar" });
+await check("/activity?type=social", { status: 307, location: "/activity/social" });
+for (const type of ["mabar", "event", "escape", "coaching", "social"]) await check(`/activity/${type}`, { includes: ["Soslay Activities"] });
 await check("/activity/tidak-ada", { status: 404 });
 const venues = await check("/venue");
-await check("/venue?city=bali");
+// ?city= dilayani halaman statis per kota (rewrite) → HTML awal sudah terfilter. Nama venue hanya
+// pasti di data demo; di live cukup cek halamannya terbuka.
+await check("/venue?city=bali", demo ? { includes: ["Kula Mani Tennis Village"], excludes: [">AYANA Midplaza Jakarta</h3>"] } : {});
 const venuePath = firstHref(venues, "/venue/");
 if (venuePath) await check(venuePath, { includes: ["Upcoming", "Moments from"] });
 else failures.push("/venue → tidak ada link venue");

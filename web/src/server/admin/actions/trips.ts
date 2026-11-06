@@ -10,7 +10,7 @@ import { uploadPrivateFile } from "@/server/storage";
 import { FINANCE_PROOF_BUCKET } from "../finance-repo";
 import { findMemberById, findMemberByIdentifier } from "../identity";
 import { getTrip } from "../trips-repo";
-import { audit, refreshPaths, requireEditor, type ActionResult } from "./common";
+import { audit, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, type ActionResult } from "./common";
 
 /**
  * Aksi Tennis Escape = Trip (BR-22): simpan trip (info, activity, rundown, paket), arsip / duplikat,
@@ -188,7 +188,7 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
   const id = savedId as string;
 
   await audit(auth.userId, `${input.id ? "mengubah" : "membuat"} trip ${tripRow.title}`, "trip", id);
-  refreshPaths("/admin/activities", `/admin/activities/trip/${id}`);
+  refreshPaths(...PUBLIC_SESSION_PATHS, "/admin/activities", `/admin/activities/trip/${id}`);
   return { ok: true, id, message: input.status === "published" ? "Trip dipublikasikan." : "Trip tersimpan sebagai draft." };
 }
 
@@ -199,7 +199,7 @@ export async function archiveTrip(id: string): Promise<ActionResult> {
   const { data, error } = await supabase.from("trips").update({ status: "cancelled", show_on_homepage: false }).eq("id", id).select("title").maybeSingle();
   if (error || !data) return { ok: false, error: `Gagal mengarsipkan: ${error?.message ?? "trip tidak ditemukan"}` };
   await audit(auth.userId, `mengarsipkan trip ${data.title}`, "trip", id);
-  refreshPaths("/admin/activities");
+  refreshPaths(...PUBLIC_SESSION_PATHS, "/admin/activities");
   return { ok: true, message: `${data.title} diarsipkan.` };
 }
 
