@@ -24,9 +24,24 @@ const nextConfig: NextConfig = {
     minimumCacheTTL: 31_536_000,
   },
 
-  // Ikon tas belanja di navbar → keranjang ada di tab Order member area.
   async redirects() {
-    return [{ source: "/keranjang", destination: "/akun/order", permanent: false }];
+    return [
+      // Ikon tas belanja di navbar → keranjang ada di tab Order member area.
+      { source: "/keranjang", destination: "/akun/order", permanent: false },
+      // Link lama filter /activity?type=… → halaman per tipe (/activity statis, tidak membaca query).
+      // Sama dengan activityLandings di src/content/activity.ts.
+      ...[
+        ["weekly-mabar", "mabar"],
+        ["match-day", "event"],
+        ["tennis-escape", "escape"],
+        ["beginner-coaching", "coaching"],
+      ].map(([type, path]) => ({
+        source: "/activity",
+        has: [{ type: "query" as const, key: "type", value: type }],
+        destination: `/activity/${path}`,
+        permanent: false,
+      })),
+    ];
   },
 };
 

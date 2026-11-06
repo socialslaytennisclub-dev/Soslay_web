@@ -1,0 +1,85 @@
+/* Kerangka loading halaman publik — kilau sama dengan MemberSkeleton. */
+.bone {
+  position: relative;
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--color-indigo-140);
+}
+
+.dark {
+  background: rgb(255 255 255 / 0.12);
+}
+
+.bone::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.5), transparent);
+  transform: translateX(-100%);
+  animation: page-shimmer 1.3s ease-in-out infinite;
+}
+
+.dark::after {
+  background: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.14), transparent);
+}
+
+@keyframes page-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bone::after {
+    animation: none;
+  }
+}
+
+.hero {
+  min-height: min(70vh, 640px);
+  display: flex;
+  align-items: flex-end;
+  padding-block: calc(var(--nav-height) + var(--space-48)) var(--space-48);
+  background: var(--gradient-navy);
+}
+
+.heroInner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+}
+
+.body {
+  padding-block: var(--space-48) var(--space-80);
+}
+
+.bodyInner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-32);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-24);
+}
+
+.card {
+  aspect-ratio: 4 / 3;
+  border-radius: var(--radius-lg);
+}
+
+@media (min-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}

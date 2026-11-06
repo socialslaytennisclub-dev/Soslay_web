@@ -1,25 +1,13 @@
-import { Container, FilterChips, Text, VenueCard, type FilterChip } from "@/components/ui";
-import { venueCities, venueHref, venuePage, type CitySlug, type Venue } from "@/content/venues";
-import { splitInHalf } from "@/lib/array";
+import { Container, Text } from "@/components/ui";
+import { venuePage, type Venue } from "@/content/venues";
+import { VenueCityChips, VenueCityGrid } from "./VenueCityFilter";
 import styles from "./VenueDirectory.module.css";
 
-type VenueDirectoryProps = {
-  venues: Venue[];
-  activeCity?: CitySlug;
-};
-
-/** Figma 25:758 — section navy: judul + chip kota + grid 2 kolom zig-zag (kolom kiri turun 200px). */
-export function VenueDirectory({ venues, activeCity }: VenueDirectoryProps) {
-  const [left, right] = splitInHalf(venues);
-  const chips: FilterChip[] = [
-    { label: "All", href: "/venue#daftar-venue", active: !activeCity },
-    ...venueCities.map((city) => ({
-      label: city.label,
-      href: `/venue?city=${city.slug}#daftar-venue`,
-      active: city.slug === activeCity,
-    })),
-  ];
-
+/**
+ * Figma 25:758 — section navy: judul + chip kota + grid 2 kolom zig-zag (kolom kiri turun 200px).
+ * Filter kota (?city=jakarta | bali) dijalankan di browser, lihat VenueCityFilter.
+ */
+export function VenueDirectory({ venues }: { venues: Venue[] }) {
   return (
     <section className={styles.section} aria-labelledby="venue-directory-title" id="daftar-venue">
       <Container className={styles.inner}>
@@ -32,20 +20,10 @@ export function VenueDirectory({ venues, activeCity }: VenueDirectoryProps) {
               {venuePage.directory.description}
             </Text>
           </div>
-          <FilterChips items={chips} label="Filter by city" tone="dark" className={styles.filter} />
+          <VenueCityChips />
         </header>
 
-        <div className={styles.grid}>
-          {[left, right].map((column, index) => (
-            <ul key={index} className={styles.column} data-parallax={index === 0 ? "-6" : undefined}>
-              {column.map((venue) => (
-                <li key={venue.slug} data-anim="reveal">
-                  <VenueCard {...venue} href={venueHref(venue)} />
-                </li>
-              ))}
-            </ul>
-          ))}
-        </div>
+        <VenueCityGrid venues={venues} />
       </Container>
     </section>
   );

@@ -4,7 +4,7 @@ import { Navbar } from "@/components/layout/Navbar/Navbar";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 import { PageHero } from "@/components/sections/PageHero/PageHero";
 import { VenueDirectory } from "@/components/venue/VenueDirectory/VenueDirectory";
-import { isCitySlug, venueCities, venuePage } from "@/content/venues";
+import { venuePage } from "@/content/venues";
 import { getWebsiteVenues } from "@/server/public/venues";
 
 export const metadata: Metadata = {
@@ -12,13 +12,12 @@ export const metadata: Metadata = {
   description: "Soslay's curated tennis courts in Jakarta & Bali — indoor, rooftop, outdoor, and tropical.",
 };
 
-/** Halaman Venue (Figma 25:749). Filter kota lewat ?city=jakarta | bali. */
-export default async function VenuePage({ searchParams }: PageProps<"/venue">) {
-  const { city } = await searchParams;
-  const activeCity = isCitySlug(city) ? city : undefined;
-  const cityName = venueCities.find((item) => item.slug === activeCity)?.city;
-  const venueList = await getWebsiteVenues();
-  const venues = cityName ? venueList.filter((venue) => venue.city === cityName) : venueList;
+/** Statis + ISR (bukan render per request) supaya pindah halaman cepat dari cache Vercel. */
+export const revalidate = 3600;
+
+/** Halaman Venue (Figma 25:749). Filter kota ?city=jakarta | bali dijalankan di browser. */
+export default async function VenuePage() {
+  const venues = await getWebsiteVenues();
 
   return (
     <>
@@ -26,7 +25,7 @@ export default async function VenuePage({ searchParams }: PageProps<"/venue">) {
       <MotionProvider>
         <main>
           <PageHero id="venue-hero-title" {...venuePage.hero} />
-          <VenueDirectory venues={venues} activeCity={activeCity} />
+          <VenueDirectory venues={venues} />
         </main>
         <Footer />
       </MotionProvider>

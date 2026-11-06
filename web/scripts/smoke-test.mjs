@@ -56,7 +56,8 @@ if (activity && !demo && !/Book a Session|No upcoming sessions yet|No sessions i
   failures.push("/activity → tidak ada tombol booking maupun pesan jadwal kosong");
   console.log(`✗ ${"/activity (booking / jadwal kosong)".padEnd(48)} keduanya tidak ada`);
 }
-await check("/activity?type=weekly-mabar");
+// Link lama filter tipe → halaman per tipe (next.config redirects).
+await check("/activity?type=weekly-mabar", { status: 307, location: "/activity/mabar" });
 for (const type of ["mabar", "event", "escape", "coaching"]) await check(`/activity/${type}`, { includes: ["Soslay Activities"] });
 await check("/activity/tidak-ada", { status: 404 });
 const venues = await check("/venue");

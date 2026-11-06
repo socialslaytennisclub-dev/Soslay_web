@@ -4,7 +4,8 @@ import { isSupabaseConfigured, supabaseAnonKey, supabaseUrl } from "@/lib/supaba
 import { cookieOptionsFor, SCOPE_HEADER, scopeForPath } from "@/lib/supabase/scope";
 
 /**
- * Refresh sesi Supabase di setiap request + cek optimistis untuk /admin dan area member /akun.
+ * Refresh sesi Supabase di halaman yang memakai sesi (lihat matcher) + cek optimistis untuk /admin
+ * dan area member /akun.
  * Otorisasi sebenarnya (role & izin modul) tetap di server: layout admin + RLS.
  * Tanpa env Supabase, proxy tidak melakukan apa-apa (mode demo).
  *
@@ -61,6 +62,22 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  // Lewati aset statis & gambar.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|images|icons|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif)$).*)"],
+  // Hanya halaman yang membaca sesi di server. Halaman publik (beranda, Activity, Venue, Shop) statis
+  // dan status login di Navbar dibaca di browser — tanpa proxy, halaman itu langsung dari cache
+  // Vercel tanpa menunggu cek sesi ke Supabase di setiap pindah halaman.
+  matcher: [
+    "/admin/:path*",
+    "/akun/:path*",
+    "/masuk/:path*",
+    "/daftar",
+    "/lupa-password",
+    "/reset-password",
+    "/auth/:path*",
+    "/absensi/:path*",
+    // Link email Supabase yang gagal (?error_code=…) bisa kembali ke halaman mana pun.
+    {
+      source: "/((?!_next/static|_next/image|favicon.ico|images|icons|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif)$).*)",
+      has: [{ type: "query", key: "error_code" }],
+    },
+  ],
 };
