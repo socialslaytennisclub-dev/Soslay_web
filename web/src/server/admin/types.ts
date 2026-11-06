@@ -177,8 +177,11 @@ export type SessionsQuery = {
 
 export type SessionSort = "schedule" | "title" | "created";
 
+/** Baris daftar Activities: sesi biasa, atau trip (baris induk + activity per lapangan). */
+export type ActivityListRow = { kind: "session"; session: SessionRow } | { kind: "trip"; item: { trip: TripDetail; summary: TripSummary; display: TripStatus } };
+
 export type SessionsResult = {
-  items: SessionRow[];
+  rows: ActivityListRow[];
   counts: { upcoming: number; completed: number; draft: number; archived: number };
   venues: string[];
   types: { slug: string; label: string }[];
@@ -205,8 +208,14 @@ export type SessionParticipant = {
   phone: string;
   level: TennisLevel | null;
   payment: PaymentStatus;
+  /**
+   * Baris dari file Kuyy: nominal tiket & jalur bayarnya (Kuy → Saldo Kuyy, Manual → akun bayar manual, mis.
+   * BCA). Bisa diubah admin bersama status bayar; masuk Keuangan setelah activity selesai & lunas.
+   * null = bukan baris file Kuyy (booking website, tambahan admin).
+   */
+  kuyPayment: { amount: number; via: "kuy" | "manual" } | null;
   status: BookingStatus;
-  source: "website" | "kuy" | "admin";
+  source: "website" | "kuy" | "admin" | "trip";
   checkedIn: boolean;
   guests: number;
 };
@@ -413,7 +422,7 @@ export type SitePage = { path: string; name: string; description: string; update
 
 // ── Settings & Roles ────────────────────────────────────────────────────────
 
-export type AdminModule = "overview" | "members" | "activities" | "venues" | "products" | "orders" | "content" | "settings";
+export type AdminModule = "overview" | "members" | "activities" | "venues" | "products" | "orders" | "content" | "settings" | "finance";
 export type ModuleAccess = "edit" | "view" | "none";
 
 export type StaffMember = {
@@ -633,3 +642,106 @@ export type PointsOverview = {
 };
 
 export type MemberChoice = { id: string; name: string; code: string; tier: Tier; balance: number };
+
+// ── Tennis Escape = Trip (BR-22) ───────────────────────────────────────────
+export type TripStatus = "draft" | "published" | "cancelled" | "completed";
+
+/** Activity dalam trip = sesi biasa (1 court/sesi) + info jual satuan. */
+export type TripActivity = SessionRow & {
+  tripOrder: number;
+  /** Dijual satuan via Kuyy (harga = price). */
+  soldSingle: boolean;
+  singleQuota: number | null;
+  kuyUrl: string;
+  /** Peserta dari paket bundling / dari tiket satuan. */
+  bundled: number;
+  singles: number;
+};
+
+export type TripRundownItem = { id: string; day: string; time: string; title: string; location: string; sessionId: string | null };
+
+export type TripPayment = {
+  id: string;
+  kind: import("@/lib/trips").TripPaymentKind;
+  amount: number;
+  receivedOn: string;
+  accountId: string;
+  accountName: string;
+  proofName: string | null;
+  hasProof: boolean;
+  voided: boolean;
+  voidReason: string | null;
+  createdAt: string;
+};
+
+export type TripBooking = {
+  id: string;
+  memberId: string | null;
+  memberCode: string;
+  name: string;
+  phone: string;
+  email: string;
+  createdAt: string;
+  cancelled: boolean;
+  payments: TripPayment[];
+  money: import("@/lib/trips").BookingMoney;
+};
+
+export type TripDetail = {
+  id: string;
+  slug: string;
+  title: string;
+  description: string;
+  area: string;
+  startsOn: string;
+  endsOn: string;
+  coverPath: string | null;
+  /** Cover trip, atau foto activity pertama. */
+  image: string;
+  status: TripStatus;
+  visibility: "public" | "members" | "link";
+  showOnHomepage: boolean;
+  showRundown: boolean;
+  priceNormal: number;
+  priceEarlyBird: number | null;
+  earlyBirdUntil: string | null;
+  packageQuota: number;
+  minDp: number;
+  inclusions: string[];
+  activities: TripActivity[];
+  rundown: TripRundownItem[];
+  bookings: TripBooking[];
+};
+
+/** Baris induk trip di daftar Activities. */
+export type TripSummary = {
+  sold: number;
+  earlyBird: number;
+  normal: number;
+  /** Peserta satuan (Kuyy) di semua activity. */
+  singles: number;
+  unpaid: number;
+  paidIn: number;
+  outstanding: number;
+  fullyPaid: number;
+  dp: number;
+  venues: number;
+};
+
+/** Sesi yang bisa diambil ke trip (modal 05x-5). */
+export type TripCandidate = {
+  id: string;
+  title: string;
+  typeLabel: string;
+  date: string;
+  start: string;
+  end: string;
+  venueName: string;
+  capacity: number;
+  booked: number;
+  price: number;
+  statusLabel: string;
+  kuyUrl: string;
+  /** Sudah terhubung ke trip lain → tidak bisa dipilih. */
+  otherTrip: string | null;
+};

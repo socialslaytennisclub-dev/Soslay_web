@@ -2,11 +2,12 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { generateLineup, lineupStats, playableCourts, type LevelWeights, type LineupMatch } from "@/lib/americano";
+import { generateLineup, hasTargetTotal, lineupStats, playableCourts, type LevelWeights, type LineupMatch } from "@/lib/americano";
 import { cx } from "@/lib/cx";
+import { useScoreDraft } from "@/hooks/useScoreDraft";
 import { saveLineup, saveMatchScore } from "@/server/admin/actions/play";
 import type { MatchFormat, SessionMatch, SessionParticipant, TennisLevel } from "@/server/admin/types";
-import { FormCard, Toggle } from "../ui/AdminForm";
+import { FormCard, SingleChips, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge, MemberAvatar } from "../ui/AdminUI";
 import { toast } from "../ui/Toaster";
@@ -37,6 +38,7 @@ const digits = (v: string) => v.replace(/\D/g, "").slice(0, 2);
 /** Admin / Edit sesi — Format & skor (Figma ADM-10). */
 export function FormatCard({ value, onChange, locked }: { value: PlayForm; onChange: (next: PlayForm) => void; locked: boolean }) {
   const hint = FORMATS.find((f) => f.value === value.matchFormat)?.hint;
+  const withTarget = hasTargetTotal(value.matchFormat);
   const set = (patch: Partial<PlayForm>) => onChange({ ...value, ...patch });
   const scored = value.matchFormat !== "none";
 
@@ -65,22 +67,19 @@ export function FormatCard({ value, onChange, locked }: { value: PlayForm; onCha
 
       {scored && (
         <>
-          <fieldset className={editor.fieldset}>
-            <legend className={editor.label}>Format leaderboard *</legend>
-            <div className={editor.segmentWrap}>
-              {RANKINGS.map((r) => (
-                <button key={r.value} type="button" aria-pressed={value.leaderboardMode === r.value} className={cx(editor.option, value.leaderboardMode === r.value && editor.optionOn)} onClick={() => set({ leaderboardMode: r.value })}>
-                  {r.label}
-                </button>
-              ))}
-            </div>
-            <span className={editor.muted}>Win: peringkat dari jumlah menang · Point: dari total poin</span>
-          </fieldset>
+          <SingleChips
+            label="Format leaderboard *"
+            options={RANKINGS}
+            value={value.leaderboardMode}
+            onChange={(leaderboardMode) => set({ leaderboardMode })}
+            hint={<span className={editor.muted}>Win: peringkat dari jumlah menang · Point: dari total poin</span>}
+          />
 
-          <div className={editor.cols3}>
+          <div className={withTarget ? editor.cols3 : editor.cols2}>
             <NumberField label="Jumlah court" suffix="court" value={value.courtCount} onChange={(v) => set({ courtCount: v })} disabled={locked} />
             <NumberField label="Jumlah ronde" suffix="ronde" value={value.roundCount} onChange={(v) => set({ roundCount: v })} />
-            <NumberField label="Target poin" suffix="/ match" value={value.targetPoints} onChange={(v) => set({ targetPoints: v })} disabled={locked} />
+            {/* Rotating Partner tanpa target poin — skor bebas sesuai hasil di lapangan. */}
+            {withTarget && <NumberField label="Target poin" suffix="/ match" value={value.targetPoints} onChange={(v) => set({ targetPoints: v })} disabled={locked} />}
           </div>
 
           <hr className={styles.divider} />
@@ -115,7 +114,9 @@ export function FormatCard({ value, onChange, locked }: { value: PlayForm; onCha
             <span>
               Bisa diubah saat event berlangsung lewat Activity Desk. Perubahan berlaku mulai ronde berikutnya.
               <br />
-              Ronde tanpa batas waktu — match selesai saat total poin kedua tim = {value.targetPoints || "target"} (mis. 12–9).
+              {withTarget
+                ? `Ronde tanpa batas waktu — match selesai saat total poin kedua tim = ${value.targetPoints || "target"} (mis. 12–9).`
+                : "Tanpa target poin — host mengisi skor sesuai hasil di lapangan (mis. 6–4)."}
             </span>
           </p>
 
@@ -174,7 +175,8 @@ export function LineupCard({
   participants: SessionParticipant[];
   courts: number;
   rounds: number;
-  targetPoints: number;
+  /** null = tanpa target poin (Rotating Partner): skor bebas. */
+  targetPoints: number | null;
   /** Rotating Partner: tim di tiap court diseimbangkan per level. */
   balanceLevels: boolean;
   initial: SessionMatch[];
@@ -378,6 +380,7 @@ export function LineupCard({
                       teamA={m.a.map((p) => names.get(p)).join(" + ")}
                       teamB={m.b.map((p) => names.get(p)).join(" + ")}
                       initial={m.scoreA}
+                      initialB={m.scoreB}
                       busy={saving}
                       onCancel={() => setScoring(null)}
                       onSave={(a, b) => saveScore(m, a, b)}
@@ -422,29 +425,29 @@ export function LineupCard({
 }
 
 /**
- * Input skor host: cukup atur salah satu tim, tim lawan = target − skor itu. Total selalu
- * tepat target (mis. 21 → 10–11), jadi tidak mungkin melebihi target.
+ * Input skor host. Dengan target (Americano): cukup atur salah satu tim, tim lawan = target − skor itu,
+ * jadi total selalu tepat target (mis. 21 → 10–11). Tanpa target (Rotating Partner): kedua skor bebas.
  */
 function ScoreInput({
   target,
   teamA,
   teamB,
   initial,
+  initialB,
   busy,
   onCancel,
   onSave,
 }: {
-  target: number;
+  target: number | null;
   teamA: string;
   teamB: string;
   initial: number | null;
+  initialB: number | null;
   busy: boolean;
   onCancel: () => void;
   onSave: (a: number, b: number) => void;
 }) {
-  const [a, setA] = useState(initial ?? Math.ceil(target / 2));
-  const clamp = (n: number) => Math.max(0, Math.min(target, Number.isFinite(n) ? Math.round(n) : 0));
-  const b = target - a;
+  const { a, b, max, valid, setA, setB } = useScoreDraft(target, initial, initialB);
 
   const row = (label: string, value: number, set: (n: number) => void) => (
     <div className={styles.scoreRow}>
@@ -454,7 +457,7 @@ function ScoreInput({
           −
         </button>
         <input inputMode="numeric" aria-label={`Skor ${label}`} value={value} onChange={(e) => set(Number(e.target.value.replace(/\D/g, "") || 0))} />
-        <button type="button" aria-label={`Tambah skor ${label}`} disabled={value >= target} onClick={() => set(value + 1)}>
+        <button type="button" aria-label={`Tambah skor ${label}`} disabled={value >= max} onClick={() => set(value + 1)}>
           +
         </button>
       </span>
@@ -463,16 +466,14 @@ function ScoreInput({
 
   return (
     <div className={styles.scoreInput}>
-      {row(teamA, a, (n) => setA(clamp(n)))}
-      {row(teamB, b, (n) => setA(target - clamp(n)))}
-      <span className={editor.muted}>
-        Total {a + b} / {target} · skor tim lawan terisi otomatis
-      </span>
+      {row(teamA, a, setA)}
+      {row(teamB, b, setB)}
+      <span className={editor.muted}>{target === null ? "Isi skor kedua tim sesuai hasil di lapangan" : `Total ${a + b} / ${target} · skor tim lawan terisi otomatis`}</span>
       <span className={styles.actions}>
         <AdminButton size="sm" onClick={onCancel} disabled={busy}>
           Batal
         </AdminButton>
-        <AdminButton variant="primary" size="sm" icon="check-bold" onClick={() => onSave(a, b)} disabled={busy}>
+        <AdminButton variant="primary" size="sm" icon="check-bold" onClick={() => onSave(a, b)} disabled={busy || !valid}>
           {busy ? "Menyimpan…" : "Simpan & verifikasi"}
         </AdminButton>
       </span>

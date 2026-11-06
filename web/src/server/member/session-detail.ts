@@ -1,8 +1,9 @@
 import "server-only";
+import { scoreTarget } from "@/lib/americano";
 import { cache } from "react";
 import QRCode from "qrcode";
 import { memberSessions } from "@/content/member";
-import { LEVEL_LABEL } from "@/lib/admin-labels";
+import { LEVEL_LABEL, PARTICIPANT_SOURCE_LABEL } from "@/lib/admin-labels";
 import { cityOf, type City } from "@/lib/format";
 import { sessionClosesAt } from "@/lib/session-close";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -59,7 +60,7 @@ export type MemberSessionDetail = {
   checkInAt: string;
   phase: DetailPhase;
   venue: { name: string; address: string; mapsUrl: string | null };
-  format: { label: string; targetPoints: number; courts: number; rounds: number; lineup: boolean; leaderboardMode: "points" | "wins"; attendancePoints: number };
+  format: { label: string; /** null = tanpa target poin (Rotating Partner): skor bebas. */ targetPoints: number | null; courts: number; rounds: number; lineup: boolean; leaderboardMode: "points" | "wins"; attendancePoints: number };
   capacity: number;
   levels: string[];
   /** null = host yang tidak ikut main (tanpa booking) — tanpa e-ticket & info pendaftaran. */
@@ -116,7 +117,6 @@ const FORMAT_LABEL: Record<string, string> = {
   knockout: "Knockout",
 };
 
-const SOURCE_LABEL: Record<string, string> = { kuy: "Kuy", admin: "Admin", website: "Website" };
 
 type SessionRow = {
   id: string;
@@ -284,7 +284,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
       id: p.id,
       name: p.name,
       level: p.tennis_level ? LEVEL_LABEL[p.tennis_level] : "Level belum diisi",
-      source: SOURCE_LABEL[p.source] ?? "Website",
+      source: PARTICIPANT_SOURCE_LABEL[p.source as keyof typeof PARTICIPANT_SOURCE_LABEL] ?? "Website",
       me: p.member_id === user.id,
       checkedIn: p.checked_in,
       member: p.member_id !== null,
@@ -317,7 +317,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     venue: { name: session.venues.name, address: session.venues.address ?? session.venues.city, mapsUrl: session.venues.maps_url },
     format: {
       label: FORMAT_LABEL[session.match_format] ?? "Fun game",
-      targetPoints: session.target_points,
+      targetPoints: scoreTarget(session.match_format, session.target_points),
       courts: session.court_count,
       rounds: session.round_count,
       lineup: session.match_format === "americano" || session.match_format === "rotating",

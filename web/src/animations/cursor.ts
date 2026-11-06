@@ -14,7 +14,38 @@ export function customCursor(cursor: HTMLElement, scope: HTMLElement) {
   const EXPANDED = 88;
   gsap.set(cursor, { xPercent: -50, yPercent: -50, scale: 0, autoAlpha: 1 });
 
+  // Label yang sedang tampil (null = titik kecil). Ditentukan dari elemen di bawah kursor setiap gerakan —
+  // bukan dari pasangan pointerover/out — supaya tidak tertinggal membesar saat elemennya hilang (pindah
+  // halaman) dan tidak ada sisa label ("Vi") saat keluar sebelum animasi masuk selesai.
+  let active: string | null = null;
+  const expand = (text: string) => {
+    active = text;
+    if (label) {
+      gsap.killTweensOf(label);
+      label.textContent = text;
+      gsap.to(label, { autoAlpha: 1, duration: 0.25, delay: 0.1 });
+    }
+    gsap.to(cursor, { width: EXPANDED, height: EXPANDED, duration: 0.5, ease: "expo.out", overwrite: "auto" });
+  };
+  const collapse = () => {
+    active = null;
+    if (label) {
+      gsap.killTweensOf(label);
+      gsap.set(label, { autoAlpha: 0 });
+      label.textContent = "";
+    }
+    gsap.to(cursor, { width: DOT, height: DOT, duration: 0.5, ease: "expo.out", overwrite: "auto" });
+  };
+  const sync = (target: EventTarget | null) => {
+    const el = target instanceof Element ? target.closest<HTMLElement>("[data-cursor]") : null;
+    const want = el && scope.contains(el) ? (el.dataset.cursor ?? "") || null : null;
+    if (want === active) return;
+    if (want) expand(want);
+    else collapse();
+  };
+
   let visible = false;
+  let last: { x: number; y: number } | null = null;
   const onMove = (event: PointerEvent) => {
     if (!visible) {
       // Gerakan pertama: lompat langsung ke posisi kursor, lalu munculkan.
@@ -22,40 +53,38 @@ export function customCursor(cursor: HTMLElement, scope: HTMLElement) {
       gsap.to(cursor, { scale: 1, duration: 0.4 });
       visible = true;
     }
+    last = { x: event.clientX, y: event.clientY };
     xTo(event.clientX);
     yTo(event.clientY);
+    sync(event.target);
   };
   const onEnterPage = () => gsap.to(cursor, { scale: 1, duration: 0.4 });
-  const onLeavePage = () => gsap.to(cursor, { scale: 0, duration: 0.3 });
-
-  const onOver = (event: Event) => {
-    const target = (event.target as HTMLElement).closest<HTMLElement>("[data-cursor]");
-    if (target && label) {
-      label.textContent = target.dataset.cursor ?? "";
-      gsap.to(cursor, { width: EXPANDED, height: EXPANDED, duration: 0.5, ease: "expo.out" });
-      gsap.to(label, { autoAlpha: 1, duration: 0.3, delay: 0.1 });
-    }
+  const onLeavePage = () => {
+    collapse();
+    gsap.to(cursor, { scale: 0, duration: 0.3 });
   };
-  const onOut = (event: Event) => {
-    const from = (event.target as HTMLElement).closest("[data-cursor]");
-    const to = ((event as MouseEvent).relatedTarget as HTMLElement | null)?.closest("[data-cursor]");
-    if (from && from !== to) {
-      gsap.to(cursor, { width: DOT, height: DOT, duration: 0.5, ease: "expo.out" });
-      if (label) gsap.to(label, { autoAlpha: 0, duration: 0.15 });
-    }
+  // Scroll tanpa menggerakkan mouse juga bisa memindahkan elemen di bawah kursor.
+  // Maks. sekali per frame (elementFromPoint memaksa hit-test).
+  let frame = 0;
+  const onScroll = () => {
+    if (frame || !last) return;
+    frame = requestAnimationFrame(() => {
+      frame = 0;
+      if (last) sync(document.elementFromPoint(last.x, last.y));
+    });
   };
 
   window.addEventListener("pointermove", onMove);
+  window.addEventListener("scroll", onScroll, { passive: true });
   document.documentElement.addEventListener("pointerenter", onEnterPage);
   document.documentElement.addEventListener("pointerleave", onLeavePage);
-  scope.addEventListener("pointerover", onOver);
-  scope.addEventListener("pointerout", onOut);
 
   return () => {
     window.removeEventListener("pointermove", onMove);
+    cancelAnimationFrame(frame);
+    window.removeEventListener("scroll", onScroll);
     document.documentElement.removeEventListener("pointerenter", onEnterPage);
     document.documentElement.removeEventListener("pointerleave", onLeavePage);
-    scope.removeEventListener("pointerover", onOver);
-    scope.removeEventListener("pointerout", onOut);
+    gsap.killTweensOf([cursor, label]);
   };
 }

@@ -1,8 +1,11 @@
 "use server";
 
+import { DEFAULT_TARGET_POINTS, hasTargetTotal, SCORE_MAX } from "@/lib/americano";
 import { redirect } from "next/navigation";
 import { isActivityType } from "@/content/activity";
+import { wibAt } from "@/lib/format";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { normalizeBookingUrl, slugify } from "@/lib/text";
 import { discardUploads, isOwnUpload, uploadPublicImage } from "../../storage";
 import { monthKey } from "../time";
 import type { MatchFormat, TennisLevel } from "../types";
@@ -55,20 +58,7 @@ const ENABLED_FORMATS: MatchFormat[] = ["none", "americano", "rotating"];
 const WEEK = 7 * 86_400_000;
 const LEVELS: TennisLevel[] = ["beginner", "beginner_intermediate", "intermediate", "intermediate_advanced", "advanced"];
 const CREW_ROLE = { Host: "host", Coach: "coach", Fotografer: "photographer" } as const;
-/** "kuy.id/soslay/x" → "https://kuy.id/soslay/x"; null kalau bukan URL http(s). */
-function normalizeBookingUrl(raw: string): string | null {
-  const value = raw.trim();
-  if (!value) return "";
-  try {
-    const url = new URL(/^https?:\/\//i.test(value) ? value : `https://${value}`);
-    return url.protocol === "https:" || url.protocol === "http:" ? url.toString() : null;
-  } catch {
-    return null;
-  }
-}
 
-const wib = (date: string, time: string) => new Date(`${date}T${time}:00+07:00`);
-const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60);
 
 function refresh(id?: string) {
   // Website: daftar aktivitas, halaman per tipe (/activity/mabar …), detail venue & homepage.
@@ -79,7 +69,7 @@ function validate(input: SessionInput): string | null {
   if (!input.title.trim()) return "Judul sesi wajib diisi.";
   if (!isActivityType(input.typeSlug)) return "Tipe sesi tidak dikenal.";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date) || !/^\d{2}:\d{2}$/.test(input.start) || !/^\d{2}:\d{2}$/.test(input.end)) return "Tanggal/jam tidak valid.";
-  if (!(wib(input.date, input.end) > wib(input.date, input.start))) return "Jam selesai harus setelah jam mulai.";
+  if (!(wibAt(input.date, input.end) > wibAt(input.date, input.start))) return "Jam selesai harus setelah jam mulai.";
   if (!Number.isInteger(input.price) || input.price < 0) return "Harga tidak valid.";
   if (!Number.isInteger(input.capacity) || input.capacity < 1) return "Kapasitas minimal 1.";
   if (!Number.isInteger(input.points) || input.points < 0) return "Slay Point tidak valid.";
@@ -95,7 +85,7 @@ function validate(input: SessionInput): string | null {
   if (matchFormat !== "none") {
     if (!Number.isInteger(courtCount) || courtCount < 1 || courtCount > 12) return "Jumlah court 1–12.";
     if (!Number.isInteger(roundCount) || roundCount < 1 || roundCount > 40) return "Jumlah ronde 1–40.";
-    if (!Number.isInteger(targetPoints) || targetPoints < 1 || targetPoints > 99) return "Target poin 1–99.";
+    if (hasTargetTotal(matchFormat) && (!Number.isInteger(targetPoints) || targetPoints < 1 || targetPoints > SCORE_MAX)) return `Target poin 1–${SCORE_MAX}.`;
     if (input.play.leaderboardMode !== "points" && input.play.leaderboardMode !== "wins") return "Format leaderboard tidak dikenal.";
   }
   return null;
@@ -146,8 +136,8 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
   const { data: venue } = await supabase.from("venues").select("id").eq("name", input.venueName).maybeSingle();
   if (!venue) return { ok: false, error: `Venue "${input.venueName}" tidak ditemukan.` };
 
-  const startsAt = wib(input.date, input.start);
-  const endsAt = wib(input.date, input.end);
+  const startsAt = wibAt(input.date, input.start);
+  const endsAt = wibAt(input.date, input.end);
   const bookingUrl = normalizeBookingUrl(input.kuyUrl);
   if (bookingUrl === null) return { ok: false, error: "Link booking Kuy tidak valid — contoh: https://kuy.id/soslay/nama-event" };
 
@@ -193,7 +183,8 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
     match_format: input.play.matchFormat,
     court_count: input.play.courtCount,
     round_count: input.play.roundCount,
-    target_points: input.play.targetPoints,
+    // Rotating Partner tidak memakai target poin — isian kosong disimpan sebagai target bawaan.
+    target_points: hasTargetTotal(input.play.matchFormat) || (input.play.targetPoints >= 1 && input.play.targetPoints <= SCORE_MAX) ? input.play.targetPoints : DEFAULT_TARGET_POINTS,
     // v1: skor hanya diisi host/admin.
     score_entry: "host",
     leaderboard_mode: input.play.leaderboardMode,

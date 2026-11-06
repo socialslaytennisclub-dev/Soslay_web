@@ -6,7 +6,8 @@ import styles from "./Logo.module.css";
 type LogoProps = {
   /** lime untuk latar gelap/foto, navy untuk latar lime/terang. */
   tone?: "lime" | "navy";
-  size?: "md" | "lg";
+  /** sm = header portal member (Figma 1209:957, ±112 px). */
+  size?: "sm" | "md" | "lg";
   className?: string;
 };
 
@@ -14,7 +15,7 @@ type LogoProps = {
 export function Logo({ tone = "lime", size = "md", className }: LogoProps) {
   return (
     <Link href="/" className={cx(styles.logo, styles[size], className)} aria-label="Soslay — home">
-      <Image src={`/images/brand/logo-${tone}.webp`} alt="" width={301} height={87} preload={size === "md"} />
+      <Image src={`/images/brand/logo-${tone}.webp`} alt="" width={301} height={87} preload={size !== "lg"} />
     </Link>
   );
 }

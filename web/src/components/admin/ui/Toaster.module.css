@@ -90,3 +90,18 @@
     animation: none;
   }
 }
+
+.action {
+  flex: none;
+  align-self: center;
+  padding: 2px var(--space-8);
+  border-radius: var(--radius-sm);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+  color: var(--color-indigo-600);
+}
+
+.action:hover {
+  background: var(--color-indigo-50);
+}

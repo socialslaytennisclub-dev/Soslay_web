@@ -25,6 +25,7 @@ const MODULE_HREFS: Record<AdminModule, string[]> = {
   orders: ["/admin/orders"],
   content: ["/admin/konten"],
   settings: ["/admin/settings"],
+  finance: ["/admin/keuangan"],
 };
 
 /**

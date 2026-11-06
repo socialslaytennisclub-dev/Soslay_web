@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SessionEditor } from "@/components/admin/activities/SessionEditor";
+import { TRIP_TYPE } from "@/lib/trips";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { attendancePointDefaults } from "@/server/admin/points-repo";
 import { memberChoices } from "@/server/admin/repo";
@@ -14,6 +15,10 @@ export default async function AdminNewSessionPage({ searchParams }: PageProps<"/
   const fromId = Array.isArray(from) ? from[0] : from;
   const [draft, pointDefaults] = await Promise.all([getSessionDraft(fromId), attendancePointDefaults()]);
   // Sesi baru (bukan duplikat) memakai Slay Point default dari Aturan poin.
+  // Dari form Buat trip: pilih tipe lain → kembali ke form sesi dengan tipe itu.
+  const type = (await searchParams).type;
+  const typeSlug = Array.isArray(type) ? type[0] : type;
+  if (!fromId && typeSlug && typeSlug !== TRIP_TYPE && activityTypeOptions().some((t) => t.slug === typeSlug)) draft.typeSlug = typeSlug;
   if (!fromId) draft.pointsPerAttendance = pointDefaults[draft.typeSlug] ?? draft.pointsPerAttendance;
 
   return (

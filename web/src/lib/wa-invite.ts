@@ -43,7 +43,7 @@ export const changedPhoneError = (raw: string, stored: string | null | undefined
 const greetName = (name: string) => firstName(name) || "kak";
 
 /** Link wa.me ke nomor tersimpan dengan pesan terisi, atau null kalau nomornya tidak valid. */
-function waLink(phone: string, text: string): string | null {
+export function waLink(phone: string, text: string): string | null {
   const number = waNumber(phone);
   return number ? `https://wa.me/${number}?text=${encodeURIComponent(text)}` : null;
 }

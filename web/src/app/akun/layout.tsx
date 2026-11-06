@@ -16,7 +16,7 @@ export default async function MemberLayout({ children }: LayoutProps<"/akun">) {
   const me = await getMyMember();
   return (
     <>
-      <Navbar variant="solid" member={me && { name: me.profile.displayName || me.header.name, photo: me.header.photo }} />
+      <Navbar variant="solid" compactLogo member={me && { name: me.profile.displayName || me.header.name, photo: me.header.photo }} />
       <RefreshOnFocus />
       <MotionProvider>
         <main>{children}</main>

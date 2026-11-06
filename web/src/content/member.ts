@@ -1,3 +1,4 @@
+import { LEVEL_LABEL } from "@/lib/levels";
 import { shiftDemoDates } from "@/lib/demo-dates";
 import type { City } from "@/lib/format";
 
@@ -149,6 +150,8 @@ export type MemberSession = {
   status: MemberSessionStatus;
   /** Slay Point yang didapat setelah hadir. */
   points?: number;
+  /** Nama trip Tennis Escape bila activity ini bagian dari trip (chip di kartu). */
+  trip?: string;
   /** Member ditunjuk sebagai host sesi ini (chip HOST, Panel Host di detail sesi). */
   host?: boolean;
   /** Host tanpa ikut main (tidak punya booking) — tanpa chip Terdaftar / e-ticket. */
@@ -276,13 +279,8 @@ export const genderOptions = ["Laki-laki", "Perempuan", "Tidak ingin menyebutkan
 
 export const playingDurationOptions = ["Kurang dari 6 bulan", "6–12 bulan", "1–3 tahun", "3–5 tahun", "Lebih dari 5 tahun"];
 
-export const tennisLevelOptions = [
-  "Beginner",
-  "Beginner–Intermediate",
-  "Intermediate",
-  "Intermediate–Advanced",
-  "Advanced",
-];
+/** Pilihan Tennis Level di profil — dipetakan ke enum lewat LEVEL_LABEL / levelFromLabel (lib/levels). */
+export const tennisLevelOptions = Object.values(LEVEL_LABEL);
 
 export const playingFrequencyOptions = ["First time / Rarely", "1–2x/month", "1x/week", "2–3x/week", "4x+/week"];
 

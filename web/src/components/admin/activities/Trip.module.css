@@ -1,0 +1,548 @@
+/* Tennis Escape = Trip — form Buat trip & halaman Peserta & pembayaran (Figma 05x, 05x-2). */
+
+.anchor {
+  scroll-margin-top: 96px;
+}
+
+.typeChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-500);
+  font-family: var(--font-ui);
+  font-weight: var(--weight-medium);
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--color-navy-900);
+}
+
+.hint {
+  display: block;
+  margin-top: var(--space-6, 6px);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-600);
+}
+
+.dateRange {
+  display: flex;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.dateRange > :not(span) {
+  flex: 1;
+  min-width: 0;
+}
+
+/* ── Tambah activity ▾ ── */
+.addWrap {
+  position: relative;
+}
+
+.addMenu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  width: min(340px, 80vw);
+  padding: var(--space-6, 6px);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+  box-shadow: 0 16px 40px rgb(10 8 74 / 0.14);
+}
+
+.addMenu button {
+  display: flex;
+  gap: var(--space-10);
+  padding: var(--space-10);
+  border-radius: var(--radius-md);
+  text-align: left;
+  color: var(--color-navy-900);
+}
+
+.addMenu button:hover,
+.addMenu button:focus-visible {
+  background: var(--color-lime-50);
+}
+
+.addMenu strong {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 13px;
+}
+
+.addMenu small {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+/* ── Activity dalam trip ── */
+.activityList {
+  display: grid;
+  gap: var(--space-10);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity {
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+}
+
+.activityOpen {
+  border: 2px solid var(--color-indigo-600);
+}
+
+.activityHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  width: 100%;
+  padding: var(--space-12) var(--space-14);
+  text-align: left;
+  color: var(--color-navy-900);
+}
+
+.activityBadge {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-navy-900);
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  font-size: 12px;
+  color: var(--color-lime-500);
+}
+
+.activityText {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.activityText strong {
+  font-family: var(--font-display);
+  font-size: 14px;
+}
+
+.activityText small {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.pill {
+  flex-shrink: 0;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-100);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--color-navy-900);
+}
+
+.pillMuted {
+  background: var(--color-indigo-50);
+  color: var(--color-indigo-muted);
+}
+
+.activityBody {
+  display: grid;
+  gap: var(--space-14);
+  padding: 0 var(--space-14) var(--space-14);
+}
+
+.single {
+  display: grid;
+  gap: var(--space-12);
+  padding: var(--space-12);
+  border-radius: var(--radius-lg);
+  background: var(--color-indigo-50);
+}
+
+.detailNote {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
+  padding: var(--space-12);
+  border-radius: var(--radius-lg);
+  background: var(--color-lime-100);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-navy-900);
+}
+
+.detailNote > span {
+  flex: 1;
+}
+
+.detailNote strong {
+  display: block;
+  font-size: 13px;
+}
+
+.remove {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  justify-self: start;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-pink-500);
+}
+
+/* ── Rundown ── */
+.dayTabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6, 6px);
+  padding: 4px;
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-50);
+  width: fit-content;
+  max-width: 100%;
+}
+
+.dayTab {
+  padding: 6px 14px;
+  border-radius: var(--radius-full);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-indigo-muted);
+}
+
+.dayTabOn {
+  background: var(--color-navy-900);
+  font-weight: var(--weight-semibold);
+  color: var(--color-white);
+}
+
+.rundown {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+  list-style: none;
+  overflow: hidden;
+}
+
+.rundown > li {
+  padding: var(--space-10) var(--space-12);
+}
+
+.rundown > li + li {
+  border-top: 1px solid var(--color-indigo-border);
+}
+
+.rundownRow {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr) 150px 32px;
+  align-items: center;
+  gap: var(--space-10);
+}
+
+.rundownLinked {
+  background: var(--color-lime-100);
+}
+
+.rundownTime {
+  font-weight: var(--weight-semibold);
+}
+
+.rundownText {
+  display: grid;
+  gap: 4px;
+}
+
+.iconBtn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  color: var(--color-indigo-muted);
+}
+
+.iconBtn:hover {
+  background: var(--color-indigo-50);
+  color: var(--color-navy-900);
+}
+
+@media (max-width: 720px) {
+  .rundownRow {
+    grid-template-columns: minmax(0, 1fr) 32px;
+  }
+  .rundownRow > :nth-child(2),
+  .rundownRow > :nth-child(3) {
+    grid-column: 1 / -1;
+  }
+}
+
+/* ── Paket bundling ── */
+.prices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-12);
+}
+
+.priceCard {
+  display: grid;
+  gap: var(--space-8);
+  padding: var(--space-14);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+}
+
+.priceEarly {
+  border-color: var(--color-lime-500);
+  background: var(--color-lime-100);
+}
+
+.priceInput {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-family: var(--font-display);
+  color: var(--color-navy-900);
+}
+
+.priceInput input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-size: 24px;
+  color: var(--color-navy-900);
+}
+
+.priceInput input::placeholder {
+  font-size: 13px;
+  font-weight: var(--weight-regular, 400);
+}
+
+.priceInput input:focus {
+  outline: none;
+}
+
+.priceSub {
+  display: grid;
+  gap: 4px;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.readonly {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-indigo-50);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-6, 6px);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 6px 4px 10px;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-full);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-navy-900);
+}
+
+.chip button {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  color: var(--color-indigo-muted);
+}
+
+.chip button:hover {
+  background: var(--color-indigo-50);
+}
+
+.chipAdd input {
+  padding: 5px 10px;
+  border: 1px dashed var(--color-indigo-200, #c9cbff);
+  border-radius: var(--radius-full);
+  background: transparent;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-600);
+}
+
+.financeNote {
+  display: flex;
+  gap: var(--space-8);
+  margin: 0;
+  padding: var(--space-12);
+  border-radius: var(--radius-lg);
+  background: var(--color-indigo-50);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: var(--color-indigo-600);
+}
+
+/* ── Ringkasan harga ── */
+.summary {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.summary li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-10);
+  padding: var(--space-10) 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.summary li + li {
+  border-top: 1px solid var(--color-indigo-border);
+}
+
+.summary small {
+  display: block;
+  font-size: 11px;
+  color: var(--color-indigo-muted);
+}
+
+.summary strong {
+  font-family: var(--font-display);
+  white-space: nowrap;
+}
+
+/* ── Modal ambil activity ── */
+.modalActions {
+  display: flex;
+  gap: var(--space-8);
+}
+
+.pickFilters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.pickFilters > :first-child {
+  flex: 1;
+  min-width: 200px;
+}
+
+.pickList {
+  display: grid;
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pickItem {
+  display: flex;
+  gap: var(--space-12);
+  padding: var(--space-12);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+  font-family: var(--font-ui);
+  cursor: pointer;
+}
+
+.pickItem input {
+  margin-top: 3px;
+  accent-color: var(--color-navy-900);
+}
+
+.pickItem > span {
+  display: grid;
+  gap: 2px;
+}
+
+.pickItem strong {
+  font-family: var(--font-display);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.pickItem small {
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.pickItemOn {
+  border-color: var(--color-lime-500);
+  background: var(--color-lime-100);
+}
+
+.pickItemOff {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.danger {
+  color: var(--color-pink-500) !important;
+}
+
+.warn {
+  padding: var(--space-12) var(--space-14);
+  border-radius: var(--radius-lg);
+  background: #fff4dc;
+  font-family: var(--font-ui);
+  font-size: 12px;
+  color: #7a4b00;
+}
+
+.warn ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+/* ── Tab halaman trip ── */
+.pageTabs {
+  display: flex;
+  gap: var(--space-24, 24px);
+  overflow-x: auto;
+  border-bottom: 1px solid var(--color-indigo-border);
+}
+
+.pageTab {
+  padding: var(--space-10) 0;
+  border-bottom: 2px solid transparent;
+  font-family: var(--font-ui);
+  font-size: 14px;
+  white-space: nowrap;
+  color: var(--color-indigo-600);
+}
+
+.pageTabOn {
+  border-color: var(--color-navy-900);
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  color: var(--color-navy-900);
+}

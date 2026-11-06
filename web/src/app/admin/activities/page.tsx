@@ -90,11 +90,11 @@ export default async function AdminActivitiesPage({ searchParams }: PageProps<"/
         />
         {one(raw.deleted) && <ToastOnMount text="Sesi dihapus dan sudah hilang dari website." />}
         <p className={pageStyles.summary}>
-          {result.items.length} sesi · {rangeLabel}
+          {result.rows.length} {result.rows.some((r) => r.kind === "trip") ? "sesi & trip" : "sesi"} · {rangeLabel}
         </p>
 
         <section className={cx(styles.panel, styles.panelMobile)} aria-label="Daftar sesi">
-          <SessionsTable items={result.items} sort={result.sort} dir={result.dir} sortHrefs={{ title: sortHref("title"), schedule: sortHref("schedule") }} />
+          <SessionsTable rows={result.rows} sort={result.sort} dir={result.dir} sortHrefs={{ title: sortHref("title"), schedule: sortHref("schedule") }} />
         </section>
       </div>
     </>

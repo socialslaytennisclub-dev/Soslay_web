@@ -6,23 +6,26 @@ import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { formatRupiahPlain, LEVEL_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
+import { TRIP_TYPE } from "@/lib/trips";
 import { shrinkImage } from "@/lib/image-resize";
 import { participantsLockReason } from "@/lib/session-lock";
 import { memberInviteWaLink } from "@/lib/wa-invite";
 import { clearParticipants, removeParticipants } from "@/server/admin/actions/play";
 import { deleteSession, discardSessionUploads, saveSession, setCheckIn, uploadSessionCover, type SessionInput } from "@/server/admin/actions/sessions";
-import { usesLineup } from "@/lib/americano";
+import { hasTargetTotal, scoreTarget, usesLineup } from "@/lib/americano";
 import type { MemberChoice, SessionDetail, SessionHost, SessionParticipant, TennisLevel } from "@/server/admin/types";
 import { FormCard, MultiChips, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
-import { AdminButton, Badge, desktopOnlyClass, MemberAvatar, MobileCard, MobileCardList, PaymentBadge, PickerInput } from "../ui/AdminUI";
+import { AdminButton, Badge, desktopOnlyClass, MemberAvatar, MobileCard, MobileCardList, PickerInput } from "../ui/AdminUI";
 import { CrewDrawer } from "./CrewDrawer";
+import { PaymentCell, useParticipantPayment, viaLabel } from "./ParticipantPayment";
 import { ParticipantsDrawer } from "./ParticipantsDrawer";
 import { WaInviteLink } from "./WaInviteLink";
 import { FormatCard, LineupCard, type PlayForm } from "./PlayCards";
 import styles from "./SessionEditor.module.css";
 import playStyles from "./Play.module.css";
 import { useConfirm } from "../ui/ConfirmDialog";
+import { RowMenu } from "../ui/RowMenu";
 import { toast, ToastOnMount } from "../ui/Toaster";
 import { useUploadCleanup } from "../ui/useUploadCleanup";
 
@@ -45,10 +48,7 @@ const toDate = (iso: string) => new Date(new Date(iso).getTime() + WIB).toISOStr
 const toTime = (iso: string) => new Date(new Date(iso).getTime() + WIB).toISOString().slice(11, 16);
 const fromWib = (date: string, time: string) => new Date(`${date}T${time}:00+07:00`);
 
-const LEVELS = (Object.keys(LEVEL_LABEL) as TennisLevel[]).map((value) => ({
-  value,
-  label: { beginner_intermediate: "Beginner–Intermediate", intermediate_advanced: "Intermediate–Advanced" }[value as string] ?? LEVEL_LABEL[value],
-}));
+const LEVELS = (Object.entries(LEVEL_LABEL) as [TennisLevel, string][]).map(([value, label]) => ({ value, label }));
 
 const STATUS_OPTIONS = [
   { value: "draft", label: "Draft" },
@@ -63,7 +63,6 @@ const VISIBILITY = [
   { value: "link", label: "Link" },
 ] as const;
 
-const SOURCE_LABEL: Record<SessionParticipant["source"], string> = { website: "Website", kuy: "Kuy", admin: "Admin" };
 const PREVIEW_ROWS = 5;
 
 const longDate = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" });
@@ -88,6 +87,8 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   const [points, setPoints] = useState(String(session.pointsPerAttendance));
   // Poin ikut default tipe baru selama admin belum mengubahnya sendiri.
   const changeType = (slug: string) => {
+    // Tennis Escape = trip (BR-22): form sesi baru berubah jadi form Buat trip.
+    if (mode === "new" && slug === TRIP_TYPE) return router.push("/admin/activities/trip/new");
     if (pointDefaults && points === String(pointDefaults[typeSlug] ?? "") && pointDefaults[slug] !== undefined) setPoints(String(pointDefaults[slug]));
     setTypeSlug(slug);
   };
@@ -144,7 +145,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     if (play.matchFormat !== "none") {
       if (!(Number(play.courtCount) >= 1 && Number(play.courtCount) <= 12)) e.play = "Jumlah court 1–12.";
       else if (!(Number(play.roundCount) >= 1 && Number(play.roundCount) <= 40)) e.play = "Jumlah ronde 1–40.";
-      else if (!(Number(play.targetPoints) >= 1)) e.play = "Isi target poin.";
+      else if (hasTargetTotal(play.matchFormat) && !(Number(play.targetPoints) >= 1)) e.play = "Isi target poin.";
     }
     return e;
   }, [title, date, startsAt, endsAt, price, capacity, mode, session.booked, play, kuyUrl]);
@@ -294,8 +295,16 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
       </Badge>
     );
 
+  /** Format permainan diubah tapi belum disimpan → line-up menunggu "Simpan perubahan". */
+  const playDirty =
+    session.play.matchFormat !== play.matchFormat ||
+    String(session.play.courtCount) !== play.courtCount ||
+    String(session.play.roundCount) !== play.roundCount ||
+    (hasTargetTotal(play.matchFormat) && String(session.play.targetPoints) !== play.targetPoints);
+
   // ── Hapus peserta & absensi (terkunci begitu aktivitas sudah dikerjakan) ──
   const [confirm, confirmDialog] = useConfirm();
+  const [editPayment, paymentDrawer] = useParticipantPayment(session.id, session.displayStatus === "completed");
   const [removing, setRemoving] = useState<string | null>(null);
   const checkedInCount = session.participants.filter(isCheckedIn).length;
   const lockBase = {
@@ -306,10 +315,11 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   };
   const rowLock = participantsLockReason({ ...lockBase, checkedIn: 0 });
   const clearLock = participantsLockReason({ ...lockBase, checkedIn: checkedInCount });
-  const fromKuy = session.participants.filter((p) => p.id !== p.memberId);
+  const fromKuy = session.participants.filter((p) => p.id !== p.memberId && p.source !== "trip");
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const removeLock = (p: SessionParticipant) => rowLock ?? (isCheckedIn(p) ? "Sudah check-in — batalkan check-in dulu sebelum menghapus." : null);
+  const removeLock = (p: SessionParticipant) =>
+    p.source === "trip" ? "Pembeli paket trip — batalkan paketnya di Peserta & pembayaran trip." : (rowLock ?? (isCheckedIn(p) ? "Sudah check-in — batalkan check-in dulu sebelum menghapus." : null));
   const toggleSelected = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -398,21 +408,16 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     );
   };
 
-  const removeButton = (p: SessionParticipant) => {
-    const reason = removeLock(p);
-    return (
-      <button
-        type="button"
-        className={styles.iconButton}
-        aria-label={`Hapus ${p.name} dari sesi`}
-        title={reason ?? "Hapus peserta"}
-        disabled={Boolean(reason) || removing !== null}
-        onClick={() => removeMany([p])}
-      >
-        <AdminIcon name="trash" size={16} />
-      </button>
-    );
-  };
+  /** Menu ⋮ per peserta: ubah pembayaran (impor Kuyy) & hapus dari sesi. */
+  const rowMenu = (p: SessionParticipant) => (
+    <RowMenu
+      label={`Aksi untuk ${p.name}`}
+      items={[
+        ...(p.kuyPayment ? [{ label: "Ubah pembayaran", icon: "pencil-simple" as const, onSelect: () => editPayment(p) }] : []),
+        { label: "Hapus dari sesi", icon: "trash" as const, danger: true, disabledReason: removeLock(p), disabled: removing !== null, onSelect: () => removeMany([p]) },
+      ]}
+    />
+  );
 
   const participantName = (p: SessionParticipant) => (
     <span className={styles.person}>
@@ -639,13 +644,13 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
               participants={session.participants}
               courts={Number(play.courtCount) || 1}
               rounds={Number(play.roundCount) || 1}
-              targetPoints={session.play.targetPoints}
+              targetPoints={scoreTarget(session.play.matchFormat, session.play.targetPoints)}
               balanceLevels={play.matchFormat === "rotating"}
               initial={session.matches}
               disabledReason={
                 mode === "new"
                   ? "Simpan sesi dulu, lalu impor peserta dari Kuyy untuk membuat line-up."
-                  : session.play.matchFormat !== play.matchFormat || String(session.play.courtCount) !== play.courtCount || String(session.play.roundCount) !== play.roundCount || String(session.play.targetPoints) !== play.targetPoints
+                  : playDirty
                     ? "Format berubah — klik \"Simpan perubahan\" dulu, lalu atur line-up."
                     : undefined
               }
@@ -747,6 +752,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                 </p>
               )}
               {confirmDialog}
+              {paymentDrawer}
 
               {ordered.length === 0 ? (
                 <p className={styles.empty}>Belum ada peserta.</p>
@@ -762,13 +768,13 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                         aside={
                           <span className={styles.cardActions}>
                             {checkInButton(p)}
-                            {removeButton(p)}
+                            {rowMenu(p)}
                           </span>
                         }
                         meta={[
                           { label: "Level", value: p.level ? LEVEL_LABEL[p.level] : "—" },
-                          { label: "Bayar", value: <PaymentBadge status={p.payment} /> },
-                          { label: "Via", value: SOURCE_LABEL[p.source] },
+                          { label: "Bayar", value: <PaymentCell participant={p} /> },
+                          { label: "Via", value: viaLabel(p) },
                         ]}
                       />
                     ))}
@@ -801,11 +807,13 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                             <td>{participantName(p)}</td>
                             <td>{p.level ? LEVEL_LABEL[p.level] : "—"}</td>
                             <td>
-                              <PaymentBadge status={p.payment} />
+                              <PaymentCell participant={p} />
                             </td>
-                            <td>{SOURCE_LABEL[p.source]}</td>
+                            <td>
+                              {viaLabel(p)}
+                            </td>
                             <td>{checkInButton(p)}</td>
-                            <td>{removeButton(p)}</td>
+                            <td>{rowMenu(p)}</td>
                           </tr>
                         ))}
                       </tbody>

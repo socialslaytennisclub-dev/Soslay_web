@@ -297,7 +297,7 @@ function InfoTab({ detail: d }: { detail: MemberSessionDetail }) {
     {
       icon: <Volleyball size={18} />,
       label: "Format",
-      value: d.format.lineup ? `${d.format.label} · ${d.format.targetPoints} poin/match` : d.typeLabel,
+      value: d.format.lineup ? (d.format.targetPoints === null ? d.format.label : `${d.format.label} · ${d.format.targetPoints} poin/match`) : d.typeLabel,
     },
     {
       icon: <Users size={18} />,

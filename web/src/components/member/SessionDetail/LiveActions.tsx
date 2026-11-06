@@ -5,7 +5,7 @@ import { useDialog } from "@/hooks/useDialog";
 import styles from "./SessionDetail.module.css";
 
 /** "Aturan skor" — ringkasan cara main & penilaian (Figma UIF-07). */
-export function ScoreRulesButton({ target, mode }: { target: number; mode: "points" | "wins" }) {
+export function ScoreRulesButton({ target, mode }: { target: number | null; mode: "points" | "wins" }) {
   const { dialogRef, open, close, onBackdropClick } = useDialog();
   return (
     <>
@@ -22,7 +22,7 @@ export function ScoreRulesButton({ target, mode }: { target: number; mode: "poin
             </button>
           </header>
           <ul className={styles.rules}>
-            <li>Tiap match dimainkan sampai total poin kedua tim = {target} (mis. 12–9). Tidak ada batas waktu.</li>
+            <li>{target === null ? "Tidak ada target poin — skor dicatat sesuai hasil match di lapangan (mis. 6–4)." : `Tiap match dimainkan sampai total poin kedua tim = ${target} (mis. 12–9). Tidak ada batas waktu.`}</li>
             <li>Partner berganti setiap ronde; court & pasangan mengikuti line-up dari host.</li>
             <li>Skor diinput & diverifikasi oleh host sesi — lapor skor ke host setelah match selesai.</li>
             <li>{mode === "wins" ? "Peringkat diurutkan dari jumlah menang, lalu total poin." : "Poin individu = skor tim kamu di setiap match yang kamu mainkan; peringkat diurutkan dari total poin."}</li>

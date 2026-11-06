@@ -1,76 +1,20 @@
 import "server-only";
-import { generateLineup, usesLineup } from "@/lib/americano";
+import { generateLineup, usesLineup, scoreTarget } from "@/lib/americano";
 import { sessionClosesAt } from "@/lib/session-close";
-import { isSessionFinished } from "@/lib/session-lock";
-import { venueList } from "@/content/venues";
 import { venueChoices } from "./catalog-repo";
-import { getDataset, type DataSession, type Dataset } from "./dataset";
+import { getDataset, type DataSession } from "./dataset";
+import { venueList } from "@/content/venues";
 import { activityTypeLabels } from "./demo-data";
+import { isFinished, toRow } from "./session-rows";
+import { listTripDetails, tripDisplayStatus, tripSummary } from "./trips-repo";
 import { DEFAULT_PLAY, loadSessionPlay, NO_PHOTOS } from "./play-repo";
 import { DAY } from "./time";
-import type { SessionDetail, SessionDisplayStatus, SessionParticipant, SessionRow, SessionSort, SessionsQuery, SessionsResult } from "./types";
+import type { ActivityListRow, SessionDetail, SessionParticipant, SessionSort, SessionsQuery, SessionsResult } from "./types";
 
 /**
  * Data Activities (tabel sessions + session_fill). Sama seperti repo.ts: data demo sampai
  * Supabase tersambung, tanda tangan fungsi tetap.
  */
-
-const ALTITUDE = { city: "Bali", type: "Outdoor", image: "/images/activity/featured-altitude.webp" };
-
-function venueMeta(name: string) {
-  const venue = venueList.find((v) => v.name === name);
-  return venue ? { city: venue.city, type: venue.type, image: venue.image } : ALTITUDE;
-}
-
-function fill(d: Dataset, sessionId: string) {
-  let booked = 0;
-  let waitlisted = 0;
-  for (const b of d.bookingsOfSession(sessionId)) {
-    if (b.status === "waitlisted") waitlisted++;
-    else if (b.status !== "cancelled") booked++;
-  }
-  return { booked, waitlisted };
-}
-
-/**
- * Selesai = diakhiri lewat "Akhiri Activity" (status completed) ATAU sudah ditutup otomatis (jam
- * selesai + jeda 30 menit, lib/session-close) — aturan yang sama dengan halaman sesi member
- * (phaseOf). Tanpa ini sesi yang tidak diakhiri host hilang dari semua tab.
- */
-const isFinished = (s: DataSession, now: Date) => isSessionFinished({ status: s.status, endedAt: null, endsAt: s.endsAt, now });
-
-function displayStatus(s: DataSession, booked: number, now: Date): SessionDisplayStatus {
-  if (isFinished(s, now)) return "completed";
-  if (s.status !== "published") return s.status;
-  if (s.publishAt && s.publishAt > now) return "scheduled";
-  if (booked >= s.capacity) return "full";
-  if (booked / s.capacity >= 0.85) return "almost_full";
-  return "published";
-}
-
-function toRow(d: Dataset, s: DataSession): SessionRow {
-  const meta = venueMeta(s.venueName);
-  const { booked, waitlisted } = fill(d, s.id);
-  return {
-    id: s.id,
-    title: s.title,
-    typeSlug: s.typeSlug,
-    typeLabel: activityTypeLabels[s.typeSlug] ?? s.typeSlug,
-    // Foto milik sesi lebih dulu (thumbnail album Foto, lalu cover sesi); tanpa itu → foto venue.
-    image: s.photoCoverPath || s.coverPath || meta.image,
-    startsAt: s.startsAt.toISOString(),
-    endsAt: s.endsAt.toISOString(),
-    venueName: s.venueName,
-    venueCity: meta.city,
-    venueType: meta.type,
-    capacity: s.capacity,
-    booked,
-    waitlisted,
-    price: s.price,
-    status: s.status,
-    displayStatus: displayStatus(s, booked, d.now),
-  };
-}
 
 const isoDay = (d: Date) => d.toISOString().slice(0, 10);
 
@@ -86,10 +30,11 @@ function inTab(s: DataSession, tab: SessionsQuery["tab"], now: Date) {
 /** Mode demo tidak menyimpan waktu dibuat → anggap dibuat 3 minggu sebelum sesi. */
 const createdAt = (s: DataSession) => s.createdAt ?? new Date(s.startsAt.getTime() - 21 * DAY);
 
-const SORT_KEY: Record<SessionSort, (a: DataSession, b: DataSession) => number> = {
-  schedule: (a, b) => a.startsAt.getTime() - b.startsAt.getTime(),
-  title: (a, b) => a.title.localeCompare(b.title, "id") || a.startsAt.getTime() - b.startsAt.getTime(),
-  created: (a, b) => createdAt(a).getTime() - createdAt(b).getTime(),
+type Sortable = { startsAt: number; title: string; created: number };
+const SORT_KEY: Record<SessionSort, (a: Sortable, b: Sortable) => number> = {
+  schedule: (a, b) => a.startsAt - b.startsAt,
+  title: (a, b) => a.title.localeCompare(b.title, "id") || a.startsAt - b.startsAt,
+  created: (a, b) => a.created - b.created,
 };
 
 export async function listSessions(query: SessionsQuery): Promise<SessionsResult> {
@@ -105,26 +50,50 @@ export async function listSessions(query: SessionsQuery): Promise<SessionsResult
   const dir = query.dir ?? (query.sort ? (sort === "title" ? "asc" : "desc") : tab === "upcoming" || tab === "draft" ? "asc" : "desc");
   const sign = dir === "asc" ? 1 : -1;
 
-  const items = sessions
+  // Activity trip tampil di bawah baris induk trip, bukan sebagai baris sendiri.
+  const standalone = sessions.filter((s) => !s.tripId);
+  const sessionRows = standalone
     .filter((s) => inTab(s, tab, now))
     .filter((s) => !range || (isoDay(s.startsAt) >= range.from && isoDay(s.startsAt) <= range.to))
     .filter((s) => !q || s.title.toLowerCase().includes(q) || s.venueName.toLowerCase().includes(q))
     .filter((s) => !query.type || s.typeSlug === query.type)
     .filter((s) => !query.venue || s.venueName === query.venue)
+    .map((s) => ({ kind: "session" as const, session: s, startsAt: s.startsAt.getTime(), title: s.title, created: createdAt(s).getTime() }));
+
+  // Trip: satu baris induk di tanggal mulai trip (filter Tipe "Trip" = hanya trip).
+  const today = isoDay(now);
+  const trips = (await listTripDetails()).map((trip) => ({ trip, display: tripDisplayStatus(trip, today) }));
+  const tripInTab = (t: (typeof trips)[number], which: SessionsQuery["tab"]) =>
+    which === "draft" ? t.display === "draft" : which === "archived" ? t.display === "cancelled" : which === "completed" ? t.display === "completed" : t.display === "published";
+  const tripRows = trips
+    .filter((t) => tripInTab(t, tab))
+    .filter(({ trip }) => !range || (trip.startsOn <= range.to && trip.endsOn >= range.from))
+    .filter(({ trip }) => !q || [trip.title, trip.area, ...trip.activities.flatMap((a) => [a.title, a.venueName])].some((v) => v.toLowerCase().includes(q)))
+    .filter(() => !query.type || query.type === "trip")
+    .filter(({ trip }) => !query.venue || trip.activities.some((a) => a.venueName === query.venue))
+    .map(({ trip, display }) => ({
+      kind: "trip" as const,
+      item: { trip, summary: tripSummary(trip), display },
+      startsAt: Date.parse(`${trip.startsOn}T00:00:00+07:00`),
+      title: trip.title,
+      created: Date.parse(`${trip.startsOn}T00:00:00+07:00`) - 60 * DAY,
+    }));
+  const sessionsOnly = query.type === "trip" ? [] : sessionRows;
+  const rows = [...sessionsOnly, ...tripRows]
     .sort((a, b) => sign * SORT_KEY[sort](a, b))
     .slice(0, 60)
-    .map((s) => toRow(d, s));
+    .map((r): ActivityListRow => (r.kind === "session" ? { kind: "session", session: toRow(d, r.session) } : { kind: "trip", item: r.item }));
 
   return {
-    items,
+    rows,
     counts: {
-      upcoming: sessions.filter((s) => inTab(s, "upcoming", now)).length,
-      completed: sessions.filter((s) => inTab(s, "completed", now)).length,
-      draft: sessions.filter((s) => s.status === "draft").length,
-      archived: sessions.filter((s) => s.status === "cancelled").length,
+      upcoming: standalone.filter((s) => inTab(s, "upcoming", now)).length + trips.filter((t) => tripInTab(t, "upcoming")).length,
+      completed: standalone.filter((s) => inTab(s, "completed", now)).length + trips.filter((t) => tripInTab(t, "completed")).length,
+      draft: standalone.filter((s) => s.status === "draft").length + trips.filter((t) => tripInTab(t, "draft")).length,
+      archived: standalone.filter((s) => s.status === "cancelled").length + trips.filter((t) => tripInTab(t, "archived")).length,
     },
     venues: [...new Set(sessions.map((s) => s.venueName))].sort(),
-    types: Object.entries(activityTypeLabels).map(([slug, label]) => ({ slug, label })),
+    types: [...Object.entries(activityTypeLabels).map(([slug, label]) => ({ slug, label })), { slug: "trip", label: "Trip" }],
     range,
     sort,
     dir,
@@ -136,9 +105,18 @@ function demoLineup(sessionId: string, participants: SessionParticipant[], play:
   let seed = [...sessionId].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
   const rand = () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
   const players = participants.filter((p) => p.status !== "waitlisted").map((p) => p.id);
+  const target = scoreTarget(play.matchFormat, play.targetPoints);
+  const randInt = (max: number) => Math.floor(rand() * (max + 1));
   return generateLineup({ players, courts: play.courtCount, rounds: play.roundCount }, { rand, attempts: 8 }).map((m) => {
-    const a = m.round <= 2 ? Math.floor(rand() * (play.targetPoints + 1)) : null;
-    return { ...m, id: `${sessionId}-r${m.round}-c${m.court}`, scoreA: a, scoreB: a === null ? null : play.targetPoints - a };
+    const id = `${sessionId}-r${m.round}-c${m.court}`;
+    if (m.round > 2) return { ...m, id, scoreA: null, scoreB: null };
+    if (target !== null) {
+      const a = randInt(target);
+      return { ...m, id, scoreA: a, scoreB: target - a };
+    }
+    // Tanpa target (Rotating Partner): satu tim menang 6, lawannya 0–5.
+    const [a, b] = rand() < 0.5 ? [6, randInt(5)] : [randInt(5), 6];
+    return { ...m, id, scoreA: a, scoreB: b };
   });
 }
 
@@ -155,6 +133,7 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
     .map((b, i): SessionParticipant => {
       const m = d.memberById.get(b.memberId)!;
+      const source = b.source ?? ((i % 5 === 1 ? "kuy" : i % 7 === 3 ? "admin" : "website") as "website" | "kuy" | "admin");
       return {
         id: m.id,
         memberId: m.id,
@@ -166,14 +145,18 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
         level: m.level,
         payment: b.payment,
         status: b.status,
-        source: b.source ?? ((i % 5 === 1 ? "kuy" : i % 7 === 3 ? "admin" : "website") as "website" | "kuy" | "admin"),
+        source,
+        // Demo: peserta "Kuy" memakai harga sesi supaya form ubah nominal bisa dicoba.
+        kuyPayment: source === "kuy" ? { amount: s.price, via: "kuy" } : null,
         checkedIn: b.checkedIn ?? b.status === "attended",
         guests: b.guests ?? (i % 9 === 3 ? 1 : 0),
       };
     });
   const { play, roster, hosts, matches, photos } = await loadSessionPlay(s, d.live);
-  // Peserta hasil import Kuyy menggantikan daftar booking begitu ada.
-  const participants = roster ?? fromBookings;
+  // Daftar peserta (impor Kuyy) menggantikan daftar booking begitu ada; booking yang member-nya belum ada di
+  // daftar itu (mis. booking website setelah impor) tetap ikut — sama dengan session_roster & session_fill_counts.
+  const inRoster = new Set(roster?.map((p) => p.memberId).filter(Boolean));
+  const participants = roster ? [...roster, ...fromBookings.filter((p) => !inRoster.has(p.memberId))] : fromBookings;
   if (!d.live && usesLineup(play.matchFormat)) matches.push(...demoLineup(id, participants, play));
   const seed = Number(id.replace(/\D/g, "")) || 0;
   return {

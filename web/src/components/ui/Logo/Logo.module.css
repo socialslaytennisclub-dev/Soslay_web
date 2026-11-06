@@ -15,3 +15,8 @@
 .lg {
   width: clamp(160px, 10vw + 60px, 202px);
 }
+
+/* Header portal member (Figma 1209:957): logo ±112 px di desktop. */
+.sm {
+  width: clamp(96px, 4vw + 60px, 112px);
+}

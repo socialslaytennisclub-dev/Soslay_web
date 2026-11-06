@@ -15,7 +15,8 @@ import styles from "./Toaster.module.css";
  */
 
 type Tone = "success" | "error";
-type ToastItem = { id: number; text: string; tone: Tone };
+type ToastAction = { label: string; onClick: () => void };
+type ToastItem = { id: number; text: string; tone: Tone; action?: ToastAction; duration?: number };
 
 const DURATION: Record<Tone, number> = { success: 4500, error: 7000 };
 const MAX_VISIBLE = 4;
@@ -25,9 +26,9 @@ let nextId = 1;
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((l) => l());
 
-function push(text: string, tone: Tone) {
+function push(text: string, tone: Tone, action?: ToastAction, duration?: number) {
   // Pesan yang sama berturut-turut (mis. klik dua kali) cukup satu.
-  items = [...items.filter((t) => t.text !== text), { id: nextId++, text, tone }].slice(-MAX_VISIBLE);
+  items = [...items.filter((t) => t.text !== text), { id: nextId++, text, tone, action, duration }].slice(-MAX_VISIBLE);
   emit();
 }
 
@@ -39,6 +40,8 @@ function dismiss(id: number) {
 export const toast = {
   success: (text: string) => push(text, "success"),
   error: (text: string) => push(text, "error"),
+  /** Toast sukses dengan tombol aksi (mis. "Batalkan" 5 detik setelah simpan / hapus — Keuangan 12k). */
+  withAction: (text: string, action: ToastAction, duration = 5000) => push(text, "success", action, duration),
   /** Hasil server action admin ({ ok, message } / { ok: false, error }). */
   result: (result: { ok: true; message: string } | { ok: false; error: string }) =>
     result.ok ? push(result.message, "success") : push(result.error, "error"),
@@ -75,7 +78,7 @@ export function Toaster() {
 function ToastCard({ item }: { item: ToastItem }) {
   const timer = useRef<number | null>(null);
   const start = () => {
-    timer.current = window.setTimeout(() => dismiss(item.id), DURATION[item.tone]);
+    timer.current = window.setTimeout(() => dismiss(item.id), item.duration ?? DURATION[item.tone]);
   };
   const stop = () => {
     if (timer.current) window.clearTimeout(timer.current);
@@ -100,6 +103,18 @@ function ToastCard({ item }: { item: ToastItem }) {
         <AdminIcon name={item.tone === "error" ? "warning-circle" : "check-circle"} size={18} />
       </span>
       <p className={styles.text}>{item.text}</p>
+      {item.action && (
+        <button
+          type="button"
+          className={styles.action}
+          onClick={() => {
+            item.action!.onClick();
+            dismiss(item.id);
+          }}
+        >
+          {item.action.label}
+        </button>
+      )}
       <button type="button" className={styles.close} aria-label="Tutup notifikasi" onClick={() => dismiss(item.id)}>
         <AdminIcon name="x" size={14} />
       </button>

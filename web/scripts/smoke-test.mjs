@@ -112,11 +112,21 @@ const adminPaths = [
   "/admin/points?tab=rules",
   "/admin/points?tab=history",
   "/admin/points?tab=history&reason=attendance",
+  "/admin/keuangan",
+  "/admin/keuangan/transaksi",
+  "/admin/keuangan/transaksi?tab=expense&src=manual",
+  "/admin/keuangan/transaksi/import",
+  "/admin/keuangan/laba-rugi",
+  "/admin/keuangan/laba-rugi?mode=quarter",
+  "/admin/keuangan/event",
+  "/admin/keuangan/neraca",
+  "/admin/keuangan/tahunan",
+  "/admin/keuangan/pengaturan",
 ];
 
 if (!demo) {
   // Tanpa login semua halaman admin harus diarahkan ke login admin (dan tidak membocorkan data).
-  for (const p of [...adminPaths, "/admin/members/export", "/admin/orders/SOS-2309/label", "/admin/points/export"]) await check(p, { status: 307, location: "/masuk/admin?next=" });
+  for (const p of [...adminPaths, "/admin/members/export", "/admin/orders/SOS-2309/label", "/admin/points/export", "/admin/keuangan/export", "/admin/keuangan/cetak"]) await check(p, { status: 307, location: "/masuk/admin?next=" });
 } else {
   for (const p of adminPaths) await check(p);
   const members = await check("/admin/members?tab=all");
@@ -131,6 +141,20 @@ if (!demo) {
   if (sessionPath) {
     await check(sessionPath, { includes: ["Peserta"] });
     await check(`/admin/activities/new?from=${sessionPath.split("/").pop()}`);
+  }
+  // Tennis Escape = Trip (BR-22): baris trip di daftar, form, peserta & pembayaran, Keuangan, halaman member.
+  const tripList = await check("/admin/activities?type=trip", { includes: ["Rally in Paradise", "TRIP"] });
+  const tripPath = firstHref(tripList, "/admin/activities/trip/");
+  if (tripPath) {
+    const tripId = tripPath.split("/").pop();
+    await check(`/admin/activities/trip/${tripId}`, { includes: ["Activities dalam trip", "Rundown", "Paket bundling"] });
+    await check(`/admin/activities/trip/${tripId}/peserta`, { includes: ["Peserta bundling", "Sisa tagihan", "Catat pembayaran"] });
+    await check(`/admin/keuangan/transaksi?m=all&trip=${tripId}`, { includes: ["Rally in Paradise"] });
+  } else failures.push("/admin/activities?type=trip → tidak ada link trip");
+  await check("/admin/activities/trip/new", { includes: ["Buat trip", "Tambah activity"] });
+  if (demo) {
+    await check("/akun/aktivitas", { includes: ["Special event", "Rally in Paradise"] });
+    await check("/akun/trip/rally-in-paradise-bali", { includes: ["Paket kamu", "Rundown"] });
   }
   const orders = await check("/admin/orders");
   const orderCode = orders.match(/SOS-\d{3,}/)?.[0];
@@ -163,6 +187,17 @@ if (!demo) {
   await check("/admin/points?tab=rules", { includes: ["Poin kehadiran per tipe sesi", "Bonus massal"] });
   await check("/admin/points?tab=history", { includes: ["Edit tier &amp; benefit", "Riwayat poin"] });
   await check("/admin/points/export?reason=attendance", { contentType: "text/csv" });
+  // Keuangan (ADM-18): laporan, neraca seimbang, detail event, export & cetak.
+  await check("/admin/keuangan?m=2026-10", { includes: ["Ringkasan keuangan", "Saldo per akun", "Transaksi terbaru"] });
+  await check("/admin/keuangan/laba-rugi?m=2026-10", { includes: ["Laporan laba rugi", "LABA BERSIH", "Sorotan"] });
+  await check("/admin/keuangan/neraca?m=2026-10", { includes: ["Seimbang", "TOTAL ASET"] });
+  const events = await check("/admin/keuangan/event?m=2026-10", { includes: ["Laba per sesi"] });
+  const eventPath = firstHref(events, "/admin/keuangan/event/");
+  if (eventPath) await check(eventPath, { includes: ["Transaksi terkait"] });
+  else failures.push("/admin/keuangan/event → tidak ada link detail event");
+  await check("/admin/keuangan/export?reports=transactions&format=csv&m=2026-10", { contentType: "text/csv" });
+  await check("/admin/keuangan/export?reports=pnl,balance,journal&m=2026-10", { contentType: "spreadsheetml" });
+  await check("/admin/keuangan/cetak?reports=pnl&m=2026-10", { includes: ["Laba rugi"] });
 }
 
 console.log(`\n${passed} lolos · ${failures.length} gagal`);

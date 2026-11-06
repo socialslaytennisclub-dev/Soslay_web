@@ -8,7 +8,7 @@ import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } fro
 
 /** Settings & Roles: tim, role & izin, undangan, dan pengaturan aplikasi. */
 
-const MODULES: AdminModule[] = ["overview", "members", "activities", "venues", "products", "orders", "content", "settings"];
+const MODULES: AdminModule[] = ["overview", "members", "activities", "venues", "products", "orders", "content", "settings", "finance"];
 const ACCESS: ModuleAccess[] = ["none", "view", "edit"];
 const SUPER_ADMIN = "Super Admin";
 

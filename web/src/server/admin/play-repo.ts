@@ -1,4 +1,5 @@
 import "server-only";
+import { DEFAULT_TARGET_POINTS } from "@/lib/americano";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { DataSession } from "./dataset";
 import { membersByIds } from "./identity";
@@ -13,7 +14,7 @@ export const DEFAULT_PLAY: SessionPlay = {
   matchFormat: "none",
   courtCount: 2,
   roundCount: 9,
-  targetPoints: 21,
+  targetPoints: DEFAULT_TARGET_POINTS,
   scoreEntry: "host",
   leaderboardMode: "points",
   showLeaderboard: true,
@@ -46,10 +47,14 @@ type RosterRow = {
   kuy_username: string | null;
   ghost_id: string | null;
   phone: string | null;
-  source: "kuy" | "admin";
+  source: "kuy" | "admin" | "website" | "trip";
   tennis_level: TennisLevel | null;
   kuy_reg_no: string | null;
   checked_in_at: string | null;
+  amount: number;
+  payment_status: "paid" | "pending";
+  payment_channel: "kuy" | "manual";
+  is_kuy_import: boolean;
 };
 type HostRow = { member_id: string; role: "host" | "photographer" };
 type MatchRow = { id: string; round_no: number; court_no: number; a1: string; a2: string; b1: string; b2: string; score_a: number | null; score_b: number | null };
@@ -79,7 +84,7 @@ export async function loadSessionPlay(session: DataSession, live: boolean): Prom
       .single<PlayRow>(),
     supabase
       .from("session_participants")
-      .select("id, member_id, full_name, kuy_username, ghost_id, phone, tennis_level, kuy_reg_no, checked_in_at, source")
+      .select("id, member_id, full_name, kuy_username, ghost_id, phone, tennis_level, kuy_reg_no, checked_in_at, source, amount, payment_status, payment_channel, is_kuy_import")
       .eq("session_id", id)
       .returns<RosterRow[]>(),
     supabase.from("session_hosts").select("member_id, role").eq("session_id", id).returns<HostRow[]>(),
@@ -130,7 +135,8 @@ export async function loadSessionPlay(session: DataSession, live: boolean): Prom
             ghostActivities: !r.member_id && r.ghost_id ? (ghostCounts.get(r.ghost_id) ?? 1) : null,
             phone: r.phone ?? "",
             level: r.tennis_level,
-            payment: "paid",
+            payment: r.payment_status,
+            kuyPayment: r.is_kuy_import ? { amount: r.amount, via: r.payment_channel } : null,
             status: r.checked_in_at ? "attended" : "registered",
             source: r.source,
             checkedIn: Boolean(r.checked_in_at),

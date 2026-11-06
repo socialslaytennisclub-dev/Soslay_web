@@ -150,6 +150,11 @@ export type DemoSession = {
   showOnHomepage: boolean;
   recommendedLevels: TennisLevel[];
   repeatWeekly: boolean;
+  /** Activity Tennis Escape yang masuk trip (BR-22). */
+  tripId?: string;
+  tripOrder?: number;
+  soldSingle?: boolean;
+  singleQuota?: number | null;
 };
 
 export type DemoBooking = {
@@ -271,6 +276,53 @@ for (let week = 0; week < 58; week++) {
         bookings.push({ sessionId: session.id, memberId: m.id, status: "waitlisted", payment: "pending", createdAt: new Date(DEMO_NOW.getTime() - between(1, 72) * 3600_000) });
       }
     }
+  });
+}
+
+// ── Tennis Escape trip (BR-22) ──────────────────────────────────────────────
+// "Rally in Paradise · Bali", 17–19 Okt: 4 activity (1 court/sesi), 10 paket bundling (bayar manual) +
+// peserta satuan Kuyy per activity. Paket & pembayaran ada di trip-demo.ts.
+export const DEMO_TRIP_ID = "trip-rally";
+export const DEMO_TRIP_BUNDLE = members.filter((m) => !m.suspended).slice(1, 11);
+{
+  const plan = [
+    { title: "Lapangan Maya Ubud", venue: "Kula Mani Tennis Village", day: "2026-10-17", start: "07:00", hours: 3, price: 450_000, single: true, quota: 6, singles: 3 },
+    { title: "Altitude Kintamani", venue: "Altitude Kintamani", day: "2026-10-18", start: "06:30", hours: 3, price: 550_000, single: true, quota: 6, singles: 5 },
+    { title: "Ubud Tennis Club", venue: "Kula Mani Tennis Village", day: "2026-10-18", start: "16:00", hours: 3, price: 400_000, single: true, quota: 6, singles: 2 },
+    { title: "Sanur Beach Court", venue: "Swan Paradise Pramana", day: "2026-10-19", start: "07:00", hours: 3, price: 0, single: false, quota: null, singles: 0 },
+  ];
+  const others = members.filter((m) => !m.suspended && !DEMO_TRIP_BUNDLE.includes(m)).slice(20);
+  plan.forEach((p, i) => {
+    const startsAt = new Date(`${p.day}T${p.start}:00+07:00`);
+    const session: DemoSession = {
+      id: `${DEMO_TRIP_ID}-a${i + 1}`,
+      title: p.title,
+      typeSlug: "tennis-escape",
+      description: "Activity trip Rally in Paradise · Bali.",
+      venueName: p.venue,
+      court: "Court 1",
+      startsAt,
+      endsAt: new Date(startsAt.getTime() + p.hours * 3600_000),
+      capacity: 16,
+      price: p.price,
+      pointsPerAttendance: 150,
+      status: "published",
+      publishAt: null,
+      visibility: "public",
+      waitlistEnabled: false,
+      membersOnly: false,
+      showOnHomepage: false,
+      recommendedLevels: ["beginner_intermediate", "intermediate"],
+      repeatWeekly: false,
+      tripId: DEMO_TRIP_ID,
+      tripOrder: i + 1,
+      soldSingle: p.single,
+      singleQuota: p.quota,
+    };
+    sessions.push(session);
+    const createdAt = new Date(DEMO_NOW.getTime() - (20 - i) * DAY);
+    for (const m of DEMO_TRIP_BUNDLE) bookings.push({ sessionId: session.id, memberId: m.id, status: "registered", payment: "paid", createdAt });
+    for (const m of others.slice(i * 5, i * 5 + p.singles)) bookings.push({ sessionId: session.id, memberId: m.id, status: "registered", payment: "paid", createdAt });
   });
 }
 

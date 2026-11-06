@@ -316,7 +316,7 @@ export async function getOverview(weeks = 12): Promise<OverviewData> {
   const bookingsLastWeek = createdBetween(now - 14 * DAY, now - 7 * DAY);
   const sessionsThisWeek = sessions.filter((s) => s.status !== "draft" && s.status !== "cancelled" && weekStart(s.startsAt).getTime() === thisWeek);
   const capacityThisWeek = sessionsThisWeek.reduce((sum, s) => sum + s.capacity, 0);
-  const bookedThisWeek = weekly.get(thisWeek) ?? 0;
+  const bookedThisWeek = sessionsThisWeek.reduce((sum, s) => sum + Math.min(d.filled(s.id), s.capacity), 0);
 
   const pastBookings = (from: number, to: number) =>
     bookings.filter((b) => {
@@ -384,7 +384,7 @@ export async function getOverview(weeks = 12): Promise<OverviewData> {
       venueName: s.venueName,
       startsAt: s.startsAt.toISOString(),
       capacity: s.capacity,
-      booked: bookings.filter((b) => b.sessionId === s.id && (b.status === "registered" || b.status === "attended" || b.status === "no_show")).length,
+      booked: d.filled(s.id),
     })),
     newestMembers: [...everyone].sort((a, b) => b.joinedAt.localeCompare(a.joinedAt)).slice(0, 5),
     tierDistribution: TIERS.map(({ tier }) => ({ tier, count: everyone.filter((m) => m.tier === tier && m.status !== "suspended").length })),

@@ -51,6 +51,48 @@ export async function uploadPublicImage({
   return { ok: true, path, url: admin.storage.from(bucket).getPublicUrl(path).data.publicUrl };
 }
 
+/**
+ * Upload file ke bucket PRIVAT (bukti transaksi keuangan) — dibaca lewat signed URL setelah cek
+ * izin. Bucket dibuat otomatis saat upload pertama.
+ */
+export async function uploadPrivateFile({
+  bucket,
+  file,
+  folder,
+  maxBytes,
+  types,
+}: {
+  bucket: string;
+  file: File;
+  folder: string;
+  maxBytes: number;
+  types: Record<string, string>;
+}): Promise<{ ok: true; path: string } | { ok: false; error: string }> {
+  const ext = types[file.type];
+  if (!ext) return { ok: false, error: `Format harus ${Object.values(types).map((t) => t.toUpperCase()).join(", ").replace(/, ([^,]*)$/, " atau $1")}.` };
+  if (file.size > maxBytes) return { ok: false, error: `Ukuran file maksimal ${Math.round(maxBytes / 1024 / 1024)} MB.` };
+  const admin = createSupabaseAdminClient();
+  if (!admin) return { ok: false, error: "Upload belum aktif: SUPABASE_SERVICE_ROLE_KEY belum dipasang." };
+  const path = `${folder}/${crypto.randomUUID()}.${ext}`;
+  const upload = () => admin.storage.from(bucket).upload(path, file, { contentType: file.type });
+  let { error } = await upload();
+  if (error && /bucket not found/i.test(error.message)) {
+    const created = await admin.storage.createBucket(bucket, { public: false, fileSizeLimit: maxBytes, allowedMimeTypes: Object.keys(types) });
+    if (created.error && !/already exists/i.test(created.error.message)) return { ok: false, error: `Gagal menyiapkan Storage: ${created.error.message}` };
+    ({ error } = await upload());
+  }
+  if (error) return { ok: false, error: `Gagal upload: ${error.message}` };
+  return { ok: true, path };
+}
+
+/** Signed URL sementara untuk file di bucket privat (null bila service role belum dipasang). */
+export async function privateFileUrl(bucket: string, path: string, seconds = 300): Promise<string | null> {
+  const admin = createSupabaseAdminClient();
+  if (!admin) return null;
+  const { data } = await admin.storage.from(bucket).createSignedUrl(path, seconds);
+  return data?.signedUrl ?? null;
+}
+
 /** Prefix URL publik bucket ini (untuk memastikan URL yang dikirim form memang hasil upload kita). */
 export const publicBucketPrefix = (bucket: string) => `${supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/public/${bucket}/`;
 

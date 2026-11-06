@@ -7,7 +7,7 @@ import type {
   PointsReason,
   RedemptionStatus,
   RewardCategory,
-  TennisLevel,
+  SessionDisplayStatus,
   Tier,
 } from "@/server/admin/types";
 
@@ -15,13 +15,12 @@ import type {
 
 export const TIER_LABEL: Record<Tier, string> = { basic: "Basic", silver: "Silver", gold: "Gold", platinum: "Platinum" };
 
-export const LEVEL_LABEL: Record<TennisLevel, string> = {
-  beginner: "Beginner",
-  beginner_intermediate: "Beg–Intermediate",
-  intermediate: "Intermediate",
-  intermediate_advanced: "Int–Advanced",
-  advanced: "Advanced",
-};
+/** Asal peserta sesi (kolom "Via"). */
+export const PARTICIPANT_SOURCE_LABEL: Record<"website" | "kuy" | "admin" | "trip", string> = { website: "Website", kuy: "Kuy", admin: "Admin", trip: "Paket trip" };
+/** Jalur bayar peserta impor Kuyy: lewat Kuyy atau langsung (transfer, mis. BCA). */
+export const PAYMENT_CHANNEL_LABEL: Record<"kuy" | "manual", string> = { kuy: "Kuy", manual: "Manual" };
+
+export { LEVEL_LABEL } from "./levels";
 
 export const MEMBER_STATUS_LABEL: Record<MemberStatus, string> = { active: "Aktif", inactive: "Tidak aktif", suspended: "Ditangguhkan" };
 
@@ -81,3 +80,14 @@ export const BONUS_LABEL: Record<BonusKey, { label: string; hint: string }> = {
 
 /** "1.250 pts" / "−300 pts"; `signed` menambah "+" untuk angka positif. */
 export const formatPoints = (n: number, signed = false) => `${n < 0 ? "−" : signed && n > 0 ? "+" : ""}${Math.abs(n).toLocaleString("id-ID")} pts`;
+
+/** Status tampilan sesi di daftar Activities. */
+export const SESSION_STATUS_LABEL: Record<SessionDisplayStatus, string> = {
+  almost_full: "Hampir penuh",
+  published: "Published",
+  full: "Penuh",
+  draft: "Draft",
+  scheduled: "Terjadwal",
+  completed: "Selesai",
+  cancelled: "Dibatalkan",
+};

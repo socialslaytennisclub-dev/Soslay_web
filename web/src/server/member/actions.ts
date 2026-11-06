@@ -1,13 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { genderOptions, handOptions, playingFormatOptions, playingFrequencyOptions, tennisLevelOptions, type MemberProfile } from "@/content/member";
+import { genderOptions, handOptions, playingFormatOptions, playingFrequencyOptions, type MemberProfile } from "@/content/member";
+import { levelFromLabel } from "@/lib/levels";
 import { normalizeKuyId } from "@/lib/auth";
 import { validateProfile } from "@/lib/profile";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { localPhone } from "@/lib/wa-invite";
 import { removePublicImage, uploadPublicImage } from "../storage";
-import { FORMAT, FREQUENCY, GENDER, HAND, LEVEL, toEnum } from "./profile";
+import { FORMAT, FREQUENCY, GENDER, HAND, toEnum } from "./profile";
 
 const AVATAR_BUCKET = "avatars";
 
@@ -41,7 +42,8 @@ export async function saveMyProfile(profile: MemberProfile): Promise<SaveProfile
       kuy_id: normalizeKuyId(profile.kuyId) || null,
       reclub_id: profile.reclubId.trim().replace(/^@/, "") || null,
       instagram: profile.instagram.trim().replace(/^@/, "") || null,
-      tennis_level: toEnum(LEVEL, tennisLevelOptions, profile.tennisLevel),
+      // Lewat label (juga nama lama dari form yang terbuka sebelum level diganti nama) — bukan urutan pilihan.
+      tennis_level: levelFromLabel(profile.tennisLevel),
       play_frequency: toEnum(FREQUENCY, playingFrequencyOptions, profile.playingFrequency),
       play_format: toEnum(FORMAT, playingFormatOptions, profile.playingFormat),
       dominant_hand: toEnum(HAND, handOptions, profile.hand),
@@ -113,7 +115,8 @@ export async function submitHostScore(matchId: string, scoreA: number, scoreB: n
   const { error } = await supabase.rpc("save_match_score", { p_match: matchId, p_score_a: scoreA, p_score_b: scoreB });
   if (error) {
     if (/Hanya admin atau host/.test(error.message)) return { ok: false, error: "Hanya host sesi ini yang bisa input skor." };
-    if (/Total poin/.test(error.message)) return { ok: false, error: error.message.replace("Total poin harus", "Total skor kedua tim harus") + " poin." };
+    if (error.hint === "score_total") return { ok: false, error: error.message.replace("Total poin harus", "Total skor kedua tim harus") + " poin." };
+    if (error.hint === "score_zero") return { ok: false, error: "Skor masih 0–0 — isi skor kedua tim." };
     if (/terkunci/.test(error.message)) return { ok: false, error: "Sesi sudah diakhiri — skor terkunci." };
     return { ok: false, error: "Skor gagal disimpan. Coba lagi." };
   }

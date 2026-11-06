@@ -1,35 +1,14 @@
-import Image from "next/image";
 import Link from "next/link";
 import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
-import { blurProps } from "@/lib/image";
-import type { SessionDisplayStatus, SessionRow, SessionSort } from "@/server/admin/types";
+import type { ActivityListRow, SessionRow, SessionSort } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
-import { Badge, desktopOnlyClass, MobileCard, MobileCardList, type BadgeTone } from "../ui/AdminUI";
+import { desktopOnlyClass, MobileCard, MobileCardList } from "../ui/AdminUI";
 import styles from "./Activities.module.css";
-
-const STATUS: Record<SessionDisplayStatus, { label: string; tone: BadgeTone }> = {
-  almost_full: { label: "Hampir penuh", tone: "pink" },
-  published: { label: "Published", tone: "lime" },
-  full: { label: "Penuh", tone: "indigo" },
-  draft: { label: "Draft", tone: "neutral" },
-  scheduled: { label: "Terjadwal", tone: "indigo" },
-  completed: { label: "Selesai", tone: "neutral" },
-  cancelled: { label: "Dibatalkan", tone: "pink" },
-};
-
-const day = new Intl.DateTimeFormat("id-ID", { weekday: "short", day: "2-digit", month: "short", timeZone: "Asia/Jakarta" });
-const time = new Intl.DateTimeFormat("id-ID", { hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
-
-function schedule(s: SessionRow) {
-  return {
-    date: day.format(new Date(s.startsAt)).replace(/\./g, "").replace(",", ","),
-    time: `${time.format(new Date(s.startsAt))}–${time.format(new Date(s.endsAt))}`,
-  };
-}
+import { CapacityBar, schedule, StatusBadge, Thumb } from "./ActivityCells";
+import { TripCard, TripRows } from "./TripRows";
 
 function Capacity({ s }: { s: SessionRow }) {
-  const full = s.booked >= s.capacity;
   return (
     <span className={styles.capacity}>
       <span className={styles.capacityHead}>
@@ -38,23 +17,13 @@ function Capacity({ s }: { s: SessionRow }) {
         </span>
         {s.waitlisted > 0 && <span className={styles.waitlist}>+{s.waitlisted} waitlist</span>}
       </span>
-      <span className={styles.capacityTrack}>
-        <span className={cx(styles.capacityBar, full && styles.capacityFull)} style={{ width: `${Math.min(s.booked / s.capacity, 1) * 100}%` }} />
-      </span>
-    </span>
-  );
-}
-
-function Thumb({ s }: { s: SessionRow }) {
-  return (
-    <span className={styles.thumb}>
-      <Image src={s.image} alt="" fill sizes="56px" {...blurProps(s.image)} />
+      <CapacityBar value={s.booked} max={s.capacity} />
     </span>
   );
 }
 
 type SessionsTableProps = {
-  items: SessionRow[];
+  rows: ActivityListRow[];
   sort: SessionSort;
   dir: "asc" | "desc";
   /** URL urutan per kolom (dihitung di server, mempertahankan filter). */
@@ -62,8 +31,8 @@ type SessionsTableProps = {
 };
 
 /** Tabel Activities (Figma 25:4725) + versi kartu di HP. Kolom Sesi & Jadwal bisa diurutkan. */
-export function SessionsTable({ items, sort, dir, sortHrefs }: SessionsTableProps) {
-  if (items.length === 0) {
+export function SessionsTable({ rows, sort, dir, sortHrefs }: SessionsTableProps) {
+  if (rows.length === 0) {
     return <p className={styles.empty}>Tidak ada sesi untuk filter ini.</p>;
   }
 
@@ -85,7 +54,9 @@ export function SessionsTable({ items, sort, dir, sortHrefs }: SessionsTableProp
   return (
     <>
       <MobileCardList label="Daftar sesi">
-        {items.map((s) => {
+        {rows.map((r) => {
+          if (r.kind === "trip") return (<li key={r.item.trip.id} className={styles.tripCardItem}><TripCard item={r.item} /></li>);
+          const s = r.session;
           const when = schedule(s);
           return (
             <MobileCard
@@ -93,7 +64,7 @@ export function SessionsTable({ items, sort, dir, sortHrefs }: SessionsTableProp
               href={`/admin/activities/${s.id}`}
               title={
                 <span className={styles.sessionCell}>
-                  <Thumb s={s} />
+                  <Thumb src={s.image} />
                   <span className={styles.sessionText}>
                     <span className={styles.sessionTitle}>{s.title}</span>
                     <span className={styles.sessionMeta}>
@@ -102,7 +73,7 @@ export function SessionsTable({ items, sort, dir, sortHrefs }: SessionsTableProp
                   </span>
                 </span>
               }
-              aside={<Badge tone={STATUS[s.displayStatus].tone} dot>{STATUS[s.displayStatus].label}</Badge>}
+              aside={<StatusBadge status={s.displayStatus} />}
               meta={[
                 { label: "Venue", value: s.venueName },
                 { label: "Kapasitas", value: <Capacity s={s} /> },
@@ -127,13 +98,15 @@ export function SessionsTable({ items, sort, dir, sortHrefs }: SessionsTableProp
             </tr>
           </thead>
           <tbody>
-            {items.map((s) => {
+            {rows.map((r) => {
+              if (r.kind === "trip") return <TripRows key={r.item.trip.id} item={r.item} />;
+              const s = r.session;
               const when = schedule(s);
               return (
                 <tr key={s.id}>
                   <td>
                     <Link href={`/admin/activities/${s.id}`} className={styles.sessionCell}>
-                      <Thumb s={s} />
+                      <Thumb src={s.image} />
                       <span className={styles.sessionText}>
                         <span className={styles.sessionTitle}>{s.title}</span>
                         <span className={styles.sessionMeta}>{s.typeLabel}</span>
@@ -155,9 +128,7 @@ export function SessionsTable({ items, sort, dir, sortHrefs }: SessionsTableProp
                   </td>
                   <td className={styles.cellStrong}>{formatRupiahPlain(s.price)}</td>
                   <td>
-                    <Badge tone={STATUS[s.displayStatus].tone} dot>
-                      {STATUS[s.displayStatus].label}
-                    </Badge>
+                    <StatusBadge status={s.displayStatus} />
                   </td>
                   <td>
                     <span className={styles.rowActions}>

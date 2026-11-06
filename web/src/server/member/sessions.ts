@@ -24,6 +24,7 @@ type SessionRow = {
   status: string;
   cover_path: string | null;
   venues: { name: string; city: string; cover_path: string | null } | null;
+  trips: { title: string } | null;
 };
 
 export const getMySessions = cache(async (): Promise<MemberSession[] | null> => {
@@ -44,7 +45,7 @@ export const getMySessions = cache(async (): Promise<MemberSession[] | null> => 
   // RLS "member read booked sessions" / "host read hosted sessions": termasuk visibilitas Link.
   const { data: sessions } = await supabase
     .from("sessions")
-    .select("id, slug, title, starts_at, ends_at, ended_at, status, cover_path, venues(name, city, cover_path)")
+    .select("id, slug, title, starts_at, ends_at, ended_at, status, cover_path, venues(name, city, cover_path), trips(title)")
     .in(
       "id",
       bookings.map((b) => b.session_id),
@@ -78,6 +79,7 @@ export const getMySessions = cache(async (): Promise<MemberSession[] | null> => 
         status: done ? "done" : "registered",
         points: b.id ? earned.get(b.id) : undefined,
         host: hostOf.has(s.id),
+        trip: s.trips?.title,
         hostOnly: !b.id,
       },
     ];

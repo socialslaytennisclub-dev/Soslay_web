@@ -51,6 +51,13 @@
   }
 }
 
+/* Cetak: sidebar disembunyikan (AdminShell) → konten selebar kertas. */
+@media print {
+  .main {
+    margin-left: 0;
+  }
+}
+
 /* Halaman "akses ditolak" (login tapi bukan staf aktif). */
 .denied {
   display: flex;
