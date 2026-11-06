@@ -4,7 +4,6 @@ import { MediaCard } from "../MediaCard/MediaCard";
 import styles from "./SocialPostCard.module.css";
 
 export type SocialPostCardProps = {
-  /** "threads" = post lama (sebelum diganti TikTok). */
   platform: "instagram" | "tiktok" | "threads";
   text: string[];
   handle: string;

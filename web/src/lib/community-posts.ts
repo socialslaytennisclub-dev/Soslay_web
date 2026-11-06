@@ -1,16 +1,15 @@
 import { instagram } from "@/content/home";
 
 /**
- * Post Instagram & TikTok di feed "See You on the Court!" homepage. Disimpan di
+ * Post Instagram, TikTok & Threads di feed "See You on the Court!" homepage. Disimpan di
  * content_sections (page home, key instagram) → `posts`. Selama belum pernah diedit di admin,
  * daftar diambil dari konten statis (content/home) + `hiddenPosts` lama.
  */
-export type PostPlatform = "instagram" | "tiktok";
+export type PostPlatform = "instagram" | "tiktok" | "threads";
 
 export type StoredPost = {
   id: string;
-  /** "threads" = post lama sebelum Threads diganti TikTok — tetap tampil, diedit jadi IG / TikTok. */
-  platform: PostPlatform | "threads";
+  platform: PostPlatform;
   handle: string;
   text: string;
   href: string;
@@ -39,10 +38,10 @@ export function postsFromSection(json: InstagramSectionJson | null | undefined):
   }));
 }
 
-/** Link post sesuai platform: instagram.com/p|reel/… atau tiktok.com/@user/video/… (atau link pendek vt/vm). */
+/** Link post sesuai platform: instagram.com/p|reel/…, tiktok.com/@user/video/… (atau vt/vm), threads.net|com/@user/post/…. */
 export function postLinkError(platform: PostPlatform, href: string): string | null {
   const url = href.trim();
-  if (!url) return platform === "instagram" ? "Tempel link post Instagram." : "Tempel link video TikTok.";
+  if (!url) return platform === "instagram" ? "Tempel link post Instagram." : platform === "tiktok" ? "Tempel link video TikTok." : "Tempel link post Threads.";
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -52,6 +51,9 @@ export function postLinkError(platform: PostPlatform, href: string): string | nu
   const host = parsed.hostname.replace(/^www\./, "");
   if (platform === "instagram") {
     return host === "instagram.com" && /^\/(p|reel|reels|tv)\/[\w-]+/.test(parsed.pathname) ? null : "Link harus post Instagram, mis. https://www.instagram.com/p/…";
+  }
+  if (platform === "threads") {
+    return (host === "threads.net" || host === "threads.com") && /^\/@[\w.]+\/post\/[\w-]+/.test(parsed.pathname) ? null : "Link harus post Threads, mis. https://www.threads.net/@user/post/…";
   }
   const full = (host === "tiktok.com" || host === "m.tiktok.com") && /^\/@[\w.-]+\/(video|photo)\/\d+/.test(parsed.pathname);
   const short = (host === "vt.tiktok.com" || host === "vm.tiktok.com") && /^\/\w+/.test(parsed.pathname);

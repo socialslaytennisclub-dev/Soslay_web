@@ -20,14 +20,12 @@ type KindMeta = { label: string; icon: AdminIconName; tone: BadgeTone; link: str
 const KIND: Record<PostPlatform, KindMeta> = {
   instagram: { label: "Instagram", icon: "instagram-logo", tone: "pink", link: "Link post Instagram", placeholder: "https://www.instagram.com/p/…" },
   tiktok: { label: "TikTok", icon: "tiktok-logo", tone: "neutral", link: "Link video TikTok", placeholder: "https://www.tiktok.com/@user/video/…" },
+  threads: { label: "Threads", icon: "chat-circle-text", tone: "indigo", link: "Link post Threads", placeholder: "https://www.threads.net/@user/post/…" },
 };
-/** Post lama dari Threads (sebelum diganti TikTok) — tetap tampil; saat diedit pilih Instagram / TikTok. */
-const LEGACY_THREADS: KindMeta = { label: "Threads", icon: "chat-circle-text", tone: "neutral", link: "", placeholder: "" };
-const kindOf = (platform: CommunityPost["platform"]) => (platform === "threads" ? LEGACY_THREADS : KIND[platform]);
 
 const EMPTY: CommunityPost = { id: "", platform: "instagram", handle: "", text: "", href: "", visible: true };
 
-/** Tab Testimoni & IG: post Instagram & TikTok di feed "See You on the Court!" homepage — tambah / ubah / hapus. */
+/** Tab Testimoni & IG: post Instagram, TikTok & Threads di feed "See You on the Court!" homepage — tambah / ubah / hapus. */
 export function CommunityPosts({ initial, members }: { initial: CommunityPost[]; members: MemberChoice[] }) {
   const [posts, setPosts] = useState(initial);
   const [filter, setFilter] = useState<"all" | "visible" | "hidden">("all");
@@ -69,7 +67,7 @@ export function CommunityPosts({ initial, members }: { initial: CommunityPost[];
       <section className={styles.card}>
         <header className={styles.cardHeader}>
           <div>
-            <h2 className={styles.cardTitle}>Post Instagram & TikTok</h2>
+            <h2 className={styles.cardTitle}>Post Instagram, TikTok & Threads</h2>
             <p className={styles.muted}>{posts.filter((p) => p.visible).length} tampil di homepage · langsung tersimpan</p>
           </div>
           <div className={styles.filterPills} role="group" aria-label="Filter">
@@ -90,11 +88,11 @@ export function CommunityPosts({ initial, members }: { initial: CommunityPost[];
           </div>
         </header>
         {shown.length === 0 ? (
-          <p className={ordersStyles.empty}>{posts.length ? "Tidak ada post dengan filter ini." : "Belum ada post. Tambahkan post Instagram atau TikTok pertama."}</p>
+          <p className={ordersStyles.empty}>{posts.length ? "Tidak ada post dengan filter ini." : "Belum ada post. Tambahkan post Instagram, TikTok atau Threads pertama."}</p>
         ) : (
           <ul className={styles.posts}>
             {shown.map((p) => {
-              const kind = kindOf(p.platform);
+              const kind = KIND[p.platform];
               return (
                 <li key={p.id} className={cx(styles.post, !p.visible && styles.sectionOff, editing?.id === p.id && t.rowActive)}>
                   {p.image ? (
@@ -146,7 +144,7 @@ export function CommunityPosts({ initial, members }: { initial: CommunityPost[];
 function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: CommunityPost; members: MemberChoice[]; onClose: () => void; onSaved: (p: CommunityPost) => void; onDelete: () => void }) {
   const isNew = !post.id;
   const [form, setForm] = useState<PostInput>({
-    platform: post.platform === "threads" ? "instagram" : post.platform,
+    platform: post.platform,
     handle: post.handle,
     text: post.text,
     href: post.href,
@@ -228,7 +226,7 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
         <fieldset className={t.fieldset}>
           <legend className={settingsStyles.label}>Jenis post</legend>
           <div className={t.segment}>
-            {(["instagram", "tiktok"] as const).map((p) => (
+            {(["instagram", "tiktok", "threads"] as const).map((p) => (
               <button key={p} type="button" aria-pressed={form.platform === p} className={cx(t.segmentOption, form.platform === p && t.segmentOn)} onClick={() => changePlatform(p)}>
                 <AdminIcon name={KIND[p].icon} size={16} />
                 {KIND[p].label}

@@ -146,11 +146,11 @@ export async function setInstagramPostVisible(id: string, visible: boolean): Pro
 
 export type PostInput = { platform: PostPlatform; handle: string; text: string; href: string; image: string; visible: boolean; memberId: string | null };
 
-/** Tambah (id kosong) atau ubah post Instagram / TikTok. */
+/** Tambah (id kosong) atau ubah post Instagram / TikTok / Threads. */
 export async function saveInstagramPost(id: string, input: PostInput): Promise<ActionResult & { post?: StoredPost }> {
   const auth = await requireEditor("content");
   if ("error" in auth) return fail(auth.error);
-  if (input.platform !== "instagram" && input.platform !== "tiktok") return fail("Pilih jenis post.");
+  if (!["instagram", "tiktok", "threads"].includes(input.platform)) return fail("Pilih jenis post.");
   const handle = normalizeHandle(input.handle);
   if (!handle) return fail("Isi username akun (mis. @socialslay).");
   const text = input.text.trim();
@@ -202,8 +202,9 @@ export async function deleteInstagramPost(id: string): Promise<ActionResult> {
 const POST_BUCKET = "community-posts";
 
 // Foto preview link (og:image) hanya diambil dari domain ini — server tidak mengikuti URL sembarangan.
-const PREVIEW_PAGE_HOSTS = ["instagram.com", "tiktok.com"];
+const PREVIEW_PAGE_HOSTS = ["instagram.com", "tiktok.com", "threads.net", "threads.com"];
 const PREVIEW_IMAGE_HOSTS = ["cdninstagram.com", "fbcdn.net", "tiktokcdn.com", "tiktokcdn-us.com", "tiktokcdn-eu.com", "ibyteimg.com", "byteimg.com"];
+const PLATFORM_LABEL: Record<PostPlatform, string> = { instagram: "Instagram", tiktok: "TikTok", threads: "Threads" };
 const PREVIEW_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 const hostIn = (url: string, hosts: string[]) => {
   try {
@@ -224,7 +225,7 @@ export async function fetchPostPhoto(platform: PostPlatform, href: string): Prom
   const auth = await requireEditor("content");
   if ("error" in auth) return { ok: false, error: auth.error };
   if (postLinkError(platform, href)) return { ok: false, error: "Link belum valid." };
-  const failed = { ok: false as const, error: `Foto tidak bisa diambil otomatis dari ${platform === "instagram" ? "Instagram" : "TikTok"} — upload foto manual.` };
+  const failed = { ok: false as const, error: `Foto tidak bisa diambil otomatis dari ${PLATFORM_LABEL[platform]} — upload foto manual.` };
   try {
     const page = await fetch(href.trim(), {
       headers: { "User-Agent": "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)", Accept: "text/html" },
