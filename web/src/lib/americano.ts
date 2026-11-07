@@ -1,7 +1,8 @@
 /**
  * Line-up Americano doubles: tiap ronde, 4 pemain per court (2 vs 2), sisanya rest.
- * Target: jumlah main serata mungkin, partner tidak berulang, lawan bervariasi, dan
- * tidak ada yang rest dua ronde berturut-turut kalau bisa dihindari.
+ * Target: jumlah main serata mungkin, partner tidak berulang, lawan bervariasi, kelompok 4 orang
+ * yang sama tidak main bareng lagi, pemain yang baru bertemu (teman / lawan) tidak langsung bertemu
+ * lagi di ronde berikutnya, dan tidak ada yang rest dua ronde berturut-turut kalau bisa dihindari.
  *
  * Rotating Partner = aturan yang sama + tim di tiap court diseimbangkan per level (opsi `levels`).
  *
@@ -46,54 +47,87 @@ function shuffle<T>(list: T[], rand: () => number): T[] {
 /** Court yang benar-benar bisa diisi: maksimal floor(pemain / 4). */
 export const playableCourts = (players: number, courts: number) => Math.max(0, Math.min(courts, Math.floor(players / 4)));
 
-type History = { games: Map<string, number>; partners: Map<string, number>; opponents: Map<string, number>; lastRest: Set<string> };
+type History = {
+  games: Map<string, number>;
+  partners: Map<string, number>;
+  opponents: Map<string, number>;
+  /** Kelompok 4 orang (satu court) yang sudah pernah main bareng → berapa kali. */
+  groups: Map<string, number>;
+  /** Pasangan pemain yang bertemu (teman atau lawan) di ronde terakhir. */
+  lastMeet: Set<string>;
+  lastRest: Set<string>;
+};
 
 const bump = (map: Map<string, number>, key: string) => map.set(key, (map.get(key) ?? 0) + 1);
+const groupKey = (four: string[]) => [...four].sort().join("|");
+const pairsOf = (four: string[]) => four.flatMap((x, i) => four.slice(i + 1).map((y) => pairKey(x, y)));
 
 function emptyHistory(players: string[]): History {
-  return { games: new Map(players.map((p) => [p, 0])), partners: new Map(), opponents: new Map(), lastRest: new Set() };
+  return { games: new Map(players.map((p) => [p, 0])), partners: new Map(), opponents: new Map(), groups: new Map(), lastMeet: new Set(), lastRest: new Set() };
 }
 
 function record(h: History, matches: LineupMatch[], players: string[]) {
   const playing = new Set<string>();
+  const met = new Set<string>();
   for (const m of matches) {
-    for (const p of [...m.a, ...m.b]) {
+    const four = [...m.a, ...m.b];
+    for (const p of four) {
       playing.add(p);
       bump(h.games, p);
     }
     bump(h.partners, pairKey(...m.a));
     bump(h.partners, pairKey(...m.b));
     for (const x of m.a) for (const y of m.b) bump(h.opponents, pairKey(x, y));
+    bump(h.groups, groupKey(four));
+    for (const k of pairsOf(four)) met.add(k);
   }
   h.lastRest = new Set(players.filter((p) => !playing.has(p)));
+  h.lastMeet = met;
 }
 
-/** Penalti satu court: partner berulang mahal, lawan berulang murah, selisih level tim (Rotating). */
-function courtCost(h: History, a: [string, string], b: [string, string], levels?: LevelWeights) {
-  let cost = 10 * ((h.partners.get(pairKey(...a)) ?? 0) + (h.partners.get(pairKey(...b)) ?? 0));
-  for (const x of a) for (const y of b) cost += h.opponents.get(pairKey(x, y)) ?? 0;
+// Bobot penalti: kelompok 4 orang yang sama >> partner berulang > bertemu lagi di ronde berikutnya >
+// rest dua kali berturut-turut > lawan berulang. 1–2 orang bertemu lagi masih wajar (penalti kecil).
+const COST = { sameGroup: 60, partner: 10, metLastRound: 4, restTwice: 3, opponent: 1, level: 4 };
+
+/** Penalti kelompok 4 orang di satu court (sama untuk ketiga cara membagi tim): kelompok sama & bertemu lagi dari ronde lalu. */
+function groupCost(h: History, four: string[]) {
+  let cost = COST.sameGroup * (h.groups.get(groupKey(four)) ?? 0);
+  for (const k of pairsOf(four)) if (h.lastMeet.has(k)) cost += COST.metLastRound;
+  return cost;
+}
+
+/** Penalti pembagian tim: partner berulang, lawan berulang, selisih level tim (Rotating). */
+function pairingCost(h: History, a: [string, string], b: [string, string], levels?: LevelWeights) {
+  let cost = COST.partner * ((h.partners.get(pairKey(...a)) ?? 0) + (h.partners.get(pairKey(...b)) ?? 0));
+  for (const x of a) for (const y of b) cost += COST.opponent * (h.opponents.get(pairKey(x, y)) ?? 0);
   if (levels) {
     const strength = (t: [string, string]) => (levels[t[0]] ?? 3) + (levels[t[1]] ?? 3);
-    cost += 4 * Math.abs(strength(a) - strength(b));
+    cost += COST.level * Math.abs(strength(a) - strength(b));
   }
   return cost;
 }
 
+const courtCost = (h: History, a: [string, string], b: [string, string], levels?: LevelWeights) => groupCost(h, [...a, ...b]) + pairingCost(h, a, b, levels);
+
 function planRound(h: History, players: string[], courts: number, round: number, rand: () => number, levels?: LevelWeights): LineupMatch[] {
-  // Pilih yang paling sedikit main; seri → yang rest ronde lalu didahulukan, lalu acak.
-  const order = shuffle(players, rand).sort((x, y) => {
-    const g = (h.games.get(x) ?? 0) - (h.games.get(y) ?? 0);
-    if (g !== 0) return g;
-    return Number(h.lastRest.has(y)) - Number(h.lastRest.has(x));
-  });
-  const picked = order.slice(0, courts * 4);
+  // Jumlah main tetap serata mungkin: yang paling sedikit main pasti main; dari yang seri di batas
+  // (mis. 8 pemain 1 court: semua seri) dipilih kombinasi dengan penalti terkecil — bukan selalu yang
+  // baru rest, karena itu membuat kelompok 4 orang yang sama terus bertemu bergantian.
+  const need = courts * 4;
+  const order = shuffle(players, rand).sort((x, y) => (h.games.get(x) ?? 0) - (h.games.get(y) ?? 0));
+  const cutoff = h.games.get(order[need - 1]) ?? 0;
+  const must = order.filter((p) => (h.games.get(p) ?? 0) < cutoff);
+  const pool = order.filter((p) => (h.games.get(p) ?? 0) === cutoff);
 
   let best: LineupMatch[] = [];
   let bestCost = Infinity;
-  for (let attempt = 0; attempt < 60; attempt++) {
+  for (let attempt = 0; attempt < 80; attempt++) {
+    const picked = [...must, ...shuffle(pool, rand).slice(0, need - must.length)];
     const s = shuffle(picked, rand);
     const matches: LineupMatch[] = [];
-    let cost = 0;
+    // Yang rest ronde lalu dan rest lagi sekarang.
+    const chosen = new Set(picked);
+    let cost = COST.restTwice * [...h.lastRest].filter((p) => !chosen.has(p)).length;
     for (let c = 0; c < courts; c++) {
       const [p1, p2, p3, p4] = s.slice(c * 4, c * 4 + 4);
       // 3 cara membagi 4 pemain jadi 2 tim — ambil yang termurah.
@@ -105,11 +139,11 @@ function planRound(h: History, players: string[], courts: number, round: number,
       let pick = options[0];
       let pickCost = Infinity;
       for (const o of options) {
-        const oc = courtCost(h, o[0], o[1], levels);
+        const oc = pairingCost(h, o[0], o[1], levels);
         if (oc < pickCost) [pick, pickCost] = [o, oc];
       }
       matches.push({ round, court: c + 1, a: pick[0], b: pick[1] });
-      cost += pickCost;
+      cost += pickCost + groupCost(h, [p1, p2, p3, p4]);
     }
     if (cost < bestCost) [best, bestCost] = [matches, cost];
     if (bestCost === 0) break;
@@ -131,7 +165,7 @@ export function lineupCost(matches: LineupMatch[], players: string[], levels?: L
     for (const p of h.lastRest) if (prevRest.has(p)) restStreak++;
   }
   const games = [...h.games.values()];
-  return cost + 25 * (Math.max(...games, 0) - Math.min(...games, 0)) + 3 * restStreak;
+  return cost + 25 * (Math.max(...games, 0) - Math.min(...games, 0)) + COST.restTwice * restStreak;
 }
 
 /**
