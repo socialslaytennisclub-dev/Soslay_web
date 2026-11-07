@@ -545,13 +545,15 @@ export async function updateParticipantPayment(
   const phoneError = guest ? changedPhoneError(input.phone ?? "", row.phone as string | null) : null;
   if (phoneError) return { ok: false, error: phoneError };
   const phone = guest && input.phone?.trim() ? localPhone(input.phone) : null;
+  // Nomor yang sama dengan format lain (0812… / 812…) bukan perubahan.
+  const detailsChanged = guest && (name !== row.full_name || phone !== (row.phone ?? null));
 
   // Data tamu (ghost member) mengikuti perubahan nama / nomor tanpa mengubah riwayat orang lain:
   //  1. nomor baru sudah tercatat sebagai tamu lain (mis. orang pengganti yang sempat ditambahkan admin) → pakai tamu itu;
   //  2. tamu ini hanya ada di activity ini → datanya dibetulkan (mis. salah ketik);
   //  3. pernah ikut activity lain → slotnya digantikan orang lain: dipisah jadi tamu baru.
   let ghost: { kind: "reuse" | "new"; id: string } | { kind: "fix" } | null = null;
-  if (guest && row.ghost_id && (name !== row.full_name || phone !== (row.phone ?? null))) {
+  if (detailsChanged && row.ghost_id) {
     const [{ data: known }, { count: elsewhere }] = await Promise.all([
       phone ? supabase.from("ghost_members").select("id").eq("phone", phone).is("claimed_by", null).neq("id", row.ghost_id).limit(1).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from("session_participants").select("id", { count: "exact", head: true }).eq("ghost_id", row.ghost_id).neq("id", participantId),
@@ -578,7 +580,7 @@ export async function updateParticipantPayment(
       payment_status: payment,
       payment_channel: via,
       amount_edited_at: now,
-      ...(guest ? { full_name: name, phone, details_edited_at: now, ...(ghost && "id" in ghost ? { ghost_id: ghost.id } : {}) } : {}),
+      ...(detailsChanged ? { full_name: name, phone, details_edited_at: now, ...(ghost && "id" in ghost ? { ghost_id: ghost.id } : {}) } : {}),
     })
     .eq("id", participantId)
     .eq("session_id", sessionId);

@@ -547,7 +547,6 @@ function LeaderboardTab({ detail: d }: { detail: MemberSessionDetail }) {
             <th scope="col">Pemain</th>
             <th scope="col">Match</th>
             <th scope="col">{wins ? "Menang" : "Poin"}</th>
-            <th scope="col" title="Selisih skor — penentu kalau nilai sama">+/−</th>
           </tr>
         </thead>
         <tbody>
@@ -564,13 +563,17 @@ function LeaderboardTab({ detail: d }: { detail: MemberSessionDetail }) {
               <td className={styles.boardMatch}>
                 {s.played}/{s.total}
               </td>
-              <td className={styles.boardValue}>{value}</td>
-              <td className={styles.boardMatch}>{formatDiff(s.diff)}</td>
+              <td className={styles.boardValue}>
+                {value}
+                <small className={styles.boardDiff} title="Selisih skor">
+                  {formatDiff(s.diff)}
+                </small>
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p className={styles.boardNote}>{started ? `${wins ? "Menang sama → selisih skor (+/−), lalu total poin" : "Poin sama → selisih skor (+/−), lalu jumlah menang"}; yang masih sama berbagi peringkat (=). Hanya match yang sudah diinput host yang dihitung.` : "Belum ada skor masuk — peringkat bergerak setelah host menginput skor match pertama."}</p>
+      <p className={styles.boardNote}>{started ? `${wins ? "Menang sama → selisih skor (+/−, angka kecil), lalu total poin" : "Poin sama → selisih skor (+/−, angka kecil), lalu jumlah menang"}; yang masih sama berbagi peringkat (=). Hanya match yang sudah diinput host yang dihitung.` : "Belum ada skor masuk — peringkat bergerak setelah host menginput skor match pertama."}</p>
     </section>
   );
 }

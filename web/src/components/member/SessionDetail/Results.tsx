@@ -132,14 +132,18 @@ function FinalBoard({ detail: d, ranks }: { detail: MemberSessionDetail; ranks: 
       </b>
       <span className={styles.finalName}>
         <span className={styles.miniFace}>{initials(s.name)}</span>
-        {s.name}
-        {s.me && " (kamu)"}
+        <span className={styles.finalNameText}>
+          {s.name}
+          {s.me && " (kamu)"}
+        </span>
       </span>
       <small>
         {s.played}/{s.total}
       </small>
-      <small>{formatDiff(s.diff)}</small>
-      <strong>{value}</strong>
+      <strong className={styles.finalValue}>
+        {value}
+        <small title="Selisih skor">{formatDiff(s.diff)}</small>
+      </strong>
     </li>
   );
   return (
@@ -152,7 +156,6 @@ function FinalBoard({ detail: d, ranks }: { detail: MemberSessionDetail; ranks: 
         <span>#</span>
         <span>Pemain</span>
         <span>Match</span>
-        <span>+/−</span>
         <span>{unit}</span>
       </p>
       <ol>{ranks.slice(0, TOP).map(row)}</ol>
@@ -164,7 +167,7 @@ function FinalBoard({ detail: d, ranks }: { detail: MemberSessionDetail; ranks: 
           <ol>{ranks.slice(TOP).map(row)}</ol>
         </details>
       )}
-      <p className={styles.finalNote}>{d.format.leaderboardMode === "wins" ? "Menang sama → selisih skor (+/−), lalu total poin" : "Poin sama → selisih skor (+/−), lalu jumlah menang"}; yang masih sama berbagi peringkat (=). Hanya match yang diinput host yang dihitung.</p>
+      <p className={styles.finalNote}>{d.format.leaderboardMode === "wins" ? "Menang sama → selisih skor (+/−, angka kecil), lalu total poin" : "Poin sama → selisih skor (+/−, angka kecil), lalu jumlah menang"}; yang masih sama berbagi peringkat (=). Hanya match yang diinput host yang dihitung.</p>
     </section>
   );
 }

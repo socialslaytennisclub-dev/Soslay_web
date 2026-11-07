@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useImperativeHandle, useRef, useState, useTransition, type ReactNode, type Ref } from "react";
 import { useDialog } from "@/hooks/useDialog";
 import { formatRupiahPlain, PARTICIPANT_SOURCE_LABEL, PAYMENT_CHANNEL_LABEL, PAYMENT_LABEL } from "@/lib/admin-labels";
-import { changedPhoneError } from "@/lib/wa-invite";
+import { changedPhoneError, localPhone } from "@/lib/wa-invite";
 import { amountDigits, amountDisplay } from "@/lib/finance/format";
 import { updateParticipantPayment } from "@/server/admin/actions/play";
 import type { SessionParticipant } from "@/server/admin/types";
@@ -79,7 +79,7 @@ function PaymentDrawer({ sessionId, finished, ref }: { sessionId: string; finish
     Number(amount || 0) === target.editablePayment.amount &&
     payment === target.payment &&
     via === target.editablePayment.via &&
-    (!guest || (name.trim() === target.name && phone === target.phone));
+    (!guest || (name.trim() === target.name && localPhone(phone) === localPhone(target.phone)));
 
   return (
     <Drawer
