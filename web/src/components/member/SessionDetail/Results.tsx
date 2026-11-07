@@ -3,7 +3,7 @@ import Link from "next/link";
 import { cx } from "@/lib/cx";
 import { formatAngka, formatTanggalPendek } from "@/lib/format";
 import { isUnstarted, roundList } from "@/lib/rounds";
-import { finalRanks, PODIUM_BONUS, type Ranked, sessionPoints } from "@/lib/standings";
+import { finalRanks, formatDiff, PODIUM_BONUS, type Ranked, sessionPoints } from "@/lib/standings";
 import { initials, teamName } from "@/lib/text";
 import type { MemberSessionDetail } from "@/server/member/session-detail";
 import { perspective, planOf } from "./LiveCards";
@@ -138,6 +138,7 @@ function FinalBoard({ detail: d, ranks }: { detail: MemberSessionDetail; ranks: 
       <small>
         {s.played}/{s.total}
       </small>
+      <small>{formatDiff(s.diff)}</small>
       <strong>{value}</strong>
     </li>
   );
@@ -151,6 +152,7 @@ function FinalBoard({ detail: d, ranks }: { detail: MemberSessionDetail; ranks: 
         <span>#</span>
         <span>Pemain</span>
         <span>Match</span>
+        <span>+/−</span>
         <span>{unit}</span>
       </p>
       <ol>{ranks.slice(0, TOP).map(row)}</ol>
@@ -162,7 +164,7 @@ function FinalBoard({ detail: d, ranks }: { detail: MemberSessionDetail; ranks: 
           <ol>{ranks.slice(TOP).map(row)}</ol>
         </details>
       )}
-      <p className={styles.finalNote}>Nilai seri berbagi peringkat (=). Hanya match yang diinput host yang dihitung.</p>
+      <p className={styles.finalNote}>{d.format.leaderboardMode === "wins" ? "Menang sama → total poin, lalu selisih skor (+/−)" : "Poin sama → selisih skor (+/−), lalu jumlah menang"}; yang masih sama berbagi peringkat (=). Hanya match yang diinput host yang dihitung.</p>
     </section>
   );
 }

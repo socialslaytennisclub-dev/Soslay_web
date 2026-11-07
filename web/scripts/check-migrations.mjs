@@ -1156,3 +1156,31 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
     console.log("✓ jumlah ronde / court dikurangi → line-up di luar format terhapus (yang sudah ada skornya ditolak)");
   }
 }
+
+// Peringkat juara: total poin sama → selisih skor menentukan (yang lebih produktif di atas).
+{
+  await as(null);
+  const s = (await one(
+    `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, match_format, leaderboard_mode, court_count, round_count)
+     values ('rank-diff', 'Rank Diff', 'weekly-mabar', $1, now() - interval '3 hours', now() - interval '1 hour', 20, 'published', 'americano', 'points', 2, 1) returning id`,
+    [venue],
+  )).id;
+  const members = [];
+  const pl = [];
+  for (let i = 1; i <= 8; i++) {
+    const { id: m } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [m, `Rank ${i}`, `rank${i}@mail.com`]);
+    members.push(m);
+    pl.push((await one(`insert into session_participants (session_id, full_name, kuy_reg_no, source, member_id) values ($1, $2, $3, 'admin', $4) returning id`, [s, `Rank ${i}`, `RK${i}`, m])).id);
+  }
+  // Court 1: 48–10 (selisih +38) · court 2: 48–40 (selisih +8) → sama-sama 48 poin.
+  await db.query(
+    `insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2, score_a, score_b) values ($1, 1, 1, $2, $3, $4, $5, 48, 10), ($1, 1, 2, $6, $7, $8, $9, 48, 40)`,
+    [s, ...pl],
+  );
+  await db.query(`select finish_session($1, null, now())`, [s]);
+  const bonus = async (m) => (await one(`select coalesce(sum(delta), 0)::int d from points_ledger where member_id = $1 and note like 'Bonus juara%'`, [m])).d;
+  const [first, third] = [await bonus(members[0]), await bonus(members[4])];
+  console.assert(first === 100 && third === 50, `poin sama 48: selisih +38 juara 1 (+${first}), selisih +8 juara 3 (+${third})`);
+  console.log("✓ peringkat juara: total poin sama → selisih skor menentukan");
+}

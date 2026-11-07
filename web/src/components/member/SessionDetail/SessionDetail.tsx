@@ -4,6 +4,7 @@ import { Container } from "@/components/ui";
 import { cx } from "@/lib/cx";
 import { CITY_TZ_LABEL, formatAngka, formatJamRange, formatRupiah, formatTanggalISO, formatTanggalPendek } from "@/lib/format";
 import { planRounds, ROUND_STATUS_LABEL, skippedLabel } from "@/lib/rounds";
+import { formatDiff, rankKey } from "@/lib/standings";
 import { initials, teamName } from "@/lib/text";
 import type { DetailMatch, DetailStanding, MemberSessionDetail } from "@/server/member/session-detail";
 import { SelfCheckIn } from "@/components/member/CheckIn/SelfCheckIn";
@@ -485,19 +486,20 @@ function HostCard({ detail: d }: { detail: MemberSessionDetail }) {
   );
 }
 
-/** Peringkat dengan seri (Figma: "=5"): pemain dengan nilai sama berbagi nomor. */
+/** Peringkat dengan seri (Figma: "=5"): pemain yang sama persis (nilai utama, pembanding, selisih) berbagi nomor. */
 function ranks(d: MemberSessionDetail) {
-  const value = (s: DetailStanding) => (d.format.leaderboardMode === "wins" ? s.wins : s.points);
+  const mode = d.format.leaderboardMode;
+  const key = (s: DetailStanding) => rankKey(s, mode).join();
   // Standings sudah terurut → nilai sama selalu berdampingan: hitung posisi pertama & jumlahnya sekali jalan.
-  const groups = new Map<number, { first: number; count: number }>();
+  const groups = new Map<string, { first: number; count: number }>();
   d.standings.forEach((s, i) => {
-    const g = groups.get(value(s));
+    const g = groups.get(key(s));
     if (g) g.count += 1;
-    else groups.set(value(s), { first: i + 1, count: 1 });
+    else groups.set(key(s), { first: i + 1, count: 1 });
   });
   return d.standings.map((s) => {
-    const g = groups.get(value(s))!;
-    return { s, rank: `${g.count > 1 ? "=" : ""}${g.first}`, value: value(s) };
+    const g = groups.get(key(s))!;
+    return { s, rank: `${g.count > 1 ? "=" : ""}${g.first}`, value: mode === "wins" ? s.wins : s.points };
   });
 }
 
@@ -545,6 +547,7 @@ function LeaderboardTab({ detail: d }: { detail: MemberSessionDetail }) {
             <th scope="col">Pemain</th>
             <th scope="col">Match</th>
             <th scope="col">{wins ? "Menang" : "Poin"}</th>
+            <th scope="col" title="Selisih skor — penentu kalau nilai sama">+/−</th>
           </tr>
         </thead>
         <tbody>
@@ -562,11 +565,12 @@ function LeaderboardTab({ detail: d }: { detail: MemberSessionDetail }) {
                 {s.played}/{s.total}
               </td>
               <td className={styles.boardValue}>{value}</td>
+              <td className={styles.boardMatch}>{formatDiff(s.diff)}</td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p className={styles.boardNote}>{started ? "Nilai seri berbagi peringkat (=). Hanya match yang sudah diinput host yang dihitung." : "Belum ada skor masuk — peringkat bergerak setelah host menginput skor match pertama."}</p>
+      <p className={styles.boardNote}>{started ? `${wins ? "Menang sama → total poin, lalu selisih skor (+/−)" : "Poin sama → selisih skor (+/−), lalu jumlah menang"}; yang masih sama berbagi peringkat (=). Hanya match yang sudah diinput host yang dihitung.` : "Belum ada skor masuk — peringkat bergerak setelah host menginput skor match pertama."}</p>
     </section>
   );
 }

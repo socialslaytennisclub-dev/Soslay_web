@@ -2668,7 +2668,7 @@ button.link {
 .finalCols,
 .finalBoard li {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) 56px 48px;
+  grid-template-columns: 32px minmax(0, 1fr) 48px 44px 48px;
   align-items: center;
   gap: var(--space-12);
   padding: 0 var(--space-16);
