@@ -89,8 +89,11 @@ create trigger session_participants_keep_import_edits before update of paid_at, 
 -- Nama peserta diubah → keterangan transaksi Keuangan otomatisnya ikut ("Tiket Kuyy · <nama>").
 create function finance_on_participant_renamed() returns trigger language plpgsql security definer set search_path = public as $$
 begin
-  update finance_transactions set description = replace(description, old.full_name, new.full_name)
-  where source in ('kuyy_import', 'ticket_manual_paid') and source_ref = 'sp:' || new.id;
+  -- Nama selalu di akhir keterangan ("Tiket Kuyy · <nama>", "Koreksi · … · <nama>") → ganti bagian akhir saja.
+  update finance_transactions
+  set description = left(description, length(description) - length(old.full_name)) || new.full_name
+  where source in ('kuyy_import', 'ticket_manual_paid') and source_ref = 'sp:' || new.id
+    and right(description, length(old.full_name)) = old.full_name;
   return null;
 end $$;
 create trigger session_participants_finance_rename after update of full_name on session_participants

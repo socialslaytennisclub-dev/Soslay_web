@@ -10,7 +10,6 @@ import { isUnstarted, type RoundPlan } from "@/lib/rounds";
 import { firstName, teamName } from "@/lib/text";
 import type { MemberSessionDetail } from "@/server/member/session-detail";
 import { saveHostLineup, type HostLineupMatch } from "@/server/member/actions";
-import { maxRound } from "./LiveCards";
 import styles from "./SessionDetail.module.css";
 
 type Slot = "a1" | "a2" | "b1" | "b2";
@@ -30,7 +29,8 @@ const toDraft = (d: MemberSessionDetail): Draft[] =>
  */
 export function shuffleFromRound(d: MemberSessionDetail, fromRound: number): HostLineupMatch[] | null {
   const players = d.people.filter((p) => p.checkedIn).map((p) => p.id);
-  const rounds = maxRound(d);
+  // Hanya ronde di format sesi (line-up lama di luar format tidak diisi ulang).
+  const rounds = d.format.rounds;
   if (!playableCourts(players.length, d.format.courts)) return null;
   const history: LineupMatch[] = d.matches
     .filter((m) => m.round < fromRound)
@@ -51,7 +51,9 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
   const { dialogRef, open: showDialog, close, onBackdropClick } = useDialog();
   const [view, setView] = useState<"edit" | "shuffle">("edit");
   const [draft, setDraft] = useState<Draft[]>([]);
-  const [round, setRound] = useState(d.currentRound ?? plan.rounds[0]);
+  // Tab ronde mengikuti format sesi — ronde lama di luar format (mis. R7 setelah ronde dikurangi ke 6) tidak tampil.
+  const rounds = plan.rounds.filter((r) => r <= d.format.rounds);
+  const [round, setRound] = useState(d.currentRound ?? rounds[0]);
   const [shuffled, setShuffled] = useState<HostLineupMatch[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, startBusy] = useTransition();
@@ -64,7 +66,7 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
 
   const openDialog = () => {
     setDraft(toDraft(d));
-    setRound(d.currentRound ?? plan.rounds[0]);
+    setRound(d.currentRound ?? rounds[0]);
     setView("edit");
     setError(null);
     showDialog();
@@ -85,7 +87,7 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
     });
 
   const saveDraft = () => {
-    const open = plan.rounds.filter(editable);
+    const open = rounds.filter(editable);
     if (!open.length) return setError("Tidak ada ronde yang masih bisa diubah.");
     const from = Math.min(...open);
     // Hanya ronde / court di format sesi sekarang (line-up lama di luar format tidak ikut dikirim).
@@ -130,7 +132,7 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
                 <span>
                   ✓ {present.length} sudah hadir · {absent.length} belum hadir
                 </span>
-                {shuffleFrom <= plan.rounds.at(-1)! && (
+                {shuffleFrom <= rounds.at(-1)! && (
                   <button
                     type="button"
                     className={styles.btnOutlineSm}
@@ -146,7 +148,7 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
               </div>
 
               <div className={styles.lineupTabs} role="tablist" aria-label="Ronde">
-                {plan.rounds.map((r) => (
+                {rounds.map((r) => (
                   <button key={r} type="button" role="tab" aria-selected={r === round} className={cx(styles.lineupTab, r === round && styles.lineupTabOn)} onClick={() => setRound(r)}>
                     {!editable(r) && <Lock size={12} aria-hidden />}
                     {plan.statusOf(r) === "live" && <span className={styles.chipDot} aria-hidden />}R{r}
@@ -203,7 +205,7 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
                 <div>
                   <h2 id="lineup-title">Acak ulang line-up</h2>
                   <span className={styles.muted}>
-                    {d.currentRound ? `R${d.currentRound} sedang dimainkan · ` : ""}R{shuffleFrom}–R{plan.rounds.at(-1)} diacak ulang
+                    {d.currentRound ? `R${d.currentRound} sedang dimainkan · ` : ""}R{shuffleFrom}–R{rounds.at(-1)} diacak ulang
                   </span>
                 </div>
                 <button type="button" className={styles.qrClose} onClick={() => setView("edit")} aria-label="Kembali">

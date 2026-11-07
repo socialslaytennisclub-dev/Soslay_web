@@ -8,7 +8,7 @@ import { formatRupiahPlain, LEVEL_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { TRIP_TYPE } from "@/lib/trips";
 import { shrinkImage } from "@/lib/image-resize";
-import { isSessionFinished, participantRemoveLock, participantsLockReason } from "@/lib/session-lock";
+import { participantRemoveLock, participantsLockReason } from "@/lib/session-lock";
 import { memberInviteWaLink } from "@/lib/wa-invite";
 import { clearParticipants, removeParticipants } from "@/server/admin/actions/play";
 import { deleteSession, discardSessionUploads, saveSession, setCheckIn, uploadSessionCover, type SessionInput } from "@/server/admin/actions/sessions";
@@ -319,8 +319,9 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Hapus per peserta: belum check-in & belum masuk line-up / skor; setelah selesai hanya tambahan admin.
   const inMatch = new Set(session.matches.flatMap((m) => [...m.a, ...m.b]));
-  // Sama dengan server: diakhiri, atau ditutup otomatis (jam selesai + jeda).
-  const finished = isSessionFinished({ status: session.status, endedAt: session.play.endedAt, endsAt: session.endsAt });
+  // Status selesai dihitung server saat halaman dimuat (diakhiri / ditutup otomatis) — tidak memakai jam
+  // browser saat render, supaya hasil server & browser sama. Server tetap mengecek ulang saat menghapus.
+  const finished = session.displayStatus === "completed";
   // Baris booking (id = memberId) bukan baris daftar peserta tambahan admin.
   const removeLock = (p: SessionParticipant) =>
     participantRemoveLock({ trip: p.source === "trip", checkedIn: isCheckedIn(p), inMatch: inMatch.has(p.id), finished, adminRow: p.source === "admin" && p.id !== p.memberId });

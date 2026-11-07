@@ -1,7 +1,7 @@
 -- Jumlah ronde / court sesi dikurangi (mis. 9 → 6 ronde) → line-up ronde / court yang tidak ada lagi
 -- (belum ada skornya) ikut dihapus. Dulu tertinggal: halaman host tetap menampilkan R7–R9 dan
--- "Simpan line-up" ditolak "Ronde / court di luar format sesi". Ronde / court yang sudah ada skornya
--- tidak boleh dibuang → pengurangan ditolak dengan pesan yang jelas.
+-- "Simpan line-up" ditolak "Ronde / court di luar format sesi". Ronde / court yang sudah ada skornya,
+-- atau ronde yang sudah dimulai, tidak boleh dibuang → pengurangan ditolak dengan pesan yang jelas.
 create function sessions_trim_lineup() returns trigger language plpgsql security definer set search_path = public as $$
 begin
   if exists (
@@ -11,6 +11,15 @@ begin
     raise exception 'Sudah ada skor di ronde / court yang mau dihapus — jumlah ronde / court minimal sampai yang sudah ada skornya.'
       using hint = 'lineup_scored';
   end if;
+  -- Ronde yang sedang / sudah dimulai (Mulai Ronde) juga tidak boleh dibuang walau belum ada skornya.
+  if new.round_count < old.round_count and (
+    coalesce(new.current_round, 0) > new.round_count
+    or exists (select 1 from unnest(new.started_rounds) r where r > new.round_count)
+  ) then
+    raise exception 'Ronde % sudah dimulai — jumlah ronde minimal sampai ronde yang sudah dimulai.',
+      greatest(coalesce(new.current_round, 0), coalesce((select max(r) from unnest(new.started_rounds) r), 0))
+      using hint = 'lineup_started';
+  end if;
   delete from session_matches
   where session_id = new.id and score_a is null and (round_no > new.round_count or court_no > new.court_count);
   return null;
@@ -19,10 +28,12 @@ create trigger sessions_trim_lineup after update of round_count, court_count on 
   for each row when (new.round_count < old.round_count or new.court_count < old.court_count)
   execute function sessions_trim_lineup();
 
--- Data lama: line-up yang sudah terlanjur di luar format (belum ada skornya).
+-- Data lama: line-up yang sudah terlanjur di luar format (belum ada skornya), hanya activity yang belum
+-- selesai — riwayat activity yang sudah selesai tidak diubah.
 delete from session_matches m
 using sessions s
-where s.id = m.session_id and m.score_a is null and (m.round_no > s.round_count or m.court_no > s.court_count);
+where s.id = m.session_id and m.score_a is null and (m.round_no > s.round_count or m.court_no > s.court_count)
+  and s.ended_at is null and s.status <> 'completed';
 
 -- Pesan host yang lebih jelas bila halaman masih memakai format lama.
 create or replace function host_save_lineup(p_session uuid, p_from_round smallint, p_matches jsonb)

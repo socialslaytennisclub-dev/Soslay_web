@@ -1117,6 +1117,12 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
     await db.query(`update session_participants set full_name = 'Sakinabila', phone = '82222', details_edited_at = now() where id = $1`, [kuy]);
     const desc = await one(`select description from finance_transactions where source_ref = $1 and amount > 0`, ['sp:' + kuy]);
     console.assert(desc.description.includes("Sakinabila") && !desc.description.includes("Tuesdy"), `keterangan Keuangan ikut nama baru (${desc.description})`);
+    // Nama yang mirip awalan keterangan ("Kuyy") → hanya bagian nama di akhir yang diganti.
+    // Tiap editan admin punya waktu baru (jam PGlite terlalu kasar untuk dua perintah beruntun → waktu eksplisit).
+    await db.query(`update session_participants set full_name = 'Kuyy', details_edited_at = now() + interval '1 minute' where id = $1`, [kuy]);
+    await db.query(`update session_participants set full_name = 'Sakinabila', details_edited_at = now() + interval '2 minutes' where id = $1`, [kuy]);
+    const desc2 = await one(`select description from finance_transactions where source_ref = $1 and amount > 0`, ['sp:' + kuy]);
+    console.assert(desc2.description === "Tiket Kuyy · Sakinabila", `ganti nama tidak merusak awalan keterangan (${desc2.description})`);
     await db.query(`update session_participants set full_name = 'Tuesdy A', phone = '81111' where id = $1`, [kuy]); // import ulang
     const after = await one(`select full_name, phone from session_participants where id = $1`, [kuy]);
     console.assert(after.full_name === "Sakinabila" && after.phone === "82222", `import ulang tidak menimpa nama/no. HP yang diubah admin (${JSON.stringify(after)})`);
@@ -1143,6 +1149,15 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
       refused = true;
     }
     console.assert(refused, "ronde yang sudah ada skornya tidak boleh dibuang");
+    // Ronde yang sedang dimainkan (belum ada skor) juga tidak boleh dibuang.
+    await db.query(`update sessions set started_rounds = '{6}', current_round = 6 where id = $1`, [ln]);
+    let refusedStarted = false;
+    try {
+      await db.query(`update sessions set round_count = 5 where id = $1`, [ln]);
+    } catch {
+      refusedStarted = true;
+    }
+    console.assert(refusedStarted, "ronde yang sudah dimulai tidak boleh dibuang");
     console.log("✓ jumlah ronde / court dikurangi → line-up di luar format terhapus (yang sudah ada skornya ditolak)");
   }
 }

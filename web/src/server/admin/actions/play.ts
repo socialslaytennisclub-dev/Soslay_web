@@ -548,6 +548,7 @@ export async function updateParticipantPayment(
   //  2. tamu ini hanya ada di activity ini → datanya dibetulkan (mis. salah ketik);
   //  3. pernah ikut activity lain → slotnya digantikan orang lain: dipisah jadi tamu baru.
   let ghostId: string | null = null;
+  let createdGhost = false;
   let fixGhost = false;
   if (guest && row.ghost_id && (name !== row.full_name || phone !== (row.phone ?? null))) {
     const [{ data: known }, { count: elsewhere }] = await Promise.all([
@@ -562,6 +563,7 @@ export async function updateParticipantPayment(
       const { data: created, error: ghostError } = await supabase.from("ghost_members").insert({ full_name: name, phone }).select("id").single();
       if (ghostError || !created) return { ok: false, error: `Gagal mencatat tamu: ${ghostError?.message ?? "coba lagi"}` };
       ghostId = created.id as string;
+      createdGhost = true;
     } else {
       fixGhost = true;
     }
@@ -580,7 +582,11 @@ export async function updateParticipantPayment(
     })
     .eq("id", participantId)
     .eq("session_id", sessionId);
-  if (error) return { ok: false, error: `Gagal menyimpan: ${error.message}` };
+  if (error) {
+    // Tamu baru yang dibuat untuk perubahan ini tidak jadi dipakai.
+    if (createdGhost && ghostId) await supabase.from("ghost_members").delete().eq("id", ghostId);
+    return { ok: false, error: `Gagal menyimpan: ${error.message}` };
+  }
   if (fixGhost) await supabase.from("ghost_members").update({ full_name: name, phone }).eq("id", row.ghost_id).is("claimed_by", null);
 
   const who = guest ? name : (row.full_name as string);
@@ -695,12 +701,13 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
   const addMember = async (member: MemberIdentity): Promise<ActionResult> => {
     const [{ count }, { data: booking }] = await Promise.all([
       supabase.from("session_participants").select("id", { count: "exact", head: true }).eq("session_id", sessionId).eq("member_id", member.id),
-      supabase.from("bookings").select("source").eq("session_id", sessionId).eq("member_id", member.id).neq("status", "cancelled").maybeSingle(),
+      supabase.from("bookings").select("source, payment_status").eq("session_id", sessionId).eq("member_id", member.id).neq("status", "cancelled").maybeSingle(),
     ]);
     if (count) return { ok: false, error: `${member.fullName} sudah terdaftar di sesi ini.` };
-    // Sudah booking sendiri (website / paket trip) → bayarnya tercatat lewat booking itu; baris ini Rp0
-    // supaya Keuangan tidak mencatat pendapatan dua kali.
-    const price = booking && booking.source !== "admin" && booking.source !== "kuy" ? 0 : state.price;
+    // Sudah booking sendiri (website / paket trip) & sudah lunas → bayarnya tercatat lewat booking itu; baris
+    // ini Rp0 supaya Keuangan tidak mencatat dua kali. Booking belum dibayar (bayar di lapangan) → harga activity.
+    const paidByBooking = Boolean(booking && booking.source !== "admin" && booking.source !== "kuy" && booking.payment_status === "paid");
+    const price = paidByBooking ? 0 : state.price;
     const { error } = await supabase.from("session_participants").insert({
       session_id: sessionId,
       kuy_reg_no: regNo,
@@ -718,7 +725,7 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
     if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
     await audit(auth.userId, `menambah peserta ${member.fullName} (manual)`, "session", sessionId);
     refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
-    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta · ${price ? formatRupiahPlain(price) : "bayar lewat booking website"}${lateNote}.` };
+    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta · ${paidByBooking ? "sudah bayar lewat booking" : formatRupiahPlain(price)}${lateNote}.` };
   };
 
   if ("memberId" in input) return byId ? addMember(byId) : { ok: false, error: "Member tidak ditemukan." };
