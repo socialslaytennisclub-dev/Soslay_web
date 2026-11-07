@@ -290,6 +290,22 @@ export async function deleteSession(id: string): Promise<ActionResult> {
 }
 
 /**
+ * Hapus activity salah input beserta pesertanya — juga yang sudah lewat / selesai. Admin harus mengetik
+ * judul activity. RPC delete_session_mistake menetralkan poin kehadiran / bonus juara dan (lewat trigger
+ * Keuangan) mengoreksi transaksi otomatis peserta. Activity paket trip ditolak.
+ */
+export async function deleteSessionMistake(id: string, typedTitle: string): Promise<ActionResult> {
+  const auth = await requireEditor("activities");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const supabase = await createSupabaseServerClient();
+  const { data: people, error } = await supabase.rpc("delete_session_mistake", { p_session: id, p_title: typedTitle.trim() });
+  if (error) return { ok: false, error: `Gagal menghapus: ${error.message}` };
+  await audit(auth.userId, `menghapus activity salah input "${typedTitle.trim()}" beserta ${people ?? 0} peserta`, "session", id);
+  refresh();
+  redirect("/admin/activities?deleted=1");
+}
+
+/**
  * Check-in / batal check-in peserta. Peserta import Kuyy lewat RPC (admin atau host sesi);
  * peserta dari booking (tanpa import) langsung di bookings. Poin kehadiran diberi/ditarik
  * oleh trigger database.

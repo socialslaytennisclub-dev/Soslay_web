@@ -1281,3 +1281,40 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert(after.d === 10 && after.n === 1, `booking dibuat ulang lalu check-in → ${after.d} pts (${after.n} baris)`);
   console.log("✓ poin kehadiran sekali per activity: check-in dobel / batal lalu check-in / booking dibuat ulang");
 }
+
+// Hapus activity salah input (sudah selesai, ada peserta lunas & check-in): peserta, booking & activity
+// terhapus; Keuangan otomatis dikoreksi jadi 0; poin kehadiran dinetralkan baris penyesuaian.
+{
+  await as(null);
+  await db.exec(`update finance_settings set go_live_date = '2020-01-01'`);
+  const venue = (await one(`select id from venues limit 1`)).id;
+  const S = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, points_per_attendance)
+    values ('salah-input', 'Mabar Salah Input', 'weekly-mabar', $1, now() - interval '5 hours', now() - interval '3 hours', 8, 'published', 10) returning id`, [venue])).id;
+  const { id: m } = await one(`insert into auth.users default values returning id`);
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Salah Input', 'salah.input@mail.com')`, [m]);
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount, member_id) values ($1, 'Member', 'K1', 'kmember', 220000, $2)`, [S, m]);
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount) values ($1, 'Tamu Kuyy', 'K2', 'ktamu', 220000)`, [S]);
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, source, payment_channel, amount) values ($1, 'Tamu Manual', 'M1', 'admin', 'manual', 220000)`, [S]);
+  await db.query(`update session_participants set checked_in_at = now() where session_id = $1 and member_id = $2`, [S, m]);
+  await db.query(`update sessions set status = 'completed', ended_at = now() where id = $1`, [S]);
+  const refs = (await db.query(`select 'sp:' || id r from session_participants where session_id = $1`, [S])).rows.map((r) => r.r);
+  const fin = async () => Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source_ref = any($1) and deleted_at is null`, [refs])).s);
+  const bal = async () => Number((await one(`select coalesce(sum(delta), 0) s from points_ledger where member_id = $1`, [m])).s);
+  const before = await bal();
+  console.assert((await fin()) === 660000, `activity selesai → 3 peserta lunas di Keuangan (${await fin()})`);
+  const fails = (sql, params) => db.query(sql, params).then(() => false, () => true);
+  await as(m);
+  console.assert(await fails(`select delete_session_mistake($1, 'Mabar Salah Input')`, [S]), "member biasa tidak boleh menghapus activity");
+  const boss = (await one(`insert into auth.users default values returning id`)).id;
+  await as(null);
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Hapus', 'hapus@soslay.test', 'active' from roles where name = 'Super Admin'`, [boss]);
+  await as(boss);
+  console.assert(await fails(`select delete_session_mistake($1, 'Mabar Salah')`, [S]), "judul tidak sama → ditolak");
+  const n = (await one(`select delete_session_mistake($1, 'Mabar Salah Input') n`, [S])).n;
+  await as(null);
+  console.assert(n === 3, `jumlah peserta terhapus ${n}`);
+  console.assert((await one(`select count(*)::int n from sessions where id = $1`, [S])).n === 0 && (await one(`select count(*)::int n from bookings where session_id = $1`, [S])).n === 0, "activity & booking terhapus");
+  console.assert((await fin()) === 0, `Keuangan dikoreksi jadi 0 (${await fin()})`);
+  console.assert((await bal()) === before - 10, `poin kehadiran dinetralkan (${before} → ${await bal()})`);
+  console.log("✓ hapus activity salah input: peserta & booking terhapus, Keuangan dikoreksi, poin kehadiran dinetralkan");
+}
