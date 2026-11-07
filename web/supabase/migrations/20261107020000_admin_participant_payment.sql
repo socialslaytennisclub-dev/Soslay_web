@@ -63,3 +63,35 @@ create trigger session_participants_sync_payment after insert or update of payme
 
 -- Peserta tambahan admin dibayar langsung (bukan lewat Kuyy) → jalur bawaan Manual.
 update session_participants set payment_channel = 'manual' where source = 'admin' and amount = 0 and payment_channel = 'kuy';
+
+-- Nama / nomor HP tamu yang diubah admin (mis. slot digantikan orang lain) tidak ditimpa import ulang
+-- file Kuyy — sama seperti nominal (amount_edited_at).
+alter table session_participants add column details_edited_at timestamptz;
+
+create or replace function session_participant_keep_import_edits() returns trigger language plpgsql as $$
+begin
+  new.paid_at := coalesce(new.paid_at, old.paid_at);
+  if old.amount_edited_at is not null and new.amount_edited_at is not distinct from old.amount_edited_at then
+    new.amount := old.amount;
+  end if;
+  if old.details_edited_at is not null and new.details_edited_at is not distinct from old.details_edited_at then
+    new.full_name := old.full_name;
+    new.phone := old.phone;
+    new.email := old.email;
+    new.ghost_id := old.ghost_id;
+  end if;
+  return new;
+end $$;
+drop trigger session_participants_keep_import_edits on session_participants;
+create trigger session_participants_keep_import_edits before update of paid_at, amount, full_name, phone, email, ghost_id on session_participants
+  for each row execute function session_participant_keep_import_edits();
+
+-- Nama peserta diubah → keterangan transaksi Keuangan otomatisnya ikut ("Tiket Kuyy · <nama>").
+create function finance_on_participant_renamed() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  update finance_transactions set description = replace(description, old.full_name, new.full_name)
+  where source in ('kuyy_import', 'ticket_manual_paid') and source_ref = 'sp:' || new.id;
+  return null;
+end $$;
+create trigger session_participants_finance_rename after update of full_name on session_participants
+  for each row when (old.full_name is distinct from new.full_name) execute function finance_on_participant_renamed();

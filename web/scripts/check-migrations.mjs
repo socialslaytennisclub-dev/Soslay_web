@@ -1110,7 +1110,17 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
     console.assert((await ref(adm)) === 200000, `peserta admin diubah lunas Rp200.000 → tercatat (${await ref(adm)})`);
     await db.query(`update session_participants set payment_status = 'pending' where id = $1`, [adm]);
     console.assert((await ref(adm)) === 0, "peserta admin jadi menunggu → koreksi");
+    // Tamu Kuyy diganti orangnya (nama/no. HP diubah admin) → import ulang file Kuyy tidak menimpanya;
+    // keterangan transaksi Keuangan ikut nama baru.
+    const kuy = (await one(`insert into session_participants (session_id, full_name, phone, kuy_reg_no, kuy_username, amount) values ($1, 'Tuesdy A', '81111', 'K1', 'buyer1', 230000) returning id`, [sess])).id;
+    console.assert((await ref(kuy)) === 230000, "baris Kuyy lunas tercatat");
+    await db.query(`update session_participants set full_name = 'Sakinabila', phone = '82222', details_edited_at = now() where id = $1`, [kuy]);
+    const desc = await one(`select description from finance_transactions where source_ref = $1 and amount > 0`, ['sp:' + kuy]);
+    console.assert(desc.description.includes("Sakinabila") && !desc.description.includes("Tuesdy"), `keterangan Keuangan ikut nama baru (${desc.description})`);
+    await db.query(`update session_participants set full_name = 'Tuesdy A', phone = '81111' where id = $1`, [kuy]); // import ulang
+    const after = await one(`select full_name, phone from session_participants where id = $1`, [kuy]);
+    console.assert(after.full_name === "Sakinabila" && after.phone === "82222", `import ulang tidak menimpa nama/no. HP yang diubah admin (${JSON.stringify(after)})`);
     await db.exec(`update finance_settings set go_live_date = '2026-12-01'`);
-    console.log("✓ peserta tambahan admin: ubah nominal / status / via → Keuangan + koreksi");
+    console.log("✓ peserta tambahan admin: ubah nominal / status / via → Keuangan + koreksi; nama tamu yang diubah tahan import ulang");
   }
 }

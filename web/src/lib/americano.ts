@@ -85,9 +85,10 @@ function record(h: History, matches: LineupMatch[], players: string[]) {
   h.lastMeet = met;
 }
 
-// Bobot penalti: kelompok 4 orang yang sama >> partner berulang > bertemu lagi di ronde berikutnya >
-// rest dua kali berturut-turut > lawan berulang. 1–2 orang bertemu lagi masih wajar (penalti kecil).
-const COST = { sameGroup: 60, partner: 10, metLastRound: 4, restTwice: 3, opponent: 1, level: 4 };
+// Bobot penalti: kelompok 4 orang yang sama >> selisih level tim (Rotating) ≈ partner berulang >
+// rest dua kali berturut-turut > bertemu lagi di ronde berikutnya > lawan berulang. 1–2 orang bertemu
+// lagi masih wajar (penalti kecil); rest dua kali lebih mahal dari satu pertemuan ulang.
+const COST = { sameGroup: 60, partner: 10, level: 10, restTwice: 8, metLastRound: 4, opponent: 1 };
 
 /** Penalti kelompok 4 orang di satu court (sama untuk ketiga cara membagi tim): kelompok sama & bertemu lagi dari ronde lalu. */
 function groupCost(h: History, four: string[]) {

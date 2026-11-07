@@ -435,7 +435,7 @@ export async function removeParticipants(sessionId: string, participants: { id: 
     const { data: rows } = await supabase.from("session_participants").select("id, full_name, member_id, checked_in_at, source").eq("session_id", sessionId).in("id", rosterIds);
     if ((rows?.length ?? 0) !== rosterIds.length) return { ok: false, error: "Sebagian peserta tidak ditemukan — muat ulang halaman." };
     for (const r of rows!) {
-      const lock = participantRemoveLock({ checkedIn: Boolean(r.checked_in_at), inMatch: inMatch.has(r.id as string), finished, source: r.source as string });
+      const lock = participantRemoveLock({ trip: r.source === "trip", checkedIn: Boolean(r.checked_in_at), inMatch: inMatch.has(r.id as string), finished, adminRow: r.source === "admin" });
       if (lock) return { ok: false, error: `${r.full_name}: ${lock}` };
     }
     const { error } = await supabase.from("session_participants").delete().in("id", rosterIds);
@@ -543,29 +543,45 @@ export async function updateParticipantPayment(
   if (phoneError) return { ok: false, error: phoneError };
   const phone = guest && input.phone?.trim() ? localPhone(input.phone) : null;
 
-  const { error } = await supabase
-    .from("session_participants")
-    // amount_edited_at → import ulang file Kuyy tidak menimpa nominal ini (trigger keep_import_edits).
-    .update({ amount, payment_status: payment, payment_channel: via, amount_edited_at: new Date().toISOString(), ...(guest ? { full_name: name, phone } : {}) })
-    .eq("id", participantId)
-    .eq("session_id", sessionId);
-  if (error) return { ok: false, error: `Gagal menyimpan: ${error.message}` };
+  // Data tamu (ghost member) mengikuti perubahan nama / nomor tanpa mengubah riwayat orang lain:
+  //  1. nomor baru sudah tercatat sebagai tamu lain (mis. orang pengganti yang sempat ditambahkan admin) → pakai tamu itu;
+  //  2. tamu ini hanya ada di activity ini → datanya dibetulkan (mis. salah ketik);
+  //  3. pernah ikut activity lain → slotnya digantikan orang lain: dipisah jadi tamu baru.
+  let ghostId: string | null = null;
+  let fixGhost = false;
   if (guest && row.ghost_id && (name !== row.full_name || phone !== (row.phone ?? null))) {
-    // Data tamu (ghost member) mengikuti perubahan tanpa mengubah riwayat orang lain:
-    //  1. nomor baru sudah tercatat sebagai tamu lain (mis. orang pengganti yang sempat ditambahkan admin) → pakai tamu itu;
-    //  2. tamu ini hanya ada di activity ini → datanya dibetulkan (mis. salah ketik);
-    //  3. pernah ikut activity lain → slotnya digantikan orang lain: dipisah jadi tamu baru.
     const [{ data: known }, { count: elsewhere }] = await Promise.all([
       phone ? supabase.from("ghost_members").select("id").eq("phone", phone).is("claimed_by", null).neq("id", row.ghost_id).limit(1).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from("session_participants").select("id", { count: "exact", head: true }).eq("ghost_id", row.ghost_id).neq("id", participantId),
     ]);
-    if (!known && !elsewhere) {
-      await supabase.from("ghost_members").update({ full_name: name, phone }).eq("id", row.ghost_id).is("claimed_by", null);
+    if (known) {
+      const { count: twin } = await supabase.from("session_participants").select("id", { count: "exact", head: true }).eq("session_id", sessionId).eq("ghost_id", known.id).neq("id", participantId);
+      if (twin) return { ok: false, error: "Tamu dengan nomor ini sudah ada di activity ini — hapus baris dobelnya dulu, lalu simpan lagi." };
+      ghostId = known.id as string;
+    } else if (elsewhere) {
+      const { data: created, error: ghostError } = await supabase.from("ghost_members").insert({ full_name: name, phone }).select("id").single();
+      if (ghostError || !created) return { ok: false, error: `Gagal mencatat tamu: ${ghostError?.message ?? "coba lagi"}` };
+      ghostId = created.id as string;
     } else {
-      const ghostId = known?.id ?? (await supabase.from("ghost_members").insert({ full_name: name, phone }).select("id").single()).data?.id;
-      if (ghostId) await supabase.from("session_participants").update({ ghost_id: ghostId }).eq("id", participantId);
+      fixGhost = true;
     }
   }
+
+  const now = new Date().toISOString();
+  const { error } = await supabase
+    .from("session_participants")
+    // *_edited_at → import ulang file Kuyy tidak menimpa nominal / nama & nomor ini (trigger keep_import_edits).
+    .update({
+      amount,
+      payment_status: payment,
+      payment_channel: via,
+      amount_edited_at: now,
+      ...(guest ? { full_name: name, phone, details_edited_at: now, ...(ghostId ? { ghost_id: ghostId } : {}) } : {}),
+    })
+    .eq("id", participantId)
+    .eq("session_id", sessionId);
+  if (error) return { ok: false, error: `Gagal menyimpan: ${error.message}` };
+  if (fixGhost) await supabase.from("ghost_members").update({ full_name: name, phone }).eq("id", row.ghost_id).is("claimed_by", null);
 
   const who = guest ? name : (row.full_name as string);
   const status = `${PAYMENT_LABEL[payment].toLowerCase()} · via ${PAYMENT_CHANNEL_LABEL[via]}`;
@@ -677,14 +693,20 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
   const lateNote = state.finished ? " · sesi sudah selesai, otomatis tercatat hadir" : "";
 
   const addMember = async (member: MemberIdentity): Promise<ActionResult> => {
-    const { count } = await supabase.from("session_participants").select("id", { count: "exact", head: true }).eq("session_id", sessionId).eq("member_id", member.id);
+    const [{ count }, { data: booking }] = await Promise.all([
+      supabase.from("session_participants").select("id", { count: "exact", head: true }).eq("session_id", sessionId).eq("member_id", member.id),
+      supabase.from("bookings").select("source").eq("session_id", sessionId).eq("member_id", member.id).neq("status", "cancelled").maybeSingle(),
+    ]);
     if (count) return { ok: false, error: `${member.fullName} sudah terdaftar di sesi ini.` };
+    // Sudah booking sendiri (website / paket trip) → bayarnya tercatat lewat booking itu; baris ini Rp0
+    // supaya Keuangan tidak mencatat pendapatan dua kali.
+    const price = booking && booking.source !== "admin" && booking.source !== "kuy" ? 0 : state.price;
     const { error } = await supabase.from("session_participants").insert({
       session_id: sessionId,
       kuy_reg_no: regNo,
       source: "admin",
       payment_channel: "manual", // dibayar langsung, bukan lewat Kuyy
-      amount: state.price, // harga activity; DP / harga lain → ⋮ Ubah pembayaran
+      amount: price, // harga activity; DP / harga lain → ⋮ Ubah pembayaran
       member_id: member.id,
       full_name: member.fullName,
       email: member.email || null,
@@ -696,7 +718,7 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
     if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
     await audit(auth.userId, `menambah peserta ${member.fullName} (manual)`, "session", sessionId);
     refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
-    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta · ${formatRupiahPlain(state.price)}${lateNote}.` };
+    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta · ${price ? formatRupiahPlain(price) : "bayar lewat booking website"}${lateNote}.` };
   };
 
   if ("memberId" in input) return byId ? addMember(byId) : { ok: false, error: "Member tidak ditemukan." };
