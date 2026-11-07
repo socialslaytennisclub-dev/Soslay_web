@@ -1157,46 +1157,40 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   }
 }
 
-// Peringkat juara: total poin sama → selisih skor menentukan (yang lebih produktif di atas).
+// Peringkat juara: total poin / jumlah menang sama → selisih skor menentukan (yang lebih produktif di atas).
 {
   await as(null);
-  const s = (await one(
-    `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, match_format, leaderboard_mode, court_count, round_count)
-     values ('rank-diff', 'Rank Diff', 'weekly-mabar', $1, now() - interval '3 hours', now() - interval '1 hour', 20, 'published', 'americano', 'points', 2, 1) returning id`,
-    [venue],
-  )).id;
   const members = [];
-  const pl = [];
   for (let i = 1; i <= 8; i++) {
-    const { id: m } = await one(`insert into auth.users default values returning id`);
-    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [m, `Rank ${i}`, `rank${i}@mail.com`]);
-    members.push(m);
-    pl.push((await one(`insert into session_participants (session_id, full_name, kuy_reg_no, source, member_id) values ($1, $2, $3, 'admin', $4) returning id`, [s, `Rank ${i}`, `RK${i}`, m])).id);
+    const { id } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, `Rank ${i}`, `rank${i}@mail.com`]);
+    members.push(id);
   }
-  // Court 1: 48–10 (selisih +38) · court 2: 48–40 (selisih +8) → sama-sama 48 poin.
-  await db.query(
-    `insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2, score_a, score_b) values ($1, 1, 1, $2, $3, $4, $5, 48, 10), ($1, 1, 2, $6, $7, $8, $9, 48, 40)`,
-    [s, ...pl],
-  );
-  await db.query(`select finish_session($1, null, now())`, [s]);
-  const bonus = async (m) => (await one(`select coalesce(sum(delta), 0)::int d from points_ledger where member_id = $1 and note like 'Bonus juara%'`, [m])).d;
-  const [first, third] = [await bonus(members[0]), await bonus(members[4])];
+  // Satu ronde, 2 court, 8 member: court 1 = member 1–4, court 2 = member 5–8. Hasil: bonus juara member 1 & 5.
+  const podium = async (title, mode, [[a1, b1], [a2, b2]]) => {
+    const s = (await one(
+      `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, match_format, leaderboard_mode, court_count, round_count)
+       values ($1, $1, 'weekly-mabar', $2, now() - interval '3 hours', now() - interval '1 hour', 20, 'published', 'americano', $3, 2, 1) returning id`,
+      [title, venue, mode],
+    )).id;
+    const { rows } = await db.query(
+      `insert into session_participants (session_id, full_name, kuy_reg_no, source, member_id)
+       select $1, 'Rank ' || i, $2 || i, 'admin', m from unnest($3::uuid[]) with ordinality as t(m, i) order by i returning id`,
+      [s, title, members],
+    );
+    await db.query(
+      `insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2, score_a, score_b) values ($1, 1, 1, $2, $3, $4, $5, $10, $11), ($1, 1, 2, $6, $7, $8, $9, $12, $13)`,
+      [s, ...rows.map((r) => r.id), a1, b1, a2, b2],
+    );
+    await db.query(`select finish_session($1, null, now())`, [s]);
+    const bonus = async (m) => (await one(`select coalesce(sum(delta), 0)::int d from points_ledger where member_id = $1 and note = 'Bonus juara #' || $3 || ' · ' || $2`, [m, title, m === members[0] ? 1 : 3])).d;
+    return [await bonus(members[0]), await bonus(members[4])];
+  };
+  // Point: 48–10 (selisih +38) vs 48–40 (selisih +8) → sama-sama 48 poin.
+  const [first, third] = await podium("rank-diff", "points", [[48, 10], [48, 40]]);
   console.assert(first === 100 && third === 50, `poin sama 48: selisih +38 juara 1 (+${first}), selisih +8 juara 3 (+${third})`);
-  // Mode Win: menang sama → selisih lebih besar di atas walau total poinnya lebih kecil.
-  // Court 1: 21–5 (selisih +16, 21 poin) · court 2: 30–25 (selisih +5, 30 poin).
-  const w = (await one(
-    `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, match_format, leaderboard_mode, court_count, round_count)
-     values ('rank-diff-win', 'Rank Diff Win', 'weekly-mabar', $1, now() - interval '3 hours', now() - interval '1 hour', 20, 'published', 'americano', 'wins', 2, 1) returning id`,
-    [venue],
-  )).id;
-  const wp = [];
-  for (let i = 0; i < 8; i++) wp.push((await one(`insert into session_participants (session_id, full_name, kuy_reg_no, source, member_id) values ($1, $2, $3, 'admin', $4) returning id`, [w, `Rank ${i + 1}`, `RW${i}`, members[i]])).id);
-  await db.query(
-    `insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2, score_a, score_b) values ($1, 1, 1, $2, $3, $4, $5, 21, 5), ($1, 1, 2, $6, $7, $8, $9, 30, 25)`,
-    [w, ...wp],
-  );
-  await db.query(`select finish_session($1, null, now())`, [w]);
-  const [winFirst, winThird] = [(await bonus(members[0])) - first, (await bonus(members[4])) - third];
+  // Win: 21–5 (selisih +16, 21 poin) vs 30–25 (selisih +5, 30 poin) → menang sama, selisih menang atas poin.
+  const [winFirst, winThird] = await podium("rank-diff-win", "wins", [[21, 5], [30, 25]]);
   console.assert(winFirst === 100 && winThird === 50, `menang sama: selisih +16 juara 1 (+${winFirst}), selisih +5 juara 3 (+${winThird})`);
   console.log("✓ peringkat juara: total poin / jumlah menang sama → selisih skor menentukan");
 }

@@ -1,7 +1,7 @@
 -- Penentu peringkat kalau nilai sama: selisih skor (skor sendiri − lawan). Mode Point = total poin →
 -- selisih → menang; mode Win = menang → selisih → total poin. Contoh: dua pemain sama-sama 48 poin →
 -- yang selisihnya lebih besar (lebih produktif) juara di atas. Sama dengan web/src/lib/standings.ts
--- (rankKey). Isi fungsi selain urutan rank() sama persis dengan 20261101000000_session_close_grace.
+-- (RANK_ORDER). Isi fungsi selain urutan rank() sama persis dengan 20261101000000_session_close_grace.
 
 create or replace function finish_session(p_session uuid, p_by uuid, p_at timestamptz)
 returns void language plpgsql security definer set search_path = public as $$
@@ -22,9 +22,7 @@ begin
          format('Bonus juara #%s · %s', r.rk, v_s.title)
   from (
     select pid, rank() over (order by
-             case when v_s.leaderboard_mode = 'wins' then wins else pts end desc,
-             diff desc,
-             case when v_s.leaderboard_mode = 'wins' then pts else wins end desc) as rk
+             case when v_s.leaderboard_mode = 'wins' then array[wins, diff, pts] else array[pts, diff, wins] end desc) as rk
     from (
       select pid, sum(own) as pts, sum(own - opp) as diff, count(*) filter (where own > opp) as wins
       from (

@@ -1534,13 +1534,16 @@ button.link {
   font-weight: var(--weight-bold);
 }
 
-/* Selisih skor (penentu kalau nilai sama) — baris kecil di bawah poin / menang. */
-.boardDiff,
-.finalValue small {
+/* Selisih skor (penentu kalau nilai sama) — baris kecil di bawah poin / menang. Warna redup ikut
+   tabelnya (live: opacity di sini; final: warna `.finalBoard li small`). */
+.scoreDiff {
   display: block;
   font-family: var(--font-body);
   font-size: 11px;
   font-weight: var(--weight-medium);
+}
+
+.boardValue .scoreDiff {
   opacity: 0.75;
 }
 

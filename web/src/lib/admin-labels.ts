@@ -1,3 +1,4 @@
+import { formatAngka, formatSigned } from "./format";
 import type {
   BonusKey,
   BookingStatus,
@@ -79,7 +80,7 @@ export const BONUS_LABEL: Record<BonusKey, { label: string; hint: string }> = {
 };
 
 /** "1.250 pts" / "−300 pts"; `signed` menambah "+" untuk angka positif. */
-export const formatPoints = (n: number, signed = false) => `${n < 0 ? "−" : signed && n > 0 ? "+" : ""}${Math.abs(n).toLocaleString("id-ID")} pts`;
+export const formatPoints = (n: number, signed = false) => `${signed || n < 0 ? formatSigned(n) : formatAngka(n)} pts`;
 
 /** Status tampilan sesi di daftar Activities. */
 export const SESSION_STATUS_LABEL: Record<SessionDisplayStatus, string> = {

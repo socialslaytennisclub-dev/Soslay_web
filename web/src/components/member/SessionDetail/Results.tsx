@@ -3,7 +3,8 @@ import Link from "next/link";
 import { cx } from "@/lib/cx";
 import { formatAngka, formatTanggalPendek } from "@/lib/format";
 import { isUnstarted, roundList } from "@/lib/rounds";
-import { finalRanks, formatDiff, PODIUM_BONUS, type Ranked, sessionPoints } from "@/lib/standings";
+import { finalRanks, PODIUM_BONUS, type Ranked, sessionPoints, tieRule } from "@/lib/standings";
+import { formatSigned } from "@/lib/format";
 import { initials, teamName } from "@/lib/text";
 import type { MemberSessionDetail } from "@/server/member/session-detail";
 import { perspective, planOf } from "./LiveCards";
@@ -114,10 +115,19 @@ export function ResultsTab({ detail: d }: { detail: MemberSessionDetail }) {
               );
             })}
           </ul>
-          <p className={styles.small}>{wins ? "Peringkat diurutkan dari jumlah menang, lalu total poin." : "Poin individu = skor tim kamu di setiap match yang kamu mainkan."}</p>
+          <p className={styles.small}>{wins ? "Peringkat diurutkan dari jumlah menang" : "Poin individu = skor tim kamu di setiap match yang kamu mainkan; peringkat dari total poin"}. {tieRule(d.format.leaderboardMode)}.</p>
         </section>
       )}
     </>
+  );
+}
+
+/** Selisih skor (penentu kalau nilai sama) — angka kecil di bawah poin / menang di leaderboard. */
+export function ScoreDiff({ n }: { n: number }) {
+  return (
+    <small className={styles.scoreDiff} title="Selisih skor">
+      {formatSigned(n)}
+    </small>
   );
 }
 
@@ -140,9 +150,9 @@ function FinalBoard({ detail: d, ranks }: { detail: MemberSessionDetail; ranks: 
       <small>
         {s.played}/{s.total}
       </small>
-      <strong className={styles.finalValue}>
+      <strong>
         {value}
-        <small title="Selisih skor">{formatDiff(s.diff)}</small>
+        <ScoreDiff n={s.diff} />
       </strong>
     </li>
   );
@@ -167,7 +177,7 @@ function FinalBoard({ detail: d, ranks }: { detail: MemberSessionDetail; ranks: 
           <ol>{ranks.slice(TOP).map(row)}</ol>
         </details>
       )}
-      <p className={styles.finalNote}>{d.format.leaderboardMode === "wins" ? "Menang sama → selisih skor (+/−, angka kecil), lalu total poin" : "Poin sama → selisih skor (+/−, angka kecil), lalu jumlah menang"}; yang masih sama berbagi peringkat (=). Hanya match yang diinput host yang dihitung.</p>
+      <p className={styles.finalNote}>{tieRule(d.format.leaderboardMode)} — selisih = angka kecil di bawah nilai; yang masih sama berbagi peringkat (=). Hanya match yang diinput host yang dihitung.</p>
     </section>
   );
 }

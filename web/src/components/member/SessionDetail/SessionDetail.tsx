@@ -4,9 +4,9 @@ import { Container } from "@/components/ui";
 import { cx } from "@/lib/cx";
 import { CITY_TZ_LABEL, formatAngka, formatJamRange, formatRupiah, formatTanggalISO, formatTanggalPendek } from "@/lib/format";
 import { planRounds, ROUND_STATUS_LABEL, skippedLabel } from "@/lib/rounds";
-import { formatDiff, rankKey } from "@/lib/standings";
+import { finalRanks, tieRule } from "@/lib/standings";
 import { initials, teamName } from "@/lib/text";
-import type { DetailMatch, DetailStanding, MemberSessionDetail } from "@/server/member/session-detail";
+import type { DetailMatch, MemberSessionDetail } from "@/server/member/session-detail";
 import { SelfCheckIn } from "@/components/member/CheckIn/SelfCheckIn";
 import { Countdown } from "./Countdown";
 import { HostLive } from "./HostPanel";
@@ -15,7 +15,7 @@ import { LiveRefresh } from "./LiveRefresh";
 import { maxRound, NOT_IN_LINEUP, perspective, PlayerLiveCard } from "./LiveCards";
 import { ParticipantList } from "./ParticipantList";
 import { QrCheckIn } from "./QrCheckIn";
-import { DoneSide, HostResults, PhotosTab, ResultsTab } from "./Results";
+import { DoneSide, HostResults, PhotosTab, ResultsTab, ScoreDiff } from "./Results";
 import { ReviewTab } from "./ReviewForm";
 import styles from "./SessionDetail.module.css";
 
@@ -486,23 +486,6 @@ function HostCard({ detail: d }: { detail: MemberSessionDetail }) {
   );
 }
 
-/** Peringkat dengan seri (Figma: "=5"): pemain yang sama persis (nilai utama, pembanding, selisih) berbagi nomor. */
-function ranks(d: MemberSessionDetail) {
-  const mode = d.format.leaderboardMode;
-  const key = (s: DetailStanding) => rankKey(s, mode).join();
-  // Standings sudah terurut → nilai sama selalu berdampingan: hitung posisi pertama & jumlahnya sekali jalan.
-  const groups = new Map<string, { first: number; count: number }>();
-  d.standings.forEach((s, i) => {
-    const g = groups.get(key(s));
-    if (g) g.count += 1;
-    else groups.set(key(s), { first: i + 1, count: 1 });
-  });
-  return d.standings.map((s) => {
-    const g = groups.get(key(s))!;
-    return { s, rank: `${g.count > 1 ? "=" : ""}${g.first}`, value: mode === "wins" ? s.wins : s.points };
-  });
-}
-
 function Progress({ detail: d, label }: { detail: MemberSessionDetail; label: string }) {
   const done = d.matches.filter((m) => m.scoreA !== null).length;
   return (
@@ -550,9 +533,9 @@ function LeaderboardTab({ detail: d }: { detail: MemberSessionDetail }) {
           </tr>
         </thead>
         <tbody>
-          {ranks(d).map(({ s, rank, value }) => (
+          {finalRanks(d.standings, d.format.leaderboardMode, { includeUnplayed: true }).map(({ s, rank, tie, value }) => (
             <tr key={s.id} className={cx(s.me && styles.boardMe2)}>
-              <td className={styles.boardRank}>{started ? rank : "–"}</td>
+              <td className={styles.boardRank}>{started ? `${tie ? "=" : ""}${rank}` : "–"}</td>
               <td>
                 <span className={styles.boardPlayer}>
                   <span className={styles.miniFace}>{initials(s.name)}</span>
@@ -565,15 +548,13 @@ function LeaderboardTab({ detail: d }: { detail: MemberSessionDetail }) {
               </td>
               <td className={styles.boardValue}>
                 {value}
-                <small className={styles.boardDiff} title="Selisih skor">
-                  {formatDiff(s.diff)}
-                </small>
+                <ScoreDiff n={s.diff} />
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      <p className={styles.boardNote}>{started ? `${wins ? "Menang sama → selisih skor (+/−, angka kecil), lalu total poin" : "Poin sama → selisih skor (+/−, angka kecil), lalu jumlah menang"}; yang masih sama berbagi peringkat (=). Hanya match yang sudah diinput host yang dihitung.` : "Belum ada skor masuk — peringkat bergerak setelah host menginput skor match pertama."}</p>
+      <p className={styles.boardNote}>{started ? `${tieRule(d.format.leaderboardMode)} — selisih = angka kecil di bawah nilai; yang masih sama berbagi peringkat (=). Hanya match yang sudah diinput host yang dihitung.` : "Belum ada skor masuk — peringkat bergerak setelah host menginput skor match pertama."}</p>
     </section>
   );
 }

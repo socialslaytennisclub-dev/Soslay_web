@@ -59,7 +59,15 @@ type History = {
 };
 
 const bump = (map: Map<string, number>, key: string) => map.set(key, (map.get(key) ?? 0) + 1);
-const groupKey = (four: string[]) => [...four].sort().join("|");
+/** Kunci kelompok 4 orang (urutan pemain tidak berpengaruh) — tanpa salin & sort array di jalur panas. */
+function groupKey(a: string, b: string, c: string, d: string) {
+  if (a > b) [a, b] = [b, a];
+  if (c > d) [c, d] = [d, c];
+  if (a > c) [a, c] = [c, a];
+  if (b > d) [b, d] = [d, b];
+  if (b > c) [b, c] = [c, b];
+  return `${a}|${b}|${c}|${d}`;
+}
 const pairsOf = (four: string[]) => four.flatMap((x, i) => four.slice(i + 1).map((y) => pairKey(x, y)));
 
 function emptyHistory(players: string[]): History {
@@ -78,7 +86,7 @@ function record(h: History, matches: LineupMatch[], players: string[]) {
     bump(h.partners, pairKey(...m.a));
     bump(h.partners, pairKey(...m.b));
     for (const x of m.a) for (const y of m.b) bump(h.opponents, pairKey(x, y));
-    bump(h.groups, groupKey(four));
+    bump(h.groups, groupKey(four[0], four[1], four[2], four[3]));
     for (const k of pairsOf(four)) met.add(k);
   }
   h.lastRest = new Set(players.filter((p) => !playing.has(p)));
@@ -90,44 +98,53 @@ function record(h: History, matches: LineupMatch[], players: string[]) {
 // lagi masih wajar (penalti kecil); rest dua kali lebih mahal dari satu pertemuan ulang.
 const COST = { sameGroup: 60, partner: 10, level: 10, restTwice: 8, metLastRound: 4, opponent: 1 };
 
+/** Bagian penalti court yang sama untuk ketiga pembagian tim + ke-6 kunci pasangannya. */
+type CourtBase = { k12: string; k13: string; k14: string; k23: string; k24: string; k34: string; group: number; allOpp: number };
+
 /**
- * Penalti satu court untuk ketiga cara membagi 4 pemain jadi 2 tim — satu-satunya rumus penalti court
- * (dipakai planRound untuk memilih & lineupCost untuk menilai). Bagian kelompok (kelompok 4 orang sama,
- * bertemu lagi dari ronde lalu) sama untuk ketiganya; bagian tim: partner berulang, lawan berulang,
- * selisih level tim (Rotating). Ke-6 pasangan dihitung sekali: tiap pasangan jadi partner di satu
- * pembagian dan lawan di dua lainnya. Pembagian pertama = [p1, p2] vs [p3, p4].
+ * Bagian kelompok: kelompok 4 orang yang sama & pasangan yang bertemu lagi dari ronde lalu. Ke-6
+ * pasangan dihitung sekali: tiap pasangan jadi partner di satu pembagian dan lawan di dua lainnya,
+ * jadi penalti lawan satu pembagian = total lawan ke-6 pasangan − lawan dari 2 pasangan partnernya.
  */
-function splitCosts(h: History, [p1, p2, p3, p4]: string[], levels?: LevelWeights) {
-  const [k12, k13, k14, k23, k24, k34] = [pairKey(p1, p2), pairKey(p1, p3), pairKey(p1, p4), pairKey(p2, p3), pairKey(p2, p4), pairKey(p3, p4)];
-  const opp = (k: string) => h.opponents.get(k) ?? 0;
-  const part = (k: string) => h.partners.get(k) ?? 0;
-  let group = COST.sameGroup * (h.groups.get(groupKey([p1, p2, p3, p4])) ?? 0);
+function courtBase(h: History, p1: string, p2: string, p3: string, p4: string): CourtBase {
+  const k12 = pairKey(p1, p2), k13 = pairKey(p1, p3), k14 = pairKey(p1, p4), k23 = pairKey(p2, p3), k24 = pairKey(p2, p4), k34 = pairKey(p3, p4);
+  let group = COST.sameGroup * (h.groups.get(groupKey(p1, p2, p3, p4)) ?? 0);
   let allOpp = 0;
   for (const k of [k12, k13, k14, k23, k24, k34]) {
     if (h.lastMeet.has(k)) group += COST.metLastRound;
-    allOpp += opp(k);
+    allOpp += h.opponents.get(k) ?? 0;
   }
-  const strength = (t: [string, string]) => (levels?.[t[0]] ?? 3) + (levels?.[t[1]] ?? 3);
-  return ([
-    [[p1, p2], [p3, p4], k12, k34],
-    [[p1, p3], [p2, p4], k13, k24],
-    [[p1, p4], [p2, p3], k14, k23],
-  ] as [[string, string], [string, string], string, string][]).map(([a, b, ka, kb]) => ({
-    a,
-    b,
-    cost:
-      group +
-      COST.partner * (part(ka) + part(kb)) +
-      COST.opponent * (allOpp - opp(ka) - opp(kb)) +
-      (levels ? COST.level * Math.abs(strength(a) - strength(b)) : 0),
-  }));
+  return { k12, k13, k14, k23, k24, k34, group, allOpp };
+}
+
+/**
+ * Penalti court untuk pembagian [a1, a2] vs [b1, b2] (partner `ka`/`kb`) — satu-satunya rumus penalti
+ * court (planRound memilih, lineupCost menilai): kelompok + partner berulang + lawan berulang + selisih
+ * level tim (Rotating).
+ */
+function splitCost(h: History, base: CourtBase, a1: string, a2: string, b1: string, b2: string, ka: string, kb: string, levels?: LevelWeights) {
+  const level = levels ? COST.level * Math.abs((levels[a1] ?? 3) + (levels[a2] ?? 3) - (levels[b1] ?? 3) - (levels[b2] ?? 3)) : 0;
+  const partners = (h.partners.get(ka) ?? 0) + (h.partners.get(kb) ?? 0);
+  const opponents = base.allOpp - (h.opponents.get(ka) ?? 0) - (h.opponents.get(kb) ?? 0);
+  return base.group + COST.partner * partners + COST.opponent * opponents + level;
 }
 
 /** Penalti court untuk pembagian tim yang sudah ditentukan. */
-const courtCost = (h: History, a: [string, string], b: [string, string], levels?: LevelWeights) => splitCosts(h, [...a, ...b], levels)[0].cost;
+function courtCost(h: History, [a1, a2]: [string, string], [b1, b2]: [string, string], levels?: LevelWeights) {
+  const base = courtBase(h, a1, a2, b1, b2);
+  return splitCost(h, base, a1, a2, b1, b2, base.k12, base.k34, levels);
+}
 
-/** Pembagian tim termurah untuk 4 pemain di satu court + penaltinya. */
-const bestCourt = (h: History, four: string[], levels?: LevelWeights) => splitCosts(h, four, levels).reduce((x, y) => (y.cost < x.cost ? y : x));
+/** Pembagian tim termurah untuk 4 pemain di satu court + penaltinya (seri → pembagian pertama). */
+function bestCourt(h: History, p1: string, p2: string, p3: string, p4: string, levels?: LevelWeights): { a: [string, string]; b: [string, string]; cost: number } {
+  const base = courtBase(h, p1, p2, p3, p4);
+  const c0 = splitCost(h, base, p1, p2, p3, p4, base.k12, base.k34, levels);
+  const c1 = splitCost(h, base, p1, p3, p2, p4, base.k13, base.k24, levels);
+  const c2 = splitCost(h, base, p1, p4, p2, p3, base.k14, base.k23, levels);
+  if (c0 <= c1 && c0 <= c2) return { a: [p1, p2], b: [p3, p4], cost: c0 };
+  if (c1 <= c2) return { a: [p1, p3], b: [p2, p4], cost: c1 };
+  return { a: [p1, p4], b: [p2, p3], cost: c2 };
+}
 
 function planRound(h: History, players: string[], courts: number, round: number, rand: () => number, levels?: LevelWeights): LineupMatch[] {
   // Jumlah main tetap serata mungkin: yang paling sedikit main pasti main; dari yang seri di batas
@@ -151,7 +168,7 @@ function planRound(h: History, players: string[], courts: number, round: number,
     const matches: LineupMatch[] = [];
     let cost = COST.restTwice * (aboveRestTwice + sp.slice(take).reduce((n, p) => n + restedAgain(p), 0));
     for (let c = 0; c < courts; c++) {
-      const { a, b, cost: cc } = bestCourt(h, s.slice(c * 4, c * 4 + 4), levels);
+      const { a, b, cost: cc } = bestCourt(h, s[c * 4], s[c * 4 + 1], s[c * 4 + 2], s[c * 4 + 3], levels);
       matches.push({ round, court: c + 1, a, b });
       cost += cc;
     }

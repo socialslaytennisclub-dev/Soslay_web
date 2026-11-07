@@ -110,6 +110,9 @@ export function formatAngka(value: number): string {
   return thousands.format(value);
 }
 
+/** Angka bertanda: 1250 → "+1.250", −3 → "−3", 0 → "0". */
+export const formatSigned = (n: number) => `${n < 0 ? "−" : n > 0 ? "+" : ""}${formatAngka(Math.abs(n))}`;
+
 /** Tanggal + jam WIB ("2026-10-17", "07:00") → Date. */
 export const wibAt = (date: string, time: string) => new Date(`${date}T${time}:00+07:00`);
 

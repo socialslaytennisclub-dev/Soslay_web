@@ -3,6 +3,7 @@
 import { BookOpen, X } from "lucide-react";
 import { useDialog } from "@/hooks/useDialog";
 import styles from "./SessionDetail.module.css";
+import { tieRule } from "@/lib/standings";
 
 /** "Aturan skor" — ringkasan cara main & penilaian (Figma UIF-07). */
 export function ScoreRulesButton({ target, mode }: { target: number | null; mode: "points" | "wins" }) {
@@ -25,11 +26,8 @@ export function ScoreRulesButton({ target, mode }: { target: number | null; mode
             <li>{target === null ? "Tidak ada target poin — skor dicatat sesuai hasil match di lapangan (mis. 6–4)." : `Tiap match dimainkan sampai total poin kedua tim = ${target} (mis. 12–9). Tidak ada batas waktu.`}</li>
             <li>Partner berganti setiap ronde; court & pasangan mengikuti line-up dari host.</li>
             <li>Skor diinput & diverifikasi oleh host sesi — lapor skor ke host setelah match selesai.</li>
-            <li>
-              {mode === "wins"
-                ? "Peringkat diurutkan dari jumlah menang. Menang sama → selisih skor (skor tim kamu − lawan) yang lebih besar di atas, lalu total poin."
-                : "Poin individu = skor tim kamu di setiap match yang kamu mainkan; peringkat diurutkan dari total poin. Poin sama → selisih skor (skor tim kamu − lawan) yang lebih besar di atas, lalu jumlah menang."}
-            </li>
+            <li>{mode === "wins" ? "Peringkat diurutkan dari jumlah menang." : "Poin individu = skor tim kamu di setiap match yang kamu mainkan; peringkat diurutkan dari total poin."}</li>
+            <li>{tieRule(mode)} (selisih = skor tim kamu − lawan, yang lebih besar di atas).</li>
             <li>Kalau semuanya masih sama, peringkat dibagi (=).</li>
           </ul>
           <button type="button" className={styles.btnNavy} onClick={close}>

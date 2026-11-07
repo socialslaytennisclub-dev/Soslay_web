@@ -5,7 +5,7 @@ import { isEmail } from "@/lib/auth";
 import { isSessionFinished, participantRemoveLock, participantsLockReason } from "@/lib/session-lock";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { changedPhoneError, localPhone, phoneFormatError } from "@/lib/wa-invite";
+import { changedPhoneError, localPhone, phoneFormatError, samePhone } from "@/lib/wa-invite";
 import { getDataset } from "../dataset";
 import { ownContacts, parseKuyExport, type KuyRow } from "../kuy-import";
 import { findMemberById, findMemberByIdentifier, findMemberByPhone, type MemberIdentity } from "../identity";
@@ -546,7 +546,7 @@ export async function updateParticipantPayment(
   if (phoneError) return { ok: false, error: phoneError };
   const phone = guest && input.phone?.trim() ? localPhone(input.phone) : null;
   // Nomor yang sama dengan format lain (0812… / 812…) bukan perubahan.
-  const detailsChanged = guest && (name !== row.full_name || phone !== (row.phone ?? null));
+  const detailsChanged = guest && (name !== row.full_name || !samePhone(phone, row.phone as string | null));
 
   // Data tamu (ghost member) mengikuti perubahan nama / nomor tanpa mengubah riwayat orang lain:
   //  1. nomor baru sudah tercatat sebagai tamu lain (mis. orang pengganti yang sempat ditambahkan admin) → pakai tamu itu;
