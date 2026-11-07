@@ -318,7 +318,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Hapus per peserta: belum check-in & belum masuk line-up / skor; setelah selesai hanya tambahan admin.
-  const inMatch = new Set(session.matches.flatMap((m) => [...m.a, ...m.b]));
+  const inMatch = useMemo(() => new Set(session.matches.flatMap((m) => [...m.a, ...m.b])), [session.matches]);
   // Status selesai dihitung server saat halaman dimuat (diakhiri / ditutup otomatis) — tidak memakai jam
   // browser saat render, supaya hasil server & browser sama. Server tetap mengecek ulang saat menghapus.
   const finished = session.displayStatus === "completed";
@@ -418,7 +418,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     <RowMenu
       label={`Aksi untuk ${p.name}`}
       items={[
-        ...(p.kuyPayment ? [{ label: "Ubah pembayaran", icon: "pencil-simple" as const, onSelect: () => editPayment(p) }] : []),
+        ...(p.editablePayment ? [{ label: "Ubah pembayaran", icon: "pencil-simple" as const, onSelect: () => editPayment(p) }] : []),
         { label: "Hapus dari sesi", icon: "trash" as const, danger: true, disabledReason: removeLock(p), disabled: removing !== null, onSelect: () => removeMany([p]) },
       ]}
     />

@@ -174,7 +174,7 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
   const supabase = await createSupabaseServerClient();
-  const [upload, state, existing] = await Promise.all([readUpload(formData), sessionFinished(supabase, sessionId), existingParticipants(supabase, sessionId)]);
+  const [upload, state, existing] = await Promise.all([readUpload(formData), sessionState(supabase, sessionId), existingParticipants(supabase, sessionId)]);
   if ("error" in upload) return { ok: false, error: upload.error };
   if ("error" in state) return { ok: false, error: state.error };
   if (!existing) return { ok: false, error: "Gagal membaca peserta yang sudah tercatat — coba lagi." };
@@ -390,7 +390,7 @@ export async function saveMatchScore(sessionId: string, matchId: string, scoreA:
 }
 
 /** Alasan data peserta sesi terkunci (aktivitas sudah dikerjakan), atau null kalau boleh dihapus. */
-async function participantsLock(supabase: Supabase, sessionId: string, opts: { ignoreCheckIns?: boolean } = {}): Promise<string | null> {
+async function participantsLock(supabase: Supabase, sessionId: string): Promise<string | null> {
   const [{ data: session }, { count: scored }, { count: checkedIn }] = await Promise.all([
     supabase.from("sessions").select("starts_at, status, ended_at").eq("id", sessionId).maybeSingle(),
     supabase.from("session_matches").select("id", { count: "exact", head: true }).eq("session_id", sessionId).not("score_a", "is", null),
@@ -402,7 +402,7 @@ async function participantsLock(supabase: Supabase, sessionId: string, opts: { i
     status: session.status as string,
     endedAt: session.ended_at as string | null,
     scoredMatches: scored ?? 0,
-    checkedIn: opts.ignoreCheckIns ? 0 : (checkedIn ?? 0),
+    checkedIn: checkedIn ?? 0,
   });
 }
 
@@ -417,27 +417,30 @@ export async function removeParticipants(sessionId: string, participants: { id: 
   if ("error" in auth) return { ok: false, error: auth.error };
   if (!participants.length) return { ok: false, error: "Pilih peserta dulu." };
   const supabase = await createSupabaseServerClient();
-  const [{ data: session }, { data: matches }] = await Promise.all([
-    supabase.from("sessions").select("status, ended_at, ends_at").eq("id", sessionId).maybeSingle(),
-    supabase.from("session_matches").select("a1, a2, b1, b2").eq("session_id", sessionId),
-  ]);
-  if (!session) return { ok: false, error: "Sesi tidak ditemukan." };
-  const finished = isSessionFinished({ status: session.status as string, endedAt: session.ended_at as string | null, endsAt: session.ends_at as string });
-  const inMatch = new Set((matches ?? []).flatMap((m) => [m.a1, m.a2, m.b1, m.b2] as string[]));
-  // Peserta dari booking website (bukan baris daftar peserta) tidak bisa dihapus setelah activity selesai.
-  if (finished && participants.some((p) => p.id === p.memberId)) return { ok: false, error: "Activity sudah selesai — hanya peserta tambahan admin yang belum check-in yang bisa dihapus." };
-
   const rosterIds = participants.filter((p) => p.id !== p.memberId).map((p) => p.id);
   const bookingMembers = participants.filter((p) => p.id === p.memberId).map((p) => p.memberId!);
+  const [state, { data: matches }, { data: rows }] = await Promise.all([
+    sessionState(supabase, sessionId),
+    supabase.from("session_matches").select("a1, a2, b1, b2").eq("session_id", sessionId),
+    rosterIds.length
+      ? supabase.from("session_participants").select("id, full_name, member_id, checked_in_at, source").eq("session_id", sessionId).in("id", rosterIds)
+      : Promise.resolve({ data: [] }),
+  ]);
+  if ("error" in state) return { ok: false, error: state.error };
+  if ((rows?.length ?? 0) !== rosterIds.length) return { ok: false, error: "Sebagian peserta tidak ditemukan — muat ulang halaman." };
+  const inMatch = new Set((matches ?? []).flatMap((m) => [m.a1, m.a2, m.b1, m.b2] as string[]));
+  // Aturan yang sama dengan tombol hapus di editor — booking website bukan baris tambahan admin.
+  for (const r of rows!) {
+    const lock = participantRemoveLock({ trip: r.source === "trip", checkedIn: Boolean(r.checked_in_at), inMatch: inMatch.has(r.id as string), finished: state.finished, adminRow: r.source === "admin" });
+    if (lock) return { ok: false, error: `${r.full_name}: ${lock}` };
+  }
+  for (const id of bookingMembers) {
+    const lock = participantRemoveLock({ trip: false, checkedIn: false, inMatch: inMatch.has(id), finished: state.finished, adminRow: false });
+    if (lock) return { ok: false, error: lock };
+  }
   const names: string[] = [];
 
-  if (rosterIds.length) {
-    const { data: rows } = await supabase.from("session_participants").select("id, full_name, member_id, checked_in_at, source").eq("session_id", sessionId).in("id", rosterIds);
-    if ((rows?.length ?? 0) !== rosterIds.length) return { ok: false, error: "Sebagian peserta tidak ditemukan — muat ulang halaman." };
-    for (const r of rows!) {
-      const lock = participantRemoveLock({ trip: r.source === "trip", checkedIn: Boolean(r.checked_in_at), inMatch: inMatch.has(r.id as string), finished, adminRow: r.source === "admin" });
-      if (lock) return { ok: false, error: `${r.full_name}: ${lock}` };
-    }
+  if (rows!.length) {
     const { error } = await supabase.from("session_participants").delete().in("id", rosterIds);
     if (error) return { ok: false, error: `Gagal menghapus: ${error.message}` };
     const memberIds = await withoutTripBuyers(supabase, sessionId, rows!.map((r) => r.member_id as string | null));
@@ -547,9 +550,7 @@ export async function updateParticipantPayment(
   //  1. nomor baru sudah tercatat sebagai tamu lain (mis. orang pengganti yang sempat ditambahkan admin) → pakai tamu itu;
   //  2. tamu ini hanya ada di activity ini → datanya dibetulkan (mis. salah ketik);
   //  3. pernah ikut activity lain → slotnya digantikan orang lain: dipisah jadi tamu baru.
-  let ghostId: string | null = null;
-  let createdGhost = false;
-  let fixGhost = false;
+  let ghost: { kind: "reuse" | "new"; id: string } | { kind: "fix" } | null = null;
   if (guest && row.ghost_id && (name !== row.full_name || phone !== (row.phone ?? null))) {
     const [{ data: known }, { count: elsewhere }] = await Promise.all([
       phone ? supabase.from("ghost_members").select("id").eq("phone", phone).is("claimed_by", null).neq("id", row.ghost_id).limit(1).maybeSingle() : Promise.resolve({ data: null }),
@@ -558,14 +559,13 @@ export async function updateParticipantPayment(
     if (known) {
       const { count: twin } = await supabase.from("session_participants").select("id", { count: "exact", head: true }).eq("session_id", sessionId).eq("ghost_id", known.id).neq("id", participantId);
       if (twin) return { ok: false, error: "Tamu dengan nomor ini sudah ada di activity ini — hapus baris dobelnya dulu, lalu simpan lagi." };
-      ghostId = known.id as string;
+      ghost = { kind: "reuse", id: known.id as string };
     } else if (elsewhere) {
       const { data: created, error: ghostError } = await supabase.from("ghost_members").insert({ full_name: name, phone }).select("id").single();
       if (ghostError || !created) return { ok: false, error: `Gagal mencatat tamu: ${ghostError?.message ?? "coba lagi"}` };
-      ghostId = created.id as string;
-      createdGhost = true;
+      ghost = { kind: "new", id: created.id as string };
     } else {
-      fixGhost = true;
+      ghost = { kind: "fix" };
     }
   }
 
@@ -578,20 +578,21 @@ export async function updateParticipantPayment(
       payment_status: payment,
       payment_channel: via,
       amount_edited_at: now,
-      ...(guest ? { full_name: name, phone, details_edited_at: now, ...(ghostId ? { ghost_id: ghostId } : {}) } : {}),
+      ...(guest ? { full_name: name, phone, details_edited_at: now, ...(ghost && "id" in ghost ? { ghost_id: ghost.id } : {}) } : {}),
     })
     .eq("id", participantId)
     .eq("session_id", sessionId);
   if (error) {
     // Tamu baru yang dibuat untuk perubahan ini tidak jadi dipakai.
-    if (createdGhost && ghostId) await supabase.from("ghost_members").delete().eq("id", ghostId);
+    if (ghost?.kind === "new") await supabase.from("ghost_members").delete().eq("id", ghost.id);
     return { ok: false, error: `Gagal menyimpan: ${error.message}` };
   }
-  if (fixGhost) await supabase.from("ghost_members").update({ full_name: name, phone }).eq("id", row.ghost_id).is("claimed_by", null);
-
   const who = guest ? name : (row.full_name as string);
   const status = `${PAYMENT_LABEL[payment].toLowerCase()} · via ${PAYMENT_CHANNEL_LABEL[via]}`;
-  await audit(auth.userId, `mengubah pembayaran ${who}: ${formatRupiahPlain(amount)} · ${status}`, "session", sessionId);
+  await Promise.all([
+    ghost?.kind === "fix" ? supabase.from("ghost_members").update({ full_name: name, phone }).eq("id", row.ghost_id).is("claimed_by", null) : null,
+    audit(auth.userId, `mengubah pembayaran ${who}: ${formatRupiahPlain(amount)} · ${status}`, "session", sessionId),
+  ]);
   refreshPaths(`/admin/activities/${sessionId}`);
   return { ok: true, message: `Pembayaran ${who} disimpan · ${formatRupiahPlain(amount)} · ${status}.` };
 }
@@ -607,7 +608,7 @@ export type ParticipantLookup =
  * baru dicatat sesudah main). Hanya admin editor "activities" yang bisa memanggil aksi ini.
  * `finished` dipakai untuk aturan khusus sesi selesai (lihat addParticipantManual & impor Kuyy).
  */
-async function sessionFinished(supabase: Supabase, sessionId: string): Promise<{ error: string } | { finished: boolean; price: number }> {
+async function sessionState(supabase: Supabase, sessionId: string): Promise<{ error: string } | { finished: boolean; price: number }> {
   const { data: session } = await supabase.from("sessions").select("status, ended_at, ends_at, price").eq("id", sessionId).maybeSingle();
   if (!session) return { error: "Sesi tidak ditemukan." };
   return {
@@ -690,7 +691,7 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
   const supabase = await createSupabaseServerClient();
-  const [state, byId] = await Promise.all([sessionFinished(supabase, sessionId), "memberId" in input ? findMemberById(input.memberId) : null]);
+  const [state, byId] = await Promise.all([sessionState(supabase, sessionId), "memberId" in input ? findMemberById(input.memberId) : null]);
   if ("error" in state) return { ok: false, error: state.error };
   const regNo = `ADM-${crypto.randomUUID().slice(0, 6).toUpperCase()}`;
   // Sesi sudah selesai → peserta yang ditambahkan sesudahnya memang ikut main: langsung tercatat

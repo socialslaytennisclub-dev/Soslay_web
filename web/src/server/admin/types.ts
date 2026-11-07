@@ -213,7 +213,7 @@ export type SessionParticipant = {
    * manual, mis. BCA). Bisa diubah admin bersama status bayar; masuk Keuangan setelah activity selesai & lunas.
    * null = pembayarannya tidak diubah di sini (booking website, peserta paket trip).
    */
-  kuyPayment: { amount: number; via: "kuy" | "manual" } | null;
+  editablePayment: { amount: number; via: "kuy" | "manual" } | null;
   status: BookingStatus;
   source: "website" | "kuy" | "admin" | "trip";
   checkedIn: boolean;

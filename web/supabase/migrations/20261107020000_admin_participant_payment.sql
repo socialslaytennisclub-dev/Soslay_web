@@ -6,6 +6,7 @@
 create or replace function participant_payment_editable(p session_participants) returns boolean
 language sql immutable as $$ select p.is_kuy_import or p.source = 'admin' $$;
 
+-- Sama persis dengan versi 20261106050000_trip_finance_review_fixes — hanya `p.is_kuy_import` → participant_payment_editable(p).
 create or replace function finance_sync_participant(p session_participants, p_count boolean, p_session sessions default null, p_settings finance_settings default null)
 returns void language plpgsql security definer set search_path = public as $$
 declare
@@ -59,7 +60,7 @@ begin
 end $$;
 drop trigger session_participants_sync_payment on session_participants;
 create trigger session_participants_sync_payment after insert or update of payment_status, amount, member_id on session_participants
-  for each row when ((new.is_kuy_import or new.source = 'admin') and new.member_id is not null) execute function session_participant_payment_sync();
+  for each row when (participant_payment_editable(new) and new.member_id is not null) execute function session_participant_payment_sync();
 
 -- Peserta tambahan admin dibayar langsung (bukan lewat Kuyy) → jalur bawaan Manual.
 update session_participants set payment_channel = 'manual' where source = 'admin' and amount = 0 and payment_channel = 'kuy';

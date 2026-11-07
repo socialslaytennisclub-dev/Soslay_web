@@ -22,9 +22,10 @@ type Draft = HostLineupMatch & { locked: boolean };
  */
 const toDraft = (d: MemberSessionDetail): Draft[] => {
   const rows: Draft[] = [];
+  const byCourt = new Map(d.matches.map((m) => [`${m.round}:${m.court}`, m]));
   for (let r = 1; r <= d.format.rounds; r++) {
     for (let c = 1; c <= d.format.courts; c++) {
-      const m = d.matches.find((x) => x.round === r && x.court === c);
+      const m = byCourt.get(`${r}:${c}`);
       const [a1, a2, b1, b2] = m?.playerIds ?? ["", "", "", ""];
       rows.push({ round_no: r, court_no: c, a1, a2, b1, b2, locked: m ? m.scoreA !== null : false });
     }

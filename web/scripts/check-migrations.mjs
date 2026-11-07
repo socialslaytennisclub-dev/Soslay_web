@@ -1139,37 +1139,20 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
     for (let i = 1; i <= 4; i++) pl.push((await one(`insert into session_participants (session_id, full_name, kuy_reg_no, source) values ($1, $2, $3, 'admin') returning id`, [ln, `P${i}`, `L${i}`])).id);
     for (let r = 1; r <= 9; r++) await db.query(`insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2) values ($1, $2, 1, $3, $4, $5, $6)`, [ln, r, ...pl]);
     await db.query(`update sessions set round_count = 6 where id = $1`, [ln]);
+    const rejects = (sql, hint) => db.query(sql, [ln]).then(() => false, (e) => e.hint === hint);
     const left = await one(`select max(round_no)::int r, count(*)::int n from session_matches where session_id = $1`, [ln]);
     console.assert(left.r === 6 && left.n === 6, `ronde dikurangi 9 → 6: line-up R7–R9 terhapus (${JSON.stringify(left)})`);
     await db.query(`update session_matches set score_a = 21, score_b = 15 where session_id = $1 and round_no = 5`, [ln]);
-    let refused = false;
-    try {
-      await db.query(`update sessions set round_count = 4 where id = $1`, [ln]);
-    } catch {
-      refused = true;
-    }
-    console.assert(refused, "ronde yang sudah ada skornya tidak boleh dibuang");
+    console.assert(await rejects(`update sessions set round_count = 4 where id = $1`, "lineup_scored"), "ronde yang sudah ada skornya tidak boleh dibuang");
     // Ronde yang sedang dimainkan (belum ada skor) juga tidak boleh dibuang.
     await db.query(`update sessions set started_rounds = '{6}', current_round = 6 where id = $1`, [ln]);
-    let refusedStarted = false;
-    try {
-      await db.query(`update sessions set round_count = 5 where id = $1`, [ln]);
-    } catch {
-      refusedStarted = true;
-    }
-    console.assert(refusedStarted, "ronde yang sudah dimulai tidak boleh dibuang");
+    console.assert(await rejects(`update sessions set round_count = 5 where id = $1`, "lineup_started"), "ronde yang sudah dimulai tidak boleh dibuang");
     // Court dikurangi saat ronde yang memakai court itu sudah dimulai → ditolak.
     await db.query(`update sessions set court_count = 2 where id = $1`, [ln]);
     const pl2 = [];
     for (let i = 5; i <= 8; i++) pl2.push((await one(`insert into session_participants (session_id, full_name, kuy_reg_no, source) values ($1, $2, $3, 'admin') returning id`, [ln, `P${i}`, `L${i}`])).id);
     await db.query(`insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2) values ($1, 6, 2, $2, $3, $4, $5)`, [ln, ...pl2]);
-    let refusedCourt = false;
-    try {
-      await db.query(`update sessions set court_count = 1 where id = $1`, [ln]);
-    } catch {
-      refusedCourt = true;
-    }
-    console.assert(refusedCourt, "court yang dipakai di ronde berjalan tidak boleh dibuang");
+    console.assert(await rejects(`update sessions set court_count = 1 where id = $1`, "lineup_started"), "court yang dipakai di ronde berjalan tidak boleh dibuang");
     console.log("✓ jumlah ronde / court dikurangi → line-up di luar format terhapus (yang sudah ada skornya ditolak)");
   }
 }

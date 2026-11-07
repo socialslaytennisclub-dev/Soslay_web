@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useImperativeHandle, useRef, useState, useTransition, type ReactNode, type Ref } from "react";
 import { useDialog } from "@/hooks/useDialog";
 import { formatRupiahPlain, PARTICIPANT_SOURCE_LABEL, PAYMENT_CHANNEL_LABEL, PAYMENT_LABEL } from "@/lib/admin-labels";
-import { phoneFormatError } from "@/lib/wa-invite";
+import { changedPhoneError } from "@/lib/wa-invite";
 import { amountDigits, amountDisplay } from "@/lib/finance/format";
 import { updateParticipantPayment } from "@/server/admin/actions/play";
 import type { SessionParticipant } from "@/server/admin/types";
@@ -16,12 +16,12 @@ import { toast } from "../ui/Toaster";
 import styles from "./SessionEditor.module.css";
 
 type Payment = "paid" | "pending";
-type Via = NonNullable<SessionParticipant["kuyPayment"]>["via"];
+type Via = NonNullable<SessionParticipant["editablePayment"]>["via"];
 const PAYMENT_OPTIONS = (["paid", "pending"] as const).map((value) => ({ value, label: PAYMENT_LABEL[value] }));
 const VIA_OPTIONS = (["kuy", "manual"] as const).map((value) => ({ value, label: PAYMENT_CHANNEL_LABEL[value] }));
 
 /** Kolom "Via": peserta file Kuyy & tambahan admin → jalur bayarnya (Kuy / Manual); lainnya → asal peserta. */
-export const viaLabel = (p: SessionParticipant) => (p.kuyPayment ? PAYMENT_CHANNEL_LABEL[p.kuyPayment.via] : PARTICIPANT_SOURCE_LABEL[p.source]);
+export const viaLabel = (p: SessionParticipant) => (p.editablePayment ? PAYMENT_CHANNEL_LABEL[p.editablePayment.via] : PARTICIPANT_SOURCE_LABEL[p.source]);
 
 type PaymentDrawerHandle = { open: (p: SessionParticipant) => void };
 
@@ -47,11 +47,11 @@ function PaymentDrawer({ sessionId, finished, ref }: { sessionId: string; finish
     ref,
     () => ({
       open(p) {
-        if (!p.kuyPayment) return;
+        if (!p.editablePayment) return;
         setTarget(p);
-        setAmount(String(p.kuyPayment.amount));
+        setAmount(String(p.editablePayment.amount));
         setPayment(p.payment === "pending" ? "pending" : "paid");
-        setVia(p.kuyPayment.via);
+        setVia(p.editablePayment.via);
         setName(p.name);
         setPhone(p.phone);
         openDialog();
@@ -73,12 +73,12 @@ function PaymentDrawer({ sessionId, finished, ref }: { sessionId: string; finish
 
   // Tamu (belum member) → nama & nomor HP ikut bisa diubah; member → hanya pembayaran (data dari profil).
   const guest = target !== null && !target.memberId;
-  const phoneError = guest && phone.trim() && phone !== target.phone ? phoneFormatError(phone) : null;
+  const phoneError = guest ? changedPhoneError(phone, target.phone) : null;
   const unchanged =
-    target?.kuyPayment != null &&
-    Number(amount || 0) === target.kuyPayment.amount &&
+    target?.editablePayment != null &&
+    Number(amount || 0) === target.editablePayment.amount &&
     payment === target.payment &&
-    via === target.kuyPayment.via &&
+    via === target.editablePayment.via &&
     (!guest || (name.trim() === target.name && phone === target.phone));
 
   return (
@@ -138,11 +138,11 @@ export function useParticipantPayment(sessionId: string, finished: boolean): [(p
 
 /** Sel "Bayar": badge status + nominal (peserta file Kuyy & tambahan admin). Diubah lewat menu ⋮ → Ubah pembayaran. */
 export function PaymentCell({ participant: p }: { participant: SessionParticipant }) {
-  if (!p.kuyPayment || (p.source === "admin" && !p.kuyPayment.amount)) return <PaymentBadge status={p.payment} />;
+  if (!p.editablePayment || (p.source === "admin" && !p.editablePayment.amount)) return <PaymentBadge status={p.payment} />;
   return (
     <span className={styles.paymentCell}>
       <PaymentBadge status={p.payment} />
-      <span>{formatRupiahPlain(p.kuyPayment.amount)}</span>
+      <span>{formatRupiahPlain(p.editablePayment.amount)}</span>
     </span>
   );
 }
