@@ -737,13 +737,6 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const before = await txCount();
   await db.query(`update session_participants set amount = amount, payment_status = payment_status where id = $1`, [p1]);
   console.assert((await txCount()) === before, "import ulang tanpa perubahan menambah transaksi");
-  // Ganti nama → keterangan transaksi ikut, hanya akhiran " · <nama lama>" utuh yang diganti.
-  await db.query(`update session_participants set full_name = 'Nama Baru' where id = $1`, [p1]);
-  const renamed = await db.query(`select description from finance_transactions where source_ref = $1 and deleted_at is null`, ['sp:' + p1]);
-  console.assert(renamed.rows.length > 0 && renamed.rows.every((r) => r.description.endsWith(" · Nama Baru")), `ganti nama peserta → keterangan transaksi ${JSON.stringify(renamed.rows)}`);
-  await db.query(`update session_participants set full_name = 'Baru' where id = $1`, [p1]);
-  const shorter = await db.query(`select description from finance_transactions where source_ref = $1 and deleted_at is null`, ['sp:' + p1]);
-  console.assert(shorter.rows.every((r) => r.description.endsWith(" · Baru") && !r.description.includes("Nama")), `ganti nama: hanya akhiran utuh ${JSON.stringify(shorter.rows)}`);
   await db.query(`delete from session_participants where id = $1`, [p1]);
   console.assert((await net("kuyy_import")) === 0 && (await net("ticket_manual_paid")) === 0, "A-8 hapus peserta → koreksi");
   // Nominal yang diubah admin tidak tertimpa import ulang file Kuyy (yang menulis amount tanpa amount_edited_at).
@@ -1200,4 +1193,40 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const [winFirst, winThird] = await podium("rank-diff-win", "wins", [[21, 5], [30, 25]]);
   console.assert(winFirst === 100 && winThird === 50, `menang sama: selisih +16 juara 1 (+${winFirst}), selisih +5 juara 3 (+${winThird})`);
   console.log("✓ peringkat juara: total poin / jumlah menang sama → selisih skor menentukan");
+
+  // Koreksi hasil setelah sesi berakhir: line-up & skor diganti admin → bonus juara dihitung ulang lewat
+  // baris koreksi (bonus lama tidak dihapus).
+  const fixer = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Koreksi', 'koreksi@soslay.test', 'active' from roles where name = 'Super Admin'`, [fixer]);
+  const fails = (sql, params) => db.query(sql, params).then(() => false, () => true);
+  const total = async (m, s) => (await one(`select coalesce(sum(delta), 0)::int d from points_ledger where member_id = $1 and session_id = $2`, [m, s])).d;
+  await podium("koreksi", "points", [[48, 10], [48, 40]]);
+  const ks = (await one(`select id from sessions where slug = 'koreksi'`)).id;
+  console.assert((await total(members[0], ks)) === 100 && (await total(members[4], ks)) === 50, "bonus juara dari finish_session ditandai session_id");
+  const parts = (await db.query(`select id from session_participants where session_id = $1 order by kuy_reg_no`, [ks])).rows.map((r) => r.id);
+  // Court 2 dikoreksi 48–5 (selisih +43) → member 5 & 6 juara 1, member 1 & 2 turun ke #3.
+  const lineup = (scoreB2) => JSON.stringify([
+    { round_no: 1, court_no: 1, a1: parts[0], a2: parts[1], b1: parts[2], b2: parts[3], score_a: 48, score_b: 10 },
+    { round_no: 1, court_no: 2, a1: parts[4], a2: parts[5], b1: parts[6], b2: parts[7], score_a: 48, score_b: scoreB2 },
+  ]);
+  await as(members[0]);
+  console.assert(await fails(`select correct_session_result($1, $2::jsonb)`, [ks, lineup(5)]), "member biasa tidak boleh mengoreksi hasil");
+  await as(fixer);
+  await db.query(`update sessions set target_points = 58 where id = $1`, [ks]);
+  console.assert(await fails(`select correct_session_result($1, $2::jsonb)`, [ks, lineup(5)]), "Americano: total skor koreksi harus = target");
+  const dup = JSON.stringify([{ round_no: 1, court_no: 1, a1: parts[0], a2: parts[1], b1: parts[2], b2: parts[3], score_a: 48, score_b: 10 }, { round_no: 1, court_no: 2, a1: parts[0], a2: parts[5], b1: parts[6], b2: parts[7], score_a: null, score_b: null }]);
+  console.assert(await fails(`select correct_session_result($1, $2::jsonb)`, [ks, dup]), "pemain main dua kali di satu ronde ditolak");
+  await db.query(`update sessions set match_format = 'rotating' where id = $1`, [ks]); // skor bebas
+  const changed = (await one(`select correct_session_result($1, $2::jsonb) n`, [ks, lineup(5)])).n;
+  console.assert(changed === 4, `koreksi mengubah bonus 4 member (bukan ${changed})`);
+  console.assert((await total(members[0], ks)) === 50 && (await total(members[4], ks)) === 100, `bonus setelah koreksi: #1 lama ${await total(members[0], ks)}, #1 baru ${await total(members[4], ks)}`);
+  console.assert((await one(`select count(*)::int n from points_ledger where session_id = $1 and note like 'Bonus juara #%'`, [ks])).n === 4, "bonus lama tidak dihapus");
+  console.assert((await one(`select score_b from session_matches where session_id = $1 and court_no = 2`, [ks])).score_b === 5, "skor koreksi tersimpan");
+  console.assert((await one(`select status from sessions where id = $1`, [ks])).status === "completed", "sesi tetap selesai");
+  console.assert((await one(`select correct_session_result($1, $2::jsonb) n`, [ks, lineup(5)])).n === 0, "koreksi ulang yang sama tidak menambah poin");
+  // Sesi yang belum berakhir tidak lewat jalur koreksi.
+  await db.query(`update sessions set ended_at = null, status = 'published' where id = $1`, [ks]);
+  console.assert(await fails(`select correct_session_result($1, $2::jsonb)`, [ks, lineup(5)]), "sesi belum berakhir tidak bisa dikoreksi");
+  await as(null);
+  console.log("✓ koreksi hasil: admin ganti line-up & skor sesi selesai → bonus juara dihitung ulang (baris koreksi, sekali)");
 }

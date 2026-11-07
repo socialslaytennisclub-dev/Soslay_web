@@ -304,13 +304,13 @@ export async function saveLineup(sessionId: string, matches: Omit<SessionMatch, 
     supabase.from("session_participants").select("id, member_id").eq("session_id", sessionId),
     supabase
       .from("bookings")
-      .select("member_id, amount, source, payment_status, profiles(full_name, email, phone, instagram, tennis_level)")
+      .select("member_id, amount, source, profiles(full_name, email, phone, instagram, tennis_level)")
       .eq("session_id", sessionId)
       .in("status", ["registered", "attended"]),
   ]);
   let roster = existing ?? [];
   const inRoster = new Set(roster.map((r) => r.member_id as string | null).filter(Boolean));
-  type Booked = { member_id: string; amount: number; source: "website" | "kuy" | "admin"; payment_status: string; profiles: { full_name: string; email: string; phone: string | null; instagram: string | null; tennis_level: string | null } | null };
+  type Booked = { member_id: string; amount: number; source: "website" | "kuy" | "admin"; profiles: { full_name: string; email: string; phone: string | null; instagram: string | null; tennis_level: string | null } | null };
   const rows = ((booked ?? []) as unknown as Booked[])
     .filter((b) => !inRoster.has(b.member_id))
     .map((b) => ({
@@ -324,11 +324,8 @@ export async function saveLineup(sessionId: string, matches: Omit<SessionMatch, 
       instagram: b.profiles?.instagram ?? null,
       tennis_level: b.profiles?.tennis_level ?? null,
       amount: b.amount,
-      // Ikut sumber & status bayar booking-nya (website / admin) — bukan baris file Kuyy. Tanpa status ini
-      // baris admin memakai default kolom "paid" dan langsung masuk Keuangan saat activity selesai.
+      // Ikut sumber booking-nya (website / admin) — bukan baris file Kuyy, jadi tidak dihitung sebagai uang Kuyy.
       source: b.source,
-      payment_status: b.payment_status === "paid" ? ("paid" as const) : ("pending" as const),
-      ...(b.source === "admin" ? { payment_channel: "manual" as const } : {}),
     }));
   if (rows.length) {
     const { data, error } = await supabase.from("session_participants").insert(rows).select("id, member_id");
@@ -392,6 +389,38 @@ export async function saveMatchScore(sessionId: string, matchId: string, scoreA:
   return { ok: true, message: `Skor ${scoreA}–${scoreB} tersimpan · court terkunci.` };
 }
 
+/**
+ * Koreksi hasil activity yang sudah berakhir: seluruh line-up + skor diganti, lalu bonus juara dihitung
+ * ulang oleh RPC correct_session_result (bonus lama dikoreksi lewat baris baru, bukan dihapus). Hanya admin.
+ */
+export async function correctSessionResult(sessionId: string, matches: SessionMatch[]): Promise<ActionResult> {
+  const auth = await requireEditor("activities");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  if (matches.some((m) => [m.scoreA, m.scoreB].some((n) => n !== null && !(Number.isInteger(n) && n >= 0)))) return { ok: false, error: "Skor tidak valid." };
+  const supabase = await createSupabaseServerClient();
+
+  // Slot di editor memakai id peserta (atau id member untuk peserta dari booking) → id session_participants.
+  const { data: roster } = await supabase.from("session_participants").select("id, member_id").eq("session_id", sessionId);
+  const idOf = new Map<string, string>();
+  for (const r of roster ?? []) {
+    idOf.set(r.id as string, r.id as string);
+    if (r.member_id) idOf.set(r.member_id as string, r.id as string);
+  }
+  const rows = [];
+  for (const m of matches) {
+    const [a1, a2, b1, b2] = [...m.a, ...m.b].map((p) => idOf.get(p));
+    if (!a1 || !a2 || !b1 || !b2) return { ok: false, error: `Ada pemain di Ronde ${m.round} yang belum tercatat sebagai peserta sesi ini.` };
+    rows.push({ round_no: m.round, court_no: m.court, a1, a2, b1, b2, score_a: m.scoreA, score_b: m.scoreB });
+  }
+
+  const { data: changed, error } = await supabase.rpc("correct_session_result", { p_session: sessionId, p_matches: rows });
+  if (error) return { ok: false, error: `Gagal menyimpan koreksi: ${error.message}` };
+  const scored = matches.filter((m) => m.scoreA !== null).length;
+  await audit(auth.userId, `mengoreksi hasil activity (${matches.length} match, ${scored} berskor, bonus juara ${changed ?? 0} member disesuaikan)`, "session", sessionId);
+  refreshPaths(`/admin/activities/${sessionId}`, ["/akun/aktivitas/[slug]", "page"]);
+  return { ok: true, message: changed ? `Koreksi tersimpan · bonus juara ${changed} member disesuaikan.` : "Koreksi tersimpan · juara tidak berubah." };
+}
+
 /** Alasan data peserta sesi terkunci (aktivitas sudah dikerjakan), atau null kalau boleh dihapus. */
 async function participantsLock(supabase: Supabase, sessionId: string): Promise<string | null> {
   const [{ data: session }, { count: scored }, { count: checkedIn }] = await Promise.all([
@@ -422,30 +451,24 @@ export async function removeParticipants(sessionId: string, participants: { id: 
   const supabase = await createSupabaseServerClient();
   const rosterIds = participants.filter((p) => p.id !== p.memberId).map((p) => p.id);
   const bookingMembers = participants.filter((p) => p.id === p.memberId).map((p) => p.memberId!);
-  const [state, { data: matches }, { data: rows }, { data: bookingRows }] = await Promise.all([
+  const [state, { data: matches }, { data: rows }] = await Promise.all([
     sessionState(supabase, sessionId),
     supabase.from("session_matches").select("a1, a2, b1, b2").eq("session_id", sessionId),
     rosterIds.length
       ? supabase.from("session_participants").select("id, full_name, member_id, checked_in_at, source").eq("session_id", sessionId).in("id", rosterIds)
       : Promise.resolve({ data: [] }),
-    // Check-in peserta booking website ada di bookings — ikut dicek seperti baris daftar peserta.
-    bookingMembers.length
-      ? supabase.from("bookings").select("member_id").eq("session_id", sessionId).in("member_id", bookingMembers).not("checked_in_at", "is", null)
-      : Promise.resolve({ data: [] }),
   ]);
   if ("error" in state) return { ok: false, error: state.error };
   if ((rows?.length ?? 0) !== rosterIds.length) return { ok: false, error: "Sebagian peserta tidak ditemukan — muat ulang halaman." };
   const inMatch = new Set((matches ?? []).flatMap((m) => [m.a1, m.a2, m.b1, m.b2] as string[]));
-  // Aturan yang sama dengan tombol hapus di editor, satu daftar untuk baris peserta & booking website
-  // (booking website bukan baris tambahan admin; check-in-nya ada di bookings).
-  const bookingCheckedIn = new Set((bookingRows ?? []).map((b) => b.member_id as string));
-  const candidates = [
-    ...rows!.map((r) => ({ id: r.id as string, label: `${r.full_name}: `, trip: r.source === "trip", checkedIn: Boolean(r.checked_in_at), adminRow: r.source === "admin" })),
-    ...bookingMembers.map((id) => ({ id, label: "", trip: false, checkedIn: bookingCheckedIn.has(id), adminRow: false })),
-  ];
-  for (const c of candidates) {
-    const lock = participantRemoveLock({ trip: c.trip, checkedIn: c.checkedIn, inMatch: inMatch.has(c.id), finished: state.finished, adminRow: c.adminRow });
-    if (lock) return { ok: false, error: `${c.label}${lock}` };
+  // Aturan yang sama dengan tombol hapus di editor — booking website bukan baris tambahan admin.
+  for (const r of rows!) {
+    const lock = participantRemoveLock({ trip: r.source === "trip", checkedIn: Boolean(r.checked_in_at), inMatch: inMatch.has(r.id as string), finished: state.finished, adminRow: r.source === "admin" });
+    if (lock) return { ok: false, error: `${r.full_name}: ${lock}` };
+  }
+  for (const id of bookingMembers) {
+    const lock = participantRemoveLock({ trip: false, checkedIn: false, inMatch: inMatch.has(id), finished: state.finished, adminRow: false });
+    if (lock) return { ok: false, error: lock };
   }
   const names: string[] = [];
 
@@ -709,11 +732,6 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
   // hadir (booking member ikut "attended" + poin kehadiran lewat trigger), tidak menggantung "terdaftar".
   const checkIn = state.finished ? lateCheckIn(auth.userId) : null;
   const lateNote = state.finished ? " · sesi sudah selesai, otomatis tercatat hadir" : "";
-  // Kolom yang sama untuk tambahan member & tamu: dibayar langsung (Manual, bukan Kuyy), nominal = harga
-  // activity, "menunggu" — default kolom "paid" akan langsung masuk Keuangan saat activity selesai.
-  // DP / harga lain / tandai lunas → ⋮ Ubah pembayaran.
-  const manualRow = { session_id: sessionId, kuy_reg_no: regNo, source: "admin", payment_channel: "manual", payment_status: "pending", amount: state.price, ...checkIn } as const;
-  const pendingNote = `${formatRupiahPlain(state.price)} menunggu bayar`;
 
   const addMember = async (member: MemberIdentity): Promise<ActionResult> => {
     const [{ count }, { data: booking }] = await Promise.all([
@@ -722,22 +740,27 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
     ]);
     if (count) return { ok: false, error: `${member.fullName} sudah terdaftar di sesi ini.` };
     // Sudah booking sendiri (website / paket trip) & sudah lunas → bayarnya tercatat lewat booking itu; baris
-    // ini Rp0 lunas supaya Keuangan tidak mencatat dua kali. Booking belum dibayar (bayar di lapangan) → harga activity.
+    // ini Rp0 supaya Keuangan tidak mencatat dua kali. Booking belum dibayar (bayar di lapangan) → harga activity.
     const paidByBooking = Boolean(booking && booking.source !== "admin" && booking.source !== "kuy" && booking.payment_status === "paid");
+    const price = paidByBooking ? 0 : state.price;
     const { error } = await supabase.from("session_participants").insert({
-      ...manualRow,
-      ...(paidByBooking ? { payment_status: "paid", amount: 0 } : {}),
+      session_id: sessionId,
+      kuy_reg_no: regNo,
+      source: "admin",
+      payment_channel: "manual", // dibayar langsung, bukan lewat Kuyy
+      amount: price, // harga activity; DP / harga lain → ⋮ Ubah pembayaran
       member_id: member.id,
       full_name: member.fullName,
       email: member.email || null,
       phone: member.phone || null,
       tennis_level: member.level,
       kuy_username: member.kuyId || null,
+      ...checkIn,
     });
     if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
     await audit(auth.userId, `menambah peserta ${member.fullName} (manual)`, "session", sessionId);
     refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
-    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta · ${paidByBooking ? "sudah bayar lewat booking" : pendingNote}${lateNote}.` };
+    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta · ${paidByBooking ? "sudah bayar lewat booking" : formatRupiahPlain(price)}${lateNote}.` };
   };
 
   if ("memberId" in input) return byId ? addMember(byId) : { ok: false, error: "Member tidak ditemukan." };
@@ -767,14 +790,19 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
     ghostId = data.id as string;
   }
   const { error } = await supabase.from("session_participants").insert({
-    ...manualRow,
+    session_id: sessionId,
+    kuy_reg_no: regNo,
+    source: "admin",
+    payment_channel: "manual", // dibayar langsung, bukan lewat Kuyy
+    amount: state.price, // harga activity; DP / harga lain → ⋮ Ubah pembayaran
     ghost_id: ghostId,
     full_name: known?.full_name ?? fullName,
     email: email || null,
     phone: phone || null,
+    ...checkIn,
   });
   if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
   await audit(auth.userId, `menambah peserta ${fullName} (manual, ghost)`, "session", sessionId);
   refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
-  return { ok: true, message: `${fullName} ditambahkan sebagai ghost member · ${pendingNote}${known ? " (sudah pernah ikut aktivitas sebelumnya)" : ""}${lateNote}.` };
+  return { ok: true, message: `${fullName} ditambahkan sebagai ghost member · ${formatRupiahPlain(state.price)}${known ? " (sudah pernah ikut aktivitas sebelumnya)" : ""}${lateNote}.` };
 }

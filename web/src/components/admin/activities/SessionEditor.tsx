@@ -652,6 +652,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
               targetPoints={scoreTarget(session.play.matchFormat, session.play.targetPoints)}
               balanceLevels={play.matchFormat === "rotating"}
               initial={session.matches}
+              ended={!!session.play.endedAt}
               disabledReason={
                 mode === "new"
                   ? "Simpan sesi dulu, lalu impor peserta dari Kuyy untuk membuat line-up."
