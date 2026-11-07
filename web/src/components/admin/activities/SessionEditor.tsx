@@ -8,7 +8,7 @@ import { formatRupiahPlain, LEVEL_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { TRIP_TYPE } from "@/lib/trips";
 import { shrinkImage } from "@/lib/image-resize";
-import { participantsLockReason } from "@/lib/session-lock";
+import { participantRemoveLock, participantsLockReason } from "@/lib/session-lock";
 import { memberInviteWaLink } from "@/lib/wa-invite";
 import { clearParticipants, removeParticipants } from "@/server/admin/actions/play";
 import { deleteSession, discardSessionUploads, saveSession, setCheckIn, uploadSessionCover, type SessionInput } from "@/server/admin/actions/sessions";
@@ -313,13 +313,15 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     endedAt: session.play.endedAt,
     scoredMatches: session.matches.filter((m) => m.scoreA !== null).length,
   };
-  const rowLock = participantsLockReason({ ...lockBase, checkedIn: 0 });
   const clearLock = participantsLockReason({ ...lockBase, checkedIn: checkedInCount });
   const fromKuy = session.participants.filter((p) => p.id !== p.memberId && p.source !== "trip");
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Hapus per peserta: belum check-in & belum masuk line-up / skor; setelah selesai hanya tambahan admin.
+  const inMatch = new Set(session.matches.flatMap((m) => [...m.a, ...m.b]));
+  const finished = session.displayStatus === "completed";
   const removeLock = (p: SessionParticipant) =>
-    p.source === "trip" ? "Pembeli paket trip — batalkan paketnya di Peserta & pembayaran trip." : (rowLock ?? (isCheckedIn(p) ? "Sudah check-in — batalkan check-in dulu sebelum menghapus." : null));
+    participantRemoveLock({ checkedIn: isCheckedIn(p), inMatch: inMatch.has(p.id), finished, source: p.id === p.memberId && p.source === "admin" ? "booking" : p.source });
   const toggleSelected = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);

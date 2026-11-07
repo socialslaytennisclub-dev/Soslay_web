@@ -2,7 +2,7 @@
 
 import { formatRupiahPlain, PAYMENT_CHANNEL_LABEL, PAYMENT_LABEL } from "@/lib/admin-labels";
 import { isEmail } from "@/lib/auth";
-import { isSessionFinished, participantsLockReason } from "@/lib/session-lock";
+import { isSessionFinished, participantRemoveLock, participantsLockReason } from "@/lib/session-lock";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { changedPhoneError, localPhone, phoneFormatError } from "@/lib/wa-invite";
@@ -407,18 +407,25 @@ async function participantsLock(supabase: Supabase, sessionId: string, opts: { i
 }
 
 /**
- * Hapus peserta terpilih dari sesi (satu atau banyak). Peserta impor Kuyy → baris
- * session_participants dihapus (match line-up yang memuatnya ikut terhapus) + booking Kuyy
- * member-nya dibatalkan; peserta dari booking → booking dibatalkan. Seluruh permintaan ditolak
- * kalau aktivitas sudah dikerjakan atau ada peserta terpilih yang sudah check-in.
+ * Hapus peserta terpilih dari sesi (satu atau banyak). Peserta impor Kuyy / tambahan admin → baris
+ * session_participants dihapus + booking member-nya dibatalkan; peserta dari booking → booking dibatalkan.
+ * Aturan per peserta (participantRemoveLock): belum check-in, belum masuk line-up / skor; setelah activity
+ * selesai hanya tambahan admin. Satu saja yang terkunci → seluruh permintaan ditolak.
  */
 export async function removeParticipants(sessionId: string, participants: { id: string; memberId: string | null }[]): Promise<ActionResult> {
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
   if (!participants.length) return { ok: false, error: "Pilih peserta dulu." };
   const supabase = await createSupabaseServerClient();
-  const locked = await participantsLock(supabase, sessionId, { ignoreCheckIns: true });
-  if (locked) return { ok: false, error: locked };
+  const [{ data: session }, { data: matches }] = await Promise.all([
+    supabase.from("sessions").select("status, ended_at, ends_at").eq("id", sessionId).maybeSingle(),
+    supabase.from("session_matches").select("a1, a2, b1, b2").eq("session_id", sessionId),
+  ]);
+  if (!session) return { ok: false, error: "Sesi tidak ditemukan." };
+  const finished = isSessionFinished({ status: session.status as string, endedAt: session.ended_at as string | null, endsAt: session.ends_at as string });
+  const inMatch = new Set((matches ?? []).flatMap((m) => [m.a1, m.a2, m.b1, m.b2] as string[]));
+  // Peserta dari booking website (bukan baris daftar peserta) tidak bisa dihapus setelah activity selesai.
+  if (finished && participants.some((p) => p.id === p.memberId)) return { ok: false, error: "Activity sudah selesai — hanya peserta tambahan admin yang belum check-in yang bisa dihapus." };
 
   const rosterIds = participants.filter((p) => p.id !== p.memberId).map((p) => p.id);
   const bookingMembers = participants.filter((p) => p.id === p.memberId).map((p) => p.memberId!);
@@ -427,11 +434,10 @@ export async function removeParticipants(sessionId: string, participants: { id: 
   if (rosterIds.length) {
     const { data: rows } = await supabase.from("session_participants").select("id, full_name, member_id, checked_in_at, source").eq("session_id", sessionId).in("id", rosterIds);
     if ((rows?.length ?? 0) !== rosterIds.length) return { ok: false, error: "Sebagian peserta tidak ditemukan — muat ulang halaman." };
-    // Pembeli paket trip terdaftar lewat paketnya — keluarkan dengan membatalkan paket di Peserta & pembayaran trip.
-    const bundled = rows!.filter((r) => r.source === "trip").map((r) => r.full_name as string);
-    if (bundled.length) return { ok: false, error: `${bundled.join(", ")} terdaftar lewat paket trip — batalkan paketnya di Peserta & pembayaran trip.` };
-    const present = rows!.filter((r) => r.checked_in_at).map((r) => r.full_name as string);
-    if (present.length) return { ok: false, error: `${present.join(", ")} sudah check-in — batalkan check-in dulu sebelum menghapus.` };
+    for (const r of rows!) {
+      const lock = participantRemoveLock({ checkedIn: Boolean(r.checked_in_at), inMatch: inMatch.has(r.id as string), finished, source: r.source as string });
+      if (lock) return { ok: false, error: `${r.full_name}: ${lock}` };
+    }
     const { error } = await supabase.from("session_participants").delete().in("id", rosterIds);
     if (error) return { ok: false, error: `Gagal menghapus: ${error.message}` };
     const memberIds = await withoutTripBuyers(supabase, sessionId, rows!.map((r) => r.member_id as string | null));
@@ -544,8 +550,22 @@ export async function updateParticipantPayment(
     .eq("id", participantId)
     .eq("session_id", sessionId);
   if (error) return { ok: false, error: `Gagal menyimpan: ${error.message}` };
-  // Tamu yang sama di activity lain ikut memakai nama & nomor baru (selama belum diklaim jadi member).
-  if (guest && row.ghost_id) await supabase.from("ghost_members").update({ full_name: name, phone }).eq("id", row.ghost_id).is("claimed_by", null);
+  if (guest && row.ghost_id && (name !== row.full_name || phone !== (row.phone ?? null))) {
+    // Data tamu (ghost member) mengikuti perubahan tanpa mengubah riwayat orang lain:
+    //  1. nomor baru sudah tercatat sebagai tamu lain (mis. orang pengganti yang sempat ditambahkan admin) → pakai tamu itu;
+    //  2. tamu ini hanya ada di activity ini → datanya dibetulkan (mis. salah ketik);
+    //  3. pernah ikut activity lain → slotnya digantikan orang lain: dipisah jadi tamu baru.
+    const [{ data: known }, { count: elsewhere }] = await Promise.all([
+      phone ? supabase.from("ghost_members").select("id").eq("phone", phone).is("claimed_by", null).neq("id", row.ghost_id).limit(1).maybeSingle() : Promise.resolve({ data: null }),
+      supabase.from("session_participants").select("id", { count: "exact", head: true }).eq("ghost_id", row.ghost_id).neq("id", participantId),
+    ]);
+    if (!known && !elsewhere) {
+      await supabase.from("ghost_members").update({ full_name: name, phone }).eq("id", row.ghost_id).is("claimed_by", null);
+    } else {
+      const ghostId = known?.id ?? (await supabase.from("ghost_members").insert({ full_name: name, phone }).select("id").single()).data?.id;
+      if (ghostId) await supabase.from("session_participants").update({ ghost_id: ghostId }).eq("id", participantId);
+    }
+  }
 
   const who = guest ? name : (row.full_name as string);
   const status = `${PAYMENT_LABEL[payment].toLowerCase()} · via ${PAYMENT_CHANNEL_LABEL[via]}`;
