@@ -88,7 +88,8 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
     const open = plan.rounds.filter(editable);
     if (!open.length) return setError("Tidak ada ronde yang masih bisa diubah.");
     const from = Math.min(...open);
-    const rows = draft.filter((m) => m.round_no >= from && !m.locked).map((m) => ({ round_no: m.round_no, court_no: m.court_no, a1: m.a1, a2: m.a2, b1: m.b1, b2: m.b2 }));
+    // Hanya ronde / court di format sesi sekarang (line-up lama di luar format tidak ikut dikirim).
+    const rows = draft.filter((m) => m.round_no >= from && !m.locked && m.round_no <= d.format.rounds && m.court_no <= d.format.courts).map((m) => ({ round_no: m.round_no, court_no: m.court_no, a1: m.a1, a2: m.a2, b1: m.b1, b2: m.b2 }));
     for (const r of new Set(draft.map((m) => m.round_no))) {
       const ids = draft.filter((m) => m.round_no === r).flatMap((m) => SLOTS.map((s) => m[s]));
       if (new Set(ids).size !== ids.length) return setError(`Ada pemain yang main dua kali di Ronde ${r}.`);
