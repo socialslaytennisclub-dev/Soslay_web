@@ -8,7 +8,7 @@ import { formatRupiahPlain, LEVEL_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { TRIP_TYPE } from "@/lib/trips";
 import { shrinkImage } from "@/lib/image-resize";
-import { participantsLockReason } from "@/lib/session-lock";
+import { participantRemoveLock, participantsLockReason } from "@/lib/session-lock";
 import { memberInviteWaLink } from "@/lib/wa-invite";
 import { clearParticipants, removeParticipants } from "@/server/admin/actions/play";
 import { deleteSession, discardSessionUploads, saveSession, setCheckIn, uploadSessionCover, type SessionInput } from "@/server/admin/actions/sessions";
@@ -313,13 +313,18 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     endedAt: session.play.endedAt,
     scoredMatches: session.matches.filter((m) => m.scoreA !== null).length,
   };
-  const rowLock = participantsLockReason({ ...lockBase, checkedIn: 0 });
   const clearLock = participantsLockReason({ ...lockBase, checkedIn: checkedInCount });
   const fromKuy = session.participants.filter((p) => p.id !== p.memberId && p.source !== "trip");
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Hapus per peserta: belum check-in & belum masuk line-up / skor; setelah selesai hanya tambahan admin.
+  const inMatch = useMemo(() => new Set(session.matches.flatMap((m) => [...m.a, ...m.b])), [session.matches]);
+  // Status selesai dihitung server saat halaman dimuat (diakhiri / ditutup otomatis) — tidak memakai jam
+  // browser saat render, supaya hasil server & browser sama. Server tetap mengecek ulang saat menghapus.
+  const finished = session.displayStatus === "completed";
+  // Baris booking (id = memberId) bukan baris daftar peserta tambahan admin.
   const removeLock = (p: SessionParticipant) =>
-    p.source === "trip" ? "Pembeli paket trip — batalkan paketnya di Peserta & pembayaran trip." : (rowLock ?? (isCheckedIn(p) ? "Sudah check-in — batalkan check-in dulu sebelum menghapus." : null));
+    participantRemoveLock({ trip: p.source === "trip", checkedIn: isCheckedIn(p), inMatch: inMatch.has(p.id), finished, adminRow: p.source === "admin" && p.id !== p.memberId });
   const toggleSelected = (id: string) =>
     setSelected((prev) => {
       const next = new Set(prev);
@@ -408,12 +413,12 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     );
   };
 
-  /** Menu ⋮ per peserta: ubah pembayaran (impor Kuyy) & hapus dari sesi. */
+  /** Menu ⋮ per peserta: ubah pembayaran (impor Kuyy & tambahan admin) & hapus dari sesi. */
   const rowMenu = (p: SessionParticipant) => (
     <RowMenu
       label={`Aksi untuk ${p.name}`}
       items={[
-        ...(p.kuyPayment ? [{ label: "Ubah pembayaran", icon: "pencil-simple" as const, onSelect: () => editPayment(p) }] : []),
+        ...(p.editablePayment ? [{ label: "Ubah pembayaran", icon: "pencil-simple" as const, onSelect: () => editPayment(p) }] : []),
         { label: "Hapus dari sesi", icon: "trash" as const, danger: true, disabledReason: removeLock(p), disabled: removing !== null, onSelect: () => removeMany([p]) },
       ]}
     />

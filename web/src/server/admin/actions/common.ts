@@ -45,7 +45,7 @@ export async function audit(actorId: string, action: string, entityType: string,
   await supabase.from("admin_audit_log").insert({ actor_id: actorId, action, entity_type: entityType, entity_id: entityId ?? null });
 }
 
-type RefreshPath = string | [string, "page" | "layout"];
+export type RefreshPath = string | [string, "page" | "layout"];
 
 /**
  * Halaman website statis (ISR) yang menampilkan jadwal sesi — wajib di-revalidate setiap kali sesi

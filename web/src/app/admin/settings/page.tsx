@@ -20,13 +20,22 @@ const TABS = [
   { value: "payment", label: "Pembayaran" },
   { value: "notifications", label: "Notifikasi" },
   { value: "integrations", label: "Integrasi" },
+  { value: "log", label: "Log aktivitas" },
 ] as const;
 
 /** Admin / 09 Settings & Roles (Figma 25:6834). */
 export default async function AdminSettingsPage({ searchParams }: PageProps<"/admin/settings">) {
   const raw = (await searchParams).tab;
   const tab = TABS.find((t) => t.value === (Array.isArray(raw) ? raw[0] : raw))?.value ?? "team";
-  const [staff, roles, integrations, log, settings, session] = await Promise.all([listStaff(), listRoles(), listIntegrations(), listAuditLog(), getSettings(), getAdminSession()]);
+  // Log aktivitas hanya dimuat di tab-nya sendiri (dulu di kolom kanan Tim & akses — terlalu panjang).
+  const [staff, roles, integrations, log, settings, session] = await Promise.all([
+    listStaff(),
+    listRoles(),
+    listIntegrations(),
+    tab === "log" ? listAuditLog() : Promise.resolve([]),
+    getSettings(),
+    getAdminSession(),
+  ]);
 
   return (
     <>
@@ -54,7 +63,6 @@ export default async function AdminSettingsPage({ searchParams }: PageProps<"/ad
             </div>
             <div className={styles.sideCol}>
               <IntegrationsCard items={integrations} />
-              <AuditLogCard entries={log} />
             </div>
           </div>
         )}
@@ -69,7 +77,9 @@ export default async function AdminSettingsPage({ searchParams }: PageProps<"/ad
           </section>
         )}
 
-        {tab !== "team" && tab !== "integrations" && <SettingsForms key={tab} tab={tab} initial={settings} />}
+        {tab === "log" && <AuditLogCard entries={log} />}
+
+        {tab !== "team" && tab !== "integrations" && tab !== "log" && <SettingsForms key={tab} tab={tab} initial={settings} />}
       </div>
     </>
   );

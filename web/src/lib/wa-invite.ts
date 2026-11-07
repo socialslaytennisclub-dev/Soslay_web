@@ -37,6 +37,9 @@ export function phoneFormatError(raw: string): string | null {
   return null;
 }
 
+/** Nomor yang sama walau beda format (0812… / +62 812… / 812…). */
+export const samePhone = (a: string | null | undefined, b: string | null | undefined) => localPhone(a ?? "") === localPhone(b ?? "");
+
 /** Seperti phoneFormatError, tapi nomor yang tidak diubah (sama dengan `stored`) selalu lolos — data lama tetap bisa disimpan. */
 export const changedPhoneError = (raw: string, stored: string | null | undefined) => (localPhone(raw) === localPhone(stored ?? "") ? null : phoneFormatError(raw));
 

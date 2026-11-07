@@ -66,7 +66,7 @@ export function SessionsTable({ rows, sort, dir, sortHrefs }: SessionsTableProps
                 <span className={styles.sessionCell}>
                   <Thumb src={s.image} />
                   <span className={styles.sessionText}>
-                    <span className={styles.sessionTitle}>{s.title}</span>
+                    <span className={cx(styles.sessionTitle, styles.sessionTitleWrap)}>{s.title}</span>
                     <span className={styles.sessionMeta}>
                       {when.date} · {when.time}
                     </span>

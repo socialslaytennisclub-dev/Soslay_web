@@ -1,6 +1,7 @@
 import type { IconName } from "@/components/ui";
 import { featuredProducts, productCardProps, productDetails } from "./products";
 import { venueList } from "./venues";
+import type { PostPlatform } from "@/lib/community-posts";
 
 /**
  * Konten homepage (copy, gambar, link) — terpisah dari markup.
@@ -40,7 +41,7 @@ export const activities = {
   ctaCaption: "Good courts. Good people. Good times.",
   items: [
     {
-      title: "MABAR Sessions",
+      title: "Mabar Session",
       description: "Casual weekly hit-arounds at our favorite courts — meet new people, rally, and go home with pro photos.",
       image: `${IMG}/activity-weekly-mabar.webp`,
       imagePosition: "50% 72%",
@@ -67,7 +68,7 @@ export const activities = {
       size: "narrow",
     },
     {
-      title: "Beginner Coaching",
+      title: "Coaching Session",
       description:
         "New to tennis? No problem. Learn the basics, build your confidence, and start playing with the community.",
       image: `${IMG}/activity-beginner-coaching.webp`,
@@ -145,7 +146,7 @@ export const shop = {
 };
 
 export type SocialPost = {
-  platform: "instagram" | "threads";
+  platform: PostPlatform;
   text: string[];
   handle: string;
   image?: string;

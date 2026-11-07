@@ -201,7 +201,9 @@
 
 .segment {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* Lebar sama untuk 2 (Teks / Video) atau 3 pilihan (Instagram / TikTok / Threads). */
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
   padding: var(--space-4);
   border-radius: var(--radius-full);
   background: var(--color-indigo-50);

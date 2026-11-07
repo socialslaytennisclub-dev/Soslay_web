@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Icon, Text } from "@/components/ui";
+import { Text } from "@/components/ui";
 import type { Testimonial } from "@/content/home";
 import { useAutoRotate } from "@/hooks/useAutoRotate";
 import { cx } from "@/lib/cx";
@@ -30,7 +30,7 @@ export function TestimonialCarousel({ items }: TestimonialCarouselProps) {
       onBlur={resume}
     >
       <div className={styles.top}>
-        <Icon name="threads-logo" />
+        <span className={styles.label}>Testimonials</span>
       </div>
 
       <blockquote key={index} className={styles.quote} aria-live="polite">

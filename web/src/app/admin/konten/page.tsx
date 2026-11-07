@@ -23,7 +23,15 @@ const num = new Intl.NumberFormat("id-ID");
 export default async function AdminContentPage({ searchParams }: PageProps<"/admin/konten">) {
   const raw = (await searchParams).tab;
   const tab: Tab = TABS.find((t) => t === (Array.isArray(raw) ? raw[0] : raw)) ?? "homepage";
-  const [sections, gallery, posts, pages, testimonials] = await Promise.all([listHomepageSections(), listAlbums(), listCommunityPosts(), listSitePages(), listTestimonials()]);
+  const [sections, gallery, posts, pages, testimonials, members] = await Promise.all([
+    listHomepageSections(),
+    listAlbums(),
+    listCommunityPosts(),
+    listSitePages(),
+    listTestimonials(),
+    // Pilihan "Hubungkan ke member" (testimoni & post) — hanya di tab Testimoni & IG.
+    tab === "community" ? memberChoices() : Promise.resolve([]),
+  ]);
 
   const tabs = (
     <nav className={styles.tabs} aria-label="Bagian konten">
@@ -88,8 +96,8 @@ export default async function AdminContentPage({ searchParams }: PageProps<"/adm
             {tab === "gallery" && galleryCard()}
             {tab === "community" && (
               <>
-                <TestimonialManager initial={testimonials} members={await memberChoices()} empty={emptyTestimonial()} />
-                <CommunityPosts initial={posts} />
+                <TestimonialManager initial={testimonials} members={members} empty={emptyTestimonial()} />
+                <CommunityPosts initial={posts} members={members} />
               </>
             )}
             {tab === "pages" && <SitePages pages={pages} />}

@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { cx } from "@/lib/cx";
 import { initials } from "@/lib/text";
 import { detectVideoPlatform, formatDuration, VIDEO_PLATFORM_LABEL } from "@/lib/video";
@@ -12,6 +12,7 @@ import settingsStyles from "../settings/Settings.module.css";
 import { TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge } from "../ui/AdminUI";
+import { MemberLinkField } from "./MemberLinkField";
 import styles from "./Testimonials.module.css";
 import { toast } from "../ui/Toaster";
 
@@ -159,9 +160,6 @@ function TestimonialEditor({ testimonial, members, onClose, onSaved, onDelete }:
   const [saving, start] = useTransition();
   const set = <K extends keyof TestimonialInput>(key: K, value: TestimonialInput[K]) => setForm((f) => ({ ...f, [key]: value }));
   const platform = detectVideoPlatform(form.videoUrl ?? "");
-  const memberLabel = (m: MemberChoice) => `${m.name} · ${m.code}`;
-  const linkedMember = useMemo(() => members.find((m) => m.id === form.memberId), [members, form.memberId]);
-  const [memberQuery, setMemberQuery] = useState(linkedMember ? memberLabel(linkedMember) : "");
 
   const save = () =>
     start(async () => {
@@ -291,24 +289,7 @@ function TestimonialEditor({ testimonial, members, onClose, onSaved, onDelete }:
             </span>
           </label>
         </div>
-        <label className={settingsStyles.field}>
-          <span className={settingsStyles.label}>Hubungkan ke member (opsional)</span>
-          <input
-            className={settingsStyles.input}
-            list="testimonial-members"
-            value={memberQuery}
-            placeholder="Ketik nama atau no. member"
-            onChange={(e) => {
-              setMemberQuery(e.target.value);
-              set("memberId", members.find((m) => memberLabel(m) === e.target.value)?.id ?? null);
-            }}
-          />
-          <datalist id="testimonial-members">
-            {members.map((m) => (
-              <option key={m.id} value={memberLabel(m)} />
-            ))}
-          </datalist>
-        </label>
+        <MemberLinkField members={members} value={form.memberId} onChange={(id) => set("memberId", id)} />
         <TextArea
           label={form.kind === "video" ? "Caption (opsional)" : "Kutipan *"}
           value={form.quote}

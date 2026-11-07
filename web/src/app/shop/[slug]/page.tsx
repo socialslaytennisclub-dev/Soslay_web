@@ -6,9 +6,9 @@ import { MotionProvider } from "@/components/motion/MotionProvider";
 import { ProductDetailSection } from "@/components/product/ProductDetailSection/ProductDetailSection";
 import { InstagramFeed } from "@/components/sections/InstagramFeed/InstagramFeed";
 import { TrustSection } from "@/components/sections/TrustSection/TrustSection";
-import { instagram } from "@/content/home";
 import { productPage } from "@/content/products";
 import { getShopCatalog } from "@/server/public/products";
+import { getInstagramFeed } from "@/server/public/homepage";
 
 /** Produk aktif di-prerender saat build; produk baru dari admin dirender saat pertama dibuka. */
 export async function generateStaticParams() {
@@ -38,7 +38,7 @@ export async function generateMetadata({ params }: PageProps<"/shop/[slug]">): P
 /** Product detail (Figma 25:1603). */
 export default async function ProductPage({ params }: PageProps<"/shop/[slug]">) {
   const { slug } = await params;
-  const { product, detail } = await findShopProduct(slug);
+  const [{ product, detail }, feed] = await Promise.all([findShopProduct(slug), getInstagramFeed()]);
   if (!product || !detail) notFound();
 
   return (
@@ -48,7 +48,7 @@ export default async function ProductPage({ params }: PageProps<"/shop/[slug]">)
         <main>
           <ProductDetailSection product={product} detail={detail} />
           <TrustSection {...productPage.trust} />
-          <InstagramFeed {...instagram} />
+          <InstagramFeed {...feed} />
         </main>
         <Footer />
       </MotionProvider>

@@ -166,6 +166,9 @@ export function UpcomingSessions({ data }: { data: OverviewData }) {
 }
 
 // ── Member terbaru ──────────────────────────────────────────────────────────
+/** Akun Kuy member ("@kuyid"); tanpa Kuy ID → ditandai. */
+const memberMeta = (m: OverviewData["newestMembers"][number]) => (m.kuyId ? `@${m.kuyId.replace(/^@/, "")}` : "Belum ada Kuy ID");
+
 export function NewestMembers({ data }: { data: OverviewData }) {
   return (
     <Card title="Member terbaru" subtitle={`${data.kpis.newMembersThisMonth} member bergabung bulan ini`} action={<CardLink href="/admin/members?tab=new">Kelola member</CardLink>}>
@@ -187,9 +190,7 @@ export function NewestMembers({ data }: { data: OverviewData }) {
                     <MemberAvatar name={m.fullName} />
                     <span>
                       <span className={styles.personName}>{m.fullName}</span>
-                      <span className={styles.personMeta}>
-                        @{m.instagram} · {m.city}
-                      </span>
+                      <span className={styles.personMeta}>{memberMeta(m)}</span>
                     </span>
                   </Link>
                 </td>
@@ -210,7 +211,7 @@ export function NewestMembers({ data }: { data: OverviewData }) {
           <MobileCard
             key={m.id}
             href={`/admin/members/${m.id}`}
-            title={<PersonCell name={m.fullName} meta={`@${m.instagram} · ${m.city}`} />}
+            title={<PersonCell name={m.fullName} meta={memberMeta(m)} />}
             aside={<TierBadge tier={m.tier} />}
             meta={[
               { label: "Level", value: LEVEL_LABEL[m.level] },

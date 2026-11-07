@@ -7,9 +7,9 @@ import { Navbar } from "@/components/layout/Navbar/Navbar";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 import { InstagramFeed } from "@/components/sections/InstagramFeed/InstagramFeed";
 import { activityPage } from "@/content/activity";
-import { instagram } from "@/content/home";
 import { newestFirst, pastSessions, pickFeatured, upcomingSessions } from "@/lib/sessions";
 import { getWebsiteSessions } from "@/server/public/sessions";
+import { getInstagramFeed } from "@/server/public/homepage";
 
 export const metadata: Metadata = {
   title: "Activity — SOSLAY",
@@ -27,7 +27,7 @@ export const revalidate = 60;
  * /activity/[type]; link lama /activity?type=… dialihkan ke sana (next.config).
  */
 export default async function ActivityPage() {
-  const sessions = await getWebsiteSessions();
+  const [sessions, feed] = await Promise.all([getWebsiteSessions(), getInstagramFeed()]);
   const now = new Date();
   const upcoming = upcomingSessions(sessions, now);
   const featured = pickFeatured(upcoming);
@@ -47,7 +47,7 @@ export default async function ActivityPage() {
             filter={<ActivityTypeFilter />}
             featuredShown={!!featured}
           />
-          <InstagramFeed {...instagram} />
+          <InstagramFeed {...feed} />
         </main>
         <Footer />
       </MotionProvider>

@@ -209,11 +209,11 @@ export type SessionParticipant = {
   level: TennisLevel | null;
   payment: PaymentStatus;
   /**
-   * Baris dari file Kuyy: nominal tiket & jalur bayarnya (Kuy → Saldo Kuyy, Manual → akun bayar manual, mis.
-   * BCA). Bisa diubah admin bersama status bayar; masuk Keuangan setelah activity selesai & lunas.
-   * null = bukan baris file Kuyy (booking website, tambahan admin).
+   * Baris file Kuyy & tambahan admin: nominal tiket & jalur bayarnya (Kuy → Saldo Kuyy, Manual → akun bayar
+   * manual, mis. BCA). Bisa diubah admin bersama status bayar; masuk Keuangan setelah activity selesai & lunas.
+   * null = pembayarannya tidak diubah di sini (booking website, peserta paket trip).
    */
-  kuyPayment: { amount: number; via: "kuy" | "manual" } | null;
+  editablePayment: { amount: number; via: "kuy" | "manual" } | null;
   status: BookingStatus;
   source: "website" | "kuy" | "admin" | "trip";
   checkedIn: boolean;
@@ -391,14 +391,8 @@ export type PhotoAlbum = {
   status: "published" | "draft" | "empty";
 };
 
-export type CommunityPost = {
-  id: string;
-  kind: "instagram" | "threads";
-  text: string;
-  handle: string;
-  image?: string;
-  visible: boolean;
-};
+/** Post Instagram, TikTok & Threads di feed homepage (lib/community-posts). */
+export type { StoredPost as CommunityPost } from "@/lib/community-posts";
 
 /** Testimoni komunitas (Figma 09b–09f) — teks atau video pendek 9:16. */
 export type AdminTestimonial = {

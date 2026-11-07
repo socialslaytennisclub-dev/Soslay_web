@@ -9,11 +9,11 @@ import { CITY_TIMEZONE, type City } from "@/lib/format";
  */
 
 export const activityTypes = [
-  { slug: "weekly-mabar", label: "Weekly MABAR" },
-  { slug: "match-day", label: "Tennis Match Day" },
+  { slug: "weekly-mabar", label: "Mabar Session" },
+  { slug: "match-day", label: "Tennis Event" },
   { slug: "tennis-escape", label: "Tennis Escape" },
-  { slug: "beginner-coaching", label: "Beginner Coaching" },
-  { slug: "social", label: "Social" },
+  { slug: "beginner-coaching", label: "Coaching Session" },
+  { slug: "social", label: "Tennis Social" },
 ] as const;
 
 export type ActivityTypeSlug = (typeof activityTypes)[number]["slug"];

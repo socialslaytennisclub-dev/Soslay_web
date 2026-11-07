@@ -146,8 +146,8 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
         payment: b.payment,
         status: b.status,
         source,
-        // Demo: peserta "Kuy" memakai harga sesi supaya form ubah nominal bisa dicoba.
-        kuyPayment: source === "kuy" ? { amount: s.price, via: "kuy" } : null,
+        // Demo: peserta "Kuy" & tambahan admin (via Manual) memakai harga sesi — supaya form ubah pembayaran bisa dicoba.
+        editablePayment: source === "kuy" ? { amount: s.price, via: "kuy" } : source === "admin" ? { amount: s.price, via: "manual" } : null,
         checkedIn: b.checkedIn ?? b.status === "attended",
         guests: b.guests ?? (i % 9 === 3 ? 1 : 0),
       };
@@ -243,7 +243,7 @@ export async function getSessionDraft(fromId?: string): Promise<SessionDetail> {
     id: "",
     title: "",
     typeSlug: "weekly-mabar",
-    typeLabel: activityTypeLabels["weekly-mabar"] ?? "Weekly MABAR",
+    typeLabel: activityTypeLabels["weekly-mabar"] ?? "Mabar Session",
     image: venue.image,
     startsAt: start.toISOString(),
     endsAt: new Date(start.getTime() + 4 * 3600_000).toISOString(),

@@ -72,7 +72,7 @@ export function FormatCard({ value, onChange, locked }: { value: PlayForm; onCha
             options={RANKINGS}
             value={value.leaderboardMode}
             onChange={(leaderboardMode) => set({ leaderboardMode })}
-            hint={<span className={editor.muted}>Win: peringkat dari jumlah menang · Point: dari total poin</span>}
+            hint={<span className={editor.muted}>Win: peringkat dari jumlah menang · Point: dari total poin. Nilai sama → selisih skor yang lebih besar di atas.</span>}
           />
 
           <div className={withTarget ? editor.cols3 : editor.cols2}>

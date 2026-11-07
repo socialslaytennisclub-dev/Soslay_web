@@ -27,6 +27,7 @@ export type IconName =
   | "trash"
   | "threads-logo"
   | "threads-logo-fill"
+  | "tiktok-logo"
   | "truck"
   | "users-three-bold"
   | "whatsapp-logo-fill";

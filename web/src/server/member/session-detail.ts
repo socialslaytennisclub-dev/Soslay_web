@@ -6,6 +6,7 @@ import { memberSessions } from "@/content/member";
 import { LEVEL_LABEL, PARTICIPANT_SOURCE_LABEL } from "@/lib/admin-labels";
 import { cityOf, type City } from "@/lib/format";
 import { sessionClosesAt } from "@/lib/session-close";
+import { compareStandings } from "@/lib/standings";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { TennisLevel } from "@/server/admin/types";
 import { localParts } from "@/server/public/sessions";
@@ -40,7 +41,7 @@ export type DetailMatch = {
 };
 
 /** `played` = match berskor, `total` = match yang dijadwalkan untuk pemain itu. */
-export type DetailStanding = { id: string; name: string; points: number; wins: number; played: number; total: number; me: boolean };
+export type DetailStanding = { id: string; name: string; points: number; wins: number; diff: number; played: number; total: number; me: boolean };
 
 export type MemberSessionDetail = {
   id: string;
@@ -199,12 +200,12 @@ function currentRoundOf(matches: MatchRow[]): number | null {
   return upcoming.length ? Math.min(...upcoming) : last;
 }
 
-/** Leaderboard dari skor yang sudah masuk: poin = skor tim di tiap match yang dimainkan. */
+/** Leaderboard dari skor yang sudah masuk: poin = skor tim di tiap match yang dimainkan, diff = selisih skornya. */
 function standingsOf(matches: MatchRow[], names: Map<string, string>, myIds: Set<string>, mode: "points" | "wins"): DetailStanding[] {
   const table = new Map<string, DetailStanding>();
   const row = (id: string) => {
     let r = table.get(id);
-    if (!r) table.set(id, (r = { id, name: names.get(id) ?? "Pemain", points: 0, wins: 0, played: 0, total: 0, me: myIds.has(id) }));
+    if (!r) table.set(id, (r = { id, name: names.get(id) ?? "Pemain", points: 0, wins: 0, diff: 0, played: 0, total: 0, me: myIds.has(id) }));
     return r;
   };
   for (const m of matches) {
@@ -217,12 +218,13 @@ function standingsOf(matches: MatchRow[], names: Map<string, string>, myIds: Set
       for (const id of team) {
         const r = row(id);
         r.points += own;
+        r.diff += own - other;
         r.played += 1;
         if (own > other) r.wins += 1;
       }
     }
   }
-  return [...table.values()].sort((x, y) => (mode === "wins" ? y.wins - x.wins || y.points - x.points : y.points - x.points || y.wins - x.wins) || x.name.localeCompare(y.name));
+  return [...table.values()].sort((x, y) => compareStandings(x, y, mode) || x.name.localeCompare(y.name));
 }
 
 export const getMySessionDetail = cache(async (slug: string): Promise<MemberSessionDetail | null> => {

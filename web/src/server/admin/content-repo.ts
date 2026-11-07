@@ -7,6 +7,8 @@ import { getDataset } from "./dataset";
 import { DAY } from "./time";
 import { activityTypeLabels, DEMO_NOW } from "./demo-data";
 import type { AdminTestimonial, CommunityPost, ContentSection, PhotoAlbum, SitePage } from "./types";
+import type { InstagramSectionJson } from "@/lib/community-posts";
+import { postsFromSection, readInstagramSection } from "../community-posts";
 
 /**
  * Data Konten & Galeri (content_sections, photo_albums, photos, testimonials). Isi awal diambil
@@ -32,6 +34,8 @@ export async function listHomepageSections(): Promise<ContentSection[]> {
       {
         ...base,
         name: r.label || base.name,
+        // Jumlah post diambil dari daftar yang dikelola di tab Testimoni & IG.
+        summary: r.key === "instagram" ? postSummary(r.published as InstagramSectionJson | null) : base.summary,
         enabled: r.is_enabled,
         title: d.title ?? base.title,
         description: d.description ?? base.description,
@@ -44,6 +48,12 @@ export async function listHomepageSections(): Promise<ContentSection[]> {
   });
   // Section baru di kode yang belum ada di tabel → tampil di akhir.
   return [...known, ...defaults.filter((d) => !rows.some((r) => r.key === d.key))];
+}
+
+/** "5 post · 4 tampil · kelola di Testimoni & IG" untuk kartu section Instagram. */
+function postSummary(json: InstagramSectionJson | null): string {
+  const posts = postsFromSection(json);
+  return `${posts.length} post · ${posts.filter((p) => p.visible).length} tampil · kelola di tab Testimoni & IG`;
 }
 
 function defaultHomepageSections(): ContentSection[] {
@@ -133,7 +143,7 @@ function defaultHomepageSections(): ContentSection[] {
       key: "instagram",
       name: "See You on the Court!",
       icon: "instagram-logo",
-      summary: `${instagram.posts.length} post Instagram · kurasi manual`,
+      summary: postSummary(null),
       enabled: true,
       title: instagram.title,
       description: instagram.description,
@@ -195,15 +205,10 @@ export async function listAlbums(limit?: number): Promise<{ albums: PhotoAlbum[]
   };
 }
 
-/** Post Instagram & Threads di feed "See You on the Court!" (tampil/sembunyi per post). */
+/** Post Instagram, TikTok & Threads di feed "See You on the Court!" (tambah / ubah / hapus / tampil). */
 export async function listCommunityPosts(): Promise<CommunityPost[]> {
-  let hidden = new Set<string>();
-  if (isSupabaseConfigured) {
-    const supabase = await createSupabaseServerClient();
-    const { data: ig } = await supabase.from("content_sections").select("published").eq("page", "home").eq("key", "instagram").maybeSingle();
-    hidden = new Set(((ig?.published as { hiddenPosts?: string[] } | null)?.hiddenPosts) ?? []);
-  }
-  return instagram.posts.map((p): CommunityPost => ({ id: `ig:${p.handle}`, kind: p.platform, text: p.text.join(" "), handle: p.handle, image: p.image, visible: !hidden.has(p.handle) }));
+  if (!isSupabaseConfigured) return postsFromSection(null);
+  return postsFromSection(await readInstagramSection(await createSupabaseServerClient()));
 }
 
 /** Testimoni untuk tab Testimoni & IG (CRUD). Demo: kutipan statis homepage + 2 contoh tersembunyi. */

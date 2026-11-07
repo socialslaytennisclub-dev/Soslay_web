@@ -737,6 +737,13 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const before = await txCount();
   await db.query(`update session_participants set amount = amount, payment_status = payment_status where id = $1`, [p1]);
   console.assert((await txCount()) === before, "import ulang tanpa perubahan menambah transaksi");
+  // Ganti nama → keterangan transaksi ikut, hanya akhiran " · <nama lama>" utuh yang diganti.
+  await db.query(`update session_participants set full_name = 'Nama Baru' where id = $1`, [p1]);
+  const renamed = await db.query(`select description from finance_transactions where source_ref = $1 and deleted_at is null`, ['sp:' + p1]);
+  console.assert(renamed.rows.length > 0 && renamed.rows.every((r) => r.description.endsWith(" · Nama Baru")), `ganti nama peserta → keterangan transaksi ${JSON.stringify(renamed.rows)}`);
+  await db.query(`update session_participants set full_name = 'Baru' where id = $1`, [p1]);
+  const shorter = await db.query(`select description from finance_transactions where source_ref = $1 and deleted_at is null`, ['sp:' + p1]);
+  console.assert(shorter.rows.every((r) => r.description.endsWith(" · Baru") && !r.description.includes("Nama")), `ganti nama: hanya akhiran utuh ${JSON.stringify(shorter.rows)}`);
   await db.query(`delete from session_participants where id = $1`, [p1]);
   console.assert((await net("kuyy_import")) === 0 && (await net("ticket_manual_paid")) === 0, "A-8 hapus peserta → koreksi");
   // Nominal yang diubah admin tidak tertimpa import ulang file Kuyy (yang menulis amount tanpa amount_edited_at).
@@ -1094,4 +1101,103 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.exec(`update finance_settings set auto_manual_paid = true, manual_paid_account_id = '${bank}', go_live_date = '2026-12-01'`);
   await as(null);
   console.log("✓ perbaikan review: booking jalur lain aman, tanpa dobel Kuyy, kuota & arsip paket, tidak bayar lebih, pembayaran tidak terhapus, save_trip atomik, koreksi di akun asal, otomatis mati tetap dikoreksi");
+
+  // ── Peserta tambahan admin: "Ubah pembayaran" ikut aturan Keuangan seperti baris Kuyy ──
+  {
+    await db.exec(`update finance_settings set go_live_date = '2020-01-01'`);
+    const venue = (await one(`select id from venues limit 1`)).id;
+    const sess = (await one(
+      `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status) values ('adm-pay', 'Admin bayar', 'weekly-mabar', $1, now() - interval '1 day', now() - interval '20 hours', 20, 'completed') returning id`,
+      [venue],
+    )).id;
+    const ref = async (r) => Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source_ref = $1 and deleted_at is null`, ['sp:' + r])).s);
+    const adm = (await one(`insert into session_participants (session_id, full_name, kuy_reg_no, source) values ($1, 'Tamu Admin', 'ADM-1', 'admin') returning id`, [sess])).id;
+    console.assert((await ref(adm)) === 0, "peserta admin baru (Rp0) tidak tercatat");
+    await db.query(`update session_participants set amount = 200000, payment_status = 'paid', payment_channel = 'manual' where id = $1`, [adm]);
+    console.assert((await ref(adm)) === 200000, `peserta admin diubah lunas Rp200.000 → tercatat (${await ref(adm)})`);
+    await db.query(`update session_participants set payment_status = 'pending' where id = $1`, [adm]);
+    console.assert((await ref(adm)) === 0, "peserta admin jadi menunggu → koreksi");
+    // Tamu Kuyy diganti orangnya (nama/no. HP diubah admin) → import ulang file Kuyy tidak menimpanya;
+    // keterangan transaksi Keuangan ikut nama baru.
+    const kuy = (await one(`insert into session_participants (session_id, full_name, phone, kuy_reg_no, kuy_username, amount) values ($1, 'Tuesdy A', '81111', 'K1', 'buyer1', 230000) returning id`, [sess])).id;
+    console.assert((await ref(kuy)) === 230000, "baris Kuyy lunas tercatat");
+    await db.query(`update session_participants set full_name = 'Sakinabila', phone = '82222', details_edited_at = now() where id = $1`, [kuy]);
+    const desc = await one(`select description from finance_transactions where source_ref = $1 and amount > 0`, ['sp:' + kuy]);
+    console.assert(desc.description.includes("Sakinabila") && !desc.description.includes("Tuesdy"), `keterangan Keuangan ikut nama baru (${desc.description})`);
+    // Nama yang mirip awalan keterangan ("Kuyy") → hanya bagian nama di akhir yang diganti.
+    // Tiap editan admin punya waktu baru (jam PGlite terlalu kasar untuk dua perintah beruntun → waktu eksplisit).
+    await db.query(`update session_participants set full_name = 'Kuyy', details_edited_at = now() + interval '1 minute' where id = $1`, [kuy]);
+    await db.query(`update session_participants set full_name = 'Sakinabila', details_edited_at = now() + interval '2 minutes' where id = $1`, [kuy]);
+    const desc2 = await one(`select description from finance_transactions where source_ref = $1 and amount > 0`, ['sp:' + kuy]);
+    console.assert(desc2.description === "Tiket Kuyy · Sakinabila", `ganti nama tidak merusak awalan keterangan (${desc2.description})`);
+    await db.query(`update session_participants set full_name = 'Tuesdy A', phone = '81111' where id = $1`, [kuy]); // import ulang
+    const after = await one(`select full_name, phone from session_participants where id = $1`, [kuy]);
+    console.assert(after.full_name === "Sakinabila" && after.phone === "82222", `import ulang tidak menimpa nama/no. HP yang diubah admin (${JSON.stringify(after)})`);
+    await db.exec(`update finance_settings set go_live_date = '2026-12-01'`);
+    console.log("✓ peserta tambahan admin: ubah nominal / status / via → Keuangan + koreksi; nama tamu yang diubah tahan import ulang");
+
+    // Jumlah ronde dikurangi → line-up ronde yang tidak ada lagi ikut terhapus; yang sudah ada skornya menolak.
+    const ln = (await one(
+      `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, match_format, round_count, court_count)
+       values ('ln-trim', 'Trim', 'weekly-mabar', $1, now() + interval '1 day', now() + interval '1 day 3 hours', 20, 'published', 'americano', 9, 1) returning id`,
+      [venue],
+    )).id;
+    const pl = [];
+    for (let i = 1; i <= 4; i++) pl.push((await one(`insert into session_participants (session_id, full_name, kuy_reg_no, source) values ($1, $2, $3, 'admin') returning id`, [ln, `P${i}`, `L${i}`])).id);
+    for (let r = 1; r <= 9; r++) await db.query(`insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2) values ($1, $2, 1, $3, $4, $5, $6)`, [ln, r, ...pl]);
+    await db.query(`update sessions set round_count = 6 where id = $1`, [ln]);
+    const rejects = (sql, hint) => db.query(sql, [ln]).then(() => false, (e) => e.hint === hint);
+    const left = await one(`select max(round_no)::int r, count(*)::int n from session_matches where session_id = $1`, [ln]);
+    console.assert(left.r === 6 && left.n === 6, `ronde dikurangi 9 → 6: line-up R7–R9 terhapus (${JSON.stringify(left)})`);
+    await db.query(`update session_matches set score_a = 21, score_b = 15 where session_id = $1 and round_no = 5`, [ln]);
+    console.assert(await rejects(`update sessions set round_count = 4 where id = $1`, "lineup_scored"), "ronde yang sudah ada skornya tidak boleh dibuang");
+    // Ronde yang sedang dimainkan (belum ada skor) juga tidak boleh dibuang.
+    await db.query(`update sessions set started_rounds = '{6}', current_round = 6 where id = $1`, [ln]);
+    console.assert(await rejects(`update sessions set round_count = 5 where id = $1`, "lineup_started"), "ronde yang sudah dimulai tidak boleh dibuang");
+    // Court dikurangi saat ronde yang memakai court itu sudah dimulai → ditolak.
+    await db.query(`update sessions set court_count = 2 where id = $1`, [ln]);
+    const pl2 = [];
+    for (let i = 5; i <= 8; i++) pl2.push((await one(`insert into session_participants (session_id, full_name, kuy_reg_no, source) values ($1, $2, $3, 'admin') returning id`, [ln, `P${i}`, `L${i}`])).id);
+    await db.query(`insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2) values ($1, 6, 2, $2, $3, $4, $5)`, [ln, ...pl2]);
+    console.assert(await rejects(`update sessions set court_count = 1 where id = $1`, "lineup_started"), "court yang dipakai di ronde berjalan tidak boleh dibuang");
+    console.log("✓ jumlah ronde / court dikurangi → line-up di luar format terhapus (yang sudah ada skornya ditolak)");
+  }
+}
+
+// Peringkat juara: total poin / jumlah menang sama → selisih skor menentukan (yang lebih produktif di atas).
+{
+  await as(null);
+  const members = [];
+  for (let i = 1; i <= 8; i++) {
+    const { id } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, `Rank ${i}`, `rank${i}@mail.com`]);
+    members.push(id);
+  }
+  // Satu ronde, 2 court, 8 member: court 1 = member 1–4, court 2 = member 5–8. Hasil: bonus juara member 1 & 5.
+  const podium = async (title, mode, [[a1, b1], [a2, b2]]) => {
+    const s = (await one(
+      `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, match_format, leaderboard_mode, court_count, round_count)
+       values ($1, $1, 'weekly-mabar', $2, now() - interval '3 hours', now() - interval '1 hour', 20, 'published', 'americano', $3, 2, 1) returning id`,
+      [title, venue, mode],
+    )).id;
+    const { rows } = await db.query(
+      `insert into session_participants (session_id, full_name, kuy_reg_no, source, member_id)
+       select $1, 'Rank ' || i, $2 || i, 'admin', m from unnest($3::uuid[]) with ordinality as t(m, i) order by i returning id`,
+      [s, title, members],
+    );
+    await db.query(
+      `insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2, score_a, score_b) values ($1, 1, 1, $2, $3, $4, $5, $10, $11), ($1, 1, 2, $6, $7, $8, $9, $12, $13)`,
+      [s, ...rows.map((r) => r.id), a1, b1, a2, b2],
+    );
+    await db.query(`select finish_session($1, null, now())`, [s]);
+    const bonus = async (m) => (await one(`select coalesce(sum(delta), 0)::int d from points_ledger where member_id = $1 and note = 'Bonus juara #' || $3 || ' · ' || $2`, [m, title, m === members[0] ? 1 : 3])).d;
+    return [await bonus(members[0]), await bonus(members[4])];
+  };
+  // Point: 48–10 (selisih +38) vs 48–40 (selisih +8) → sama-sama 48 poin.
+  const [first, third] = await podium("rank-diff", "points", [[48, 10], [48, 40]]);
+  console.assert(first === 100 && third === 50, `poin sama 48: selisih +38 juara 1 (+${first}), selisih +8 juara 3 (+${third})`);
+  // Win: 21–5 (selisih +16, 21 poin) vs 30–25 (selisih +5, 30 poin) → menang sama, selisih menang atas poin.
+  const [winFirst, winThird] = await podium("rank-diff-win", "wins", [[21, 5], [30, 25]]);
+  console.assert(winFirst === 100 && winThird === 50, `menang sama: selisih +16 juara 1 (+${winFirst}), selisih +5 juara 3 (+${winThird})`);
+  console.log("✓ peringkat juara: total poin / jumlah menang sama → selisih skor menentukan");
 }

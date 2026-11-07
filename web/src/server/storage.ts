@@ -8,7 +8,7 @@ import { supabaseUrl } from "@/lib/supabase/env";
  * Bucket dibuat otomatis saat upload pertama (skema `storage` tidak ada di PGlite check-migrations).
  */
 
-const IMAGE_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+export const IMAGE_TYPES: Record<string, string> = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
 
 /** `reason: "no_service_key"` → pemanggil di area member mengganti pesan teknisnya. */
 export type UploadResult = { ok: true; url: string; path: string } | { ok: false; error: string; reason?: "no_service_key" };
@@ -121,6 +121,13 @@ export async function discardUploads(bucket: string, urls: string[], { table, co
   const prefix = publicBucketPrefix(bucket);
   const paths = own.filter((u) => !keep.has(u)).map((u) => u.slice(prefix.length));
   if (paths.length) await admin.storage.from(bucket).remove(paths);
+}
+
+/** Hapus sekaligus file hasil upload di bucket ini (URL lain diabaikan) — satu panggilan Storage. */
+export async function removeOwnUploads(bucket: string, urls: string[]) {
+  const prefix = publicBucketPrefix(bucket);
+  const paths = [...new Set(urls)].filter((u) => isOwnUpload(bucket, u)).map((u) => u.slice(prefix.length));
+  if (paths.length) await createSupabaseAdminClient()?.storage.from(bucket).remove(paths);
 }
 
 /** Hapus file lama (URL publik bucket ini); diam-diam diabaikan bila gagal / bukan file bucket. */

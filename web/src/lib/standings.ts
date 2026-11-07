@@ -1,25 +1,58 @@
 /**
  * Peringkat final & bonus juara (Figma Simplify · Akhiri Activity). Aturan urutan sama dengan
- * leaderboard dan RPC `end_session_activity`: poin lalu menang (mode Point) atau menang lalu poin
- * (mode Win); nilai sama persis berbagi peringkat. Bonus juara hanya untuk pemain yang sudah main.
+ * leaderboard dan finish_session di database: mode Point = total poin → selisih skor → menang; mode
+ * Win = menang → selisih skor → total poin. Kalau nilai utama sama, yang selisihnya lebih besar (lebih
+ * produktif) di atas; nilai sama persis berbagi peringkat. Bonus juara hanya untuk pemain yang sudah main.
  */
 
 export const PODIUM_BONUS = [100, 75, 50] as const;
 
-type Standing = { points: number; wins: number; played: number };
+/** points = total skor tim di match yang dimainkan; diff = selisih skor (skor sendiri − lawan). */
+type Standing = { points: number; wins: number; diff: number; played: number };
+
+type Mode = "points" | "wins";
+
+/**
+ * Urutan penentu peringkat — satu-satunya definisi (pembanding, deteksi seri, teks aturan diturunkan
+ * dari sini; finish_session di database memakai urutan yang sama).
+ */
+const RANK_ORDER: Record<Mode, readonly ("points" | "diff" | "wins")[]> = { points: ["points", "diff", "wins"], wins: ["wins", "diff", "points"] };
+
+const FIELD_LABEL = { points: "total poin", diff: "selisih skor (+/−)", wins: "jumlah menang" } as const;
+
+/** "Menang sama → selisih skor (+/−), lalu total poin" — urutan penentu kalau nilai utama sama. */
+export const tieRule = (mode: Mode) => {
+  const [first, second, third] = RANK_ORDER[mode];
+  return `${first === "wins" ? "Menang" : "Poin"} sama → ${FIELD_LABEL[second]}, lalu ${FIELD_LABEL[third]}`;
+};
+
+/** Pembanding sort (terbaik dulu) sesuai RANK_ORDER; 0 = seri penuh. */
+export function compareStandings(x: Standing, y: Standing, mode: Mode) {
+  for (const f of RANK_ORDER[mode]) {
+    const d = y[f] - x[f];
+    if (d) return d;
+  }
+  return 0;
+}
+
+/** Nilai utama yang ditampilkan di tabel (menang / poin). */
+export const rankValue = (s: Standing, mode: Mode) => s[RANK_ORDER[mode][0]];
 
 export type Ranked<S extends Standing> = { s: S; rank: number; tie: boolean; value: number };
 
-/** `standings` sudah terurut (lihat standingsOf); pemain tanpa match berskor tidak diberi peringkat. */
-export function finalRanks<S extends Standing>(standings: S[], mode: "points" | "wins"): Ranked<S>[] {
-  const key = (s: S) => (mode === "wins" ? [s.wins, s.points] : [s.points, s.wins]);
-  const played = standings.filter((s) => s.played > 0);
+/**
+ * Peringkat dengan seri (nilai sama persis berbagi nomor). `standings` sudah terurut (lihat standingsOf).
+ * Peringkat final & bonus: pemain tanpa match berskor tidak diberi peringkat; leaderboard live
+ * menampilkan semua (`includeUnplayed`).
+ */
+export function finalRanks<S extends Standing>(standings: S[], mode: Mode, { includeUnplayed = false } = {}): Ranked<S>[] {
+  const rows = includeUnplayed ? standings : standings.filter((s) => s.played > 0);
   const out: Ranked<S>[] = [];
-  played.forEach((s, i) => {
+  rows.forEach((s, i) => {
     const prev = out[i - 1];
-    const same = prev && key(prev.s).join() === key(s).join();
-    out.push({ s, rank: same ? prev.rank : i + 1, tie: false, value: key(s)[0] });
-    if (same) out[i].tie = prev.tie = true;
+    const same = prev !== undefined && compareStandings(prev.s, s, mode) === 0;
+    out.push({ s, rank: same ? prev.rank : i + 1, tie: same, value: rankValue(s, mode) });
+    if (same) prev.tie = true;
   });
   return out;
 }

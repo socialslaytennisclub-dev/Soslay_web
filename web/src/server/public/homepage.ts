@@ -6,6 +6,9 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabasePublicClient } from "@/lib/supabase/public";
 import { getShopCatalog } from "./products";
 import { getWebsiteVenues } from "./venues";
+import type { InstagramSectionJson } from "@/lib/community-posts";
+import { postsFromSection, readInstagramSection } from "../community-posts";
+import type { SocialPostCardProps } from "@/components/ui";
 
 /**
  * Isi homepage = versi "published" dari admin (Konten & Galeri) di atas konten statis.
@@ -33,7 +36,7 @@ export type Homepage = {
   community: typeof home.community;
   marquee: string;
   shop: typeof home.shop;
-  instagram: typeof home.instagram;
+  instagram: Omit<typeof home.instagram, "posts"> & { posts: SocialPostCardProps[] };
 };
 
 const DEFAULT_ORDER: HomeSectionKey[] = ["hero", "activities", "stats", "venues", "community", "marquee", "shop", "instagram"];
@@ -71,6 +74,26 @@ function toStats(text: string): typeof home.stats {
     });
 }
 
+/** Feed "See You on the Court!": judul/CTA section + post dari admin (belum pernah diedit → konten statis + hiddenPosts lama). */
+function instagramFeed(json: SectionJson): Homepage["instagram"] {
+  const base = home.instagram;
+  return {
+    ...base,
+    title: json.title || base.title,
+    description: json.description ?? base.description,
+    cta: json.cta ?? base.cta,
+    posts: postsFromSection(json as InstagramSectionJson)
+      .filter((p) => p.visible)
+      .map((p) => ({ platform: p.platform, text: [p.text], handle: p.handle, image: p.image, imagePosition: p.imagePosition, href: p.href })),
+  };
+}
+
+/** Feed yang sama untuk halaman lain (Activity, Shop) — hanya membaca section Instagram. */
+export const getInstagramFeed = cache(async (): Promise<Homepage["instagram"]> => {
+  if (!isSupabaseConfigured) return instagramFeed({});
+  return instagramFeed(((await readInstagramSection(createSupabasePublicClient())) ?? {}) as SectionJson);
+});
+
 export const getHomepage = cache(async (): Promise<Homepage> => {
   const base = staticHomepage();
   if (!isSupabaseConfigured) return base;
@@ -96,7 +119,6 @@ export const getHomepage = cache(async (): Promise<Homepage> => {
   const marquee = get("marquee");
   const shop = get("shop");
   const instagram = get("instagram");
-  const hidden = new Set(instagram.hiddenPosts ?? []);
 
   return {
     order: rows.filter((r) => r.is_enabled).map((r) => r.key as HomeSectionKey),
@@ -140,12 +162,6 @@ export const getHomepage = cache(async (): Promise<Homepage> => {
       // Figma: 2 kartu unggulan (Best Seller teratas).
       products: catalog.products.filter((p) => p.featured).slice(0, 2).map((p) => productCardProps(p, catalog.details[p.slug])),
     },
-    instagram: {
-      ...base.instagram,
-      title: instagram.title || base.instagram.title,
-      description: instagram.description ?? base.instagram.description,
-      cta: instagram.cta ?? base.instagram.cta,
-      posts: base.instagram.posts.filter((p) => !hidden.has(p.handle)),
-    },
+    instagram: instagramFeed(instagram),
   };
 });

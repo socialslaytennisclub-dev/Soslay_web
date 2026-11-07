@@ -313,6 +313,11 @@
   min-width: 0;
 }
 
+/* Badge status / tier di kanan atas tidak ikut menyempit (judul yang turun baris). */
+.mobileCardTop > :not(.mobileCardTitle) {
+  flex-shrink: 0;
+}
+
 .mobileCardMeta {
   display: grid;
   gap: var(--space-10);

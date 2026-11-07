@@ -6,9 +6,9 @@ import { InstagramFeed } from "@/components/sections/InstagramFeed/InstagramFeed
 import { Marquee } from "@/components/sections/Marquee/Marquee";
 import { PageHero } from "@/components/sections/PageHero/PageHero";
 import { ShopCategorySection } from "@/components/shop/ShopCategorySection/ShopCategorySection";
-import { instagram } from "@/content/home";
 import { productCategories, shopPage } from "@/content/products";
 import { getShopCatalog } from "@/server/public/products";
+import { getInstagramFeed } from "@/server/public/homepage";
 
 export const metadata: Metadata = {
   title: "Shop — SOSLAY",
@@ -20,7 +20,7 @@ export const metadata: Metadata = {
  * productCategories, kategori kosong disembunyikan) · marquee · Best Seller · Instagram.
  */
 export default async function ShopPage() {
-  const { products, details } = await getShopCatalog();
+  const [{ products, details }, feed] = await Promise.all([getShopCatalog(), getInstagramFeed()]);
   const sections = productCategories
     .map((category) => ({ ...category, products: products.filter((p) => p.category === category.slug) }))
     .filter((section) => section.products.length > 0);
@@ -41,7 +41,7 @@ export default async function ShopPage() {
           {bestSellers.length > 0 && (
             <ShopCategorySection id="best-seller" layout="carousel" products={bestSellers} details={details} {...shopPage.bestSeller} />
           )}
-          <InstagramFeed {...instagram} />
+          <InstagramFeed {...feed} />
         </main>
         <Footer />
       </MotionProvider>

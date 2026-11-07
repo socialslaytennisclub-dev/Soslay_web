@@ -236,6 +236,16 @@
   color: var(--color-navy-900);
 }
 
+/* Kartu HP: judul panjang turun baris (maks 2) — tidak melebar keluar kartu / menabrak badge status. */
+.sessionTitleWrap {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .cellName {
   display: block;
   font-weight: var(--weight-medium);

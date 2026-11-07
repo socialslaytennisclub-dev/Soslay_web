@@ -8,7 +8,7 @@ import { normalizeBookingUrl, slugify } from "@/lib/text";
 import { localPhone } from "@/lib/wa-invite";
 import { uploadPrivateFile } from "@/server/storage";
 import { FINANCE_PROOF_BUCKET } from "../finance-repo";
-import { findMemberById, findMemberByIdentifier } from "../identity";
+import { findMemberById, searchMembers, type MemberIdentity } from "../identity";
 import { getTrip } from "../trips-repo";
 import { audit, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, type ActionResult } from "./common";
 
@@ -231,8 +231,25 @@ export async function duplicateTrip(id: string): Promise<SaveResult> {
   });
 }
 
-/** Tambah pembeli paket: member Soslay (ID Soslay / Kuy ID / no. HP) atau tamu (nama + no. HP). */
-export async function addTripBooking(tripId: string, input: { query?: string; memberId?: string; name?: string; phone?: string }): Promise<ActionResult> {
+export type TripMemberOption = Pick<MemberIdentity, "id" | "fullName" | "memberCode" | "phone"> & { alreadyIn: boolean };
+
+/** Saran member untuk "Tambah peserta bundling" (nama, ID Soslay, Kuy ID, nomor HP). */
+export async function searchTripMembers(tripId: string, query: string): Promise<{ ok: true; members: TripMemberOption[] } | { ok: false; error: string }> {
+  const auth = await requireEditor("activities");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const members = await searchMembers(query);
+  if (!members.length) return { ok: true, members: [] };
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase.from("trip_bookings").select("member_id").eq("trip_id", tripId).is("cancelled_at", null).in("member_id", members.map((m) => m.id));
+  const taken = new Set((data ?? []).map((r) => r.member_id as string));
+  return {
+    ok: true,
+    members: members.map(({ id, fullName, memberCode, phone }) => ({ id, fullName, memberCode, phone, alreadyIn: taken.has(id) })),
+  };
+}
+
+/** Tambah pembeli paket: member Soslay (dipilih dari saran searchTripMembers) atau tamu (nama + no. HP). */
+export async function addTripBooking(tripId: string, input: { memberId?: string; name?: string; phone?: string }): Promise<ActionResult> {
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
   // Hanya yang dibutuhkan: judul trip, jumlah activity, pembeli aktif. Kuota paket & trip diarsipkan dijaga
@@ -242,11 +259,11 @@ export async function addTripBooking(tripId: string, input: { query?: string; me
     supabase.from("trips").select("title").eq("id", tripId).maybeSingle(),
     supabase.from("sessions").select("id", { count: "exact", head: true }).eq("trip_id", tripId),
     supabase.from("trip_bookings").select("member_id").eq("trip_id", tripId).is("cancelled_at", null),
-    input.memberId ? findMemberById(input.memberId) : input.query ? findMemberByIdentifier(input.query) : Promise.resolve(null),
+    input.memberId ? findMemberById(input.memberId) : Promise.resolve(null),
   ]);
   if (!trip) return { ok: false, error: "Trip tidak ditemukan." };
   const active = activeRows ?? [];
-  if (input.query && !member) return { ok: false, error: "Member tidak ditemukan — isi nama & nomor HP untuk tamu." };
+  if (input.memberId && !member) return { ok: false, error: "Member tidak ditemukan — pilih ulang dari daftar." };
   if (member && active.some((b) => b.member_id === member.id)) return { ok: false, error: `${member.fullName} sudah terdaftar di paket ini.` };
   const name = member?.fullName ?? input.name?.trim() ?? "";
   if (!name) return { ok: false, error: "Isi nama peserta." };

@@ -1,6 +1,8 @@
 import "server-only";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { likeEscape } from "@/lib/text";
 import { localPhone } from "@/lib/wa-invite";
 import type { TennisLevel } from "./types";
 
@@ -20,7 +22,7 @@ export type MemberIdentity = {
   email: string;
   phone: string;
   level: TennisLevel | null;
-  matchedBy: "ID Soslay" | "Kuy ID" | "Reclub ID" | "nomor HP";
+  matchedBy: "ID Soslay" | "Kuy ID" | "Reclub ID" | "nomor HP" | "nama";
 };
 
 /** "SOS 0541 2610", "sos-05412610", "05412610" → "SOS 0541 2610"; selain itu null. */
@@ -72,7 +74,27 @@ export async function findMemberByIdentifier(raw: string): Promise<MemberIdentit
   if (code) return one("member_code", code, "ID Soslay");
   const phone = normalizeIndoPhone(q);
   if (phone) return findMemberByPhone(phone);
-  return (await one("kuy_id", q, "Kuy ID")) || (await one("reclub_id", q, "Reclub ID"));
+  // Kuy ID & Reclub ID dicek bersamaan; Kuy ID diutamakan bila keduanya cocok.
+  const [kuy, reclub] = await Promise.all([one("kuy_id", q, "Kuy ID"), one("reclub_id", q, "Reclub ID")]);
+  return kuy ?? reclub;
+}
+
+/**
+ * Saran member saat admin mengetik (Tambah peserta paket trip): ID Soslay / nomor HP / Kuy ID yang
+ * persis, lalu nama yang mengandung teks itu. Maks `limit` hasil.
+ */
+export async function searchMembers(raw: string, limit = 6): Promise<MemberIdentity[]> {
+  const q = raw.trim().replace(/^@/, "");
+  if (q.length < 2 || !isSupabaseConfigured) return [];
+  const db = await readClient();
+  const pattern = `%${likeEscape(q)}%`;
+  // Identifier persis & nama dicari bersamaan.
+  const [exact, { data }] = await Promise.all([
+    findMemberByIdentifier(q),
+    db.from("profiles").select(PROFILE_FIELDS).ilike("full_name", pattern).order("full_name").limit(limit).returns<ProfileRow[]>(),
+  ]);
+  const byName = (data ?? []).map((p) => toIdentity(p, "nama")).filter((m) => m.id !== exact?.id);
+  return [...(exact ? [exact] : []), ...byName].slice(0, limit);
 }
 
 /** Nomor HP di profil tersimpan dengan/tanpa 0 / 62 di depan → cocokkan ketiganya. */

@@ -34,3 +34,16 @@ export function participantsLockReason({ startsAt, status, endedAt, scoredMatche
   if (checkedIn > 0) return `${checkedIn} peserta sudah check-in — batalkan check-in dulu sebelum menghapus.`;
   return null;
 }
+
+/**
+ * Boleh hapus satu peserta? Sebelum / selama activity: selama belum check-in dan belum masuk line-up
+ * atau skor (pertandingan yang memuatnya ikut terhapus). Setelah activity selesai hanya baris tambahan
+ * admin di daftar peserta (mis. dobel salah input) — impor Kuyy & booking sudah jadi catatan activity.
+ */
+export function participantRemoveLock({ trip, checkedIn, inMatch, finished, adminRow }: { trip: boolean; checkedIn: boolean; inMatch: boolean; finished: boolean; adminRow: boolean }): string | null {
+  if (trip) return "Pembeli paket trip — batalkan paketnya di Peserta & pembayaran trip.";
+  if (checkedIn) return "Sudah check-in — batalkan check-in dulu sebelum menghapus.";
+  if (inMatch) return "Sudah masuk line-up / skor — atur ulang line-up dulu sebelum menghapus.";
+  if (finished && !adminRow) return "Activity sudah selesai — hanya peserta tambahan admin yang belum check-in yang bisa dihapus.";
+  return null;
+}

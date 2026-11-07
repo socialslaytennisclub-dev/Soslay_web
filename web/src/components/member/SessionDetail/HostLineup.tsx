@@ -10,18 +10,28 @@ import { isUnstarted, type RoundPlan } from "@/lib/rounds";
 import { firstName, teamName } from "@/lib/text";
 import type { MemberSessionDetail } from "@/server/member/session-detail";
 import { saveHostLineup, type HostLineupMatch } from "@/server/member/actions";
-import { maxRound } from "./LiveCards";
 import styles from "./SessionDetail.module.css";
 
 type Slot = "a1" | "a2" | "b1" | "b2";
 const SLOTS: Slot[] = ["a1", "a2", "b1", "b2"];
 type Draft = HostLineupMatch & { locked: boolean };
 
-const toDraft = (d: MemberSessionDetail): Draft[] =>
-  d.matches.map((m) => {
-    const [a1, a2, b1, b2] = m.playerIds;
-    return { round_no: m.round, court_no: m.court, a1, a2, b1, b2, locked: m.scoreA !== null };
-  });
+/**
+ * Draft line-up = semua ronde & court di format sesi: match yang sudah ada, sisanya slot kosong (mis.
+ * ronde ditambah 6 → 9: R7–R9 bisa diatur manual). Match lama di luar format tidak ikut.
+ */
+const toDraft = (d: MemberSessionDetail): Draft[] => {
+  const rows: Draft[] = [];
+  const byCourt = new Map(d.matches.map((m) => [`${m.round}:${m.court}`, m]));
+  for (let r = 1; r <= d.format.rounds; r++) {
+    for (let c = 1; c <= d.format.courts; c++) {
+      const m = byCourt.get(`${r}:${c}`);
+      const [a1, a2, b1, b2] = m?.playerIds ?? ["", "", "", ""];
+      rows.push({ round_no: r, court_no: c, a1, a2, b1, b2, locked: m ? m.scoreA !== null : false });
+    }
+  }
+  return rows;
+};
 
 /**
  * Acak ulang · prioritaskan yang hadir (Figma Simplify HL-1e): ronde `fromRound`…terakhir diisi
@@ -30,7 +40,8 @@ const toDraft = (d: MemberSessionDetail): Draft[] =>
  */
 export function shuffleFromRound(d: MemberSessionDetail, fromRound: number): HostLineupMatch[] | null {
   const players = d.people.filter((p) => p.checkedIn).map((p) => p.id);
-  const rounds = maxRound(d);
+  // Hanya ronde di format sesi (line-up lama di luar format tidak diisi ulang).
+  const rounds = d.format.rounds;
   if (!playableCourts(players.length, d.format.courts)) return null;
   const history: LineupMatch[] = d.matches
     .filter((m) => m.round < fromRound)
@@ -51,7 +62,9 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
   const { dialogRef, open: showDialog, close, onBackdropClick } = useDialog();
   const [view, setView] = useState<"edit" | "shuffle">("edit");
   const [draft, setDraft] = useState<Draft[]>([]);
-  const [round, setRound] = useState(d.currentRound ?? plan.rounds[0]);
+  // Tab ronde = format sesi (1…jumlah ronde): ronde lama di luar format tidak tampil, ronde baru tampil kosong.
+  const rounds = Array.from({ length: d.format.rounds }, (_, i) => i + 1);
+  const [round, setRound] = useState(d.currentRound ?? rounds[0]);
   const [shuffled, setShuffled] = useState<HostLineupMatch[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, startBusy] = useTransition();
@@ -64,7 +77,7 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
 
   const openDialog = () => {
     setDraft(toDraft(d));
-    setRound(d.currentRound ?? plan.rounds[0]);
+    setRound(d.currentRound ?? rounds[0]);
     setView("edit");
     setError(null);
     showDialog();
@@ -85,14 +98,18 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
     });
 
   const saveDraft = () => {
-    const open = plan.rounds.filter(editable);
+    const open = rounds.filter(editable);
     if (!open.length) return setError("Tidak ada ronde yang masih bisa diubah.");
     const from = Math.min(...open);
-    const rows = draft.filter((m) => m.round_no >= from && !m.locked).map((m) => ({ round_no: m.round_no, court_no: m.court_no, a1: m.a1, a2: m.a2, b1: m.b1, b2: m.b2 }));
-    for (const r of new Set(draft.map((m) => m.round_no))) {
-      const ids = draft.filter((m) => m.round_no === r).flatMap((m) => SLOTS.map((s) => m[s]));
+    // Court yang belum diisi sama sekali dilewati; yang terisi sebagian harus dilengkapi dulu.
+    const partial = draft.find((m) => !m.locked && SLOTS.some((k) => m[k]) && SLOTS.some((k) => !m[k]));
+    if (partial) return setError(`Lengkapi 4 pemain di Ronde ${partial.round_no} · Court ${partial.court_no}.`);
+    const filled = draft.filter((m) => SLOTS.every((k) => m[k]));
+    for (const r of new Set(filled.map((m) => m.round_no))) {
+      const ids = filled.filter((m) => m.round_no === r).flatMap((m) => SLOTS.map((k) => m[k]));
       if (new Set(ids).size !== ids.length) return setError(`Ada pemain yang main dua kali di Ronde ${r}.`);
     }
+    const rows = filled.filter((m) => m.round_no >= from && !m.locked).map((m) => ({ round_no: m.round_no, court_no: m.court_no, a1: m.a1, a2: m.a2, b1: m.b1, b2: m.b2 }));
     persist(from, rows);
   };
 
@@ -129,7 +146,7 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
                 <span>
                   ✓ {present.length} sudah hadir · {absent.length} belum hadir
                 </span>
-                {shuffleFrom <= plan.rounds.at(-1)! && (
+                {shuffleFrom <= rounds.at(-1)! && (
                   <button
                     type="button"
                     className={styles.btnOutlineSm}
@@ -145,7 +162,7 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
               </div>
 
               <div className={styles.lineupTabs} role="tablist" aria-label="Ronde">
-                {plan.rounds.map((r) => (
+                {rounds.map((r) => (
                   <button key={r} type="button" role="tab" aria-selected={r === round} className={cx(styles.lineupTab, r === round && styles.lineupTabOn)} onClick={() => setRound(r)}>
                     {!editable(r) && <Lock size={12} aria-hidden />}
                     {plan.statusOf(r) === "live" && <span className={styles.chipDot} aria-hidden />}R{r}
@@ -168,6 +185,7 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
                         <span key={slot} className={styles.lineupSlot}>
                           {i === 2 && <b className={styles.lineupVs}>vs</b>}
                           <select aria-label={`Court ${m.court_no} · pemain ${i + 1}`} value={m[slot]} onChange={(e) => setSlot(m.court_no, slot, e.target.value)}>
+                            {!m[slot] && <option value="">Pilih pemain…</option>}
                             {d.people.map((p) => (
                               <option key={p.id} value={p.id}>
                                 {p.name}
@@ -202,7 +220,7 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
                 <div>
                   <h2 id="lineup-title">Acak ulang line-up</h2>
                   <span className={styles.muted}>
-                    {d.currentRound ? `R${d.currentRound} sedang dimainkan · ` : ""}R{shuffleFrom}–R{plan.rounds.at(-1)} diacak ulang
+                    {d.currentRound ? `R${d.currentRound} sedang dimainkan · ` : ""}R{shuffleFrom}–R{rounds.at(-1)} diacak ulang
                   </span>
                 </div>
                 <button type="button" className={styles.qrClose} onClick={() => setView("edit")} aria-label="Kembali">
