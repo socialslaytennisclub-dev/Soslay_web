@@ -136,7 +136,8 @@ export async function loadSessionPlay(session: DataSession, live: boolean): Prom
             phone: r.phone ?? "",
             level: r.tennis_level,
             payment: r.payment_status,
-            kuyPayment: r.is_kuy_import ? { amount: r.amount, via: r.payment_channel } : null,
+            // Pembayaran bisa diubah admin: baris file Kuyy & tambahan admin.
+            kuyPayment: r.is_kuy_import || r.source === "admin" ? { amount: r.amount, via: r.payment_channel } : null,
             status: r.checked_in_at ? "attended" : "registered",
             source: r.source,
             checkedIn: Boolean(r.checked_in_at),

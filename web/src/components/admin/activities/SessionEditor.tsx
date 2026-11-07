@@ -408,7 +408,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     );
   };
 
-  /** Menu ⋮ per peserta: ubah pembayaran (impor Kuyy) & hapus dari sesi. */
+  /** Menu ⋮ per peserta: ubah pembayaran (impor Kuyy & tambahan admin) & hapus dari sesi. */
   const rowMenu = (p: SessionParticipant) => (
     <RowMenu
       label={`Aksi untuk ${p.name}`}

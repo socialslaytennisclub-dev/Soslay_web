@@ -1094,4 +1094,23 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.exec(`update finance_settings set auto_manual_paid = true, manual_paid_account_id = '${bank}', go_live_date = '2026-12-01'`);
   await as(null);
   console.log("✓ perbaikan review: booking jalur lain aman, tanpa dobel Kuyy, kuota & arsip paket, tidak bayar lebih, pembayaran tidak terhapus, save_trip atomik, koreksi di akun asal, otomatis mati tetap dikoreksi");
+
+  // ── Peserta tambahan admin: "Ubah pembayaran" ikut aturan Keuangan seperti baris Kuyy ──
+  {
+    await db.exec(`update finance_settings set go_live_date = '2020-01-01'`);
+    const venue = (await one(`select id from venues limit 1`)).id;
+    const sess = (await one(
+      `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status) values ('adm-pay', 'Admin bayar', 'weekly-mabar', $1, now() - interval '1 day', now() - interval '20 hours', 20, 'completed') returning id`,
+      [venue],
+    )).id;
+    const ref = async (r) => Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source_ref = $1 and deleted_at is null`, ['sp:' + r])).s);
+    const adm = (await one(`insert into session_participants (session_id, full_name, kuy_reg_no, source) values ($1, 'Tamu Admin', 'ADM-1', 'admin') returning id`, [sess])).id;
+    console.assert((await ref(adm)) === 0, "peserta admin baru (Rp0) tidak tercatat");
+    await db.query(`update session_participants set amount = 200000, payment_status = 'paid', payment_channel = 'manual' where id = $1`, [adm]);
+    console.assert((await ref(adm)) === 200000, `peserta admin diubah lunas Rp200.000 → tercatat (${await ref(adm)})`);
+    await db.query(`update session_participants set payment_status = 'pending' where id = $1`, [adm]);
+    console.assert((await ref(adm)) === 0, "peserta admin jadi menunggu → koreksi");
+    await db.exec(`update finance_settings set go_live_date = '2026-12-01'`);
+    console.log("✓ peserta tambahan admin: ubah nominal / status / via → Keuangan + koreksi");
+  }
 }

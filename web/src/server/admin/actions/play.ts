@@ -5,7 +5,7 @@ import { isEmail } from "@/lib/auth";
 import { isSessionFinished, participantsLockReason } from "@/lib/session-lock";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { localPhone, phoneFormatError } from "@/lib/wa-invite";
+import { changedPhoneError, localPhone, phoneFormatError } from "@/lib/wa-invite";
 import { getDataset } from "../dataset";
 import { ownContacts, parseKuyExport, type KuyRow } from "../kuy-import";
 import { findMemberById, findMemberByIdentifier, findMemberByPhone, type MemberIdentity } from "../identity";
@@ -502,33 +502,56 @@ export async function clearParticipants(sessionId: string): Promise<ActionResult
 }
 
 /**
- * Ubah nominal, status & jalur bayar peserta hasil impor Kuyy (mis. bayar DP, salah harga di file, atau
- * bayar langsung transfer ke BCA → via Manual: uangnya masuk akun bayar manual, bukan Saldo Kuyy). Boleh
- * kapan saja, juga setelah activity selesai: nominal peserta lunas masuk Keuangan begitu activity
- * selesai, perubahan sesudahnya dicatat sebagai koreksi (trigger finance_on_participant).
+ * Ubah pembayaran peserta hasil impor Kuyy atau tambahan admin: nominal, status & jalur bayar (mis. bayar DP,
+ * salah harga di file, atau bayar langsung transfer ke BCA → via Manual: uangnya masuk akun bayar manual,
+ * bukan Saldo Kuyy). Peserta yang belum member (tamu) juga bisa diganti nama & nomor HP-nya; data member
+ * diubah di profilnya. Boleh kapan saja, juga setelah activity selesai: nominal peserta lunas masuk Keuangan
+ * begitu activity selesai, perubahan sesudahnya dicatat sebagai koreksi (trigger finance_on_participant).
  */
-export async function updateParticipantPayment(sessionId: string, participantId: string, amount: number, payment: "paid" | "pending", via: "kuy" | "manual"): Promise<ActionResult> {
+export async function updateParticipantPayment(
+  sessionId: string,
+  participantId: string,
+  input: { amount: number; payment: "paid" | "pending"; via: "kuy" | "manual"; name?: string; phone?: string },
+): Promise<ActionResult> {
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
+  const { amount, payment, via } = input;
   if (!Number.isInteger(amount) || amount < 0 || amount > 100_000_000) return { ok: false, error: "Nominal tidak valid." };
   if (payment !== "paid" && payment !== "pending") return { ok: false, error: "Status bayar tidak valid." };
   if (via !== "kuy" && via !== "manual") return { ok: false, error: "Jalur bayar tidak valid." };
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase
+  const { data: row } = await supabase
     .from("session_participants")
-    // amount_edited_at → import ulang file Kuyy tidak menimpa nominal ini (trigger keep_import_edits).
-    .update({ amount, payment_status: payment, payment_channel: via, amount_edited_at: new Date().toISOString() })
+    .select("member_id, ghost_id, full_name, phone")
     .eq("id", participantId)
     .eq("session_id", sessionId)
-    .eq("is_kuy_import", true)
-    .select("full_name")
+    .or("is_kuy_import.eq.true,source.eq.admin")
     .maybeSingle();
+  if (!row) return { ok: false, error: "Peserta tidak ditemukan — muat ulang halaman." };
+
+  // Nama & nomor HP hanya untuk tamu (belum member) — data member mengikuti profilnya.
+  const guest = !row.member_id && input.name !== undefined;
+  const name = input.name?.trim() ?? "";
+  if (guest && !name) return { ok: false, error: "Isi nama peserta." };
+  const phoneError = guest ? changedPhoneError(input.phone ?? "", row.phone as string | null) : null;
+  if (phoneError) return { ok: false, error: phoneError };
+  const phone = guest && input.phone?.trim() ? localPhone(input.phone) : null;
+
+  const { error } = await supabase
+    .from("session_participants")
+    // amount_edited_at → import ulang file Kuyy tidak menimpa nominal ini (trigger keep_import_edits).
+    .update({ amount, payment_status: payment, payment_channel: via, amount_edited_at: new Date().toISOString(), ...(guest ? { full_name: name, phone } : {}) })
+    .eq("id", participantId)
+    .eq("session_id", sessionId);
   if (error) return { ok: false, error: `Gagal menyimpan: ${error.message}` };
-  if (!data) return { ok: false, error: "Peserta impor Kuyy tidak ditemukan — muat ulang halaman." };
+  // Tamu yang sama di activity lain ikut memakai nama & nomor baru (selama belum diklaim jadi member).
+  if (guest && row.ghost_id) await supabase.from("ghost_members").update({ full_name: name, phone }).eq("id", row.ghost_id).is("claimed_by", null);
+
+  const who = guest ? name : (row.full_name as string);
   const status = `${PAYMENT_LABEL[payment].toLowerCase()} · via ${PAYMENT_CHANNEL_LABEL[via]}`;
-  await audit(auth.userId, `mengubah pembayaran ${data.full_name}: ${formatRupiahPlain(amount)} · ${status}`, "session", sessionId);
+  await audit(auth.userId, `mengubah pembayaran ${who}: ${formatRupiahPlain(amount)} · ${status}`, "session", sessionId);
   refreshPaths(`/admin/activities/${sessionId}`);
-  return { ok: true, message: `Pembayaran ${data.full_name} disimpan · ${formatRupiahPlain(amount)} · ${status}.` };
+  return { ok: true, message: `Pembayaran ${who} disimpan · ${formatRupiahPlain(amount)} · ${status}.` };
 }
 
 // ── Tambah peserta manual (admin) ──────────────────────────────────────────
@@ -637,6 +660,7 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
       session_id: sessionId,
       kuy_reg_no: regNo,
       source: "admin",
+      payment_channel: "manual", // dibayar langsung, bukan lewat Kuyy
       member_id: member.id,
       full_name: member.fullName,
       email: member.email || null,
@@ -681,6 +705,7 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
     session_id: sessionId,
     kuy_reg_no: regNo,
     source: "admin",
+    payment_channel: "manual", // dibayar langsung, bukan lewat Kuyy
     ghost_id: ghostId,
     full_name: known?.full_name ?? fullName,
     email: email || null,

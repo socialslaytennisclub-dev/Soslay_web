@@ -209,9 +209,9 @@ export type SessionParticipant = {
   level: TennisLevel | null;
   payment: PaymentStatus;
   /**
-   * Baris dari file Kuyy: nominal tiket & jalur bayarnya (Kuy → Saldo Kuyy, Manual → akun bayar manual, mis.
-   * BCA). Bisa diubah admin bersama status bayar; masuk Keuangan setelah activity selesai & lunas.
-   * null = bukan baris file Kuyy (booking website, tambahan admin).
+   * Baris file Kuyy & tambahan admin: nominal tiket & jalur bayarnya (Kuy → Saldo Kuyy, Manual → akun bayar
+   * manual, mis. BCA). Bisa diubah admin bersama status bayar; masuk Keuangan setelah activity selesai & lunas.
+   * null = pembayarannya tidak diubah di sini (booking website, peserta paket trip).
    */
   kuyPayment: { amount: number; via: "kuy" | "manual" } | null;
   status: BookingStatus;
