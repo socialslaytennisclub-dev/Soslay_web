@@ -629,8 +629,9 @@ a.personName:hover {
 /* ── Ubah pembayaran peserta impor Kuyy ── */
 .paymentCell {
   display: inline-flex;
+  flex-wrap: wrap; /* kartu HP: nominal turun ke bawah badge, tidak menabrak kolom Via */
   align-items: center;
-  gap: var(--space-8);
+  gap: 4px var(--space-8);
   font-family: var(--font-ui);
   font-size: 13px;
   color: var(--color-navy-950);
