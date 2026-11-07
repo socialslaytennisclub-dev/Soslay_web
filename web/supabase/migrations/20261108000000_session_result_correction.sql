@@ -93,27 +93,28 @@ begin
   if not found then raise exception 'Sesi tidak ditemukan'; end if;
   if v_s.ended_at is null and v_s.status <> 'completed' then raise exception 'Sesi belum berakhir — atur line-up & skor seperti biasa'; end if;
 
-  drop table if exists correction;
+  -- Selalu pg_temp.* (fungsi SECURITY DEFINER): nama tanpa skema bisa jatuh ke tabel public.
+  drop table if exists pg_temp.correction;
   create temp table correction on commit drop as
   select * from jsonb_to_recordset(coalesce(p_matches, '[]'))
     as l(round_no smallint, court_no smallint, a1 uuid, a2 uuid, b1 uuid, b2 uuid, score_a smallint, score_b smallint);
 
-  if exists (select 1 from correction where round_no < 1 or round_no > v_s.round_count or court_no < 1 or court_no > v_s.court_count) then
+  if exists (select 1 from pg_temp.correction where round_no < 1 or round_no > v_s.round_count or court_no < 1 or court_no > v_s.court_count) then
     raise exception 'Ronde / court di luar format sesi (% ronde · % court)', v_s.round_count, v_s.court_count;
   end if;
-  select format('Ronde %s · Court %s', round_no, court_no) into v_bad from correction group by round_no, court_no having count(*) > 1 limit 1;
+  select format('Ronde %s · Court %s', round_no, court_no) into v_bad from pg_temp.correction group by round_no, court_no having count(*) > 1 limit 1;
   if v_bad is not null then raise exception '% tercatat dua kali', v_bad; end if;
   select format('Ronde %s · Court %s', c.round_no, c.court_no) into v_bad
-  from correction c, unnest(array[c.a1, c.a2, c.b1, c.b2]) p(id)
+  from pg_temp.correction c, unnest(array[c.a1, c.a2, c.b1, c.b2]) p(id)
   where p.id is null or not exists (select 1 from session_participants sp where sp.id = p.id and sp.session_id = p_session)
   limit 1;
   if v_bad is not null then raise exception 'Ada pemain di % yang bukan peserta sesi ini', v_bad; end if;
   select format('Ronde %s', round_no) into v_bad
-  from correction c, unnest(array[c.a1, c.a2, c.b1, c.b2]) p(id)
+  from pg_temp.correction c, unnest(array[c.a1, c.a2, c.b1, c.b2]) p(id)
   group by round_no, p.id having count(*) > 1 limit 1;
   if v_bad is not null then raise exception 'Ada pemain yang main dua kali di %', v_bad; end if;
 
-  select format('Ronde %s · Court %s', round_no, court_no) into v_bad from correction
+  select format('Ronde %s · Court %s', round_no, court_no) into v_bad from pg_temp.correction
   where (score_a is null) <> (score_b is null) or score_a < 0 or score_b < 0
      or (score_a is not null and v_s.match_format = 'americano' and score_a + score_b <> v_s.target_points)
      or (score_a is not null and v_s.match_format <> 'americano' and score_a + score_b = 0)
@@ -127,7 +128,7 @@ begin
   insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2, score_a, score_b, scored_by, scored_at)
   select p_session, round_no, court_no, a1, a2, b1, b2, score_a, score_b,
          case when score_a is not null then auth.uid() end, case when score_a is not null then now() end
-  from correction;
+  from pg_temp.correction;
 
   -- Bonus juara: target dari skor baru dikurangi bonus yang sudah tercatat untuk sesi ini.
   with target as (

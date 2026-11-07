@@ -265,6 +265,12 @@ export function LineupCard({
     setScoring(null);
   };
 
+  const removeMatch = (m: SessionMatch) => {
+    setMatches((list) => list.filter((x) => matchKey(x) !== matchKey(m)));
+    setDirty(true);
+    setScoring(null);
+  };
+
   const saveScore = (m: SessionMatch, a: number, b: number) =>
     correcting ? setDraftScore(m, a, b) : startSaving(async () => {
       const result = await saveMatchScore(sessionId, m.id!, a, b);
@@ -280,6 +286,14 @@ export function LineupCard({
   // Pemain di court yang skornya sudah masuk tidak bisa dipindah — jangan tawarkan di dropdown.
   const lockedPlayers = new Set(roundMatches.filter(isLocked).flatMap((m) => [...m.a, ...m.b]));
   const resting = players.filter((p) => !playing.has(p.id));
+
+  /** Mode koreksi: court yang ternyata dimainkan tapi belum ada di line-up → isi 4 pemain rest pertama. */
+  const addMatch = (court: number) => {
+    const [p1, p2, p3, p4] = resting.map((p) => p.id);
+    if (!p4) return;
+    setMatches((list) => [...list, { round, court, a: [p1, p2], b: [p3, p4], scoreA: null, scoreB: null }]);
+    setDirty(true);
+  };
 
   /** Ganti pemain di satu slot court lewat dropdown (Figma ADM-12): pemain terpilih bertukar tempat (pemain rest juga bisa). */
   const replaceSlot = (round: number, current: string, next: string) => {
@@ -330,7 +344,7 @@ export function LineupCard({
                 </AdminButton>
               </>
             ) : (
-              matches.length > 0 && (
+              (matches.length > 0 || playable > 0) && (
                 <AdminButton size="sm" icon="pencil-simple" onClick={() => setCorrecting(true)}>
                   Koreksi hasil
                 </AdminButton>
@@ -383,7 +397,7 @@ export function LineupCard({
           <AdminIcon name="warning-circle" size={16} />
           Butuh minimal 4 peserta untuk membuat line-up — impor peserta dari Kuyy dulu.
         </p>
-      ) : matches.length === 0 ? (
+      ) : matches.length === 0 && !correcting ? (
         <p className={styles.info}>
           <AdminIcon name="question" size={16} />
           Belum ada line-up. Klik &quot;Generate otomatis&quot; — tiap pemain dapat jumlah main yang sama dan tidak berpasangan dengan orang yang sama dua kali.
@@ -455,12 +469,34 @@ export function LineupCard({
                             Hapus skor
                           </button>
                         )}
+                        {correcting && (
+                          <button type="button" className={editor.linkButton} onClick={() => removeMatch(m)}>
+                            Hapus match
+                          </button>
+                        )}
                       </span>
                     )
                   )}
                 </div>
               );
             })}
+            {correcting &&
+              Array.from({ length: courts }, (_, i) => i + 1)
+                .filter((c) => !roundMatches.some((m) => m.court === c))
+                .map((c) => (
+                  <div key={c} className={styles.court}>
+                    <div className={styles.courtRow}>
+                      <span className={styles.courtLabel}>
+                        <strong>C{c}</strong>
+                        <span>Court</span>
+                      </span>
+                      <span className={editor.muted}>Belum ada match di ronde {round}</span>
+                    </div>
+                    <AdminButton size="sm" icon="plus-bold" onClick={() => addMatch(c)} disabled={resting.length < 4} title={resting.length < 4 ? "Butuh 4 pemain rest" : undefined}>
+                      Tambah match
+                    </AdminButton>
+                  </div>
+                ))}
           </div>
 
           {resting.length > 0 && (

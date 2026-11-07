@@ -737,6 +737,13 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const before = await txCount();
   await db.query(`update session_participants set amount = amount, payment_status = payment_status where id = $1`, [p1]);
   console.assert((await txCount()) === before, "import ulang tanpa perubahan menambah transaksi");
+  // Ganti nama → keterangan transaksi ikut, hanya akhiran " · <nama lama>" utuh yang diganti.
+  await db.query(`update session_participants set full_name = 'Nama Baru' where id = $1`, [p1]);
+  const renamed = await db.query(`select description from finance_transactions where source_ref = $1 and deleted_at is null`, ['sp:' + p1]);
+  console.assert(renamed.rows.length > 0 && renamed.rows.every((r) => r.description.endsWith(" · Nama Baru")), `ganti nama peserta → keterangan transaksi ${JSON.stringify(renamed.rows)}`);
+  await db.query(`update session_participants set full_name = 'Baru' where id = $1`, [p1]);
+  const shorter = await db.query(`select description from finance_transactions where source_ref = $1 and deleted_at is null`, ['sp:' + p1]);
+  console.assert(shorter.rows.every((r) => r.description.endsWith(" · Baru") && !r.description.includes("Nama")), `ganti nama: hanya akhiran utuh ${JSON.stringify(shorter.rows)}`);
   await db.query(`delete from session_participants where id = $1`, [p1]);
   console.assert((await net("kuyy_import")) === 0 && (await net("ticket_manual_paid")) === 0, "A-8 hapus peserta → koreksi");
   // Nominal yang diubah admin tidak tertimpa import ulang file Kuyy (yang menulis amount tanpa amount_edited_at).
@@ -1224,6 +1231,20 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await one(`select score_b from session_matches where session_id = $1 and court_no = 2`, [ks])).score_b === 5, "skor koreksi tersimpan");
   console.assert((await one(`select status from sessions where id = $1`, [ks])).status === "completed", "sesi tetap selesai");
   console.assert((await one(`select correct_session_result($1, $2::jsonb) n`, [ks, lineup(5)])).n === 0, "koreksi ulang yang sama tidak menambah poin");
+  // Hapus skor court 2 (match tidak dimainkan) → member 5 & 6 turun dari podium (baris "tidak lagi juara"),
+  // member 3 & 4 (10 poin) naik ke #3.
+  const scoresOf = ([[a1, b1], [a2, b2]]) => JSON.stringify([
+    { round_no: 1, court_no: 1, a1: parts[0], a2: parts[1], b1: parts[2], b2: parts[3], score_a: a1, score_b: b1 },
+    { round_no: 1, court_no: 2, a1: parts[4], a2: parts[5], b1: parts[6], b2: parts[7], score_a: a2, score_b: b2 },
+  ]);
+  await one(`select correct_session_result($1, $2::jsonb) n`, [ks, scoresOf([[48, 10], [null, null]])]);
+  console.assert((await total(members[0], ks)) === 100 && (await total(members[2], ks)) === 50 && (await total(members[4], ks)) === 0, `hapus skor court 2: #1 ${await total(members[0], ks)}, #3 ${await total(members[2], ks)}, keluar podium ${await total(members[4], ks)}`);
+  console.assert((await one(`select count(*)::int n from points_ledger where member_id = $1 and session_id = $2 and note like '%tidak lagi juara'`, [members[4], ks])).n === 1, "member yang keluar podium dapat baris koreksi negatif");
+  // Mode Win: menang sama → selisih skor. Court 1 30–0 (+30) vs court 2 40–35 (+5): di mode Point member 5
+  // (40 poin) juara 1, di mode Win member 1 (selisih +30) juara 1 dan member 7 keluar podium.
+  await db.query(`update sessions set leaderboard_mode = 'wins' where id = $1`, [ks]);
+  await one(`select correct_session_result($1, $2::jsonb) n`, [ks, scoresOf([[30, 0], [40, 35]])]);
+  console.assert((await total(members[0], ks)) === 100 && (await total(members[4], ks)) === 50 && (await total(members[6], ks)) === 0 && (await total(members[2], ks)) === 0, `mode Win: #1 ${await total(members[0], ks)}, #3 ${await total(members[4], ks)}, kalah ${await total(members[6], ks)}`);
   // Sesi yang belum berakhir tidak lewat jalur koreksi.
   await db.query(`update sessions set ended_at = null, status = 'published' where id = $1`, [ks]);
   console.assert(await fails(`select correct_session_result($1, $2::jsonb)`, [ks, lineup(5)]), "sesi belum berakhir tidak bisa dikoreksi");

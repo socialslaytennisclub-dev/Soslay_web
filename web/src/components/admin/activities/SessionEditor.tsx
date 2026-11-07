@@ -8,7 +8,7 @@ import { formatRupiahPlain, LEVEL_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { TRIP_TYPE } from "@/lib/trips";
 import { shrinkImage } from "@/lib/image-resize";
-import { participantRemoveLock, participantsLockReason } from "@/lib/session-lock";
+import { isSessionEnded, participantRemoveLock, participantsLockReason } from "@/lib/session-lock";
 import { memberInviteWaLink } from "@/lib/wa-invite";
 import { clearParticipants, removeParticipants } from "@/server/admin/actions/play";
 import { deleteSession, discardSessionUploads, saveSession, setCheckIn, uploadSessionCover, type SessionInput } from "@/server/admin/actions/sessions";
@@ -652,7 +652,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
               targetPoints={scoreTarget(session.play.matchFormat, session.play.targetPoints)}
               balanceLevels={play.matchFormat === "rotating"}
               initial={session.matches}
-              ended={!!session.play.endedAt}
+              ended={isSessionEnded({ status: session.status, endedAt: session.play.endedAt })}
               disabledReason={
                 mode === "new"
                   ? "Simpan sesi dulu, lalu impor peserta dari Kuyy untuk membuat line-up."
