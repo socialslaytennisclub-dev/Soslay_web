@@ -1,7 +1,7 @@
 /**
  * Peringkat final & bonus juara (Figma Simplify · Akhiri Activity). Aturan urutan sama dengan
  * leaderboard dan finish_session di database: mode Point = total poin → selisih skor → menang; mode
- * Win = menang → total poin → selisih skor. Kalau total poin sama, yang selisihnya lebih besar (lebih
+ * Win = menang → selisih skor → total poin. Kalau nilai utama sama, yang selisihnya lebih besar (lebih
  * produktif) di atas; nilai sama persis berbagi peringkat. Bonus juara hanya untuk pemain yang sudah main.
  */
 
@@ -10,8 +10,8 @@ export const PODIUM_BONUS = [100, 75, 50] as const;
 /** points = total skor tim di match yang dimainkan; diff = selisih skor (skor sendiri − lawan). */
 type Standing = { points: number; wins: number; diff: number; played: number };
 
-/** Urutan penentu peringkat (lihat komentar file): Point = poin, selisih, menang · Win = menang, poin, selisih. */
-export const rankKey = (s: Standing, mode: "points" | "wins") => (mode === "wins" ? [s.wins, s.points, s.diff] : [s.points, s.diff, s.wins]);
+/** Urutan penentu peringkat (lihat komentar file): Point = poin, selisih, menang · Win = menang, selisih, poin. */
+export const rankKey = (s: Standing, mode: "points" | "wins") => (mode === "wins" ? [s.wins, s.diff, s.points] : [s.points, s.diff, s.wins]);
 
 /** Selisih skor untuk tabel: +12 / −3 / 0. */
 export const formatDiff = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : "0");

@@ -164,7 +164,7 @@ function FinalBoard({ detail: d, ranks }: { detail: MemberSessionDetail; ranks: 
           <ol>{ranks.slice(TOP).map(row)}</ol>
         </details>
       )}
-      <p className={styles.finalNote}>{d.format.leaderboardMode === "wins" ? "Menang sama → total poin, lalu selisih skor (+/−)" : "Poin sama → selisih skor (+/−), lalu jumlah menang"}; yang masih sama berbagi peringkat (=). Hanya match yang diinput host yang dihitung.</p>
+      <p className={styles.finalNote}>{d.format.leaderboardMode === "wins" ? "Menang sama → selisih skor (+/−), lalu total poin" : "Poin sama → selisih skor (+/−), lalu jumlah menang"}; yang masih sama berbagi peringkat (=). Hanya match yang diinput host yang dihitung.</p>
     </section>
   );
 }

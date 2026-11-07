@@ -570,7 +570,7 @@ function LeaderboardTab({ detail: d }: { detail: MemberSessionDetail }) {
           ))}
         </tbody>
       </table>
-      <p className={styles.boardNote}>{started ? `${wins ? "Menang sama → total poin, lalu selisih skor (+/−)" : "Poin sama → selisih skor (+/−), lalu jumlah menang"}; yang masih sama berbagi peringkat (=). Hanya match yang sudah diinput host yang dihitung.` : "Belum ada skor masuk — peringkat bergerak setelah host menginput skor match pertama."}</p>
+      <p className={styles.boardNote}>{started ? `${wins ? "Menang sama → selisih skor (+/−), lalu total poin" : "Poin sama → selisih skor (+/−), lalu jumlah menang"}; yang masih sama berbagi peringkat (=). Hanya match yang sudah diinput host yang dihitung.` : "Belum ada skor masuk — peringkat bergerak setelah host menginput skor match pertama."}</p>
     </section>
   );
 }

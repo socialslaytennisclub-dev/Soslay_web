@@ -1,5 +1,5 @@
 -- Penentu peringkat kalau nilai sama: selisih skor (skor sendiri − lawan). Mode Point = total poin →
--- selisih → menang; mode Win = menang → total poin → selisih. Contoh: dua pemain sama-sama 48 poin →
+-- selisih → menang; mode Win = menang → selisih → total poin. Contoh: dua pemain sama-sama 48 poin →
 -- yang selisihnya lebih besar (lebih produktif) juara di atas. Sama dengan web/src/lib/standings.ts
 -- (rankKey). Isi fungsi selain urutan rank() sama persis dengan 20261101000000_session_close_grace.
 
@@ -23,8 +23,8 @@ begin
   from (
     select pid, rank() over (order by
              case when v_s.leaderboard_mode = 'wins' then wins else pts end desc,
-             case when v_s.leaderboard_mode = 'wins' then pts else diff end desc,
-             case when v_s.leaderboard_mode = 'wins' then diff else wins end desc) as rk
+             diff desc,
+             case when v_s.leaderboard_mode = 'wins' then pts else wins end desc) as rk
     from (
       select pid, sum(own) as pts, sum(own - opp) as diff, count(*) filter (where own > opp) as wins
       from (
