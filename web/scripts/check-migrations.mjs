@@ -1230,3 +1230,33 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(null);
   console.log("✓ koreksi hasil: admin ganti line-up & skor sesi selesai → bonus juara dihitung ulang (baris koreksi, sekali)");
 }
+
+// Poin kehadiran sekali per member per activity: check-in dobel, batal lalu check-in lagi, dan booking
+// yang dihapus lalu dibuat ulang tidak memberi poin dua kali.
+{
+  await as(null);
+  const { id: m } = await one(`insert into auth.users default values returning id`);
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Hadir Sekali', 'hadir1@mail.com')`, [m]);
+  const s = (await one(
+    `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, points_per_attendance)
+     values ('hadir-sekali', 'Open Stance Uji', 'weekly-mabar', $1, now(), now() + interval '2 hours', 20, 'published', 10) returning id`,
+    [(await one(`select id from venues limit 1`)).id],
+  )).id;
+  const pts = async () => (await one(`select coalesce(sum(delta), 0)::int d, count(*)::int n from points_ledger where member_id = $1 and reason = 'attendance'`, [m]));
+  const attend = (status) => db.query(`update bookings set status = $3 where session_id = $1 and member_id = $2`, [s, m, status]);
+  await db.query(`insert into bookings (session_id, member_id) values ($1, $2)`, [s, m]);
+  await attend("attended");
+  await attend("attended");
+  console.assert((await pts()).d === 10, `check-in dua kali → ${(await pts()).d} pts`);
+  await attend("registered");
+  console.assert((await pts()).d === 0, "batal check-in → poin ditarik");
+  await attend("attended");
+  console.assert((await pts()).d === 10, "check-in lagi → tetap 10");
+  console.assert((await one(`select note from points_ledger where member_id = $1 and reason = 'attendance'`, [m])).note === "Hadir di sesi · Open Stance Uji", "catatan poin menyebut nama activity");
+  await db.query(`delete from bookings where session_id = $1 and member_id = $2`, [s, m]);
+  await db.query(`insert into bookings (session_id, member_id) values ($1, $2)`, [s, m]);
+  await attend("attended");
+  const after = await pts();
+  console.assert(after.d === 10 && after.n === 1, `booking dibuat ulang lalu check-in → ${after.d} pts (${after.n} baris)`);
+  console.log("✓ poin kehadiran sekali per activity: check-in dobel / batal lalu check-in / booking dibuat ulang");
+}
