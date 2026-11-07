@@ -419,11 +419,15 @@ export async function removeParticipants(sessionId: string, participants: { id: 
   const supabase = await createSupabaseServerClient();
   const rosterIds = participants.filter((p) => p.id !== p.memberId).map((p) => p.id);
   const bookingMembers = participants.filter((p) => p.id === p.memberId).map((p) => p.memberId!);
-  const [state, { data: matches }, { data: rows }] = await Promise.all([
+  const [state, { data: matches }, { data: rows }, { data: bookingRows }] = await Promise.all([
     sessionState(supabase, sessionId),
     supabase.from("session_matches").select("a1, a2, b1, b2").eq("session_id", sessionId),
     rosterIds.length
       ? supabase.from("session_participants").select("id, full_name, member_id, checked_in_at, source").eq("session_id", sessionId).in("id", rosterIds)
+      : Promise.resolve({ data: [] }),
+    // Check-in peserta booking website ada di bookings — ikut dicek seperti baris daftar peserta.
+    bookingMembers.length
+      ? supabase.from("bookings").select("member_id").eq("session_id", sessionId).in("member_id", bookingMembers).not("checked_in_at", "is", null)
       : Promise.resolve({ data: [] }),
   ]);
   if ("error" in state) return { ok: false, error: state.error };
@@ -434,8 +438,9 @@ export async function removeParticipants(sessionId: string, participants: { id: 
     const lock = participantRemoveLock({ trip: r.source === "trip", checkedIn: Boolean(r.checked_in_at), inMatch: inMatch.has(r.id as string), finished: state.finished, adminRow: r.source === "admin" });
     if (lock) return { ok: false, error: `${r.full_name}: ${lock}` };
   }
+  const bookingCheckedIn = new Set((bookingRows ?? []).map((b) => b.member_id as string));
   for (const id of bookingMembers) {
-    const lock = participantRemoveLock({ trip: false, checkedIn: false, inMatch: inMatch.has(id), finished: state.finished, adminRow: false });
+    const lock = participantRemoveLock({ trip: false, checkedIn: bookingCheckedIn.has(id), inMatch: inMatch.has(id), finished: state.finished, adminRow: false });
     if (lock) return { ok: false, error: lock };
   }
   const names: string[] = [];
@@ -702,20 +707,24 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
   const lateNote = state.finished ? " · sesi sudah selesai, otomatis tercatat hadir" : "";
 
   const addMember = async (member: MemberIdentity): Promise<ActionResult> => {
-    const [{ count }, { data: booking }] = await Promise.all([
+    const [{ count }, { data: bookings }] = await Promise.all([
       supabase.from("session_participants").select("id", { count: "exact", head: true }).eq("session_id", sessionId).eq("member_id", member.id),
-      supabase.from("bookings").select("source, payment_status").eq("session_id", sessionId).eq("member_id", member.id).neq("status", "cancelled").maybeSingle(),
+      // Bisa lebih dari satu booking aktif (mis. website + admin) → baca semuanya, bukan maybeSingle.
+      supabase.from("bookings").select("source, payment_status").eq("session_id", sessionId).eq("member_id", member.id).neq("status", "cancelled"),
     ]);
     if (count) return { ok: false, error: `${member.fullName} sudah terdaftar di sesi ini.` };
     // Sudah booking sendiri (website / paket trip) & sudah lunas → bayarnya tercatat lewat booking itu; baris
     // ini Rp0 supaya Keuangan tidak mencatat dua kali. Booking belum dibayar (bayar di lapangan) → harga activity.
-    const paidByBooking = Boolean(booking && booking.source !== "admin" && booking.source !== "kuy" && booking.payment_status === "paid");
+    const paidByBooking = (bookings ?? []).some((b) => b.source !== "admin" && b.source !== "kuy" && b.payment_status === "paid");
     const price = paidByBooking ? 0 : state.price;
     const { error } = await supabase.from("session_participants").insert({
       session_id: sessionId,
       kuy_reg_no: regNo,
       source: "admin",
       payment_channel: "manual", // dibayar langsung, bukan lewat Kuyy
+      // Belum tentu sudah bayar → "menunggu" (default kolom "paid" langsung masuk Keuangan saat activity
+      // selesai). Admin menandai lunas lewat ⋮ Ubah pembayaran.
+      payment_status: paidByBooking ? "paid" : "pending", // lunas lewat booking → Rp0 lunas (tidak tercatat dua kali)
       amount: price, // harga activity; DP / harga lain → ⋮ Ubah pembayaran
       member_id: member.id,
       full_name: member.fullName,
@@ -728,7 +737,7 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
     if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
     await audit(auth.userId, `menambah peserta ${member.fullName} (manual)`, "session", sessionId);
     refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
-    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta · ${paidByBooking ? "sudah bayar lewat booking" : formatRupiahPlain(price)}${lateNote}.` };
+    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta · ${paidByBooking ? "sudah bayar lewat booking" : `${formatRupiahPlain(price)} menunggu bayar`}${lateNote}.` };
   };
 
   if ("memberId" in input) return byId ? addMember(byId) : { ok: false, error: "Member tidak ditemukan." };
@@ -762,6 +771,7 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
     kuy_reg_no: regNo,
     source: "admin",
     payment_channel: "manual", // dibayar langsung, bukan lewat Kuyy
+    payment_status: "pending", // belum tentu sudah bayar — tandai lunas lewat ⋮ Ubah pembayaran
     amount: state.price, // harga activity; DP / harga lain → ⋮ Ubah pembayaran
     ghost_id: ghostId,
     full_name: known?.full_name ?? fullName,
@@ -772,5 +782,5 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
   if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
   await audit(auth.userId, `menambah peserta ${fullName} (manual, ghost)`, "session", sessionId);
   refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
-  return { ok: true, message: `${fullName} ditambahkan sebagai ghost member · ${formatRupiahPlain(state.price)}${known ? " (sudah pernah ikut aktivitas sebelumnya)" : ""}${lateNote}.` };
+  return { ok: true, message: `${fullName} ditambahkan sebagai ghost member · ${formatRupiahPlain(state.price)} menunggu bayar${known ? " (sudah pernah ikut aktivitas sebelumnya)" : ""}${lateNote}.` };
 }

@@ -3,7 +3,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isPostPlatform, normalizeHandle, POST_PLATFORMS, postLinkError, type InstagramSectionJson, type PostPlatform, type StoredPost } from "@/lib/community-posts";
 import { detectVideoPlatform } from "@/lib/video";
-import { IMAGE_TYPES, removeOwnUploads, uploadPublicImage } from "../../storage";
+import { IMAGE_TYPES, isOwnUpload, removeOwnUploads, uploadPublicImage } from "../../storage";
 import { postsFromSection, readInstagramSection } from "../../community-posts";
 import { findMemberById } from "../identity";
 import type { AdminTestimonial, ContentSection } from "../types";
@@ -191,7 +191,8 @@ export async function saveInstagramPost(id: string, input: PostInput): Promise<A
   if (text.length > 280) return fail("Kutipan maksimal 280 karakter.");
   const linkError = postLinkError(input.platform, input.href);
   if (linkError) return fail(linkError);
-  if (input.image && !/^(\/images\/|https:\/\/)/.test(input.image)) return fail("Foto post tidak valid.");
+  // Hanya foto situs (/images/…) atau upload di bucket post — host lain tidak diizinkan next/image (feed publik error).
+  if (input.image && !input.image.startsWith("/images/") && !isOwnUpload(POST_BUCKET, input.image)) return fail("Foto post tidak valid — upload ulang fotonya.");
   if (input.memberId && !(await findMemberById(input.memberId))) return fail("Member yang dihubungkan tidak ditemukan — pilih ulang.");
 
   // Satu-satunya tempat aturan foto per platform (Threads: kutipan saja) — pembaca percaya data tersimpan.
@@ -286,7 +287,7 @@ export async function fetchPostPhoto(platform: PostPlatform, href: string): Prom
     if (!bytes.byteLength) return failed;
     const result = await storePostImage(new File([bytes], `preview.${IMAGE_TYPES[type]}`, { type }));
     if (!result.ok) return { ok: false, error: result.error };
-    await audit(auth.userId, "content.post_image_fetch", "post_image", result.path);
+    await audit(auth.userId, `mengambil foto post ${POST_PLATFORMS[platform].label} dari link`, "post_image", result.path);
     return { ok: true, url: result.url };
   } catch {
     return failed;
@@ -359,6 +360,6 @@ export async function uploadPostImage(formData: FormData): Promise<{ ok: true; u
   if ("error" in auth) return { ok: false, error: auth.error };
   const result = await storePostImage(formData.get("file"));
   if (!result.ok) return result;
-  await audit(auth.userId, "content.post_image_upload", "post_image", result.path);
+  await audit(auth.userId, "mengupload foto post", "post_image", result.path);
   return { ok: true, url: result.url };
 }

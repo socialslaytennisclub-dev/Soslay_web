@@ -737,6 +737,13 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const before = await txCount();
   await db.query(`update session_participants set amount = amount, payment_status = payment_status where id = $1`, [p1]);
   console.assert((await txCount()) === before, "import ulang tanpa perubahan menambah transaksi");
+  // Ganti nama → keterangan transaksi ikut, hanya akhiran " · <nama lama>" utuh yang diganti.
+  await db.query(`update session_participants set full_name = 'Nama Baru' where id = $1`, [p1]);
+  const renamed = await db.query(`select description from finance_transactions where source_ref = $1 and deleted_at is null`, ['sp:' + p1]);
+  console.assert(renamed.rows.length > 0 && renamed.rows.every((r) => r.description.endsWith(" · Nama Baru")), `ganti nama peserta → keterangan transaksi ${JSON.stringify(renamed.rows)}`);
+  await db.query(`update session_participants set full_name = 'Baru' where id = $1`, [p1]);
+  const shorter = await db.query(`select description from finance_transactions where source_ref = $1 and deleted_at is null`, ['sp:' + p1]);
+  console.assert(shorter.rows.every((r) => r.description.endsWith(" · Baru") && !r.description.includes("Nama")), `ganti nama: hanya akhiran utuh ${JSON.stringify(shorter.rows)}`);
   await db.query(`delete from session_participants where id = $1`, [p1]);
   console.assert((await net("kuyy_import")) === 0 && (await net("ticket_manual_paid")) === 0, "A-8 hapus peserta → koreksi");
   // Nominal yang diubah admin tidak tertimpa import ulang file Kuyy (yang menulis amount tanpa amount_edited_at).
