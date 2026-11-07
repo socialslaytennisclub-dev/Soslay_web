@@ -1122,5 +1122,27 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
     console.assert(after.full_name === "Sakinabila" && after.phone === "82222", `import ulang tidak menimpa nama/no. HP yang diubah admin (${JSON.stringify(after)})`);
     await db.exec(`update finance_settings set go_live_date = '2026-12-01'`);
     console.log("✓ peserta tambahan admin: ubah nominal / status / via → Keuangan + koreksi; nama tamu yang diubah tahan import ulang");
+
+    // Jumlah ronde dikurangi → line-up ronde yang tidak ada lagi ikut terhapus; yang sudah ada skornya menolak.
+    const ln = (await one(
+      `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, match_format, round_count, court_count)
+       values ('ln-trim', 'Trim', 'weekly-mabar', $1, now() + interval '1 day', now() + interval '1 day 3 hours', 20, 'published', 'americano', 9, 1) returning id`,
+      [venue],
+    )).id;
+    const pl = [];
+    for (let i = 1; i <= 4; i++) pl.push((await one(`insert into session_participants (session_id, full_name, kuy_reg_no, source) values ($1, $2, $3, 'admin') returning id`, [ln, `P${i}`, `L${i}`])).id);
+    for (let r = 1; r <= 9; r++) await db.query(`insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2) values ($1, $2, 1, $3, $4, $5, $6)`, [ln, r, ...pl]);
+    await db.query(`update sessions set round_count = 6 where id = $1`, [ln]);
+    const left = await one(`select max(round_no)::int r, count(*)::int n from session_matches where session_id = $1`, [ln]);
+    console.assert(left.r === 6 && left.n === 6, `ronde dikurangi 9 → 6: line-up R7–R9 terhapus (${JSON.stringify(left)})`);
+    await db.query(`update session_matches set score_a = 21, score_b = 15 where session_id = $1 and round_no = 5`, [ln]);
+    let refused = false;
+    try {
+      await db.query(`update sessions set round_count = 4 where id = $1`, [ln]);
+    } catch {
+      refused = true;
+    }
+    console.assert(refused, "ronde yang sudah ada skornya tidak boleh dibuang");
+    console.log("✓ jumlah ronde / court dikurangi → line-up di luar format terhapus (yang sudah ada skornya ditolak)");
   }
 }

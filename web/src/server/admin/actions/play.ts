@@ -341,7 +341,7 @@ export async function saveLineup(sessionId: string, matches: Omit<SessionMatch, 
   const resolved = [];
   const usedPerRound = new Map<number, Set<string>>();
   for (const m of matches) {
-    if (m.round < 1 || m.round > session.round_count || m.court < 1 || m.court > session.court_count) return { ok: false, error: `Ronde ${m.round} · Court ${m.court} di luar format sesi.` };
+    if (m.round < 1 || m.round > session.round_count || m.court < 1 || m.court > session.court_count) return { ok: false, error: `Ronde ${m.round} · Court ${m.court} di luar format sesi (${session.round_count} ronde · ${session.court_count} court) — muat ulang halaman lalu acak ulang.` };
     const ids = [...m.a, ...m.b].map((p) => idOf.get(p));
     if (ids.some((p) => !p)) return { ok: false, error: `Ada pemain di Ronde ${m.round} yang bukan peserta sesi ini.` };
     const used = usedPerRound.get(m.round) ?? new Set<string>();
