@@ -585,10 +585,13 @@ export type ParticipantLookup =
  * baru dicatat sesudah main). Hanya admin editor "activities" yang bisa memanggil aksi ini.
  * `finished` dipakai untuk aturan khusus sesi selesai (lihat addParticipantManual & impor Kuyy).
  */
-async function sessionFinished(supabase: Supabase, sessionId: string): Promise<{ error: string } | { finished: boolean }> {
-  const { data: session } = await supabase.from("sessions").select("status, ended_at, ends_at").eq("id", sessionId).maybeSingle();
+async function sessionFinished(supabase: Supabase, sessionId: string): Promise<{ error: string } | { finished: boolean; price: number }> {
+  const { data: session } = await supabase.from("sessions").select("status, ended_at, ends_at, price").eq("id", sessionId).maybeSingle();
   if (!session) return { error: "Sesi tidak ditemukan." };
-  return { finished: isSessionFinished({ status: session.status as string, endedAt: session.ended_at as string | null, endsAt: session.ends_at as string }) };
+  return {
+    finished: isSessionFinished({ status: session.status as string, endedAt: session.ended_at as string | null, endsAt: session.ends_at as string }),
+    price: Number(session.price ?? 0),
+  };
 }
 
 type Participants = { regNos: Set<string>; memberRegNo: Map<string, string> };
@@ -681,6 +684,7 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
       kuy_reg_no: regNo,
       source: "admin",
       payment_channel: "manual", // dibayar langsung, bukan lewat Kuyy
+      amount: state.price, // harga activity; DP / harga lain → ⋮ Ubah pembayaran
       member_id: member.id,
       full_name: member.fullName,
       email: member.email || null,
@@ -692,7 +696,7 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
     if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
     await audit(auth.userId, `menambah peserta ${member.fullName} (manual)`, "session", sessionId);
     refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
-    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta${lateNote}.` };
+    return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta · ${formatRupiahPlain(state.price)}${lateNote}.` };
   };
 
   if ("memberId" in input) return byId ? addMember(byId) : { ok: false, error: "Member tidak ditemukan." };
@@ -726,6 +730,7 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
     kuy_reg_no: regNo,
     source: "admin",
     payment_channel: "manual", // dibayar langsung, bukan lewat Kuyy
+    amount: state.price, // harga activity; DP / harga lain → ⋮ Ubah pembayaran
     ghost_id: ghostId,
     full_name: known?.full_name ?? fullName,
     email: email || null,
@@ -735,5 +740,5 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
   if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
   await audit(auth.userId, `menambah peserta ${fullName} (manual, ghost)`, "session", sessionId);
   refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
-  return { ok: true, message: `${fullName} ditambahkan sebagai ghost member${known ? " (sudah pernah ikut aktivitas sebelumnya)" : ""}${lateNote}.` };
+  return { ok: true, message: `${fullName} ditambahkan sebagai ghost member · ${formatRupiahPlain(state.price)}${known ? " (sudah pernah ikut aktivitas sebelumnya)" : ""}${lateNote}.` };
 }

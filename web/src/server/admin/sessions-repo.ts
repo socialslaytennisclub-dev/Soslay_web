@@ -146,8 +146,8 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
         payment: b.payment,
         status: b.status,
         source,
-        // Demo: peserta "Kuy" memakai harga sesi, tambahan admin via Manual — supaya form ubah pembayaran bisa dicoba.
-        kuyPayment: source === "kuy" ? { amount: s.price, via: "kuy" } : source === "admin" ? { amount: 0, via: "manual" } : null,
+        // Demo: peserta "Kuy" & tambahan admin (via Manual) memakai harga sesi — supaya form ubah pembayaran bisa dicoba.
+        kuyPayment: source === "kuy" ? { amount: s.price, via: "kuy" } : source === "admin" ? { amount: s.price, via: "manual" } : null,
         checkedIn: b.checkedIn ?? b.status === "attended",
         guests: b.guests ?? (i % 9 === 3 ? 1 : 0),
       };
