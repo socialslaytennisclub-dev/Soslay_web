@@ -1158,6 +1158,18 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
       refusedStarted = true;
     }
     console.assert(refusedStarted, "ronde yang sudah dimulai tidak boleh dibuang");
+    // Court dikurangi saat ronde yang memakai court itu sudah dimulai → ditolak.
+    await db.query(`update sessions set court_count = 2 where id = $1`, [ln]);
+    const pl2 = [];
+    for (let i = 5; i <= 8; i++) pl2.push((await one(`insert into session_participants (session_id, full_name, kuy_reg_no, source) values ($1, $2, $3, 'admin') returning id`, [ln, `P${i}`, `L${i}`])).id);
+    await db.query(`insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2) values ($1, 6, 2, $2, $3, $4, $5)`, [ln, ...pl2]);
+    let refusedCourt = false;
+    try {
+      await db.query(`update sessions set court_count = 1 where id = $1`, [ln]);
+    } catch {
+      refusedCourt = true;
+    }
+    console.assert(refusedCourt, "court yang dipakai di ronde berjalan tidak boleh dibuang");
     console.log("✓ jumlah ronde / court dikurangi → line-up di luar format terhapus (yang sudah ada skornya ditolak)");
   }
 }

@@ -20,6 +20,15 @@ begin
       greatest(coalesce(new.current_round, 0), coalesce((select max(r) from unnest(new.started_rounds) r), 0))
       using hint = 'lineup_started';
   end if;
+  -- Court dikurangi: match court yang dibuang di ronde yang sedang / sudah dimulai juga dilindungi.
+  if new.court_count < old.court_count and exists (
+    select 1 from session_matches
+    where session_id = new.id and court_no > new.court_count
+      and (round_no = new.current_round or round_no = any(new.started_rounds))
+  ) then
+    raise exception 'Court % sedang dipakai di ronde yang sudah dimulai — tunggu ronde selesai sebelum mengurangi court.', new.court_count + 1
+      using hint = 'lineup_started';
+  end if;
   delete from session_matches
   where session_id = new.id and score_a is null and (round_no > new.round_count or court_no > new.court_count);
   return null;
