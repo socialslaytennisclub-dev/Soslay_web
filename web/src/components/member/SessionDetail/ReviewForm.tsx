@@ -41,7 +41,7 @@ function Stars({ value, onChange, label, size = "md" }: { value: number; onChang
 
 /**
  * Tab Review (Figma Simplify S3-P · 2c–2e): bintang + yang paling oke + rating detail + ulasan
- * (maks. 500 karakter, tanpa foto). Review pertama +10 Slay Point; bisa diubah sampai 7 hari
+ * (maks. 500 karakter, tanpa foto). Review pertama dapat Slay Point (Aturan poin → Review sesi); bisa diubah sampai 7 hari
  * setelah sesi, setelah itu hanya bisa dibaca.
  */
 export function ReviewTab({ detail: d }: { detail: MemberSessionDetail }) {
@@ -54,6 +54,9 @@ export function ReviewTab({ detail: d }: { detail: MemberSessionDetail }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, startBusy] = useTransition();
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((r) => ({ ...r, [key]: value }));
+  // Host sesi ikut memberi review, tapi tidak menilai dirinya sendiri (rating & sorotan "Host").
+  const details = d.isHost ? DETAILS.filter(([key]) => key !== "host") : DETAILS;
+  const highlights = d.isHost ? HIGHLIGHTS.filter((h) => h !== "Host ramah") : HIGHLIGHTS;
 
   const send = () =>
     startBusy(async () => {
@@ -72,7 +75,7 @@ export function ReviewTab({ detail: d }: { detail: MemberSessionDetail }) {
       <section className={styles.card} aria-labelledby="review-title">
         {justSent && (
           <p className={styles.reviewThanks} role="status">
-            <Check size={16} aria-hidden /> Terima kasih! Review kamu sudah terkirim · +10 Slay Point
+            <Check size={16} aria-hidden /> Terima kasih! Review kamu sudah terkirim{d.reviewPoints > 0 && ` · +${d.reviewPoints} Slay Point`}
           </p>
         )}
         <header className={styles.cardHead}>
@@ -135,7 +138,7 @@ export function ReviewTab({ detail: d }: { detail: MemberSessionDetail }) {
       <fieldset className={styles.reviewSet}>
         <legend>Yang paling oke (boleh pilih lebih dari satu)</legend>
         <div className={styles.reviewChips}>
-          {HIGHLIGHTS.map((h) => {
+          {highlights.map((h) => {
             const on = draft.highlights.includes(h);
             return (
               <button key={h} type="button" aria-pressed={on} className={cx(styles.reasonChip, on && styles.reasonChipOn)} onClick={() => set("highlights", on ? draft.highlights.filter((x) => x !== h) : [...draft.highlights, h])}>
@@ -148,7 +151,7 @@ export function ReviewTab({ detail: d }: { detail: MemberSessionDetail }) {
 
       <fieldset className={styles.reviewSet}>
         <legend>Rating detail</legend>
-        {DETAILS.map(([key, label]) => (
+        {details.map(([key, label]) => (
           <div key={key} className={styles.reviewDetailRow}>
             <span>{label}</span>
             <Stars value={draft[key] ?? 0} onChange={(v) => set(key, v)} label={`Rating ${label}`} size="sm" />
@@ -187,7 +190,11 @@ export function ReviewTab({ detail: d }: { detail: MemberSessionDetail }) {
           {busy ? "Mengirim…" : d.myReview ? "Simpan perubahan" : "Kirim review"}
         </button>
       </div>
-      {!d.myReview && <p className={styles.small}>Review pertama dapat +10 Slay Point. Bisa diubah sampai {formatTanggalPendek(d.reviewUntil, d.city, "dateTime")}.</p>}
+      {!d.myReview && (
+        <p className={styles.small}>
+          {d.reviewPoints > 0 && `Review pertama dapat +${d.reviewPoints} Slay Point. `}Bisa diubah sampai {formatTanggalPendek(d.reviewUntil, d.city, "dateTime")}.
+        </p>
+      )}
     </section>
   );
 }

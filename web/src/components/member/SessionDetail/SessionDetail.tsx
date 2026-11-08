@@ -34,11 +34,11 @@ export type DetailTab = keyof typeof TAB_LABEL;
 
 /**
  * Tab per kondisi (Figma Simplify): sebelum mulai & live → Info · Peserta · Live · Leaderboard ·
- * Ronde; selesai → Hasil · Ronde · Foto · Review · Info (host yang tidak ikut main tanpa Review).
+ * Ronde; selesai → Hasil · Ronde · Foto · Review · Info (peserta & host sesi bisa memberi review).
  */
-export function detailTabs(d: Pick<MemberSessionDetail, "phase" | "ticket">): DetailTab[] {
+export function detailTabs(d: Pick<MemberSessionDetail, "phase" | "canReview">): DetailTab[] {
   if (d.phase !== "done") return ["info", "peserta", "live", "leaderboard", "ronde"];
-  return d.ticket ? ["hasil", "ronde", "foto", "review", "info"] : ["hasil", "ronde", "foto", "info"];
+  return d.canReview ? ["hasil", "ronde", "foto", "review", "info"] : ["hasil", "ronde", "foto", "info"];
 }
 
 /** Host yang tidak ikut main (Figma Simplify "Host (bukan peserta)"). */

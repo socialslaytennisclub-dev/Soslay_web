@@ -49,7 +49,7 @@ export type SessionInput = {
   crewMembers: { memberId: string; role: "host" | "photographer" }[];
   /** Foto sesi: link album Google Drive, thumbnail (URL upload), jumlah foto. */
   photos: { albumUrl: string; coverPath: string | null; count: number | null };
-  play: { matchFormat: MatchFormat; courtCount: number; roundCount: number; targetPoints: number; leaderboardMode: "points" | "wins"; showLeaderboard: boolean };
+  play: { matchFormat: MatchFormat; courtCount: number; roundCount: number; targetPoints: number; leaderboardMode: "points" | "wins"; showLeaderboard: boolean; /** null = tetap aturan lama (activity lama). */ podiumBonus: [number, number, number] | null };
 };
 
 /** Format yang sudah bisa dipakai (v1) — Round robin & Knockout menyusul. */
@@ -88,6 +88,8 @@ function validate(input: SessionInput): string | null {
     if (hasTargetTotal(matchFormat) && (!Number.isInteger(targetPoints) || targetPoints < 1 || targetPoints > SCORE_MAX)) return `Target poin 1–${SCORE_MAX}.`;
     if (input.play.leaderboardMode !== "points" && input.play.leaderboardMode !== "wins") return "Format leaderboard tidak dikenal.";
   }
+  const bonus = input.play.podiumBonus;
+  if (bonus !== null && (!Array.isArray(bonus) || bonus.length !== 3 || bonus.some((n) => !Number.isInteger(n) || n < 0 || n > 10_000))) return "Bonus juara 0–10.000 poin.";
   return null;
 }
 
@@ -189,6 +191,7 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
     score_entry: "host",
     leaderboard_mode: input.play.leaderboardMode,
     show_live_leaderboard: input.play.showLeaderboard,
+    podium_bonus: input.play.podiumBonus,
     photo_album_url: input.photos.albumUrl.trim() || null,
     photo_cover_path: input.photos.coverPath,
     photo_count: input.photos.count,

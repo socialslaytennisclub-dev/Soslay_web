@@ -246,6 +246,25 @@ export type SessionDetail = SessionRow & {
   hosts: SessionHost[];
   matches: SessionMatch[];
   photos: SessionPhotos;
+  /** Review dari peserta & host sesi (tab Review member), terbaru di atas. */
+  reviews: SessionReview[];
+};
+
+/** Satu review sesi untuk admin. Rating 1–5; null = tidak diisi. */
+export type SessionReview = {
+  memberId: string;
+  name: string;
+  /** Yang memberi review adalah host sesi ini. */
+  isHost: boolean;
+  rating: number;
+  host: number | null;
+  venue: number | null;
+  format: number | null;
+  highlights: string[];
+  comment: string | null;
+  /** Member mengizinkan review dipakai sebagai testimoni. */
+  testimonial: boolean;
+  at: string;
 };
 
 /** rotating = Rotating Partner (partner berganti tiap ronde, tim diseimbangkan per level). */
@@ -260,6 +279,9 @@ export type SessionPlay = {
   /** Peringkat dari total poin atau jumlah menang. */
   leaderboardMode: "points" | "wins";
   showLeaderboard: boolean;
+  /** Slay Point juara 1 / 2 / 3 untuk activity ini (0 = tanpa bonus), dibagikan saat sesi ditutup.
+   *  null = activity lama dengan aturan lama 100 / 75 / 50. */
+  podiumBonus: [number, number, number] | null;
   liveStartedAt: string | null;
   endedAt: string | null;
 };
@@ -619,7 +641,7 @@ export type LedgerEntry = {
 
 export type TierBenefits = { tier: Tier; label: string; minPoints: number; benefits: string[]; members: number };
 
-export type BonusKey = "signup" | "birthday" | "referral" | "testimonial" | "streak";
+export type BonusKey = "signup" | "review" | "birthday" | "referral" | "testimonial" | "streak";
 
 /** app_settings "points_rules" (+ "rupiah_per_point"). Semua angka bebas, bilangan bulat ≥ 0. */
 export type PointRules = {

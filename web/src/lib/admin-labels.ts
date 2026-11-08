@@ -73,6 +73,7 @@ export const POINTS_REASON_LABEL: Record<PointsReason, string> = { attendance: "
 
 export const BONUS_LABEL: Record<BonusKey, { label: string; hint: string }> = {
   signup: { label: "Member baru", hint: "Langsung setelah akun dibuat" },
+  review: { label: "Review sesi", hint: "Review pertama member untuk sebuah sesi (sekali per sesi)" },
   birthday: { label: "Ulang tahun", hint: "Dikirim jam 08.00 di hari ulang tahun" },
   referral: { label: "Ajak teman", hint: "Untuk kamu & teman, setelah teman hadir 1×" },
   testimonial: { label: "Testimoni disetujui", hint: "Teks atau video yang tampil di homepage" },

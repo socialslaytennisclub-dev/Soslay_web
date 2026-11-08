@@ -1,5 +1,6 @@
 import "server-only";
 import { DEFAULT_TARGET_POINTS } from "@/lib/americano";
+import { DEFAULT_PODIUM_BONUS, toPodiumBonus } from "@/lib/standings";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { DataSession } from "./dataset";
 import { membersByIds } from "./identity";
@@ -18,6 +19,7 @@ export const DEFAULT_PLAY: SessionPlay = {
   scoreEntry: "host",
   leaderboardMode: "points",
   showLeaderboard: true,
+  podiumBonus: [...DEFAULT_PODIUM_BONUS],
   liveStartedAt: null,
   endedAt: null,
 };
@@ -33,6 +35,7 @@ type PlayRow = {
   score_entry: "host" | "participants";
   leaderboard_mode: "points" | "wins";
   show_live_leaderboard: boolean;
+  podium_bonus: number[] | null;
   live_started_at: string | null;
   ended_at: string | null;
   photo_album_url: string | null;
@@ -79,7 +82,7 @@ export async function loadSessionPlay(session: DataSession, live: boolean): Prom
   const [play, roster, hosts, matches] = await Promise.all([
     supabase
       .from("sessions")
-      .select("match_format, court_count, round_count, target_points, score_entry, leaderboard_mode, show_live_leaderboard, live_started_at, ended_at, photo_album_url, photo_cover_path, photo_count, photos_posted_at")
+      .select("match_format, court_count, round_count, target_points, score_entry, leaderboard_mode, show_live_leaderboard, podium_bonus, live_started_at, ended_at, photo_album_url, photo_cover_path, photo_count, photos_posted_at")
       .eq("id", id)
       .single<PlayRow>(),
     supabase
@@ -119,6 +122,7 @@ export async function loadSessionPlay(session: DataSession, live: boolean): Prom
           scoreEntry: p.score_entry,
           leaderboardMode: p.leaderboard_mode,
           showLeaderboard: p.show_live_leaderboard,
+          podiumBonus: toPodiumBonus(p.podium_bonus),
           liveStartedAt: p.live_started_at,
           endedAt: p.ended_at,
         }

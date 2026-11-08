@@ -14,7 +14,16 @@ import { toast } from "../ui/Toaster";
 import editor from "./SessionEditor.module.css";
 import styles from "./Play.module.css";
 
-export type PlayForm = { matchFormat: MatchFormat; courtCount: string; roundCount: string; targetPoints: string; leaderboardMode: "points" | "wins"; showLeaderboard: boolean };
+export type PlayForm = {
+  matchFormat: MatchFormat;
+  courtCount: string;
+  roundCount: string;
+  targetPoints: string;
+  leaderboardMode: "points" | "wins";
+  showLeaderboard: boolean;
+  /** Slay Point juara 1 / 2 / 3 (isian teks; kosong = 0). */
+  podiumBonus: [string, string, string];
+};
 
 const RANKINGS = [
   { value: "wins", label: "Win" },
@@ -36,7 +45,21 @@ const LEVEL_WEIGHT: Record<TennisLevel, number> = { beginner: 1, beginner_interm
 const digits = (v: string) => v.replace(/\D/g, "").slice(0, 2);
 
 /** Admin / Edit sesi — Format & skor (Figma ADM-10). */
-export function FormatCard({ value, onChange, locked }: { value: PlayForm; onChange: (next: PlayForm) => void; locked: boolean }) {
+export function FormatCard({
+  value,
+  onChange,
+  locked,
+  bonusLocked = false,
+  legacyBonus = false,
+}: {
+  value: PlayForm;
+  onChange: (next: PlayForm) => void;
+  locked: boolean;
+  /** Activity sudah selesai → bonus juara sudah dibagikan, tidak bisa diubah. */
+  bonusLocked?: boolean;
+  /** Activity lama dengan aturan lama 100 / 75 / 50. */
+  legacyBonus?: boolean;
+}) {
   const hint = FORMATS.find((f) => f.value === value.matchFormat)?.hint;
   const withTarget = hasTargetTotal(value.matchFormat);
   const set = (patch: Partial<PlayForm>) => onChange({ ...value, ...patch });
@@ -81,6 +104,27 @@ export function FormatCard({ value, onChange, locked }: { value: PlayForm; onCha
             {/* Rotating Partner tanpa target poin — skor bebas sesuai hasil di lapangan. */}
             {withTarget && <NumberField label="Target poin" suffix="/ match" value={value.targetPoints} onChange={(v) => set({ targetPoints: v })} disabled={locked} />}
           </div>
+
+          <fieldset className={editor.fieldset}>
+            <legend className={editor.label}>Bonus juara (Slay Point)</legend>
+            <span className={editor.muted}>
+              {bonusLocked
+                ? "Activity sudah selesai — bonus juara sudah dibagikan dan terkunci."
+                : `Dibagikan ke member juara 1–3 saat sesi ditutup · 0 = tanpa bonus. Peringkat sama mendapat bonus yang sama.${legacyBonus ? " Activity ini dibuat sebelum bonus per activity, jadi memakai aturan lama 100 / 75 / 50." : ""}`}
+            </span>
+            <div className={editor.cols3}>
+              {value.podiumBonus.map((pts, i) => (
+                <NumberField
+                  key={i}
+                  label={`Juara ${i + 1}`}
+                  suffix="pts"
+                  value={pts}
+                  onChange={(v) => set({ podiumBonus: value.podiumBonus.map((x, j) => (j === i ? v : x)) as PlayForm["podiumBonus"] })}
+                  disabled={bonusLocked}
+                />
+              ))}
+            </div>
+          </fieldset>
 
           <hr className={styles.divider} />
 

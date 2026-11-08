@@ -3,7 +3,7 @@ import Link from "next/link";
 import { cx } from "@/lib/cx";
 import { formatAngka, formatTanggalPendek } from "@/lib/format";
 import { isUnstarted, roundList } from "@/lib/rounds";
-import { finalRanks, PODIUM_BONUS, type Ranked, sessionPoints, tieRule } from "@/lib/standings";
+import { finalRanks, podiumBonusText, type Ranked, sessionPoints, tieRule } from "@/lib/standings";
 import { formatSigned } from "@/lib/format";
 import { initials, teamName } from "@/lib/text";
 import type { MemberSessionDetail } from "@/server/member/session-detail";
@@ -213,7 +213,7 @@ export function HostResults({ detail: d, endedNotice }: { detail: MemberSessionD
           <strong>{formatAngka(total)} pts</strong>
           <small>
             +{d.format.attendancePoints} × {earning} member hadir{present > earning ? ` (${present - earning} peserta tanpa akun tidak dapat poin)` : ""}
-            {d.ended ? ` · bonus juara ${bonus ? `+${PODIUM_BONUS.join(" / +")}` : "–"}` : " · bonus juara dibagikan saat sesi ditutup"}
+            {d.ended ? ` · bonus ${bonus ? (podiumBonusText(d.format.podiumBonus) ?? "juara –") : "juara –"}` : podiumBonusText(d.format.podiumBonus) ? " · bonus juara dibagikan saat sesi ditutup" : ""}
           </small>
         </div>
       </section>
@@ -306,12 +306,12 @@ export function DoneSide({ detail: d, tab }: { detail: MemberSessionDetail; tab:
           Lihat →
         </Link>
       )}
-      {tab !== "review" && d.ticket && !reviewClosed && (
+      {tab !== "review" && d.canReview && !reviewClosed && (
         <section className={styles.card} aria-labelledby="review-cta-title">
           <h2 id="review-cta-title" className={styles.cardTitle}>
             Gimana sesinya?
           </h2>
-          <p className={styles.muted}>{d.myReview ? "Terima kasih sudah memberi review!" : "Beri rating untuk host & venue. Review pertama dapat +10 Slay Point."}</p>
+          <p className={styles.muted}>{d.myReview ? "Terima kasih sudah memberi review!" : `Beri rating untuk host & venue.${d.reviewPoints > 0 ? ` Review pertama dapat +${d.reviewPoints} Slay Point.` : ""}`}</p>
           {d.myReview && (
             <span className={styles.starsStatic} aria-label={`${d.myReview.rating} dari 5 bintang`}>
               {"★".repeat(d.myReview.rating)}

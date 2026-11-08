@@ -33,6 +33,15 @@ for (const file of (await readdir(dir)).filter((f) => f.endsWith(".sql")).sort()
 // ── Uji perilaku ────────────────────────────────────────────────────────────
 const one = async (sql, params) => (await db.query(sql, params)).rows[0];
 const as = (uid) => db.exec(`select set_config('request.jwt.claim.sub', '${uid ?? ""}', false)`);
+// Bonus juara per activity: default kolom = DEFAULT_PODIUM_BONUS di web/src/lib/standings.ts (diuji di akhir).
+// Uji lama memakai sesi "aturan lama" (podium_bonus NULL = 100 / 75 / 50), jadi default dilepas sementara.
+{
+  const { readFileSync } = await import("node:fs");
+  const ts = readFileSync(new URL("../src/lib/standings.ts", import.meta.url), "utf8").match(/DEFAULT_PODIUM_BONUS = \[([\d,\s]+)\]/)?.[1].replace(/\s/g, "");
+  const sqlDefault = (await one(`select column_default d from information_schema.columns where table_name = 'sessions' and column_name = 'podium_bonus'`)).d;
+  console.assert(ts === "10,0,0" && sqlDefault.startsWith(`'{${ts}}'`), `default bonus juara: kode ${ts} vs database ${sqlDefault}`);
+  await db.exec(`alter table sessions alter column podium_bonus drop default`);
+}
 // Uji saldo di bawah memakai angka pasti → matikan bonus member baru dulu (diuji terpisah di akhir).
 const setSignupBonus = (on) => db.query(`update app_settings set value = jsonb_set(value, '{bonuses,0,enabled}', $1::jsonb) where key = 'points_rules'`, [String(on)]);
 await setSignupBonus(false);
@@ -1388,4 +1397,131 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const bad = rows.flatMap(({ proname, prosrc }) => missingWhere(prosrc).map((stmt) => `${proname}: ${stmt}`));
   console.assert(bad.length === 0, `UPDATE / DELETE tanpa WHERE (ditolak Supabase pg_safeupdate):\n${bad.join("\n")}`);
   console.log("✓ semua fungsi: UPDATE / DELETE selalu memakai WHERE (pg_safeupdate Supabase)");
+}
+
+// Poin review sesi dari Aturan poin (points_rules bonuses[key=review]): default +10, bisa diubah / dimatikan.
+{
+  await as(null);
+  const venue = (await one(`select id from venues limit 1`)).id;
+  const reviewer = async (slug) => {
+    const { id: m } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [m, `Reviewer ${slug}`, `${slug}@mail.com`]);
+    const s = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, ended_at)
+      values ($1, $1, 'weekly-mabar', $2, now() - interval '4 hours', now() - interval '2 hours', 8, 'completed', now() - interval '1 hour') returning id`, [slug, venue])).id;
+    await db.query(`insert into bookings (session_id, member_id) values ($1, $2)`, [s, m]);
+    await as(m);
+    await db.query(`select submit_session_review($1, 5::smallint, '{}', null, null, null, null, false)`, [s]);
+    await db.query(`select submit_session_review($1, 4::smallint, '{}', null, null, null, 'ubah', false)`, [s]); // ubah review → tidak dapat lagi
+    await as(null);
+    return (await one(`select coalesce(sum(delta), 0)::int d, count(*)::int n from points_ledger where member_id = $1 and note like 'Review sesi · %'`, [m]));
+  };
+  const rule = (review) => db.query(
+    `update app_settings set value = jsonb_set(value, '{bonuses}', coalesce((select jsonb_agg(b) from jsonb_array_elements(value -> 'bonuses') b where b ->> 'key' <> 'review'), '[]') || $1::jsonb) where key = 'points_rules'`,
+    [JSON.stringify(review ? [review] : [])],
+  );
+  await rule(null);
+  const def = await reviewer("review-default");
+  const tsReview = Number((await readFile(path.resolve(import.meta.dirname, "../src/lib/standings.ts"), "utf8")).match(/DEFAULT_REVIEW_POINTS = (\d+)/)?.[1]);
+  console.assert(def.d === tsReview && def.n === 1, `aturan belum disimpan → +${tsReview} (DEFAULT_REVIEW_POINTS) sekali (${JSON.stringify(def)})`);
+  await rule({ key: "review", points: 25, enabled: true });
+  console.assert((await one(`select review_bonus_points() p`)).p === 25, "review_bonus_points membaca aturan");
+  const custom = await reviewer("review-25");
+  console.assert(custom.d === 25 && custom.n === 1, `aturan 25 → +25 sekali (${JSON.stringify(custom)})`);
+  await rule({ key: "review", points: 25, enabled: false });
+  const off = await reviewer("review-off");
+  console.assert(off.n === 0, `aturan dimatikan → tanpa poin (${JSON.stringify(off)})`);
+  // Nilai rusak di aturan tidak boleh menggagalkan kirim review → 0 poin.
+  await rule({ key: "review", points: "abc", enabled: "ya" });
+  console.assert((await one(`select review_bonus_points() p`)).p === 0, "nilai poin review rusak → 0, bukan error");
+  await rule({ key: "review", points: 1000000, enabled: true });
+  console.assert((await one(`select review_bonus_points() p`)).p === 1000000, "poin review besar (7 digit) tetap dipakai");
+  await rule({ key: "review", points: "abc", enabled: "ya" });
+  const broken = await reviewer("review-rusak");
+  console.assert(broken.n === 0, `aturan rusak → review tetap terkirim tanpa poin (${JSON.stringify(broken)})`);
+  await rule(null);
+  console.log("✓ poin review sesi mengikuti Aturan poin: default +10, bisa diubah / dimatikan, sekali per sesi");
+}
+
+// Host sesi (tanpa booking / tidak ikut main) bisa memberi review; bukan peserta & bukan host tetap ditolak.
+{
+  await as(null);
+  const venue = (await one(`select id from venues limit 1`)).id;
+  const s = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, ended_at)
+    values ('review-host', 'Review Host', 'weekly-mabar', $1, now() - interval '4 hours', now() - interval '2 hours', 8, 'completed', now() - interval '1 hour') returning id`, [venue])).id;
+  const person = async (slug) => {
+    const { id } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, slug, `${slug}@mail.com`]);
+    return id;
+  };
+  const host = await person("host-review");
+  const stranger = await person("orang-lain");
+  await db.query(`insert into session_hosts (session_id, member_id, role) values ($1, $2, 'host')`, [s, host]);
+  const fails = (sql, params) => db.query(sql, params).then(() => false, () => true);
+  await as(stranger);
+  console.assert(await fails(`select submit_session_review($1, 5::smallint, '{}', null, null, null, null, false)`, [s]), "bukan peserta & bukan host tidak boleh memberi review");
+  await as(host);
+  // Rating "Host" dari host sendiri (mis. lewat API) diabaikan.
+  await db.query(`select submit_session_review($1, 4::smallint, '{Format seru}', 5::smallint, 5::smallint, 4::smallint, 'Lancar', false)`, [s]);
+  await as(null);
+  const r = await one(`select rating, host_rating, venue_rating from session_reviews where session_id = $1 and member_id = $2`, [s, host]);
+  console.assert(r?.rating === 4 && r.host_rating === null && r.venue_rating === 5, `review host tersimpan tanpa rating Host ${JSON.stringify(r)}`);
+  // Poin review host (tanpa booking) tertaut ke sesinya → tampil di "Poin dari sesi ini".
+  const pts = await one(`select coalesce(sum(delta), 0)::int d, count(*)::int n from points_ledger where member_id = $1 and session_id = $2 and note like 'Review sesi · %'`, [host, s]);
+  console.assert(pts.n === 1 && pts.d === (await one(`select review_bonus_points() p`)).p, `poin review host tertaut ke sesi ${JSON.stringify(pts)}`);
+  console.log("✓ host sesi (tanpa booking) bisa memberi review (tanpa rating Host, poin tertaut ke sesi); orang lain ditolak");
+}
+
+// Bonus juara per activity: juara 2 & 3 = 0 → tidak ada baris bonus; nilai lain mengikuti activity; koreksi
+// memakai nilai activity itu juga; setelah selesai bonus terkunci.
+{
+  await as(null);
+  await db.exec(`alter table sessions alter column podium_bonus set default '{10,0,0}'`); // default asli
+  const venue = (await one(`select id from venues limit 1`)).id;
+  const people = [];
+  for (let i = 1; i <= 4; i++) {
+    const { id } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, `Podium ${i}`, `podium${i}@mail.com`]);
+    people.push(id);
+  }
+  const play = async (slug, bonus) => {
+    // bonus null → kolom tidak diisi (default activity baru).
+    const s = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, match_format, court_count, round_count${bonus ? ", podium_bonus" : ""})
+      values ($1, $1, 'weekly-mabar', $2, now() - interval '3 hours', now() - interval '1 hour', 8, 'published', 'rotating', 1, 1${bonus ? ", $3" : ""}) returning id`, bonus ? [slug, venue, bonus] : [slug, venue])).id;
+    const ids = [];
+    for (const [i, m] of people.entries()) ids.push((await one(`insert into session_participants (session_id, full_name, kuy_reg_no, source, member_id) values ($1, $2, $3, 'admin', $4) returning id`, [s, `P${i}`, `${slug}${i}`, m])).id);
+    // Pemain 1–2 menang 6–2 (juara 1), pemain 3–4 kalah (juara 3).
+    await db.query(`insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2, score_a, score_b) values ($1, 1, 1, $2, $3, $4, $5, 6, 2)`, [s, ...ids]);
+    await db.query(`select finish_session($1, null, now())`, [s]);
+    const got = async (m) => (await one(`select coalesce(sum(delta), 0)::int d, count(*)::int n from points_ledger where member_id = $1 and session_id = $2 and reason = 'bonus' and is_podium`, [m, s]));
+    return { s, ids, got };
+  };
+  const def = await play("podium-default", null);
+  const first = await def.got(people[0]);
+  const third = await def.got(people[2]);
+  console.assert(first.d === 10 && third.n === 0, `10 / 0 / 0 → juara 1 +10, juara 3 tanpa baris (${JSON.stringify({ first, third })})`);
+  const custom = await play("podium-custom", "{30,0,15}");
+  console.assert((await custom.got(people[0])).d === 30 && (await custom.got(people[2])).d === 15, "nilai bonus mengikuti activity");
+  // Koreksi: tim 3–4 jadi pemenang → bonus pindah sesuai nilai activity (30 / 15).
+  const admin = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Podium', 'podium@soslay.test', 'active' from roles where name = 'Super Admin'`, [admin]);
+  // Poin review (+10, reason 'bonus' + session_id, bukan bonus juara) tidak boleh ikut dikoreksi.
+  for (const m of [people[0], people[3]]) {
+    await db.query(`insert into points_ledger (member_id, delta, reason, session_id, note) values ($1, 10, 'bonus', $2, 'Review sesi · podium-custom')`, [m, custom.s]);
+  }
+  const reviewPts = async (m) => (await one(`select coalesce(sum(delta), 0)::int d from points_ledger where member_id = $1 and session_id = $2 and not is_podium`, [m, custom.s])).d;
+  await as(admin);
+  await db.query(`select correct_session_result($1, $2::jsonb)`, [custom.s, JSON.stringify([{ round_no: 1, court_no: 1, a1: custom.ids[0], a2: custom.ids[1], b1: custom.ids[2], b2: custom.ids[3], score_a: 1, score_b: 6 }])]);
+  await as(null);
+  console.assert((await custom.got(people[0])).d === 15 && (await custom.got(people[2])).d === 30, "koreksi memakai bonus activity");
+  console.assert((await reviewPts(people[0])) === 10 && (await reviewPts(people[3])) === 10, "koreksi tidak menarik poin review");
+  console.assert((await custom.got(people[3])).d === 30, `pemenang baru yang juga mereview dapat bonus juara penuh (${(await custom.got(people[3])).d})`);
+  // Sesi sudah selesai → bonus terkunci (nilai sama tetap boleh, mis. simpan ulang form).
+  const locked = await db.query(`update sessions set podium_bonus = '{50,0,0}' where id = $1`, [def.s]).then(() => false, (e) => e.hint === "podium_locked");
+  console.assert(locked, "bonus juara activity selesai terkunci");
+  await db.query(`update sessions set podium_bonus = '{10,0,0}', title = title where id = $1`, [def.s]);
+  // Nilai di luar aturan ditolak.
+  const fresh = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status) values ('podium-baru', 'Podium Baru', 'weekly-mabar', $1, now() + interval '2 days', now() + interval '2 days 2 hours', 8, 'draft') returning id`, [venue])).id;
+  const bad = await db.query(`update sessions set podium_bonus = '{10,0}' where id = $1`, [fresh]).then(() => false, () => true);
+  console.assert(bad, "bonus juara harus 3 angka");
+  console.log("✓ bonus juara per activity: default 10 / 0 / 0, nilai 0 tanpa baris, koreksi ikut nilai activity");
 }
