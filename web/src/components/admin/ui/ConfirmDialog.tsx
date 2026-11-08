@@ -45,7 +45,7 @@ export function useConfirm(): [(options: ConfirmOptions) => Promise<boolean>, Re
 function ConfirmDialog({ options, onSettle }: { options: ConfirmOptions; onSettle: (ok: boolean) => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const [typed, setTyped] = useState("");
-  const ready = !options.requireText || typed.trim() === options.requireText;
+  const ready = !options.requireText || typed.trim() === options.requireText.trim();
 
   useEffect(() => {
     const dialog = ref.current;

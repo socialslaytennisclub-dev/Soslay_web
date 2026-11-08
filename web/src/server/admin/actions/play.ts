@@ -2,7 +2,7 @@
 
 import { formatRupiahPlain, PAYMENT_CHANNEL_LABEL, PAYMENT_LABEL } from "@/lib/admin-labels";
 import { isEmail } from "@/lib/auth";
-import { isSessionFinished, participantRemoveLock, participantsLockReason } from "@/lib/session-lock";
+import { isSessionEnded, isSessionFinished, participantRemoveLock, participantsLockReason } from "@/lib/session-lock";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { changedPhoneError, localPhone, phoneFormatError, samePhone } from "@/lib/wa-invite";
@@ -294,9 +294,9 @@ export async function saveLineup(sessionId: string, matches: Omit<SessionMatch, 
   if ("error" in auth) return { ok: false, error: auth.error };
   const supabase = await createSupabaseServerClient();
 
-  const { data: session } = await supabase.from("sessions").select("court_count, round_count, ended_at").eq("id", sessionId).single();
+  const { data: session } = await supabase.from("sessions").select("court_count, round_count, ended_at, status").eq("id", sessionId).single();
   if (!session) return { ok: false, error: "Sesi tidak ditemukan." };
-  if (session.ended_at) return { ok: false, error: "Sesi sudah diakhiri — line-up terkunci." };
+  if (isSessionEnded({ status: session.status as string, endedAt: session.ended_at as string | null })) return { ok: false, error: "Sesi sudah diakhiri — pakai \"Koreksi hasil\"." };
 
   // Peserta booking (id = member id) yang belum ada di daftar peserta → baris session_participants. Juga saat
   // daftar sudah terisi impor Kuyy: booking website setelah impor ikut bisa masuk line-up.
@@ -390,6 +390,32 @@ export async function saveMatchScore(sessionId: string, matchId: string, scoreA:
   await audit(auth.userId, `menyimpan skor ${scoreA}–${scoreB}`, "session_match", matchId);
   refreshPaths(`/admin/activities/${sessionId}`);
   return { ok: true, message: `Skor ${scoreA}–${scoreB} tersimpan · court terkunci.` };
+}
+
+/**
+ * Koreksi hasil activity yang sudah berakhir: seluruh line-up + skor diganti, lalu bonus juara dihitung
+ * ulang oleh RPC correct_session_result (bonus lama dikoreksi lewat baris baru, bukan dihapus). Hanya admin.
+ */
+export async function correctSessionResult(sessionId: string, matches: SessionMatch[]): Promise<ActionResult> {
+  const auth = await requireEditor("activities");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  if (matches.some((m) => [m.scoreA, m.scoreB].some((n) => n !== null && !(Number.isInteger(n) && n >= 0)))) return { ok: false, error: "Skor tidak valid." };
+  const supabase = await createSupabaseServerClient();
+
+  // Slot = id peserta, atau member id untuk peserta booking — RPC menyiapkan baris pesertanya dalam transaksi yang sama.
+  const rows = [];
+  for (const m of matches) {
+    const [a1, a2, b1, b2] = [...m.a, ...m.b];
+    if (!a1 || !a2 || !b1 || !b2) return { ok: false, error: `Ronde ${m.round} · Court ${m.court} belum lengkap 4 pemain.` };
+    rows.push({ round_no: m.round, court_no: m.court, a1, a2, b1, b2, score_a: m.scoreA, score_b: m.scoreB });
+  }
+
+  const { data: changed, error } = await supabase.rpc("correct_session_result", { p_session: sessionId, p_matches: rows });
+  if (error) return { ok: false, error: `Gagal menyimpan koreksi: ${error.message}` };
+  const scored = matches.filter((m) => m.scoreA !== null).length;
+  await audit(auth.userId, `mengoreksi hasil activity (${matches.length} match, ${scored} berskor, bonus juara ${changed ?? 0} member disesuaikan)`, "session", sessionId);
+  refreshPaths(`/admin/activities/${sessionId}`, ["/akun/aktivitas/[slug]", "page"]);
+  return { ok: true, message: changed ? `Koreksi tersimpan · bonus juara ${changed} member disesuaikan.` : "Koreksi tersimpan · juara tidak berubah." };
 }
 
 /** Alasan data peserta sesi terkunci (aktivitas sudah dikerjakan), atau null kalau boleh dihapus. */

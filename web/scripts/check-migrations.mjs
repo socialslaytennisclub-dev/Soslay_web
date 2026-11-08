@@ -1200,4 +1200,161 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const [winFirst, winThird] = await podium("rank-diff-win", "wins", [[21, 5], [30, 25]]);
   console.assert(winFirst === 100 && winThird === 50, `menang sama: selisih +16 juara 1 (+${winFirst}), selisih +5 juara 3 (+${winThird})`);
   console.log("✓ peringkat juara: total poin / jumlah menang sama → selisih skor menentukan");
+
+  // Koreksi hasil setelah sesi berakhir: line-up & skor diganti admin → bonus juara dihitung ulang lewat
+  // baris koreksi (bonus lama tidak dihapus).
+  const fixer = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Koreksi', 'koreksi@soslay.test', 'active' from roles where name = 'Super Admin'`, [fixer]);
+  const fails = (sql, params) => db.query(sql, params).then(() => false, () => true);
+  const total = async (m, s) => (await one(`select coalesce(sum(delta), 0)::int d from points_ledger where member_id = $1 and session_id = $2`, [m, s])).d;
+  await podium("koreksi", "points", [[48, 10], [48, 40]]);
+  const ks = (await one(`select id from sessions where slug = 'koreksi'`)).id;
+  console.assert((await total(members[0], ks)) === 100 && (await total(members[4], ks)) === 50, "bonus juara dari finish_session ditandai session_id");
+  const parts = (await db.query(`select id from session_participants where session_id = $1 order by kuy_reg_no`, [ks])).rows.map((r) => r.id);
+  // Court 2 dikoreksi 48–5 (selisih +43) → member 5 & 6 juara 1, member 1 & 2 turun ke #3.
+  const lineup = (scoreB2) => JSON.stringify([
+    { round_no: 1, court_no: 1, a1: parts[0], a2: parts[1], b1: parts[2], b2: parts[3], score_a: 48, score_b: 10 },
+    { round_no: 1, court_no: 2, a1: parts[4], a2: parts[5], b1: parts[6], b2: parts[7], score_a: 48, score_b: scoreB2 },
+  ]);
+  await as(members[0]);
+  console.assert(await fails(`select correct_session_result($1, $2::jsonb)`, [ks, lineup(5)]), "member biasa tidak boleh mengoreksi hasil");
+  await as(fixer);
+  await db.query(`update sessions set target_points = 58 where id = $1`, [ks]);
+  console.assert(await fails(`select correct_session_result($1, $2::jsonb)`, [ks, lineup(5)]), "Americano: total skor koreksi harus = target");
+  const dup = JSON.stringify([{ round_no: 1, court_no: 1, a1: parts[0], a2: parts[1], b1: parts[2], b2: parts[3], score_a: 48, score_b: 10 }, { round_no: 1, court_no: 2, a1: parts[0], a2: parts[5], b1: parts[6], b2: parts[7], score_a: null, score_b: null }]);
+  console.assert(await fails(`select correct_session_result($1, $2::jsonb)`, [ks, dup]), "pemain main dua kali di satu ronde ditolak");
+  await db.query(`update sessions set match_format = 'rotating' where id = $1`, [ks]); // skor bebas
+  // Skor court 1 diinput host → tetap tercatat atas nama host setelah koreksi (court 1 tidak berubah).
+  await as(null);
+  await db.query(`update session_matches set scored_by = $2, scored_at = '2026-01-01T10:00:00Z' where session_id = $1`, [ks, members[0]]);
+  await as(fixer);
+  const m2 = (await one(`select id from session_matches where session_id = $1 and court_no = 2`, [ks])).id;
+  console.assert(await fails(`select save_match_score($1, 48::smallint, 5::smallint)`, [m2]), "sesi berakhir: skor tidak bisa diubah lewat save_match_score (juga Super Admin)");
+  const changed = (await one(`select correct_session_result($1, $2::jsonb) n`, [ks, lineup(5)])).n;
+  console.assert(changed === 4, `koreksi mengubah bonus 4 member (bukan ${changed})`);
+  console.assert((await total(members[0], ks)) === 50 && (await total(members[4], ks)) === 100, `bonus setelah koreksi: #1 lama ${await total(members[0], ks)}, #1 baru ${await total(members[4], ks)}`);
+  console.assert((await one(`select count(*)::int n from points_ledger where session_id = $1 and note like 'Bonus juara #%'`, [ks])).n === 4, "bonus lama tidak dihapus");
+  console.assert((await one(`select score_b from session_matches where session_id = $1 and court_no = 2`, [ks])).score_b === 5, "skor koreksi tersimpan");
+  const scorer = async (court) => (await one(`select scored_by, scored_at from session_matches where session_id = $1 and court_no = $2`, [ks, court]));
+  console.assert((await scorer(1)).scored_by === members[0] && new Date((await scorer(1)).scored_at).toISOString() === "2026-01-01T10:00:00.000Z", "match yang tidak berubah tetap mencatat penginput skor aslinya");
+  console.assert((await scorer(2)).scored_by === fixer, "match yang dikoreksi tercatat atas nama admin");
+  console.assert((await one(`select status from sessions where id = $1`, [ks])).status === "completed", "sesi tetap selesai");
+  console.assert((await one(`select correct_session_result($1, $2::jsonb) n`, [ks, lineup(5)])).n === 0, "koreksi ulang yang sama tidak menambah poin");
+  // Hapus skor court 2 (match tidak dimainkan) → member 5 & 6 turun dari podium (baris "tidak lagi juara"),
+  // member 3 & 4 (10 poin) naik ke #3.
+  const scoresOf = ([[a1, b1], [a2, b2]]) => JSON.stringify([
+    { round_no: 1, court_no: 1, a1: parts[0], a2: parts[1], b1: parts[2], b2: parts[3], score_a: a1, score_b: b1 },
+    { round_no: 1, court_no: 2, a1: parts[4], a2: parts[5], b1: parts[6], b2: parts[7], score_a: a2, score_b: b2 },
+  ]);
+  await one(`select correct_session_result($1, $2::jsonb) n`, [ks, scoresOf([[48, 10], [null, null]])]);
+  console.assert((await total(members[0], ks)) === 100 && (await total(members[2], ks)) === 50 && (await total(members[4], ks)) === 0, `hapus skor court 2: #1 ${await total(members[0], ks)}, #3 ${await total(members[2], ks)}, keluar podium ${await total(members[4], ks)}`);
+  console.assert((await one(`select count(*)::int n from points_ledger where member_id = $1 and session_id = $2 and note like '%tidak lagi juara'`, [members[4], ks])).n === 1, "member yang keluar podium dapat baris koreksi negatif");
+  // Mode Win: menang sama → selisih skor. Court 1 30–0 (+30) vs court 2 40–35 (+5): di mode Point member 5
+  // (40 poin) juara 1, di mode Win member 1 (selisih +30) juara 1 dan member 7 keluar podium.
+  await db.query(`update sessions set leaderboard_mode = 'wins' where id = $1`, [ks]);
+  await one(`select correct_session_result($1, $2::jsonb) n`, [ks, scoresOf([[30, 0], [40, 35]])]);
+  console.assert((await total(members[0], ks)) === 100 && (await total(members[4], ks)) === 50 && (await total(members[6], ks)) === 0 && (await total(members[2], ks)) === 0, `mode Win: #1 ${await total(members[0], ks)}, #3 ${await total(members[4], ks)}, kalah ${await total(members[6], ks)}`);
+  // Pemain booking website yang belum ada di daftar peserta (slot = member id) → baris peserta dibuat oleh
+  // RPC, hanya untuk pemain yang dipakai; koreksi yang ditolak tidak meninggalkan baris peserta.
+  await as(null);
+  const [walkIn, noShow] = [(await one(`insert into auth.users default values returning id`)).id, (await one(`insert into auth.users default values returning id`)).id];
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Walk In', 'walk.in@mail.com'), ($2, 'No Show', 'no.show@mail.com')`, [walkIn, noShow]);
+  await db.query(`insert into bookings (session_id, member_id, status) values ($1, $2, 'attended'), ($1, $3, 'registered')`, [ks, walkIn, noShow]);
+  await as(fixer);
+  const withWalkIn = (b2) => JSON.stringify([
+    { round_no: 1, court_no: 1, a1: parts[0], a2: parts[1], b1: parts[2], b2: parts[3], score_a: 30, score_b: 0 },
+    { round_no: 1, court_no: 2, a1: parts[4], a2: parts[5], b1: parts[6], b2: walkIn, score_a: b2, score_b: 0 },
+  ]);
+  const rosterOf = async (m) => (await one(`select count(*)::int n from session_participants where session_id = $1 and member_id = $2`, [ks, m])).n;
+  console.assert(await fails(`select correct_session_result($1, $2::jsonb)`, [ks, withWalkIn(0)]), "skor 0–0 ditolak");
+  console.assert((await rosterOf(walkIn)) === 0, "koreksi ditolak → tidak ada baris peserta baru");
+  await one(`select correct_session_result($1, $2::jsonb) n`, [ks, withWalkIn(40)]);
+  const walkInRow = (await one(`select id from session_participants where session_id = $1 and member_id = $2`, [ks, walkIn])).id;
+  console.assert((await one(`select b2 from session_matches where session_id = $1 and court_no = 2`, [ks])).b2 === walkInRow, "slot member id → id peserta baru");
+  console.assert((await rosterOf(noShow)) === 0, "booking yang tidak dipakai di koreksi tidak disalin jadi peserta");
+  // Sesi yang belum berakhir tidak lewat jalur koreksi.
+  await db.query(`update sessions set ended_at = null, status = 'published' where id = $1`, [ks]);
+  console.assert(await fails(`select correct_session_result($1, $2::jsonb)`, [ks, lineup(5)]), "sesi belum berakhir tidak bisa dikoreksi");
+  await as(null);
+  console.log("✓ koreksi hasil: admin ganti line-up & skor sesi selesai → bonus juara dihitung ulang (baris koreksi, sekali)");
+}
+
+// Poin kehadiran sekali per member per activity: check-in dobel, batal lalu check-in lagi, dan booking
+// yang dihapus lalu dibuat ulang tidak memberi poin dua kali.
+{
+  await as(null);
+  const { id: m } = await one(`insert into auth.users default values returning id`);
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Hadir Sekali', 'hadir1@mail.com')`, [m]);
+  const s = (await one(
+    `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, points_per_attendance)
+     values ('hadir-sekali', 'Open Stance Uji', 'weekly-mabar', $1, now(), now() + interval '2 hours', 20, 'published', 10) returning id`,
+    [(await one(`select id from venues limit 1`)).id],
+  )).id;
+  const pts = async () => (await one(`select coalesce(sum(delta), 0)::int d, count(*)::int n from points_ledger where member_id = $1 and reason = 'attendance'`, [m]));
+  const attend = (status) => db.query(`update bookings set status = $3 where session_id = $1 and member_id = $2`, [s, m, status]);
+  await db.query(`insert into bookings (session_id, member_id) values ($1, $2)`, [s, m]);
+  await attend("attended");
+  await attend("attended");
+  console.assert((await pts()).d === 10, `check-in dua kali → ${(await pts()).d} pts`);
+  await attend("registered");
+  console.assert((await pts()).d === 0, "batal check-in → poin ditarik");
+  await attend("attended");
+  console.assert((await pts()).d === 10, "check-in lagi → tetap 10");
+  console.assert((await one(`select note from points_ledger where member_id = $1 and reason = 'attendance'`, [m])).note === "Hadir di sesi · Open Stance Uji", "catatan poin menyebut nama activity");
+  await db.query(`delete from bookings where session_id = $1 and member_id = $2`, [s, m]);
+  await db.query(`insert into bookings (session_id, member_id) values ($1, $2)`, [s, m]);
+  await attend("attended");
+  const after = await pts();
+  console.assert(after.d === 10 && after.n === 1, `booking dibuat ulang lalu check-in → ${after.d} pts (${after.n} baris)`);
+  console.log("✓ poin kehadiran sekali per activity: check-in dobel / batal lalu check-in / booking dibuat ulang");
+}
+
+// Hapus activity salah input (sudah selesai, ada peserta lunas & check-in): peserta, booking & activity
+// terhapus; Keuangan otomatis dikoreksi jadi 0; poin kehadiran dinetralkan baris penyesuaian.
+{
+  await as(null);
+  await db.exec(`update finance_settings set go_live_date = '2020-01-01'`);
+  const venue = (await one(`select id from venues limit 1`)).id;
+  const S = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, points_per_attendance)
+    values ('salah-input', 'Mabar Salah Input', 'weekly-mabar', $1, now() - interval '5 hours', now() - interval '3 hours', 8, 'published', 10) returning id`, [venue])).id;
+  const { id: m } = await one(`insert into auth.users default values returning id`);
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Salah Input', 'salah.input@mail.com')`, [m]);
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount, member_id) values ($1, 'Member', 'K1', 'kmember', 220000, $2)`, [S, m]);
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount) values ($1, 'Tamu Kuyy', 'K2', 'ktamu', 220000)`, [S]);
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, source, payment_channel, amount) values ($1, 'Tamu Manual', 'M1', 'admin', 'manual', 220000)`, [S]);
+  await db.query(`update session_participants set checked_in_at = now() where session_id = $1 and member_id = $2`, [S, m]);
+  await db.query(`update sessions set status = 'completed', ended_at = now() where id = $1`, [S]);
+  const refs = (await db.query(`select 'sp:' || id r from session_participants where session_id = $1`, [S])).rows.map((r) => r.r);
+  const fin = async () => Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source_ref = any($1) and deleted_at is null`, [refs])).s);
+  const bal = async () => Number((await one(`select coalesce(sum(delta), 0) s from points_ledger where member_id = $1`, [m])).s);
+  // Booking website yang ditandai lunas manual (bk:) & bonus review +10 tanpa booking (peserta impor Kuyy).
+  const { id: w } = await one(`insert into auth.users default values returning id`);
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Booking Web', 'booking.web@mail.com')`, [w]);
+  const wb = (await one(`insert into bookings (session_id, member_id, amount, source) values ($1, $2, 150000, 'website') returning id`, [S, w])).id;
+  // Review & bonusnya tercatat di satu transaksi (submit_session_review) → created_at sama. Judul activity
+  // sudah diganti sesudahnya; bonus review activity lain berjudul sama tidak ikut dinetralkan.
+  await db.query(`with r as (insert into session_reviews (session_id, member_id, rating) values ($1, $2, 5) returning member_id)
+    insert into points_ledger (member_id, delta, reason, note) select member_id, 10, 'bonus', 'Review sesi · Mabar Lama' from r`, [S, m]);
+  await db.query(`insert into points_ledger (member_id, delta, reason, note, created_at) values ($1, 10, 'bonus', 'Review sesi · Mabar Salah Input', now() - interval '7 days')`, [m]);
+  const bookingFin = async () => Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source_ref = $1 and deleted_at is null`, ['bk:' + wb])).s);
+  const before = await bal();
+  console.assert((await fin()) === 660000, `activity selesai → 3 peserta lunas di Keuangan (${await fin()})`);
+  const fails = (sql, params) => db.query(sql, params).then(() => false, () => true);
+  await as(m);
+  console.assert(await fails(`select delete_session_mistake($1, 'Mabar Salah Input')`, [S]), "member biasa tidak boleh menghapus activity");
+  const boss = (await one(`insert into auth.users default values returning id`)).id;
+  await as(null);
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Hapus', 'hapus@soslay.test', 'active' from roles where name = 'Super Admin'`, [boss]);
+  await as(boss);
+  await db.query(`select mark_booking_paid($1, true)`, [wb]);
+  console.assert((await bookingFin()) === 150000, `Tandai Lunas booking website → Keuangan (${await bookingFin()})`);
+  console.assert(await fails(`select delete_session_mistake($1, 'Mabar Salah')`, [S]), "judul tidak sama → ditolak");
+  const n = (await one(`select delete_session_mistake($1, 'Mabar Salah Input') n`, [S])).n;
+  await as(null);
+  console.assert(n === 4, `jumlah peserta terhapus ${n}`);
+  console.assert((await one(`select count(*)::int n from sessions where id = $1`, [S])).n === 0 && (await one(`select count(*)::int n from bookings where session_id = $1`, [S])).n === 0, "activity & booking terhapus");
+  console.assert((await fin()) === 0, `Keuangan dikoreksi jadi 0 (${await fin()})`);
+  console.assert((await bookingFin()) === 0, `Tandai Lunas booking website dikoreksi jadi 0 (${await bookingFin()})`);
+  console.assert((await bal()) === before - 20, `poin kehadiran & bonus review dinetralkan (${before} → ${await bal()})`);
+  console.log("✓ hapus activity salah input: peserta & booking terhapus, Keuangan (juga Tandai Lunas) dikoreksi, poin kehadiran & review dinetralkan");
 }

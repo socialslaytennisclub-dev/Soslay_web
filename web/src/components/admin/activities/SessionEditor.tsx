@@ -8,10 +8,10 @@ import { formatRupiahPlain, LEVEL_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { TRIP_TYPE } from "@/lib/trips";
 import { shrinkImage } from "@/lib/image-resize";
-import { participantRemoveLock, participantsLockReason } from "@/lib/session-lock";
+import { isSessionEnded, participantRemoveLock, participantsLockReason } from "@/lib/session-lock";
 import { memberInviteWaLink } from "@/lib/wa-invite";
 import { clearParticipants, removeParticipants } from "@/server/admin/actions/play";
-import { deleteSession, discardSessionUploads, saveSession, setCheckIn, uploadSessionCover, type SessionInput } from "@/server/admin/actions/sessions";
+import { deleteSession, deleteSessionMistake, discardSessionUploads, saveSession, setCheckIn, uploadSessionCover, type SessionInput } from "@/server/admin/actions/sessions";
 import { hasTargetTotal, scoreTarget, usesLineup } from "@/lib/americano";
 import type { MemberChoice, SessionDetail, SessionHost, SessionParticipant, TennisLevel } from "@/server/admin/types";
 import { FormCard, MultiChips, TextArea, Toggle } from "../ui/AdminForm";
@@ -252,10 +252,20 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     }
   };
 
-  const remove = () => {
-    if (!window.confirm(`Hapus sesi "${session.title}"? Tindakan ini tidak bisa dibatalkan.`)) return;
+  const remove = async () => {
+    // Sudah ada peserta → "Hapus activity salah input": peserta ikut terhapus, konfirmasi dengan mengetik judul.
+    const withPeople = session.booked > 0 || session.participants.length > 0;
+    if (withPeople) {
+      const ok = await confirm({
+        title: "Hapus activity salah input?",
+        body: `Activity ini dan ${session.booked} pesertanya dihapus permanen, termasuk dari riwayat aktivitas member. Poin kehadiran / bonus juara dari activity ini dinetralkan, dan pemasukan otomatis peserta di Keuangan dikoreksi. Pembayaran yang perlu dikembalikan diurus di luar sistem.`,
+        confirmLabel: "Hapus activity & peserta",
+        requireText: session.title,
+      });
+      if (!ok) return;
+    } else if (!window.confirm(`Hapus sesi "${session.title}"? Tindakan ini tidak bisa dibatalkan.`)) return;
     startSaving(async () => {
-      const result = await deleteSession(session.id);
+      const result = withPeople ? await deleteSessionMistake(session.id, session.title) : await deleteSession(session.id);
       if (!result.ok) toast.error(result.error);
     });
   };
@@ -492,7 +502,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
               <AdminButton href={`/admin/activities/new?from=${session.id}`} size="sm" icon="copy">
                 Duplikat
               </AdminButton>
-              <AdminButton size="sm" icon="trash" onClick={remove} disabled={saving} title={session.booked ? "Sesi dengan peserta tidak bisa dihapus — ubah status ke Dibatalkan" : undefined}>
+              <AdminButton size="sm" icon="trash" onClick={remove} disabled={saving} title={session.booked ? "Hapus activity salah input beserta pesertanya" : undefined}>
                 Hapus
               </AdminButton>
             </>
@@ -652,6 +662,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
               targetPoints={scoreTarget(session.play.matchFormat, session.play.targetPoints)}
               balanceLevels={play.matchFormat === "rotating"}
               initial={session.matches}
+              ended={isSessionEnded({ status: session.status, endedAt: session.play.endedAt })}
               disabledReason={
                 mode === "new"
                   ? "Simpan sesi dulu, lalu impor peserta dari Kuyy untuk membuat line-up."

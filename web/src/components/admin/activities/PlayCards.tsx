@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { generateLineup, hasTargetTotal, lineupStats, playableCourts, type LevelWeights, type LineupMatch } from "@/lib/americano";
 import { cx } from "@/lib/cx";
 import { useScoreDraft } from "@/hooks/useScoreDraft";
-import { saveLineup, saveMatchScore } from "@/server/admin/actions/play";
+import { correctSessionResult, saveLineup, saveMatchScore } from "@/server/admin/actions/play";
 import type { MatchFormat, SessionMatch, SessionParticipant, TennisLevel } from "@/server/admin/types";
 import { FormCard, SingleChips, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
@@ -169,6 +169,7 @@ export function LineupCard({
   targetPoints,
   balanceLevels,
   initial,
+  ended = false,
   disabledReason,
 }: {
   sessionId: string;
@@ -180,6 +181,8 @@ export function LineupCard({
   /** Rotating Partner: tim di tiap court diseimbangkan per level. */
   balanceLevels: boolean;
   initial: SessionMatch[];
+  /** Activity sudah berakhir → hasil terkunci; admin bisa masuk mode "Koreksi hasil". */
+  ended?: boolean;
   /** Diisi → kartu hanya informasi (mis. sesi belum disimpan). */
   disabledReason?: string;
 }) {
@@ -192,14 +195,19 @@ export function LineupCard({
   );
   const router = useRouter();
   const [scoring, setScoring] = useState<string | null>(null);
+  const [correcting, setCorrecting] = useState(false);
   const [matches, setMatches] = useState<SessionMatch[]>(initial);
   const [round, setRound] = useState(1);
   const [dirty, setDirty] = useState(false);
   const [saving, startSaving] = useTransition();
 
   const playable = playableCourts(players.length, courts);
-  const isLocked = (m: SessionMatch) => m.scoreA !== null;
-  const lockedRounds = new Set(matches.filter(isLocked).map((m) => m.round));
+  const hasScore = (m: SessionMatch) => m.scoreA !== null;
+  // Mode koreksi: semua court bisa diubah, termasuk yang sudah ada skornya.
+  const isLocked = (m: SessionMatch) => hasScore(m) && !correcting;
+  const editable = !disabledReason && (!ended || correcting);
+  const lockedRounds = new Set(matches.filter(hasScore).map((m) => m.round));
+  const matchKey = (m: SessionMatch) => `${m.round}:${m.court}`;
   const stats = lineupStats(matches, ids, levels);
   const outOfFormat = matches.some((m) => m.round > rounds || m.court > courts);
   const unknown = matches.some((m) => [...m.a, ...m.b].some((p) => !names.has(p)));
@@ -228,8 +236,42 @@ export function LineupCard({
       }
     });
 
-  const saveScore = (m: SessionMatch, a: number, b: number) =>
+  const exitCorrection = () => {
+    setCorrecting(false);
+    setDirty(false);
+    setScoring(null);
+  };
+
+  const cancelCorrection = () => {
+    if (dirty && !window.confirm("Buang perubahan koreksi?")) return;
+    setMatches(initial);
+    exitCorrection();
+  };
+
+  const saveCorrection = () => {
+    if (!window.confirm("Simpan koreksi hasil? Line-up & skor diganti, lalu bonus juara dihitung ulang (bonus lama dikoreksi otomatis).")) return;
     startSaving(async () => {
+      const result = await correctSessionResult(sessionId, matches);
+      toast.result(result);
+      if (result.ok) {
+        exitCorrection();
+        router.refresh();
+      }
+    });
+  };
+
+  /** Mode koreksi: perubahan hanya di draft, baru tersimpan lewat "Simpan koreksi". */
+  const editDraft = (change: (list: SessionMatch[]) => SessionMatch[]) => {
+    setMatches(change);
+    setDirty(true);
+    setScoring(null);
+  };
+  const setDraftScore = (m: SessionMatch, a: number | null, b: number | null) =>
+    editDraft((list) => list.map((x) => (matchKey(x) === matchKey(m) ? { ...x, scoreA: a, scoreB: b } : x)));
+  const removeMatch = (m: SessionMatch) => editDraft((list) => list.filter((x) => matchKey(x) !== matchKey(m)));
+
+  const saveScore = (m: SessionMatch, a: number, b: number) =>
+    correcting ? setDraftScore(m, a, b) : startSaving(async () => {
       const result = await saveMatchScore(sessionId, m.id!, a, b);
       toast.result(result);
       if (result.ok) {
@@ -244,6 +286,13 @@ export function LineupCard({
   const lockedPlayers = new Set(roundMatches.filter(isLocked).flatMap((m) => [...m.a, ...m.b]));
   const resting = players.filter((p) => !playing.has(p.id));
 
+  /** Mode koreksi: court yang ternyata dimainkan tapi belum ada di line-up → isi 4 pemain rest pertama. */
+  const addMatch = (court: number) => {
+    const [p1, p2, p3, p4] = resting.map((p) => p.id);
+    if (!p4) return;
+    editDraft((list) => [...list, { round, court, a: [p1, p2], b: [p3, p4], scoreA: null, scoreB: null }]);
+  };
+
   /** Ganti pemain di satu slot court lewat dropdown (Figma ADM-12): pemain terpilih bertukar tempat (pemain rest juga bisa). */
   const replaceSlot = (round: number, current: string, next: string) => {
     if (current === next) return;
@@ -257,7 +306,7 @@ export function LineupCard({
       <span className={styles.slotAvatar}>
         <MemberAvatar name={names.get(id) ?? "?"} size={22} />
       </span>
-      {locked || disabledReason ? (
+      {locked || !editable ? (
         <span className={styles.slotName}>{names.get(id) ?? "?"}</span>
       ) : (
         <>
@@ -283,12 +332,31 @@ export function LineupCard({
       action={
         !disabledReason && (
           <span className={editor.cardActions}>
-            <AdminButton size="sm" icon="sparkle" onClick={generate} disabled={playable === 0 || saving}>
-              {matches.length ? "Acak ulang" : "Generate otomatis"}
-            </AdminButton>
-            <AdminButton variant="primary" size="sm" icon="check-bold" onClick={save} disabled={!dirty || saving || outOfFormat || unknown}>
-              {saving ? "Menyimpan…" : "Simpan line-up"}
-            </AdminButton>
+            {!ended ? (
+              <>
+                <AdminButton size="sm" icon="sparkle" onClick={generate} disabled={playable === 0 || saving}>
+                  {matches.length ? "Acak ulang" : "Generate otomatis"}
+                </AdminButton>
+                <AdminButton variant="primary" size="sm" icon="check-bold" onClick={save} disabled={!dirty || saving || outOfFormat || unknown}>
+                  {saving ? "Menyimpan…" : "Simpan line-up"}
+                </AdminButton>
+              </>
+            ) : correcting ? (
+              <>
+                <AdminButton size="sm" onClick={cancelCorrection} disabled={saving}>
+                  Batal
+                </AdminButton>
+                <AdminButton variant="primary" size="sm" icon="check-bold" onClick={saveCorrection} disabled={!dirty || saving || outOfFormat || unknown}>
+                  {saving ? "Menyimpan…" : "Simpan koreksi"}
+                </AdminButton>
+              </>
+            ) : (
+              (matches.length > 0 || playable > 0) && (
+                <AdminButton size="sm" icon="pencil-simple" onClick={() => setCorrecting(true)}>
+                  Koreksi hasil
+                </AdminButton>
+              )
+            )}
           </span>
         )
       }
@@ -325,7 +393,7 @@ export function LineupCard({
           <AdminIcon name="warning-circle" size={16} />
           Butuh minimal 4 peserta untuk membuat line-up — impor peserta dari Kuyy dulu.
         </p>
-      ) : matches.length === 0 ? (
+      ) : matches.length === 0 && !correcting ? (
         <p className={styles.info}>
           <AdminIcon name="question" size={16} />
           Belum ada line-up. Klik &quot;Generate otomatis&quot; — tiap pemain dapat jumlah main yang sama dan tidak berpasangan dengan orang yang sama dua kali.
@@ -365,7 +433,7 @@ export function LineupCard({
                     </span>
                     <div className={styles.teams}>
                       <span className={styles.team}>{m.a.map((p) => slot(p, round, locked))}</span>
-                      <span className={locked ? styles.score : styles.vs}>{locked ? `${m.scoreA}–${m.scoreB}` : "vs"}</span>
+                      <span className={hasScore(m) ? styles.score : styles.vs}>{hasScore(m) ? `${m.scoreA}–${m.scoreB}` : "vs"}</span>
                       <span className={styles.team}>{m.b.map((p) => slot(p, round, locked))}</span>
                     </div>
                   </div>
@@ -374,7 +442,7 @@ export function LineupCard({
                       Skor masuk · terkunci
                     </Badge>
                   )}
-                  {scoring !== null && scoring === m.id ? (
+                  {scoring === matchKey(m) ? (
                     <ScoreInput
                       target={targetPoints}
                       teamA={m.a.map((p) => names.get(p)).join(" + ")}
@@ -383,20 +451,48 @@ export function LineupCard({
                       initialB={m.scoreB}
                       busy={saving}
                       onCancel={() => setScoring(null)}
+                      saveLabel={correcting ? "Pakai skor" : undefined}
                       onSave={(a, b) => saveScore(m, a, b)}
                     />
                   ) : (
-                    !disabledReason &&
-                    m.id &&
-                    !dirty && (
-                      <button type="button" className={editor.linkButton} onClick={() => setScoring(m.id!)}>
-                        {locked ? "Edit skor" : "Input skor"}
-                      </button>
+                    (correcting || (editable && m.id && !dirty)) && (
+                      <span className={styles.actions}>
+                        <button type="button" className={editor.linkButton} onClick={() => setScoring(matchKey(m))}>
+                          {hasScore(m) ? "Edit skor" : "Input skor"}
+                        </button>
+                        {correcting && hasScore(m) && (
+                          <button type="button" className={editor.linkButton} onClick={() => setDraftScore(m, null, null)}>
+                            Hapus skor
+                          </button>
+                        )}
+                        {correcting && (
+                          <button type="button" className={editor.linkButton} onClick={() => removeMatch(m)}>
+                            Hapus match
+                          </button>
+                        )}
+                      </span>
                     )
                   )}
                 </div>
               );
             })}
+            {correcting &&
+              Array.from({ length: courts }, (_, i) => i + 1)
+                .filter((c) => !roundMatches.some((m) => m.court === c))
+                .map((c) => (
+                  <div key={c} className={styles.court}>
+                    <div className={styles.courtRow}>
+                      <span className={styles.courtLabel}>
+                        <strong>C{c}</strong>
+                        <span>Court</span>
+                      </span>
+                      <span className={editor.muted}>Belum ada match di ronde {round}</span>
+                    </div>
+                    <AdminButton size="sm" icon="plus-bold" onClick={() => addMatch(c)} disabled={resting.length < 4} title={resting.length < 4 ? "Butuh 4 pemain rest" : undefined}>
+                      Tambah match
+                    </AdminButton>
+                  </div>
+                ))}
           </div>
 
           {resting.length > 0 && (
@@ -414,10 +510,22 @@ export function LineupCard({
             </div>
           )}
 
-          <p className={styles.info}>
-            <AdminIcon name="question" size={16} />
-            Pilih nama pemain di dropdown untuk ganti atau tukar (pemain rest juga bisa dipilih). Ronde yang sudah selesai dan court yang skornya sudah masuk otomatis terkunci. Jangan lupa &quot;Simpan line-up&quot;.
-          </p>
+          {correcting ? (
+            <p className={cx(styles.info, styles.warn)}>
+              <AdminIcon name="warning-circle" size={16} />
+              Mode koreksi: semua ronde & court bisa diubah — ganti pemain lewat dropdown, ubah atau hapus skor. Perubahan baru tersimpan setelah &quot;Simpan koreksi&quot;; bonus juara lalu dihitung ulang otomatis.
+            </p>
+          ) : ended ? (
+            <p className={styles.info}>
+              <AdminIcon name="question" size={16} />
+              Activity sudah berakhir — line-up & skor terkunci. Kalau ada yang salah, klik &quot;Koreksi hasil&quot;.
+            </p>
+          ) : (
+            <p className={styles.info}>
+              <AdminIcon name="question" size={16} />
+              Pilih nama pemain di dropdown untuk ganti atau tukar (pemain rest juga bisa dipilih). Ronde yang sudah selesai dan court yang skornya sudah masuk otomatis terkunci. Jangan lupa &quot;Simpan line-up&quot;.
+            </p>
+          )}
         </>
       )}
     </FormCard>
@@ -435,6 +543,7 @@ function ScoreInput({
   initial,
   initialB,
   busy,
+  saveLabel = "Simpan & verifikasi",
   onCancel,
   onSave,
 }: {
@@ -444,6 +553,7 @@ function ScoreInput({
   initial: number | null;
   initialB: number | null;
   busy: boolean;
+  saveLabel?: string;
   onCancel: () => void;
   onSave: (a: number, b: number) => void;
 }) {
@@ -474,7 +584,7 @@ function ScoreInput({
           Batal
         </AdminButton>
         <AdminButton variant="primary" size="sm" icon="check-bold" onClick={() => onSave(a, b)} disabled={busy || !valid}>
-          {busy ? "Menyimpan…" : "Simpan & verifikasi"}
+          {busy ? "Menyimpan…" : saveLabel}
         </AdminButton>
       </span>
     </div>
