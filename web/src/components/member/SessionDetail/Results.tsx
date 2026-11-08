@@ -306,7 +306,7 @@ export function DoneSide({ detail: d, tab }: { detail: MemberSessionDetail; tab:
           Lihat →
         </Link>
       )}
-      {tab !== "review" && d.ticket && !reviewClosed && (
+      {tab !== "review" && (d.ticket || d.isHost) && !reviewClosed && (
         <section className={styles.card} aria-labelledby="review-cta-title">
           <h2 id="review-cta-title" className={styles.cardTitle}>
             Gimana sesinya?

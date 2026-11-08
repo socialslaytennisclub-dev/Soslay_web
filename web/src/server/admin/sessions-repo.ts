@@ -10,6 +10,7 @@ import { listTripDetails, tripDisplayStatus, tripSummary } from "./trips-repo";
 import { DEFAULT_PLAY, loadSessionPlay, NO_PHOTOS } from "./play-repo";
 import { DAY } from "./time";
 import type { ActivityListRow, SessionDetail, SessionParticipant, SessionSort, SessionsQuery, SessionsResult } from "./types";
+import { loadSessionReviews } from "./session-reviews";
 
 /**
  * Data Activities (tabel sessions + session_fill). Sama seperti repo.ts: data demo sampai
@@ -152,7 +153,9 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
         guests: b.guests ?? (i % 9 === 3 ? 1 : 0),
       };
     });
-  const { play, roster, hosts, matches, photos } = await loadSessionPlay(s, d.live);
+  const [{ play, roster, hosts, matches, photos }, reviewRows] = await Promise.all([loadSessionPlay(s, d.live), loadSessionReviews(s.id, d.live)]);
+  const hostIds = new Set(hosts.filter((h) => h.role === "host").map((h) => h.memberId));
+  const reviews = reviewRows.map((r) => ({ ...r, isHost: hostIds.has(r.memberId) }));
   // Daftar peserta (impor Kuyy) menggantikan daftar booking begitu ada; booking yang member-nya belum ada di
   // daftar itu (mis. booking website setelah impor) tetap ikut — sama dengan session_roster & session_fill_counts.
   const inRoster = new Set(roster?.map((p) => p.memberId).filter(Boolean));
@@ -188,6 +191,7 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
     hosts,
     matches,
     photos,
+    reviews,
   };
 }
 
@@ -231,6 +235,7 @@ export async function getSessionDraft(fromId?: string): Promise<SessionDetail> {
       hosts: [],
       matches: [],
       photos: NO_PHOTOS,
+      reviews: [],
     };
   }
   // Sabtu berikutnya 07.00 WIB (00.00 UTC).
@@ -278,6 +283,7 @@ export async function getSessionDraft(fromId?: string): Promise<SessionDetail> {
     hosts: [],
     matches: [],
     photos: NO_PHOTOS,
+    reviews: [],
   };
 }
 

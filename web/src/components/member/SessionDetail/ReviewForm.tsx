@@ -54,6 +54,9 @@ export function ReviewTab({ detail: d }: { detail: MemberSessionDetail }) {
   const [error, setError] = useState<string | null>(null);
   const [busy, startBusy] = useTransition();
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((r) => ({ ...r, [key]: value }));
+  // Host sesi ikut memberi review, tapi tidak menilai dirinya sendiri (rating & sorotan "Host").
+  const details = d.isHost ? DETAILS.filter(([key]) => key !== "host") : DETAILS;
+  const highlights = d.isHost ? HIGHLIGHTS.filter((h) => h !== "Host ramah") : HIGHLIGHTS;
 
   const send = () =>
     startBusy(async () => {
@@ -135,7 +138,7 @@ export function ReviewTab({ detail: d }: { detail: MemberSessionDetail }) {
       <fieldset className={styles.reviewSet}>
         <legend>Yang paling oke (boleh pilih lebih dari satu)</legend>
         <div className={styles.reviewChips}>
-          {HIGHLIGHTS.map((h) => {
+          {highlights.map((h) => {
             const on = draft.highlights.includes(h);
             return (
               <button key={h} type="button" aria-pressed={on} className={cx(styles.reasonChip, on && styles.reasonChipOn)} onClick={() => set("highlights", on ? draft.highlights.filter((x) => x !== h) : [...draft.highlights, h])}>
@@ -148,7 +151,7 @@ export function ReviewTab({ detail: d }: { detail: MemberSessionDetail }) {
 
       <fieldset className={styles.reviewSet}>
         <legend>Rating detail</legend>
-        {DETAILS.map(([key, label]) => (
+        {details.map(([key, label]) => (
           <div key={key} className={styles.reviewDetailRow}>
             <span>{label}</span>
             <Stars value={draft[key] ?? 0} onChange={(v) => set(key, v)} label={`Rating ${label}`} size="sm" />

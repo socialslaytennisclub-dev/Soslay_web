@@ -273,7 +273,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     supabase.rpc("is_session_host", { p_session: session.id }),
     // Isi QR = id booking, supaya pemindai panitia nanti bisa langsung menandai check-in.
     booking ? qrSvg(`soslay:booking:${booking.id}`) : null,
-    done && booking
+    done && (booking || assigned === true)
       ? supabase
           .from("session_reviews")
           .select("rating, highlights, host_rating, venue_rating, format_rating, comment, testimonial, updated_at")

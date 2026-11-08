@@ -246,6 +246,25 @@ export type SessionDetail = SessionRow & {
   hosts: SessionHost[];
   matches: SessionMatch[];
   photos: SessionPhotos;
+  /** Review dari peserta & host sesi (tab Review member), terbaru di atas. */
+  reviews: SessionReview[];
+};
+
+/** Satu review sesi untuk admin. Rating 1–5; null = tidak diisi. */
+export type SessionReview = {
+  memberId: string;
+  name: string;
+  /** Yang memberi review adalah host sesi ini. */
+  isHost: boolean;
+  rating: number;
+  host: number | null;
+  venue: number | null;
+  format: number | null;
+  highlights: string[];
+  comment: string | null;
+  /** Member mengizinkan review dipakai sebagai testimoni. */
+  testimonial: boolean;
+  at: string;
 };
 
 /** rotating = Rotating Partner (partner berganti tiap ronde, tim diseimbangkan per level). */

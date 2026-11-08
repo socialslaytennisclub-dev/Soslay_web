@@ -2,6 +2,7 @@
 -- Sebelumnya tetap +10 di submit_session_review. Aturan disimpan di app_settings points_rules
 -- bonuses[key=review] (sama seperti bonus member baru); belum pernah disimpan → +10 (default lama).
 -- Hanya berlaku untuk review baru — poin review yang sudah diberikan tidak diubah.
+-- Host yang ditunjuk untuk sesi (walau tidak ikut main / tanpa booking) juga bisa memberi review.
 
 /** Poin untuk review pertama sebuah sesi: 0 kalau dimatikan. Dibaca juga halaman member (teks "+N"). */
 create function review_bonus_points() returns integer language sql stable security definer set search_path = public as $$
@@ -14,7 +15,8 @@ create function review_bonus_points() returns integer language sql stable securi
 $$;
 grant execute on function review_bonus_points() to anon, authenticated;
 
--- Sama dengan versi 20261101000000_session_close_grace, kecuali jumlah poin dari review_bonus_points().
+-- Sama dengan versi 20261101000000_session_close_grace, kecuali jumlah poin dari review_bonus_points() dan
+-- host sesi (is_assigned_host) boleh memberi review.
 create or replace function submit_session_review(
   p_session uuid, p_rating smallint, p_highlights text[], p_host smallint, p_venue smallint, p_format smallint,
   p_comment text, p_testimonial boolean
@@ -32,8 +34,9 @@ begin
   if v_s.ended_at is null and v_s.status <> 'completed' and session_closes_at(v_s.ends_at) > now() then raise exception 'Review dibuka setelah sesi selesai'; end if;
   if now() > v_end + interval '7 days' then raise exception 'Review sudah terkunci (lewat 7 hari)'; end if;
   if not exists (select 1 from session_participants where session_id = p_session and member_id = auth.uid())
-     and not exists (select 1 from bookings where session_id = p_session and member_id = auth.uid() and status in ('registered', 'attended')) then
-    raise exception 'Hanya peserta sesi ini yang bisa memberi review';
+     and not exists (select 1 from bookings where session_id = p_session and member_id = auth.uid() and status in ('registered', 'attended'))
+     and not is_assigned_host(p_session) then
+    raise exception 'Hanya peserta atau host sesi ini yang bisa memberi review';
   end if;
 
   -- xmax = 0 → baris baru (bukan update): poin hanya untuk insert pertama, aman dari kiriman bersamaan.

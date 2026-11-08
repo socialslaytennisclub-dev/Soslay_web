@@ -22,6 +22,7 @@ import { PaymentCell, useParticipantPayment, viaLabel } from "./ParticipantPayme
 import { ParticipantsDrawer } from "./ParticipantsDrawer";
 import { WaInviteLink } from "./WaInviteLink";
 import { FormatCard, LineupCard, type PlayForm } from "./PlayCards";
+import { SessionReviews } from "./SessionReviews";
 import styles from "./SessionEditor.module.css";
 import playStyles from "./Play.module.css";
 import { useConfirm } from "../ui/ConfirmDialog";
@@ -845,6 +846,8 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
               )}
             </FormCard>
           )}
+
+          {mode === "edit" && <SessionReviews reviews={session.reviews} />}
 
           {mode === "edit" && (
             <FormCard

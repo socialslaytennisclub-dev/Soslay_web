@@ -1364,18 +1364,28 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
 // jadi definisi terakhir semua fungsi di schema public diperiksa di sini.
 {
   const { rows } = await db.query(`select p.proname, p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prolang = (select oid from pg_language where lanname in ('plpgsql')) or (n.nspname = 'public' and p.prolang = (select oid from pg_language where lanname = 'sql'))`);
-  const bad = [];
-  for (const { proname, prosrc } of rows) {
-    const src = prosrc.replace(/--[^\n]*/g, "");
+  // WHERE harus di level statement itu sendiri — WHERE di dalam subquery (mis. `set a = (select … where …)`)
+  // tidak dihitung; string & komentar diabaikan.
+  const missingWhere = (source) => {
+    const src = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--[^\n]*/g, "").replace(/'(?:[^']|'')*'/g, "''");
+    const found = [];
     for (const m of src.matchAll(/\b(update|delete\s+from)\s+[\w.]+/gi)) {
       const before = src.slice(Math.max(0, m.index - 16), m.index).toLowerCase();
       if (/(do|on|after|before|for|or|instead of)\s*$/.test(before)) continue; // on conflict do update, for update, trigger
       if (/^update\s+of\b/i.test(src.slice(m.index, m.index + 12))) continue;
       const end = src.indexOf(";", m.index);
-      const stmt = src.slice(m.index, end === -1 ? undefined : end);
-      if (!/\bwhere\b/i.test(stmt)) bad.push(`${proname}: ${stmt.replace(/\s+/g, " ").slice(0, 80)}`);
+      let stmt = src.slice(m.index, end === -1 ? undefined : end);
+      while (/\([^()]*\)/.test(stmt)) stmt = stmt.replace(/\([^()]*\)/g, " ");
+      if (!/\bwhere\b/i.test(stmt)) found.push(stmt.replace(/\s+/g, " ").slice(0, 80));
     }
-  }
+    return found;
+  };
+  console.assert(
+    missingWhere("update pg_temp.c set a = coalesce((select sp.id from sp where sp.member_id = c.a), a);").length === 1 &&
+      missingWhere("update t set a = 1 where id in (select id from u); delete from v where x = 'a;b';").length === 0,
+    "pemeriksa WHERE: WHERE di subquery tidak dihitung, WHERE statement dihitung",
+  );
+  const bad = rows.flatMap(({ proname, prosrc }) => missingWhere(prosrc).map((stmt) => `${proname}: ${stmt}`));
   console.assert(bad.length === 0, `UPDATE / DELETE tanpa WHERE (ditolak Supabase pg_safeupdate):\n${bad.join("\n")}`);
   console.log("✓ semua fungsi: UPDATE / DELETE selalu memakai WHERE (pg_safeupdate Supabase)");
 }
@@ -1412,4 +1422,29 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert(off.n === 0, `aturan dimatikan → tanpa poin (${JSON.stringify(off)})`);
   await rule(null);
   console.log("✓ poin review sesi mengikuti Aturan poin: default +10, bisa diubah / dimatikan, sekali per sesi");
+}
+
+// Host sesi (tanpa booking / tidak ikut main) bisa memberi review; bukan peserta & bukan host tetap ditolak.
+{
+  await as(null);
+  const venue = (await one(`select id from venues limit 1`)).id;
+  const s = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, ended_at)
+    values ('review-host', 'Review Host', 'weekly-mabar', $1, now() - interval '4 hours', now() - interval '2 hours', 8, 'completed', now() - interval '1 hour') returning id`, [venue])).id;
+  const person = async (slug) => {
+    const { id } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, slug, `${slug}@mail.com`]);
+    return id;
+  };
+  const host = await person("host-review");
+  const stranger = await person("orang-lain");
+  await db.query(`insert into session_hosts (session_id, member_id, role) values ($1, $2, 'host')`, [s, host]);
+  const fails = (sql, params) => db.query(sql, params).then(() => false, () => true);
+  await as(stranger);
+  console.assert(await fails(`select submit_session_review($1, 5::smallint, '{}', null, null, null, null, false)`, [s]), "bukan peserta & bukan host tidak boleh memberi review");
+  await as(host);
+  await db.query(`select submit_session_review($1, 4::smallint, '{Format seru}', null, 5::smallint, 4::smallint, 'Lancar', false)`, [s]);
+  await as(null);
+  const r = await one(`select rating, venue_rating from session_reviews where session_id = $1 and member_id = $2`, [s, host]);
+  console.assert(r?.rating === 4 && r.venue_rating === 5, `review host tersimpan ${JSON.stringify(r)}`);
+  console.log("✓ host sesi (tanpa booking) bisa memberi review; orang lain ditolak");
 }
