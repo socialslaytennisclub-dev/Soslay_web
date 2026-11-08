@@ -1442,9 +1442,13 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(stranger);
   console.assert(await fails(`select submit_session_review($1, 5::smallint, '{}', null, null, null, null, false)`, [s]), "bukan peserta & bukan host tidak boleh memberi review");
   await as(host);
-  await db.query(`select submit_session_review($1, 4::smallint, '{Format seru}', null, 5::smallint, 4::smallint, 'Lancar', false)`, [s]);
+  // Rating "Host" dari host sendiri (mis. lewat API) diabaikan.
+  await db.query(`select submit_session_review($1, 4::smallint, '{Format seru}', 5::smallint, 5::smallint, 4::smallint, 'Lancar', false)`, [s]);
   await as(null);
-  const r = await one(`select rating, venue_rating from session_reviews where session_id = $1 and member_id = $2`, [s, host]);
-  console.assert(r?.rating === 4 && r.venue_rating === 5, `review host tersimpan ${JSON.stringify(r)}`);
-  console.log("✓ host sesi (tanpa booking) bisa memberi review; orang lain ditolak");
+  const r = await one(`select rating, host_rating, venue_rating from session_reviews where session_id = $1 and member_id = $2`, [s, host]);
+  console.assert(r?.rating === 4 && r.host_rating === null && r.venue_rating === 5, `review host tersimpan tanpa rating Host ${JSON.stringify(r)}`);
+  // Poin review host (tanpa booking) tertaut ke sesinya → tampil di "Poin dari sesi ini".
+  const pts = await one(`select coalesce(sum(delta), 0)::int d, count(*)::int n from points_ledger where member_id = $1 and session_id = $2 and note like 'Review sesi · %'`, [host, s]);
+  console.assert(pts.n === 1 && pts.d === (await one(`select review_bonus_points() p`)).p, `poin review host tertaut ke sesi ${JSON.stringify(pts)}`);
+  console.log("✓ host sesi (tanpa booking) bisa memberi review (tanpa rating Host, poin tertaut ke sesi); orang lain ditolak");
 }

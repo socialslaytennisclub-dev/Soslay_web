@@ -15,10 +15,13 @@ type ReviewRow = {
   updated_at: string;
 };
 
-/** Review sesi untuk halaman edit activity (RLS "admin read reviews"). Mode demo tidak punya tabelnya. */
+/**
+ * Review sesi untuk halaman edit activity (RLS "admin read reviews"). `load` = false (mode demo, atau sesi
+ * belum selesai sehingga belum mungkin ada review) → tidak query.
+ */
 /** `isHost` diisi pemanggil (daftar host sesi dimuat paralel). */
-export async function loadSessionReviews(sessionId: string, live: boolean): Promise<SessionReview[]> {
-  if (!live) return [];
+export async function loadSessionReviews(sessionId: string, load: boolean): Promise<SessionReview[]> {
+  if (!load) return [];
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase
     .from("session_reviews")

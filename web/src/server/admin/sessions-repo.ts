@@ -153,7 +153,7 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
         guests: b.guests ?? (i % 9 === 3 ? 1 : 0),
       };
     });
-  const [{ play, roster, hosts, matches, photos }, reviewRows] = await Promise.all([loadSessionPlay(s, d.live), loadSessionReviews(s.id, d.live)]);
+  const [{ play, roster, hosts, matches, photos }, reviewRows] = await Promise.all([loadSessionPlay(s, d.live), loadSessionReviews(s.id, d.live && isFinished(s, new Date()))]);
   const hostIds = new Set(hosts.filter((h) => h.role === "host").map((h) => h.memberId));
   const reviews = reviewRows.map((r) => ({ ...r, isHost: hostIds.has(r.memberId) }));
   // Daftar peserta (impor Kuyy) menggantikan daftar booking begitu ada; booking yang member-nya belum ada di

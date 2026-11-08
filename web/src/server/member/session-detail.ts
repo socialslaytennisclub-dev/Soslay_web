@@ -77,6 +77,8 @@ export type MemberSessionDetail = {
   startedRounds: number[];
   /** Ditunjuk sebagai host sesi ini (chip "Kamu host" + Panel Host). */
   isHost: boolean;
+  /** Boleh memberi review: sesi selesai & punya booking aktif atau host sesi (sama dengan submit_session_review). */
+  canReview: boolean;
   /** Member yang login punya match di line-up (bukan sekadar peserta / host). */
   plays: boolean;
   /** Host & sesi masih berjalan → boleh input / ubah skor (dicek ulang di database). */
@@ -264,6 +266,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
   // tidak di-query, karena halaman live dimuat ulang setiap host menyimpan skor / check-in.
   const fetchedAt = Date.now();
   const done = phaseOf(session, fetchedAt) === "done";
+  const canReview = done && (Boolean(booking) || assigned === true);
   const [{ data: myRows }, { data: roster }, { data: matches }, { data: canScore }, qr, { data: review }, { data: ledger }, { data: reviewPoints }] = await Promise.all([
     // Baris peserta milik sendiri (RLS) — untuk no. registrasi Kuyy & jumlah bayar. Bisa lebih dari
     // satu (impor Kuyy + tambahan manual admin), jadi ambil semua: yang pertama untuk data daftar.
@@ -273,7 +276,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     supabase.rpc("is_session_host", { p_session: session.id }),
     // Isi QR = id booking, supaya pemindai panitia nanti bisa langsung menandai check-in.
     booking ? qrSvg(`soslay:booking:${booking.id}`) : null,
-    done && (booking || assigned === true)
+    canReview
       ? supabase
           .from("session_reviews")
           .select("rating, highlights, host_rating, venue_rating, format_rating, comment, testimonial, updated_at")
@@ -281,8 +284,16 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
           .eq("member_id", user.id)
           .maybeSingle()
       : { data: null },
-    done && booking ? supabase.from("points_ledger").select("delta, reason, note").eq("member_id", user.id).eq("booking_id", booking.id).order("created_at") : { data: [] },
-    done ? supabase.rpc("review_bonus_points") : { data: DEFAULT_REVIEW_POINTS },
+    // Poin dari sesi ini: lewat booking, atau session_id (host tanpa booking: poin review).
+    canReview
+      ? supabase
+          .from("points_ledger")
+          .select("delta, reason, note")
+          .eq("member_id", user.id)
+          .or(booking ? `booking_id.eq.${booking.id},session_id.eq.${session.id}` : `session_id.eq.${session.id}`)
+          .order("created_at")
+      : { data: [] },
+    canReview ? supabase.rpc("review_bonus_points") : { data: DEFAULT_REVIEW_POINTS },
   ]);
 
   // Member tampil dengan nama Soslay (RPC sudah memilih nama profil bila terhubung).
@@ -371,6 +382,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     currentRound: session.current_round ?? currentRoundOf(matchRows),
     startedRounds: session.started_rounds ?? [],
     isHost: assigned === true,
+    canReview,
     plays: matchRows.some((m) => side(m) !== null),
     // Hak host berakhir saat sesi ditutup (can_run_session di database) — termasuk tutup otomatis.
     canScore: canScore === true && !done,
@@ -438,6 +450,7 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     currentRound: null,
     startedRounds: [],
     isHost: false,
+    canReview: s.status === "done",
     plays: false,
     canScore: false,
     liveStarted: false,
