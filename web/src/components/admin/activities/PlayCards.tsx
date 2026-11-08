@@ -236,6 +236,16 @@ export function LineupCard({
       }
     });
 
+  /** Masuk mode koreksi. Match tanpa skor di ronde / court yang sudah tidak ada (format dikurangi setelah
+   *  line-up dibuat) langsung dibuang dari draft — sama dengan aturan saat ronde / court dikurangi. */
+  const startCorrection = () => {
+    const inFormat = matches.filter((m) => hasScore(m) || (m.round <= rounds && m.court <= courts));
+    setMatches(inFormat);
+    setDirty(inFormat.length !== matches.length);
+    setRound((r) => Math.min(r, rounds));
+    setCorrecting(true);
+  };
+
   const exitCorrection = () => {
     setCorrecting(false);
     setDirty(false);
@@ -352,7 +362,7 @@ export function LineupCard({
               </>
             ) : (
               (matches.length > 0 || playable > 0) && (
-                <AdminButton size="sm" icon="pencil-simple" onClick={() => setCorrecting(true)}>
+                <AdminButton size="sm" icon="pencil-simple" onClick={startCorrection}>
                   Koreksi hasil
                 </AdminButton>
               )
@@ -403,7 +413,11 @@ export function LineupCard({
           {(outOfFormat || unknown) && (
             <p className={cx(styles.info, styles.warn)}>
               <AdminIcon name="warning-circle" size={16} />
-              {unknown ? "Daftar peserta berubah sejak line-up dibuat" : "Jumlah court/ronde berubah"} — klik &quot;Acak ulang&quot; untuk menyesuaikan.
+              {correcting
+                ? unknown
+                  ? "Ada pemain yang tidak ada di daftar peserta — ganti lewat dropdown sebelum menyimpan koreksi."
+                  : "Ada skor di ronde / court di luar format — naikkan jumlah ronde / court di Format dulu."
+                : `${unknown ? "Daftar peserta berubah sejak line-up dibuat" : "Jumlah court/ronde berubah"} — klik "Acak ulang" untuk menyesuaikan.`}
             </p>
           )}
           <div className={styles.rounds} role="tablist" aria-label="Ronde">
