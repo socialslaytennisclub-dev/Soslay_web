@@ -1358,3 +1358,24 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await bal()) === before - 20, `poin kehadiran & bonus review dinetralkan (${before} → ${await bal()})`);
   console.log("✓ hapus activity salah input: peserta & booking terhapus, Keuangan (juga Tandai Lunas) dikoreksi, poin kehadiran & review dinetralkan");
 }
+
+// Supabase memasang pg_safeupdate untuk permintaan lewat API: UPDATE / DELETE tanpa WHERE ditolak ("UPDATE
+// requires a WHERE clause") — juga di dalam fungsi yang dipanggil lewat RPC. PGlite tidak punya ekstensi itu,
+// jadi definisi terakhir semua fungsi di schema public diperiksa di sini.
+{
+  const { rows } = await db.query(`select p.proname, p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prolang = (select oid from pg_language where lanname in ('plpgsql')) or (n.nspname = 'public' and p.prolang = (select oid from pg_language where lanname = 'sql'))`);
+  const bad = [];
+  for (const { proname, prosrc } of rows) {
+    const src = prosrc.replace(/--[^\n]*/g, "");
+    for (const m of src.matchAll(/\b(update|delete\s+from)\s+[\w.]+/gi)) {
+      const before = src.slice(Math.max(0, m.index - 16), m.index).toLowerCase();
+      if (/(do|on|after|before|for|or|instead of)\s*$/.test(before)) continue; // on conflict do update, for update, trigger
+      if (/^update\s+of\b/i.test(src.slice(m.index, m.index + 12))) continue;
+      const end = src.indexOf(";", m.index);
+      const stmt = src.slice(m.index, end === -1 ? undefined : end);
+      if (!/\bwhere\b/i.test(stmt)) bad.push(`${proname}: ${stmt.replace(/\s+/g, " ").slice(0, 80)}`);
+    }
+  }
+  console.assert(bad.length === 0, `UPDATE / DELETE tanpa WHERE (ditolak Supabase pg_safeupdate):\n${bad.join("\n")}`);
+  console.log("✓ semua fungsi: UPDATE / DELETE selalu memakai WHERE (pg_safeupdate Supabase)");
+}
