@@ -196,6 +196,8 @@ export function LineupCard({
   const router = useRouter();
   const [scoring, setScoring] = useState<string | null>(null);
   const [correcting, setCorrecting] = useState(false);
+  /** Mode koreksi: jumlah match kosong di luar format yang dibuang dari draft (ikut terhapus saat disimpan). */
+  const [dropped, setDropped] = useState(0);
   const [matches, setMatches] = useState<SessionMatch[]>(initial);
   const [round, setRound] = useState(1);
   const [dirty, setDirty] = useState(false);
@@ -210,6 +212,8 @@ export function LineupCard({
   const matchKey = (m: SessionMatch) => `${m.round}:${m.court}`;
   const stats = lineupStats(matches, ids, levels);
   const outOfFormat = matches.some((m) => m.round > rounds || m.court > courts);
+  // Mode koreksi: ronde di luar format yang masih punya match (berskor) tetap punya tab, supaya bisa dihapus.
+  const tabRounds = correcting ? Math.max(rounds, ...matches.map((m) => m.round)) : rounds;
   const unknown = matches.some((m) => [...m.a, ...m.b].some((p) => !names.has(p)));
 
   const generate = () => {
@@ -241,6 +245,7 @@ export function LineupCard({
   const startCorrection = () => {
     const inFormat = matches.filter((m) => hasScore(m) || (m.round <= rounds && m.court <= courts));
     setMatches(inFormat);
+    setDropped(matches.length - inFormat.length);
     setDirty(inFormat.length !== matches.length);
     setRound((r) => Math.min(r, rounds));
     setCorrecting(true);
@@ -248,6 +253,7 @@ export function LineupCard({
 
   const exitCorrection = () => {
     setCorrecting(false);
+    setDropped(0);
     setDirty(false);
     setScoring(null);
   };
@@ -416,12 +422,18 @@ export function LineupCard({
               {correcting
                 ? unknown
                   ? "Ada pemain yang tidak ada di daftar peserta — ganti lewat dropdown sebelum menyimpan koreksi."
-                  : "Ada skor di ronde / court di luar format — naikkan jumlah ronde / court di Format dulu."
-                : `${unknown ? "Daftar peserta berubah sejak line-up dibuat" : "Jumlah court/ronde berubah"} — klik "Acak ulang" untuk menyesuaikan.`}
+                  : `Ada match berskor di luar format (${rounds} ronde · ${courts} court) — hapus match itu, atau naikkan jumlah ronde di Format.`
+                : `${unknown ? "Daftar peserta berubah sejak line-up dibuat" : "Jumlah court/ronde berubah"} — klik "${ended ? "Koreksi hasil" : "Acak ulang"}" untuk menyesuaikan.`}
+            </p>
+          )}
+          {correcting && dropped > 0 && (
+            <p className={styles.info}>
+              <AdminIcon name="question" size={16} />
+              {dropped} match tanpa skor di ronde / court yang sudah tidak ada dibuang dari draft — ikut terhapus saat &quot;Simpan koreksi&quot;. Klik &quot;Batal&quot; kalau tidak jadi.
             </p>
           )}
           <div className={styles.rounds} role="tablist" aria-label="Ronde">
-            {Array.from({ length: rounds }, (_, i) => i + 1).map((r) => (
+            {Array.from({ length: tabRounds }, (_, i) => i + 1).map((r) => (
               <button
                 key={r}
                 type="button"
@@ -491,6 +503,7 @@ export function LineupCard({
               );
             })}
             {correcting &&
+              round <= rounds &&
               Array.from({ length: courts }, (_, i) => i + 1)
                 .filter((c) => !roundMatches.some((m) => m.court === c))
                 .map((c) => (

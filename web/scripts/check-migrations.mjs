@@ -1364,18 +1364,28 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
 // jadi definisi terakhir semua fungsi di schema public diperiksa di sini.
 {
   const { rows } = await db.query(`select p.proname, p.prosrc from pg_proc p join pg_namespace n on n.oid = p.pronamespace where n.nspname = 'public' and p.prolang = (select oid from pg_language where lanname in ('plpgsql')) or (n.nspname = 'public' and p.prolang = (select oid from pg_language where lanname = 'sql'))`);
-  const bad = [];
-  for (const { proname, prosrc } of rows) {
-    const src = prosrc.replace(/--[^\n]*/g, "");
+  // WHERE harus di level statement itu sendiri — WHERE di dalam subquery (mis. `set a = (select … where …)`)
+  // tidak dihitung; string & komentar diabaikan.
+  const missingWhere = (source) => {
+    const src = source.replace(/\/\*[\s\S]*?\*\//g, "").replace(/--[^\n]*/g, "").replace(/'(?:[^']|'')*'/g, "''");
+    const found = [];
     for (const m of src.matchAll(/\b(update|delete\s+from)\s+[\w.]+/gi)) {
       const before = src.slice(Math.max(0, m.index - 16), m.index).toLowerCase();
       if (/(do|on|after|before|for|or|instead of)\s*$/.test(before)) continue; // on conflict do update, for update, trigger
       if (/^update\s+of\b/i.test(src.slice(m.index, m.index + 12))) continue;
       const end = src.indexOf(";", m.index);
-      const stmt = src.slice(m.index, end === -1 ? undefined : end);
-      if (!/\bwhere\b/i.test(stmt)) bad.push(`${proname}: ${stmt.replace(/\s+/g, " ").slice(0, 80)}`);
+      let stmt = src.slice(m.index, end === -1 ? undefined : end);
+      while (/\([^()]*\)/.test(stmt)) stmt = stmt.replace(/\([^()]*\)/g, " ");
+      if (!/\bwhere\b/i.test(stmt)) found.push(stmt.replace(/\s+/g, " ").slice(0, 80));
     }
-  }
+    return found;
+  };
+  console.assert(
+    missingWhere("update pg_temp.c set a = coalesce((select sp.id from sp where sp.member_id = c.a), a);").length === 1 &&
+      missingWhere("update t set a = 1 where id in (select id from u); delete from v where x = 'a;b';").length === 0,
+    "pemeriksa WHERE: WHERE di subquery tidak dihitung, WHERE statement dihitung",
+  );
+  const bad = rows.flatMap(({ proname, prosrc }) => missingWhere(prosrc).map((stmt) => `${proname}: ${stmt}`));
   console.assert(bad.length === 0, `UPDATE / DELETE tanpa WHERE (ditolak Supabase pg_safeupdate):\n${bad.join("\n")}`);
   console.log("✓ semua fungsi: UPDATE / DELETE selalu memakai WHERE (pg_safeupdate Supabase)");
 }
