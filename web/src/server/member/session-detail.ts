@@ -6,7 +6,7 @@ import { memberSessions } from "@/content/member";
 import { LEVEL_LABEL, PARTICIPANT_SOURCE_LABEL } from "@/lib/admin-labels";
 import { cityOf, type City } from "@/lib/format";
 import { sessionClosesAt } from "@/lib/session-close";
-import { compareStandings, DEFAULT_PODIUM_BONUS, effectivePodiumBonus, toPodiumBonus, type PodiumBonus } from "@/lib/standings";
+import { compareStandings, DEFAULT_PODIUM_BONUS, DEFAULT_REVIEW_POINTS, effectivePodiumBonus, toPodiumBonus, type PodiumBonus } from "@/lib/standings";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { TennisLevel } from "@/server/admin/types";
 import { localParts } from "@/server/public/sessions";
@@ -113,8 +113,6 @@ export type MyReview = {
 };
 
 const REVIEW_WINDOW_MS = 7 * 86_400_000;
-/** Poin review bila aturan belum pernah disimpan — sama dengan review_bonus_points() di database. */
-const DEFAULT_REVIEW_POINTS = 10;
 
 const FORMAT_LABEL: Record<string, string> = {
   none: "Fun game",
@@ -289,7 +287,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     canReview
       ? supabase
           .from("points_ledger")
-          .select("delta, reason, note")
+          .select("delta, reason, note, is_podium")
           .eq("member_id", user.id)
           .or(booking ? `booking_id.eq.${booking.id},session_id.eq.${session.id}` : `session_id.eq.${session.id}`)
           .order("created_at")
@@ -409,8 +407,9 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     reviewUntil: new Date((session.ended_at ? new Date(session.ended_at).getTime() : sessionClosesAt(session.ends_at)) + REVIEW_WINDOW_MS).toISOString(),
     reviewPoints: typeof reviewPoints === "number" ? reviewPoints : DEFAULT_REVIEW_POINTS,
     fetchedAt,
-    myPoints: ((ledger ?? []) as { delta: number; reason: string; note: string | null }[]).map((r) => ({
-      label: r.reason === "attendance" ? "Hadir" : /^Bonus juara/.test(r.note ?? "") ? "Bonus juara" : /^Review/.test(r.note ?? "") ? "Review" : "Bonus",
+    myPoints: ((ledger ?? []) as { delta: number; reason: string; note: string | null; is_podium: boolean }[]).map((r) => ({
+      // is_podium juga menandai baris "Koreksi bonus juara" (Koreksi hasil).
+      label: r.reason === "attendance" ? "Hadir" : r.is_podium ? "Bonus juara" : /^Review/.test(r.note ?? "") ? "Review" : "Bonus",
       delta: r.delta,
     })),
   };

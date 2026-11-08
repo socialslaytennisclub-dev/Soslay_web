@@ -1421,7 +1421,8 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   );
   await rule(null);
   const def = await reviewer("review-default");
-  console.assert(def.d === 10 && def.n === 1, `aturan belum disimpan → +10 sekali (${JSON.stringify(def)})`);
+  const tsReview = Number((await readFile(path.resolve(import.meta.dirname, "../src/lib/standings.ts"), "utf8")).match(/DEFAULT_REVIEW_POINTS = (\d+)/)?.[1]);
+  console.assert(def.d === tsReview && def.n === 1, `aturan belum disimpan → +${tsReview} (DEFAULT_REVIEW_POINTS) sekali (${JSON.stringify(def)})`);
   await rule({ key: "review", points: 25, enabled: true });
   console.assert((await one(`select review_bonus_points() p`)).p === 25, "review_bonus_points membaca aturan");
   const custom = await reviewer("review-25");
@@ -1432,6 +1433,9 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   // Nilai rusak di aturan tidak boleh menggagalkan kirim review → 0 poin.
   await rule({ key: "review", points: "abc", enabled: "ya" });
   console.assert((await one(`select review_bonus_points() p`)).p === 0, "nilai poin review rusak → 0, bukan error");
+  await rule({ key: "review", points: 1000000, enabled: true });
+  console.assert((await one(`select review_bonus_points() p`)).p === 1000000, "poin review besar (7 digit) tetap dipakai");
+  await rule({ key: "review", points: "abc", enabled: "ya" });
   const broken = await reviewer("review-rusak");
   console.assert(broken.n === 0, `aturan rusak → review tetap terkirim tanpa poin (${JSON.stringify(broken)})`);
   await rule(null);

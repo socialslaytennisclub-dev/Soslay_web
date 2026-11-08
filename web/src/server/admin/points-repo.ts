@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { DEFAULT_REVIEW_POINTS } from "@/lib/standings";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDataset, type Dataset } from "./dataset";
@@ -32,7 +33,7 @@ export const DEFAULT_RULES: PointRules = {
   redeemDiscount: { enabled: true, rupiahPerPoint: 100, maxPercent: 20 },
   bonuses: [
     { key: "signup", points: 100, enabled: true },
-    { key: "review", points: 10, enabled: true },
+    { key: "review", points: DEFAULT_REVIEW_POINTS, enabled: true },
     { key: "birthday", points: 200, enabled: true },
     { key: "referral", points: 150, enabled: true },
     { key: "testimonial", points: 50, enabled: true },

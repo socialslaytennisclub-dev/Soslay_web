@@ -12,6 +12,9 @@
  */
 export const DEFAULT_PODIUM_BONUS = [10, 0, 0] as const;
 export const LEGACY_PODIUM_BONUS = [100, 75, 50] as const;
+/** Poin review sesi bila Aturan poin belum pernah disimpan — sama dengan review_bonus_points() di database
+ *  (dicek di check-migrations) dan default Aturan poin admin. */
+export const DEFAULT_REVIEW_POINTS = 10;
 export type PodiumBonus = [number, number, number];
 
 /** Kolom podium_bonus → tuple, atau null untuk aturan lama (NULL). */

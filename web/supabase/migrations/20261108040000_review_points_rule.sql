@@ -9,13 +9,13 @@
 /** Poin untuk review pertama sebuah sesi: 0 kalau dimatikan. Dibaca juga halaman member (teks "+N"). */
 create function review_bonus_points() returns integer language sql stable security definer set search_path = public as $$
   select coalesce(
-    -- Nilai rusak (bukan bilangan bulat) tidak boleh menggagalkan kirim review → 0 poin.
-    (select case when (b ->> 'enabled') is distinct from 'false' and (b ->> 'points') ~ '^\s*[0-9]{1,6}\s*$'
+    -- Nilai rusak (bukan bilangan bulat ≥ 0, maks. 9 digit) tidak boleh menggagalkan kirim review → 0 poin.
+    (select case when (b ->> 'enabled') is distinct from 'false' and (b ->> 'points') ~ '^\s*[0-9]{1,9}\s*$'
                  then btrim(b ->> 'points')::integer else 0 end
        from app_settings, jsonb_array_elements(value -> 'bonuses') b
       where key = 'points_rules' and b ->> 'key' = 'review'
       limit 1),
-    10);
+    10); -- = DEFAULT_REVIEW_POINTS di web/src/lib/standings.ts (dicek di check-migrations)
 $$;
 grant execute on function review_bonus_points() to anon, authenticated;
 
