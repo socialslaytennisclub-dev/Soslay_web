@@ -311,7 +311,7 @@ export function DoneSide({ detail: d, tab }: { detail: MemberSessionDetail; tab:
           <h2 id="review-cta-title" className={styles.cardTitle}>
             Gimana sesinya?
           </h2>
-          <p className={styles.muted}>{d.myReview ? "Terima kasih sudah memberi review!" : "Beri rating untuk host & venue. Review pertama dapat +10 Slay Point."}</p>
+          <p className={styles.muted}>{d.myReview ? "Terima kasih sudah memberi review!" : `Beri rating untuk host & venue.${d.reviewPoints > 0 ? ` Review pertama dapat +${d.reviewPoints} Slay Point.` : ""}`}</p>
           {d.myReview && (
             <span className={styles.starsStatic} aria-label={`${d.myReview.rating} dari 5 bintang`}>
               {"★".repeat(d.myReview.rating)}

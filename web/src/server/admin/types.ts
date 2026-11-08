@@ -619,7 +619,7 @@ export type LedgerEntry = {
 
 export type TierBenefits = { tier: Tier; label: string; minPoints: number; benefits: string[]; members: number };
 
-export type BonusKey = "signup" | "birthday" | "referral" | "testimonial" | "streak";
+export type BonusKey = "signup" | "review" | "birthday" | "referral" | "testimonial" | "streak";
 
 /** app_settings "points_rules" (+ "rupiah_per_point"). Semua angka bebas, bilangan bulat ≥ 0. */
 export type PointRules = {

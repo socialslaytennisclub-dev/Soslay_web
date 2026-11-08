@@ -1379,3 +1379,37 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert(bad.length === 0, `UPDATE / DELETE tanpa WHERE (ditolak Supabase pg_safeupdate):\n${bad.join("\n")}`);
   console.log("✓ semua fungsi: UPDATE / DELETE selalu memakai WHERE (pg_safeupdate Supabase)");
 }
+
+// Poin review sesi dari Aturan poin (points_rules bonuses[key=review]): default +10, bisa diubah / dimatikan.
+{
+  await as(null);
+  const venue = (await one(`select id from venues limit 1`)).id;
+  const reviewer = async (slug) => {
+    const { id: m } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [m, `Reviewer ${slug}`, `${slug}@mail.com`]);
+    const s = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, ended_at)
+      values ($1, $1, 'weekly-mabar', $2, now() - interval '4 hours', now() - interval '2 hours', 8, 'completed', now() - interval '1 hour') returning id`, [slug, venue])).id;
+    await db.query(`insert into bookings (session_id, member_id) values ($1, $2)`, [s, m]);
+    await as(m);
+    await db.query(`select submit_session_review($1, 5::smallint, '{}', null, null, null, null, false)`, [s]);
+    await db.query(`select submit_session_review($1, 4::smallint, '{}', null, null, null, 'ubah', false)`, [s]); // ubah review → tidak dapat lagi
+    await as(null);
+    return (await one(`select coalesce(sum(delta), 0)::int d, count(*)::int n from points_ledger where member_id = $1 and note like 'Review sesi · %'`, [m]));
+  };
+  const rule = (review) => db.query(
+    `update app_settings set value = jsonb_set(value, '{bonuses}', coalesce((select jsonb_agg(b) from jsonb_array_elements(value -> 'bonuses') b where b ->> 'key' <> 'review'), '[]') || $1::jsonb) where key = 'points_rules'`,
+    [JSON.stringify(review ? [review] : [])],
+  );
+  await rule(null);
+  const def = await reviewer("review-default");
+  console.assert(def.d === 10 && def.n === 1, `aturan belum disimpan → +10 sekali (${JSON.stringify(def)})`);
+  await rule({ key: "review", points: 25, enabled: true });
+  console.assert((await one(`select review_bonus_points() p`)).p === 25, "review_bonus_points membaca aturan");
+  const custom = await reviewer("review-25");
+  console.assert(custom.d === 25 && custom.n === 1, `aturan 25 → +25 sekali (${JSON.stringify(custom)})`);
+  await rule({ key: "review", points: 25, enabled: false });
+  const off = await reviewer("review-off");
+  console.assert(off.n === 0, `aturan dimatikan → tanpa poin (${JSON.stringify(off)})`);
+  await rule(null);
+  console.log("✓ poin review sesi mengikuti Aturan poin: default +10, bisa diubah / dimatikan, sekali per sesi");
+}

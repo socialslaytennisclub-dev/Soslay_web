@@ -91,6 +91,8 @@ export type MemberSessionDetail = {
   myReview: MyReview | null;
   /** Review bisa dikirim / diubah sampai saat ini (7 hari setelah sesi). */
   reviewUntil: string;
+  /** Slay Point untuk review pertama (Aturan poin → Review sesi); 0 = tidak ada poin. */
+  reviewPoints: number;
   /** Slay Point dari sesi ini untuk member yang login (hadir, bonus juara, review). */
   myPoints: { label: string; delta: number }[];
   /** Waktu data dibaca (ms) — patokan "sekarang" untuk tampilan (tombol Mulai Activity, kunci review). */
@@ -109,6 +111,8 @@ export type MyReview = {
 };
 
 const REVIEW_WINDOW_MS = 7 * 86_400_000;
+/** Poin review bila aturan belum pernah disimpan — sama dengan review_bonus_points() di database. */
+const DEFAULT_REVIEW_POINTS = 10;
 
 const FORMAT_LABEL: Record<string, string> = {
   none: "Fun game",
@@ -260,7 +264,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
   // tidak di-query, karena halaman live dimuat ulang setiap host menyimpan skor / check-in.
   const fetchedAt = Date.now();
   const done = phaseOf(session, fetchedAt) === "done";
-  const [{ data: myRows }, { data: roster }, { data: matches }, { data: canScore }, qr, { data: review }, { data: ledger }] = await Promise.all([
+  const [{ data: myRows }, { data: roster }, { data: matches }, { data: canScore }, qr, { data: review }, { data: ledger }, { data: reviewPoints }] = await Promise.all([
     // Baris peserta milik sendiri (RLS) — untuk no. registrasi Kuyy & jumlah bayar. Bisa lebih dari
     // satu (impor Kuyy + tambahan manual admin), jadi ambil semua: yang pertama untuk data daftar.
     supabase.from("session_participants").select("id, full_name, kuy_reg_no, checked_in_at, amount").eq("session_id", session.id).eq("member_id", user.id).order("imported_at"),
@@ -278,6 +282,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
           .maybeSingle()
       : { data: null },
     done && booking ? supabase.from("points_ledger").select("delta, reason, note").eq("member_id", user.id).eq("booking_id", booking.id).order("created_at") : { data: [] },
+    done ? supabase.rpc("review_bonus_points") : { data: DEFAULT_REVIEW_POINTS },
   ]);
 
   // Member tampil dengan nama Soslay (RPC sudah memilih nama profil bila terhubung).
@@ -388,6 +393,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
       : null,
     // Sama dengan RPC submit_session_review: 7 hari sejak diakhiri host, atau sejak ditutup otomatis.
     reviewUntil: new Date((session.ended_at ? new Date(session.ended_at).getTime() : sessionClosesAt(session.ends_at)) + REVIEW_WINDOW_MS).toISOString(),
+    reviewPoints: typeof reviewPoints === "number" ? reviewPoints : DEFAULT_REVIEW_POINTS,
     fetchedAt,
     myPoints: ((ledger ?? []) as { delta: number; reason: string; note: string | null }[]).map((r) => ({
       label: r.reason === "attendance" ? "Hadir" : /^Bonus juara/.test(r.note ?? "") ? "Bonus juara" : /^Review/.test(r.note ?? "") ? "Review" : "Bonus",
@@ -439,6 +445,7 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     photos: null,
     myReview: null,
     reviewUntil: new Date(sessionClosesAt(endsAt) + REVIEW_WINDOW_MS).toISOString(),
+    reviewPoints: DEFAULT_REVIEW_POINTS,
     myPoints: [],
     fetchedAt: Date.now(),
   };

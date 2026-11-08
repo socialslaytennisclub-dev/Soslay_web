@@ -103,7 +103,7 @@ export function RulesForm({ initial, types }: { initial: PointRules; types: { sl
           <FormCard title="Bonus otomatis" subtitle="Ketik angka berapa saja · bertanda Segera tersimpan, berjalan otomatis di tahap berikutnya">
             <div>
               {r.bonuses.map((b) => (
-                <Rule key={b.key} label={BONUS_LABEL[b.key].label} hint={BONUS_LABEL[b.key].hint} soon={b.key !== "signup"}>
+                <Rule key={b.key} label={BONUS_LABEL[b.key].label} hint={BONUS_LABEL[b.key].hint} soon={b.key !== "signup" && b.key !== "review"}>
                   <Pts label={`Poin ${BONUS_LABEL[b.key].label}`} value={b.points} onChange={(n) => set("bonuses", r.bonuses.map((x) => (x.key === b.key ? { ...x, points: n } : x)))} />
                   <Switch label={BONUS_LABEL[b.key].label} checked={b.enabled} onChange={(v) => set("bonuses", r.bonuses.map((x) => (x.key === b.key ? { ...x, enabled: v } : x)))} />
                 </Rule>

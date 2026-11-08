@@ -197,7 +197,7 @@ export async function selfCheckIn(sessionId: string): Promise<HostScoreResult> {
 
 export type ReviewInput ={ rating: number; highlights: string[]; host: number | null; venue: number | null; format: number | null; comment: string; testimonial: boolean };
 
-/** Review sesi oleh peserta (S3-P): +10 Slay Point sekali, bisa diubah 7 hari setelah sesi. */
+/** Review sesi oleh peserta (S3-P): Slay Point sekali (Aturan poin → Review sesi), bisa diubah 7 hari setelah sesi. */
 export async function submitSessionReview(sessionId: string, input: ReviewInput): Promise<HostScoreResult> {
   if (input.rating < 1 || input.rating > 5) return { ok: false, error: "Pilih bintang dulu." };
   if (input.comment.length > 500) return { ok: false, error: "Ulasan maksimal 500 karakter." };

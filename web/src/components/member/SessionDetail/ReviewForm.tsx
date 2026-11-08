@@ -41,7 +41,7 @@ function Stars({ value, onChange, label, size = "md" }: { value: number; onChang
 
 /**
  * Tab Review (Figma Simplify S3-P · 2c–2e): bintang + yang paling oke + rating detail + ulasan
- * (maks. 500 karakter, tanpa foto). Review pertama +10 Slay Point; bisa diubah sampai 7 hari
+ * (maks. 500 karakter, tanpa foto). Review pertama dapat Slay Point (Aturan poin → Review sesi); bisa diubah sampai 7 hari
  * setelah sesi, setelah itu hanya bisa dibaca.
  */
 export function ReviewTab({ detail: d }: { detail: MemberSessionDetail }) {
@@ -72,7 +72,7 @@ export function ReviewTab({ detail: d }: { detail: MemberSessionDetail }) {
       <section className={styles.card} aria-labelledby="review-title">
         {justSent && (
           <p className={styles.reviewThanks} role="status">
-            <Check size={16} aria-hidden /> Terima kasih! Review kamu sudah terkirim · +10 Slay Point
+            <Check size={16} aria-hidden /> Terima kasih! Review kamu sudah terkirim{d.reviewPoints > 0 && ` · +${d.reviewPoints} Slay Point`}
           </p>
         )}
         <header className={styles.cardHead}>
@@ -187,7 +187,11 @@ export function ReviewTab({ detail: d }: { detail: MemberSessionDetail }) {
           {busy ? "Mengirim…" : d.myReview ? "Simpan perubahan" : "Kirim review"}
         </button>
       </div>
-      {!d.myReview && <p className={styles.small}>Review pertama dapat +10 Slay Point. Bisa diubah sampai {formatTanggalPendek(d.reviewUntil, d.city, "dateTime")}.</p>}
+      {!d.myReview && (
+        <p className={styles.small}>
+          {d.reviewPoints > 0 && `Review pertama dapat +${d.reviewPoints} Slay Point. `}Bisa diubah sampai {formatTanggalPendek(d.reviewUntil, d.city, "dateTime")}.
+        </p>
+      )}
     </section>
   );
 }
