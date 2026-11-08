@@ -124,11 +124,20 @@ begin
       case when v_s.match_format = 'americano' then format(' — total poin harus %s', v_s.target_points) else ' — skor tidak boleh 0–0' end;
   end if;
 
+  -- Match yang tidak berubah (court, pemain & skor sama) tetap mencatat siapa / kapan skornya diinput.
+  drop table if exists pg_temp.previous_matches;
+  create temp table previous_matches on commit drop as
+  select round_no, court_no, a1, a2, b1, b2, score_a, score_b, scored_by, scored_at from session_matches where session_id = p_session;
+
   delete from session_matches where session_id = p_session;
   insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2, score_a, score_b, scored_by, scored_at)
-  select p_session, round_no, court_no, a1, a2, b1, b2, score_a, score_b,
-         case when score_a is not null then auth.uid() end, case when score_a is not null then now() end
-  from pg_temp.correction;
+  select p_session, c.round_no, c.court_no, c.a1, c.a2, c.b1, c.b2, c.score_a, c.score_b,
+         case when c.score_a is null then null when o.round_no is not null then o.scored_by else auth.uid() end,
+         case when c.score_a is null then null when o.round_no is not null then o.scored_at else now() end
+  from pg_temp.correction c
+  left join pg_temp.previous_matches o
+    on (o.round_no, o.court_no, o.a1, o.a2, o.b1, o.b2, o.score_a, o.score_b)
+       is not distinct from (c.round_no, c.court_no, c.a1, c.a2, c.b1, c.b2, c.score_a, c.score_b);
 
   -- Bonus juara: target dari skor baru dikurangi bonus yang sudah tercatat untuk sesi ini.
   with target as (
@@ -155,3 +164,34 @@ begin
 end $$;
 revoke execute on function correct_session_result(uuid, jsonb) from public, anon;
 grant execute on function correct_session_result(uuid, jsonb) to authenticated;
+
+-- Sesi yang sudah berakhir: skor hanya bisa diubah lewat correct_session_result (bonus juara ikut dihitung
+-- ulang). Sebelumnya admin pengaturan masih bisa mengubah skor satu match di sini tanpa koreksi bonus.
+-- Sama dengan versi 20261106020000_rotating_free_score, kecuali pengecekan sesi berakhir.
+create or replace function save_match_score(p_match uuid, p_score_a smallint, p_score_b smallint)
+returns void language plpgsql security definer set search_path = public as $$
+declare
+  v_session uuid;
+  v_target  smallint;
+  v_format  match_format;
+  v_ended   boolean;
+begin
+  select m.session_id, s.target_points, s.match_format, (s.ended_at is not null or s.status = 'completed')
+  into v_session, v_target, v_format, v_ended
+  from session_matches m join sessions s on s.id = m.session_id where m.id = p_match;
+  if v_session is null then raise exception 'Match tidak ditemukan'; end if;
+  if not can_run_session(v_session) then raise exception 'Hanya admin atau host sesi ini'; end if;
+  if v_ended then raise exception 'Sesi sudah diakhiri — skor terkunci. Admin: pakai "Koreksi hasil".'; end if;
+  if p_score_a is null or p_score_b is null or p_score_a < 0 or p_score_b < 0 then
+    raise exception 'Skor tidak valid';
+  end if;
+  -- Hanya Americano yang memakai target total; format lain (Rotating Partner) skor bebas, asal bukan 0–0.
+  if v_format = 'americano' then
+    if p_score_a + p_score_b <> v_target then raise exception 'Total poin harus %', v_target using hint = 'score_total'; end if;
+  elsif p_score_a + p_score_b = 0 then
+    raise exception 'Skor masih 0–0' using hint = 'score_zero';
+  end if;
+  update session_matches
+  set score_a = p_score_a, score_b = p_score_b, scored_by = auth.uid(), scored_at = now()
+  where id = p_match;
+end $$;

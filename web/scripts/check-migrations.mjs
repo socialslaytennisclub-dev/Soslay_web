@@ -1224,11 +1224,20 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const dup = JSON.stringify([{ round_no: 1, court_no: 1, a1: parts[0], a2: parts[1], b1: parts[2], b2: parts[3], score_a: 48, score_b: 10 }, { round_no: 1, court_no: 2, a1: parts[0], a2: parts[5], b1: parts[6], b2: parts[7], score_a: null, score_b: null }]);
   console.assert(await fails(`select correct_session_result($1, $2::jsonb)`, [ks, dup]), "pemain main dua kali di satu ronde ditolak");
   await db.query(`update sessions set match_format = 'rotating' where id = $1`, [ks]); // skor bebas
+  // Skor court 1 diinput host → tetap tercatat atas nama host setelah koreksi (court 1 tidak berubah).
+  await as(null);
+  await db.query(`update session_matches set scored_by = $2, scored_at = '2026-01-01T10:00:00Z' where session_id = $1`, [ks, members[0]]);
+  await as(fixer);
+  const m2 = (await one(`select id from session_matches where session_id = $1 and court_no = 2`, [ks])).id;
+  console.assert(await fails(`select save_match_score($1, 48::smallint, 5::smallint)`, [m2]), "sesi berakhir: skor tidak bisa diubah lewat save_match_score (juga Super Admin)");
   const changed = (await one(`select correct_session_result($1, $2::jsonb) n`, [ks, lineup(5)])).n;
   console.assert(changed === 4, `koreksi mengubah bonus 4 member (bukan ${changed})`);
   console.assert((await total(members[0], ks)) === 50 && (await total(members[4], ks)) === 100, `bonus setelah koreksi: #1 lama ${await total(members[0], ks)}, #1 baru ${await total(members[4], ks)}`);
   console.assert((await one(`select count(*)::int n from points_ledger where session_id = $1 and note like 'Bonus juara #%'`, [ks])).n === 4, "bonus lama tidak dihapus");
   console.assert((await one(`select score_b from session_matches where session_id = $1 and court_no = 2`, [ks])).score_b === 5, "skor koreksi tersimpan");
+  const scorer = async (court) => (await one(`select scored_by, scored_at from session_matches where session_id = $1 and court_no = $2`, [ks, court]));
+  console.assert((await scorer(1)).scored_by === members[0] && new Date((await scorer(1)).scored_at).toISOString() === "2026-01-01T10:00:00.000Z", "match yang tidak berubah tetap mencatat penginput skor aslinya");
+  console.assert((await scorer(2)).scored_by === fixer, "match yang dikoreksi tercatat atas nama admin");
   console.assert((await one(`select status from sessions where id = $1`, [ks])).status === "completed", "sesi tetap selesai");
   console.assert((await one(`select correct_session_result($1, $2::jsonb) n`, [ks, lineup(5)])).n === 0, "koreksi ulang yang sama tidak menambah poin");
   // Hapus skor court 2 (match tidak dimainkan) → member 5 & 6 turun dari podium (baris "tidak lagi juara"),
@@ -1300,6 +1309,13 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const refs = (await db.query(`select 'sp:' || id r from session_participants where session_id = $1`, [S])).rows.map((r) => r.r);
   const fin = async () => Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source_ref = any($1) and deleted_at is null`, [refs])).s);
   const bal = async () => Number((await one(`select coalesce(sum(delta), 0) s from points_ledger where member_id = $1`, [m])).s);
+  // Booking website yang ditandai lunas manual (bk:) & bonus review +10 tanpa booking (peserta impor Kuyy).
+  const { id: w } = await one(`insert into auth.users default values returning id`);
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Booking Web', 'booking.web@mail.com')`, [w]);
+  const wb = (await one(`insert into bookings (session_id, member_id, amount, source) values ($1, $2, 150000, 'website') returning id`, [S, w])).id;
+  await db.query(`insert into session_reviews (session_id, member_id, rating) values ($1, $2, 5)`, [S, m]);
+  await db.query(`insert into points_ledger (member_id, delta, reason, note) values ($1, 10, 'bonus', 'Review sesi · Mabar Salah Input')`, [m]);
+  const bookingFin = async () => Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source_ref = $1 and deleted_at is null`, ['bk:' + wb])).s);
   const before = await bal();
   console.assert((await fin()) === 660000, `activity selesai → 3 peserta lunas di Keuangan (${await fin()})`);
   const fails = (sql, params) => db.query(sql, params).then(() => false, () => true);
@@ -1309,12 +1325,15 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(null);
   await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Hapus', 'hapus@soslay.test', 'active' from roles where name = 'Super Admin'`, [boss]);
   await as(boss);
+  await db.query(`select mark_booking_paid($1, true)`, [wb]);
+  console.assert((await bookingFin()) === 150000, `Tandai Lunas booking website → Keuangan (${await bookingFin()})`);
   console.assert(await fails(`select delete_session_mistake($1, 'Mabar Salah')`, [S]), "judul tidak sama → ditolak");
   const n = (await one(`select delete_session_mistake($1, 'Mabar Salah Input') n`, [S])).n;
   await as(null);
-  console.assert(n === 3, `jumlah peserta terhapus ${n}`);
+  console.assert(n === 4, `jumlah peserta terhapus ${n}`);
   console.assert((await one(`select count(*)::int n from sessions where id = $1`, [S])).n === 0 && (await one(`select count(*)::int n from bookings where session_id = $1`, [S])).n === 0, "activity & booking terhapus");
   console.assert((await fin()) === 0, `Keuangan dikoreksi jadi 0 (${await fin()})`);
-  console.assert((await bal()) === before - 10, `poin kehadiran dinetralkan (${before} → ${await bal()})`);
-  console.log("✓ hapus activity salah input: peserta & booking terhapus, Keuangan dikoreksi, poin kehadiran dinetralkan");
+  console.assert((await bookingFin()) === 0, `Tandai Lunas booking website dikoreksi jadi 0 (${await bookingFin()})`);
+  console.assert((await bal()) === before - 20, `poin kehadiran & bonus review dinetralkan (${before} → ${await bal()})`);
+  console.log("✓ hapus activity salah input: peserta & booking terhapus, Keuangan (juga Tandai Lunas) dikoreksi, poin kehadiran & review dinetralkan");
 }

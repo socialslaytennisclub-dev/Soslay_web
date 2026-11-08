@@ -3,7 +3,7 @@
 -- Riwayat yang menyangkut uang & poin tidak dihapus diam-diam:
 --  · poin kehadiran / bonus juara dari activity ini dinetralkan dengan baris penyesuaian;
 --  · transaksi Keuangan otomatis peserta (Tiket Kuyy / Bayar manual) dikoreksi oleh trigger Keuangan
---    yang sudah ada saat baris peserta dihapus.
+--    yang sudah ada saat baris peserta dihapus; "Tandai Lunas" booking website dikoreksi di sini.
 -- Activity paket trip ditolak (diatur lewat trip). Admin harus mengetik judul activity (dicek ulang di sini).
 
 create function delete_session_mistake(p_session uuid, p_title text)
@@ -24,14 +24,32 @@ begin
     select null from session_participants where session_id = p_session and member_id is null
   ) x;
 
+  -- Poin dari activity ini: kehadiran & bonus juara (lewat session_id / booking), plus bonus review +10 —
+  -- satu baris per member yang mereview; baris itu tidak selalu punya booking (peserta impor Kuyy), jadi
+  -- dicocokkan lewat catatan 'Review sesi · <judul>' yang paling dekat waktunya dengan review-nya.
   insert into points_ledger (member_id, delta, reason, note, created_by)
   select l.member_id, -sum(l.delta)::int, 'adjustment', format('Activity dihapus (salah input) · %s', v_s.title),
          (select user_id from staff_members where user_id = auth.uid())
   from points_ledger l
-  where l.reason in ('attendance', 'bonus')
-    and (l.session_id = p_session or l.booking_id in (select b.id from bookings b where b.session_id = p_session))
+  where (l.reason in ('attendance', 'bonus') and l.note not like 'Review sesi · %'
+         and (l.session_id = p_session or l.booking_id in (select b.id from bookings b where b.session_id = p_session)))
+     or l.id in (
+       select distinct on (r.member_id) x.id
+       from session_reviews r
+       join points_ledger x on x.member_id = r.member_id and x.reason = 'bonus' and x.note like 'Review sesi · %'
+        and (x.booking_id in (select b.id from bookings b where b.session_id = p_session)
+             or (x.booking_id is null and x.note = format('Review sesi · %s', v_s.title)))
+       where r.session_id = p_session
+       order by r.member_id, (x.booking_id is not null) desc, abs(extract(epoch from x.created_at - r.created_at))
+     )
   group by l.member_id
   having sum(l.delta) <> 0;
+
+  -- Booking website yang ditandai lunas manual ("Tandai Lunas", source_ref bk:<id>) tidak punya trigger
+  -- hapus → pemasukannya dikoreksi di sini, selagi booking & activity masih ada.
+  perform finance_sync_auto('ticket_manual_paid', 'bk:' || b.id, 0, 'ticket', null,
+            'Bayar manual · ' || coalesce((select full_name from profiles where id = b.member_id), 'peserta'), p_session, now())
+  from bookings b where b.session_id = p_session;
 
   -- Peserta dulu (trigger Keuangan mengoreksi selagi activity masih ada), lalu booking & activity
   -- (line-up, host, foto ikut terhapus lewat on delete cascade).

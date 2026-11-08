@@ -296,18 +296,10 @@ function rosterIdMap(roster: { id: unknown; member_id: unknown }[]) {
 }
 
 /**
- * Simpan line-up. Match yang sudah ada skornya terkunci (tidak boleh berubah); sisanya diganti.
- * Kalau sesi belum punya peserta import, peserta booking dijadikan daftar peserta dulu.
+ * Daftar peserta sesi untuk line-up. Peserta booking (id = member id) yang belum ada di daftar peserta →
+ * baris session_participants dulu (dipakai Simpan line-up & Koreksi hasil).
  */
-export async function saveLineup(sessionId: string, matches: Omit<SessionMatch, "scoreA" | "scoreB">[]): Promise<ActionResult> {
-  const auth = await requireEditor("activities");
-  if ("error" in auth) return { ok: false, error: auth.error };
-  const supabase = await createSupabaseServerClient();
-
-  const { data: session } = await supabase.from("sessions").select("court_count, round_count, ended_at, status").eq("id", sessionId).single();
-  if (!session) return { ok: false, error: "Sesi tidak ditemukan." };
-  if (isSessionEnded({ status: session.status as string, endedAt: session.ended_at as string | null })) return { ok: false, error: "Sesi sudah diakhiri — pakai \"Koreksi hasil\"." };
-
+async function rosterWithBookings(supabase: Supabase, sessionId: string): Promise<{ roster: { id: unknown; member_id: unknown }[] } | { error: string }> {
   // Peserta booking (id = member id) yang belum ada di daftar peserta → baris session_participants. Juga saat
   // daftar sudah terisi impor Kuyy: booking website setelah impor ikut bisa masuk line-up.
   const [{ data: existing }, { data: booked }] = await Promise.all([
@@ -342,10 +334,28 @@ export async function saveLineup(sessionId: string, matches: Omit<SessionMatch, 
     }));
   if (rows.length) {
     const { data, error } = await supabase.from("session_participants").insert(rows).select("id, member_id");
-    if (error) return { ok: false, error: `Gagal menyiapkan peserta: ${error.message}` };
+    if (error) return { error: `Gagal menyiapkan peserta: ${error.message}` };
     roster = [...roster, ...(data ?? [])];
   }
-  const idOf = rosterIdMap(roster ?? []);
+  return { roster };
+}
+
+/**
+ * Simpan line-up. Match yang sudah ada skornya terkunci (tidak boleh berubah); sisanya diganti.
+ * Kalau sesi belum punya peserta import, peserta booking dijadikan daftar peserta dulu.
+ */
+export async function saveLineup(sessionId: string, matches: Omit<SessionMatch, "scoreA" | "scoreB">[]): Promise<ActionResult> {
+  const auth = await requireEditor("activities");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const supabase = await createSupabaseServerClient();
+
+  const { data: session } = await supabase.from("sessions").select("court_count, round_count, ended_at, status").eq("id", sessionId).single();
+  if (!session) return { ok: false, error: "Sesi tidak ditemukan." };
+  if (isSessionEnded({ status: session.status as string, endedAt: session.ended_at as string | null })) return { ok: false, error: "Sesi sudah diakhiri — pakai \"Koreksi hasil\"." };
+
+  const prepared = await rosterWithBookings(supabase, sessionId);
+  if ("error" in prepared) return { ok: false, error: prepared.error };
+  const idOf = rosterIdMap(prepared.roster);
 
   const resolved = [];
   const usedPerRound = new Map<number, Set<string>>();
@@ -408,8 +418,9 @@ export async function correctSessionResult(sessionId: string, matches: SessionMa
   if (matches.some((m) => [m.scoreA, m.scoreB].some((n) => n !== null && !(Number.isInteger(n) && n >= 0)))) return { ok: false, error: "Skor tidak valid." };
   const supabase = await createSupabaseServerClient();
 
-  const { data: roster } = await supabase.from("session_participants").select("id, member_id").eq("session_id", sessionId);
-  const idOf = rosterIdMap(roster ?? []);
+  const prepared = await rosterWithBookings(supabase, sessionId);
+  if ("error" in prepared) return { ok: false, error: prepared.error };
+  const idOf = rosterIdMap(prepared.roster);
   const rows = [];
   for (const m of matches) {
     const [a1, a2, b1, b2] = [...m.a, ...m.b].map((p) => idOf.get(p));
