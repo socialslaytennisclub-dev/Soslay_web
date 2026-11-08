@@ -18,30 +18,23 @@ begin
   if v_s.title is distinct from p_title then raise exception 'Judul yang diketik tidak sama dengan judul activity'; end if;
   if v_s.trip_id is not null then raise exception 'Activity paket trip — hapus / batalkan lewat halaman trip'; end if;
 
-  select count(*) into v_people from (
-    select member_id from bookings where session_id = p_session and status <> 'cancelled'
-    union all
-    select null from session_participants where session_id = p_session and member_id is null
-  ) x;
+  -- Sama dengan daftar peserta di admin: baris peserta + booking yang member-nya belum ada di daftar itu.
+  select (select count(*) from session_participants where session_id = p_session)
+       + (select count(*) from bookings b where b.session_id = p_session and b.status not in ('cancelled', 'waitlisted')
+            and not exists (select 1 from session_participants sp where sp.session_id = p_session and sp.member_id = b.member_id))
+  into v_people;
 
-  -- Poin dari activity ini: kehadiran & bonus juara (lewat session_id / booking), plus bonus review +10 —
-  -- satu baris per member yang mereview; baris itu tidak selalu punya booking (peserta impor Kuyy), jadi
-  -- dicocokkan lewat catatan 'Review sesi · <judul>' yang paling dekat waktunya dengan review-nya.
+  -- Poin dari activity ini: kehadiran, bonus juara & bonus review (lewat session_id / booking), plus bonus
+  -- review +10 peserta tanpa booking (impor Kuyy). Baris itu dicatat di transaksi yang sama dengan
+  -- review-nya → created_at sama persis (tidak bergantung judul, yang bisa sudah diganti).
   insert into points_ledger (member_id, delta, reason, note, created_by)
   select l.member_id, -sum(l.delta)::int, 'adjustment', format('Activity dihapus (salah input) · %s', v_s.title),
          (select user_id from staff_members where user_id = auth.uid())
   from points_ledger l
-  where (l.reason in ('attendance', 'bonus') and l.note not like 'Review sesi · %'
+  where (l.reason in ('attendance', 'bonus')
          and (l.session_id = p_session or l.booking_id in (select b.id from bookings b where b.session_id = p_session)))
-     or l.id in (
-       select distinct on (r.member_id) x.id
-       from session_reviews r
-       join points_ledger x on x.member_id = r.member_id and x.reason = 'bonus' and x.note like 'Review sesi · %'
-        and (x.booking_id in (select b.id from bookings b where b.session_id = p_session)
-             or (x.booking_id is null and x.note = format('Review sesi · %s', v_s.title)))
-       where r.session_id = p_session
-       order by r.member_id, (x.booking_id is not null) desc, abs(extract(epoch from x.created_at - r.created_at))
-     )
+     or (l.reason = 'bonus' and l.booking_id is null and l.session_id is null and l.note like 'Review sesi · %'
+         and exists (select 1 from session_reviews r where r.session_id = p_session and r.member_id = l.member_id and r.created_at = l.created_at))
   group by l.member_id
   having sum(l.delta) <> 0;
 

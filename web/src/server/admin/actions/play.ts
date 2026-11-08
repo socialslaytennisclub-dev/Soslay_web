@@ -297,7 +297,7 @@ function rosterIdMap(roster: { id: unknown; member_id: unknown }[]) {
 
 /**
  * Daftar peserta sesi untuk line-up. Peserta booking (id = member id) yang belum ada di daftar peserta →
- * baris session_participants dulu (dipakai Simpan line-up & Koreksi hasil).
+ * baris session_participants dulu (Koreksi hasil melakukannya di RPC correct_session_result).
  */
 async function rosterWithBookings(supabase: Supabase, sessionId: string): Promise<{ roster: { id: unknown; member_id: unknown }[] } | { error: string }> {
   // Peserta booking (id = member id) yang belum ada di daftar peserta → baris session_participants. Juga saat
@@ -418,13 +418,11 @@ export async function correctSessionResult(sessionId: string, matches: SessionMa
   if (matches.some((m) => [m.scoreA, m.scoreB].some((n) => n !== null && !(Number.isInteger(n) && n >= 0)))) return { ok: false, error: "Skor tidak valid." };
   const supabase = await createSupabaseServerClient();
 
-  const prepared = await rosterWithBookings(supabase, sessionId);
-  if ("error" in prepared) return { ok: false, error: prepared.error };
-  const idOf = rosterIdMap(prepared.roster);
+  // Slot = id peserta, atau member id untuk peserta booking — RPC menyiapkan baris pesertanya dalam transaksi yang sama.
   const rows = [];
   for (const m of matches) {
-    const [a1, a2, b1, b2] = [...m.a, ...m.b].map((p) => idOf.get(p));
-    if (!a1 || !a2 || !b1 || !b2) return { ok: false, error: `Ada pemain di Ronde ${m.round} yang belum tercatat sebagai peserta sesi ini.` };
+    const [a1, a2, b1, b2] = [...m.a, ...m.b];
+    if (!a1 || !a2 || !b1 || !b2) return { ok: false, error: `Ronde ${m.round} · Court ${m.court} belum lengkap 4 pemain.` };
     rows.push({ round_no: m.round, court_no: m.court, a1, a2, b1, b2, score_a: m.scoreA, score_b: m.scoreB });
   }
 

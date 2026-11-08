@@ -77,7 +77,7 @@ revoke execute on function finish_session(uuid, uuid, timestamptz) from public, 
 
 /**
  * Simpan koreksi hasil sesi yang sudah berakhir: seluruh line-up + skor diganti dengan p_matches
- * (round_no, court_no, a1, a2, b1, b2 = id session_participants, score_a, score_b — skor boleh null =
+ * (round_no, court_no, a1, a2, b1, b2 = id session_participants — atau member id peserta booking —, score_a, score_b — skor boleh null =
  * match tidak dimainkan), lalu bonus juara disesuaikan. Hanya admin activities (bukan host).
  * Mengembalikan jumlah member yang bonusnya berubah.
  */
@@ -98,6 +98,29 @@ begin
   create temp table correction on commit drop as
   select * from jsonb_to_recordset(coalesce(p_matches, '[]'))
     as l(round_no smallint, court_no smallint, a1 uuid, a2 uuid, b1 uuid, b2 uuid, score_a smallint, score_b smallint);
+
+  -- Slot berisi member id = peserta dari booking yang belum ada di daftar peserta (sama dengan Simpan
+  -- line-up). Hanya pemain yang dipakai di koreksi, dan di transaksi ini — kalau koreksi ditolak, baris
+  -- peserta ikut batal. Booking tambahan admin yang lunasnya sudah tercatat lewat "Tandai Lunas" (bk:)
+  -- disalin sebagai 'website' supaya Keuangan tidak mencatat pemasukannya dua kali.
+  insert into session_participants (session_id, member_id, kuy_reg_no, full_name, email, phone, instagram, tennis_level,
+                                    amount, source, payment_status, payment_channel)
+  select p_session, b.member_id, 'B-' || b.member_id, coalesce(pr.full_name, 'Member'), pr.email, pr.phone, pr.instagram, pr.tennis_level,
+         b.amount,
+         case when b.source = 'admin' and exists (select 1 from finance_transactions t where t.source_ref = 'bk:' || b.id and t.deleted_at is null)
+              then 'website' else b.source::text end,
+         (case when b.payment_status = 'paid' then 'paid' else 'pending' end)::payment_status,
+         case when b.source = 'admin' then 'manual' else 'kuy' end
+  from bookings b left join profiles pr on pr.id = b.member_id
+  where b.session_id = p_session and b.status in ('registered', 'attended')
+    and b.member_id in (select unnest(array[c.a1, c.a2, c.b1, c.b2]) from pg_temp.correction c)
+    and not exists (select 1 from session_participants sp where sp.session_id = p_session and sp.member_id = b.member_id)
+  on conflict (session_id, kuy_reg_no) do nothing;
+  update pg_temp.correction c set
+    a1 = coalesce((select sp.id from session_participants sp where sp.session_id = p_session and sp.member_id = c.a1 order by sp.imported_at limit 1), c.a1),
+    a2 = coalesce((select sp.id from session_participants sp where sp.session_id = p_session and sp.member_id = c.a2 order by sp.imported_at limit 1), c.a2),
+    b1 = coalesce((select sp.id from session_participants sp where sp.session_id = p_session and sp.member_id = c.b1 order by sp.imported_at limit 1), c.b1),
+    b2 = coalesce((select sp.id from session_participants sp where sp.session_id = p_session and sp.member_id = c.b2 order by sp.imported_at limit 1), c.b2);
 
   if exists (select 1 from pg_temp.correction where round_no < 1 or round_no > v_s.round_count or court_no < 1 or court_no > v_s.court_count) then
     raise exception 'Ronde / court di luar format sesi (% ronde · % court)', v_s.round_count, v_s.court_count;

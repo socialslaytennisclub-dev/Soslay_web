@@ -9,18 +9,20 @@ update points_ledger l set session_id = b.session_id
 from bookings b
 where l.reason = 'attendance' and l.session_id is null and b.id = l.booking_id;
 
--- Baris poin yang booking-nya sudah terhapus (booking_id NULL): sesi ditebak dari activity member itu
--- (peserta / booking) yang paling akhir dimulai sebelum poin dicatat (+1 jam, check-in dibuka 30 menit
--- sebelum mulai) dan paling lama 1 hari sebelumnya (check-in terjadi di hari activity). Hanya diisi kalau sesi itu belum punya poin kehadiran member tersebut — kalau sudah
--- ada, baris ini dibiarkan (session_id NULL) supaya tidak ada poin yang dihapus otomatis.
+-- Baris poin yang booking-nya sudah terhapus (booking_id NULL): sesi ditebak dari activity berpoin milik
+-- member itu (peserta / booking) yang BELUM punya poin kehadirannya, paling akhir dimulai sebelum poin
+-- dicatat (+1 jam, check-in dibuka 30 menit sebelum mulai). Tanpa batas bawah — check-in susulan admin
+-- beberapa hari kemudian tetap ketemu — dan activity yang sudah punya poin kehadiran dilewati, jadi
+-- tebakan tidak jatuh ke activity lama yang sudah tercatat. Tidak ada kandidat → session_id tetap NULL.
 update points_ledger l set session_id = g.session_id
 from (
   -- Dua baris yatim yang menunjuk sesi yang sama → hanya satu yang diisi (sisanya tetap NULL).
   select distinct on (member_id, session_id) id, member_id, session_id from (
   select distinct on (o.id) o.id, o.member_id, s.id as session_id
   from points_ledger o
-  join sessions s on s.starts_at <= o.created_at + interval '1 hour' and s.starts_at > o.created_at - interval '1 day'
+  join sessions s on s.starts_at <= o.created_at + interval '1 hour' and s.points_per_attendance > 0
   where o.reason = 'attendance' and o.session_id is null and o.booking_id is null
+    and not exists (select 1 from points_ledger x where x.reason = 'attendance' and x.member_id = o.member_id and x.session_id = s.id)
     and (exists (select 1 from session_participants sp where sp.session_id = s.id and sp.member_id = o.member_id)
          or exists (select 1 from bookings b where b.session_id = s.id and b.member_id = o.member_id))
   order by o.id, s.starts_at desc

@@ -1254,6 +1254,24 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.query(`update sessions set leaderboard_mode = 'wins' where id = $1`, [ks]);
   await one(`select correct_session_result($1, $2::jsonb) n`, [ks, scoresOf([[30, 0], [40, 35]])]);
   console.assert((await total(members[0], ks)) === 100 && (await total(members[4], ks)) === 50 && (await total(members[6], ks)) === 0 && (await total(members[2], ks)) === 0, `mode Win: #1 ${await total(members[0], ks)}, #3 ${await total(members[4], ks)}, kalah ${await total(members[6], ks)}`);
+  // Pemain booking website yang belum ada di daftar peserta (slot = member id) → baris peserta dibuat oleh
+  // RPC, hanya untuk pemain yang dipakai; koreksi yang ditolak tidak meninggalkan baris peserta.
+  await as(null);
+  const [walkIn, noShow] = [(await one(`insert into auth.users default values returning id`)).id, (await one(`insert into auth.users default values returning id`)).id];
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Walk In', 'walk.in@mail.com'), ($2, 'No Show', 'no.show@mail.com')`, [walkIn, noShow]);
+  await db.query(`insert into bookings (session_id, member_id, status) values ($1, $2, 'attended'), ($1, $3, 'registered')`, [ks, walkIn, noShow]);
+  await as(fixer);
+  const withWalkIn = (b2) => JSON.stringify([
+    { round_no: 1, court_no: 1, a1: parts[0], a2: parts[1], b1: parts[2], b2: parts[3], score_a: 30, score_b: 0 },
+    { round_no: 1, court_no: 2, a1: parts[4], a2: parts[5], b1: parts[6], b2: walkIn, score_a: b2, score_b: 0 },
+  ]);
+  const rosterOf = async (m) => (await one(`select count(*)::int n from session_participants where session_id = $1 and member_id = $2`, [ks, m])).n;
+  console.assert(await fails(`select correct_session_result($1, $2::jsonb)`, [ks, withWalkIn(0)]), "skor 0–0 ditolak");
+  console.assert((await rosterOf(walkIn)) === 0, "koreksi ditolak → tidak ada baris peserta baru");
+  await one(`select correct_session_result($1, $2::jsonb) n`, [ks, withWalkIn(40)]);
+  const walkInRow = (await one(`select id from session_participants where session_id = $1 and member_id = $2`, [ks, walkIn])).id;
+  console.assert((await one(`select b2 from session_matches where session_id = $1 and court_no = 2`, [ks])).b2 === walkInRow, "slot member id → id peserta baru");
+  console.assert((await rosterOf(noShow)) === 0, "booking yang tidak dipakai di koreksi tidak disalin jadi peserta");
   // Sesi yang belum berakhir tidak lewat jalur koreksi.
   await db.query(`update sessions set ended_at = null, status = 'published' where id = $1`, [ks]);
   console.assert(await fails(`select correct_session_result($1, $2::jsonb)`, [ks, lineup(5)]), "sesi belum berakhir tidak bisa dikoreksi");
@@ -1313,8 +1331,11 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const { id: w } = await one(`insert into auth.users default values returning id`);
   await db.query(`insert into profiles (id, full_name, email) values ($1, 'Booking Web', 'booking.web@mail.com')`, [w]);
   const wb = (await one(`insert into bookings (session_id, member_id, amount, source) values ($1, $2, 150000, 'website') returning id`, [S, w])).id;
-  await db.query(`insert into session_reviews (session_id, member_id, rating) values ($1, $2, 5)`, [S, m]);
-  await db.query(`insert into points_ledger (member_id, delta, reason, note) values ($1, 10, 'bonus', 'Review sesi · Mabar Salah Input')`, [m]);
+  // Review & bonusnya tercatat di satu transaksi (submit_session_review) → created_at sama. Judul activity
+  // sudah diganti sesudahnya; bonus review activity lain berjudul sama tidak ikut dinetralkan.
+  await db.query(`with r as (insert into session_reviews (session_id, member_id, rating) values ($1, $2, 5) returning member_id)
+    insert into points_ledger (member_id, delta, reason, note) select member_id, 10, 'bonus', 'Review sesi · Mabar Lama' from r`, [S, m]);
+  await db.query(`insert into points_ledger (member_id, delta, reason, note, created_at) values ($1, 10, 'bonus', 'Review sesi · Mabar Salah Input', now() - interval '7 days')`, [m]);
   const bookingFin = async () => Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source_ref = $1 and deleted_at is null`, ['bk:' + wb])).s);
   const before = await bal();
   console.assert((await fin()) === 660000, `activity selesai → 3 peserta lunas di Keuangan (${await fin()})`);
