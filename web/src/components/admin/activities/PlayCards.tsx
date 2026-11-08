@@ -45,7 +45,21 @@ const LEVEL_WEIGHT: Record<TennisLevel, number> = { beginner: 1, beginner_interm
 const digits = (v: string) => v.replace(/\D/g, "").slice(0, 2);
 
 /** Admin / Edit sesi — Format & skor (Figma ADM-10). */
-export function FormatCard({ value, onChange, locked }: { value: PlayForm; onChange: (next: PlayForm) => void; locked: boolean }) {
+export function FormatCard({
+  value,
+  onChange,
+  locked,
+  bonusLocked = false,
+  legacyBonus = false,
+}: {
+  value: PlayForm;
+  onChange: (next: PlayForm) => void;
+  locked: boolean;
+  /** Activity sudah selesai → bonus juara sudah dibagikan, tidak bisa diubah. */
+  bonusLocked?: boolean;
+  /** Activity lama dengan aturan lama 100 / 75 / 50. */
+  legacyBonus?: boolean;
+}) {
   const hint = FORMATS.find((f) => f.value === value.matchFormat)?.hint;
   const withTarget = hasTargetTotal(value.matchFormat);
   const set = (patch: Partial<PlayForm>) => onChange({ ...value, ...patch });
@@ -93,7 +107,11 @@ export function FormatCard({ value, onChange, locked }: { value: PlayForm; onCha
 
           <fieldset className={editor.fieldset}>
             <legend className={editor.label}>Bonus juara (Slay Point)</legend>
-            <span className={editor.muted}>Dibagikan ke member juara 1–3 saat sesi ditutup · 0 = tanpa bonus. Peringkat sama mendapat bonus yang sama.</span>
+            <span className={editor.muted}>
+              {bonusLocked
+                ? "Activity sudah selesai — bonus juara sudah dibagikan dan terkunci."
+                : `Dibagikan ke member juara 1–3 saat sesi ditutup · 0 = tanpa bonus. Peringkat sama mendapat bonus yang sama.${legacyBonus ? " Activity ini dibuat sebelum bonus per activity, jadi memakai aturan lama 100 / 75 / 50." : ""}`}
+            </span>
             <div className={editor.cols3}>
               {value.podiumBonus.map((pts, i) => (
                 <NumberField
@@ -102,6 +120,7 @@ export function FormatCard({ value, onChange, locked }: { value: PlayForm; onCha
                   suffix="pts"
                   value={pts}
                   onChange={(v) => set({ podiumBonus: value.podiumBonus.map((x, j) => (j === i ? v : x)) as PlayForm["podiumBonus"] })}
+                  disabled={bonusLocked}
                 />
               ))}
             </div>

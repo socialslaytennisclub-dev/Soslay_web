@@ -1,11 +1,28 @@
 -- Bonus juara per activity (diminta 8 Nov): tiap activity punya aturan sendiri, diatur di Admin → Edit
--- activity → Format & skor → "Bonus juara". Default activity baru: juara 1 = 10, juara 2 = 0, juara 3 = 0.
--- Activity yang sudah selesai tetap tercatat 100 / 75 / 50 (yang memang sudah dibagikan), supaya
--- "Koreksi hasil" tidak menarik bonus lama. Peringkat 0 poin → tidak ada baris bonus.
+-- activity → Format & skor → "Bonus juara". Default activity baru: juara 1 = 10, juara 2 = 0, juara 3 = 0
+-- (sama dengan DEFAULT_PODIUM_BONUS di web/src/lib/standings.ts, dicek di check-migrations).
+-- Activity yang sudah ada (selesai maupun yang akan datang) memakai aturan lama 100 / 75 / 50 → NULL
+-- ("aturan lama"): bonus yang sudah dibagikan tidak tertarik saat Koreksi hasil, dan yang sudah diumumkan
+-- tidak berubah diam-diam. Duplikat dari activity aturan lama memakai default baru.
+-- Setelah activity selesai bonus juara terkunci (bonusnya sudah dibagikan). Peringkat 0 poin → tanpa baris.
 
-alter table sessions add column podium_bonus integer[] not null default '{10,0,0}'
-  check (array_length(podium_bonus, 1) = 3 and 0 <= all (podium_bonus) and 10000 >= all (podium_bonus));
-update sessions set podium_bonus = '{100,75,50}' where ended_at is not null or status = 'completed';
+alter table sessions add column podium_bonus integer[]
+  check (podium_bonus is null or (array_length(podium_bonus, 1) = 3 and 0 <= all (podium_bonus) and 10000 >= all (podium_bonus)));
+-- Kolom ditambah tanpa default dulu → semua baris lama NULL (aturan lama); baru sesudahnya default activity baru.
+alter table sessions alter column podium_bonus set default '{10,0,0}';
+
+/** Bonus juara 1 / 2 / 3 sebuah activity; NULL = aturan lama 100 / 75 / 50. */
+create function session_podium_bonus(p_bonus integer[]) returns integer[] language sql immutable as $$
+  select coalesce(p_bonus, '{100,75,50}')
+$$;
+
+create function sessions_lock_podium_bonus() returns trigger language plpgsql set search_path = public as $$
+begin
+  raise exception 'Activity sudah selesai — bonus juara terkunci (sudah dibagikan).' using hint = 'podium_locked';
+end $$;
+create trigger sessions_lock_podium_bonus before update of podium_bonus on sessions
+  for each row when ((old.ended_at is not null or old.status = 'completed') and new.podium_bonus is distinct from old.podium_bonus)
+  execute function sessions_lock_podium_bonus();
 
 -- Sama dengan 20261108000000_session_result_correction, kecuali bonus dari sessions.podium_bonus.
 create or replace function finish_session(p_session uuid, p_by uuid, p_at timestamptz)
@@ -19,11 +36,11 @@ begin
   if not found then return; end if;
 
   insert into points_ledger (member_id, delta, reason, booking_id, session_id, note)
-  select p.member_id, v_s.podium_bonus[p.rk], 'bonus',
+  select p.member_id, (session_podium_bonus(v_s.podium_bonus))[p.rk], 'bonus',
          (select b.id from bookings b where b.session_id = p_session and b.member_id = p.member_id limit 1),
          p_session, format('Bonus juara #%s · %s', p.rk, v_s.title)
   from session_podium(p_session) p
-  where coalesce(v_s.podium_bonus[p.rk], 0) > 0;
+  where coalesce((session_podium_bonus(v_s.podium_bonus))[p.rk], 0) > 0;
 end $$;
 
 -- Sama dengan 20261108030000_correction_where_clause, kecuali bonus dari sessions.podium_bonus.
@@ -90,7 +107,7 @@ begin
 
   -- Bonus juara: target dari skor baru dikurangi bonus yang sudah tercatat untuk sesi ini.
   with target as (
-    select member_id, rk, coalesce(v_s.podium_bonus[rk], 0) as pts from session_podium(p_session)
+    select member_id, rk, coalesce((session_podium_bonus(v_s.podium_bonus))[rk], 0) as pts from session_podium(p_session)
   ), current_bonus as (
     select member_id, sum(delta)::int as pts from points_ledger
     where session_id = p_session and reason = 'bonus' group by member_id

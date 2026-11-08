@@ -49,7 +49,7 @@ export type SessionInput = {
   crewMembers: { memberId: string; role: "host" | "photographer" }[];
   /** Foto sesi: link album Google Drive, thumbnail (URL upload), jumlah foto. */
   photos: { albumUrl: string; coverPath: string | null; count: number | null };
-  play: { matchFormat: MatchFormat; courtCount: number; roundCount: number; targetPoints: number; leaderboardMode: "points" | "wins"; showLeaderboard: boolean; podiumBonus: [number, number, number] };
+  play: { matchFormat: MatchFormat; courtCount: number; roundCount: number; targetPoints: number; leaderboardMode: "points" | "wins"; showLeaderboard: boolean; /** null = tetap aturan lama (activity lama). */ podiumBonus: [number, number, number] | null };
 };
 
 /** Format yang sudah bisa dipakai (v1) — Round robin & Knockout menyusul. */
@@ -87,8 +87,9 @@ function validate(input: SessionInput): string | null {
     if (!Number.isInteger(roundCount) || roundCount < 1 || roundCount > 40) return "Jumlah ronde 1–40.";
     if (hasTargetTotal(matchFormat) && (!Number.isInteger(targetPoints) || targetPoints < 1 || targetPoints > SCORE_MAX)) return `Target poin 1–${SCORE_MAX}.`;
     if (input.play.leaderboardMode !== "points" && input.play.leaderboardMode !== "wins") return "Format leaderboard tidak dikenal.";
-    if (input.play.podiumBonus.length !== 3 || input.play.podiumBonus.some((n) => !Number.isInteger(n) || n < 0 || n > 10_000)) return "Bonus juara 0–10.000 poin.";
   }
+  const bonus = input.play.podiumBonus;
+  if (bonus !== null && (!Array.isArray(bonus) || bonus.length !== 3 || bonus.some((n) => !Number.isInteger(n) || n < 0 || n > 10_000))) return "Bonus juara 0–10.000 poin.";
   return null;
 }
 

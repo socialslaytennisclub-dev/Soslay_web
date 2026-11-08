@@ -13,6 +13,7 @@ import { memberInviteWaLink } from "@/lib/wa-invite";
 import { clearParticipants, removeParticipants } from "@/server/admin/actions/play";
 import { deleteSession, deleteSessionMistake, discardSessionUploads, saveSession, setCheckIn, uploadSessionCover, type SessionInput } from "@/server/admin/actions/sessions";
 import { hasTargetTotal, scoreTarget, usesLineup } from "@/lib/americano";
+import { effectivePodiumBonus, LEGACY_PODIUM_BONUS } from "@/lib/standings";
 import type { MemberChoice, SessionDetail, SessionHost, SessionParticipant, TennisLevel } from "@/server/admin/types";
 import { FormCard, MultiChips, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
@@ -116,7 +117,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     targetPoints: String(session.play.targetPoints),
     leaderboardMode: session.play.leaderboardMode,
     showLeaderboard: session.play.showLeaderboard,
-    podiumBonus: session.play.podiumBonus.map(String) as PlayForm["podiumBonus"],
+    podiumBonus: effectivePodiumBonus(session.play.podiumBonus).map(String) as PlayForm["podiumBonus"],
   });
   // Check-in yang diubah di halaman ini (id peserta → hadir?); sisanya dari server.
   const [checkInEdits, setCheckInEdits] = useState<Record<string, boolean>>({});
@@ -199,7 +200,11 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
         targetPoints: Number(play.targetPoints),
         leaderboardMode: play.leaderboardMode,
         showLeaderboard: play.showLeaderboard,
-        podiumBonus: play.podiumBonus.map((v) => Number(v) || 0) as [number, number, number],
+        // Activity lama yang bonusnya tidak diubah tetap "aturan lama" (null) — Duplikat-nya memakai default baru.
+        podiumBonus:
+          session.play.podiumBonus === null && play.podiumBonus.join() === LEGACY_PODIUM_BONUS.join()
+            ? null
+            : (play.podiumBonus.map((v) => Number(v) || 0) as [number, number, number]),
       },
     };
     if (publish) setStatus("published");
@@ -652,7 +657,13 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
             </p>
           </FormCard>
 
-          <FormatCard value={play} onChange={setPlay} locked={session.matches.some((m) => m.scoreA !== null)} />
+          <FormatCard
+            value={play}
+            onChange={setPlay}
+            locked={session.matches.some((m) => m.scoreA !== null)}
+            bonusLocked={isSessionEnded({ status: session.status, endedAt: session.play.endedAt })}
+            legacyBonus={session.play.podiumBonus === null}
+          />
           {err("play") && <span className={styles.error}>{err("play")}</span>}
 
           {usesLineup(play.matchFormat) && (

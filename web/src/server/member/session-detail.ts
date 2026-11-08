@@ -6,7 +6,7 @@ import { memberSessions } from "@/content/member";
 import { LEVEL_LABEL, PARTICIPANT_SOURCE_LABEL } from "@/lib/admin-labels";
 import { cityOf, type City } from "@/lib/format";
 import { sessionClosesAt } from "@/lib/session-close";
-import { compareStandings, DEFAULT_PODIUM_BONUS, toPodiumBonus, type PodiumBonus } from "@/lib/standings";
+import { compareStandings, DEFAULT_PODIUM_BONUS, effectivePodiumBonus, toPodiumBonus, type PodiumBonus } from "@/lib/standings";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { TennisLevel } from "@/server/admin/types";
 import { localParts } from "@/server/public/sessions";
@@ -342,7 +342,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
       lineup: session.match_format === "americano" || session.match_format === "rotating",
       leaderboardMode: session.leaderboard_mode,
       attendancePoints: session.points_per_attendance,
-      podiumBonus: toPodiumBonus(session.podium_bonus),
+      podiumBonus: effectivePodiumBonus(toPodiumBonus(session.podium_bonus)),
     },
     capacity: session.capacity,
     levels: (session.recommended_levels ?? []).map((l) => LEVEL_LABEL[l]),

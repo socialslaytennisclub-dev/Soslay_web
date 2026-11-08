@@ -232,11 +232,11 @@ export async function getSessionDraft(fromId?: string): Promise<SessionDetail> {
       participants: [],
       paid: 0,
       checkedIn: 0,
-      // Bonus juara ikut disalin — kecuali 100 / 75 / 50, angka lama yang dicatat untuk activity yang sudah
-      // selesai sebelum bonus per activity ada (20261108050000) → activity baru memakai default 10 / 0 / 0.
+      // Bonus juara ikut disalin; activity sumber dengan aturan lama (null, sebelum bonus per activity) →
+      // activity baru memakai default 10 / 0 / 0.
       play: {
         ...source.play,
-        podiumBonus: source.play.podiumBonus.join() === "100,75,50" ? [...DEFAULT_PODIUM_BONUS] : source.play.podiumBonus,
+        podiumBonus: source.play.podiumBonus ?? [...DEFAULT_PODIUM_BONUS],
         liveStartedAt: null,
         endedAt: null,
       },

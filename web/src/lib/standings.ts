@@ -5,13 +5,20 @@
  * produktif) di atas; nilai sama persis berbagi peringkat. Bonus juara hanya untuk pemain yang sudah main.
  */
 
-/** Bonus juara 1 / 2 / 3 activity baru (diatur per activity, kolom sessions.podium_bonus). */
+/**
+ * Bonus juara 1 / 2 / 3 activity baru (diatur per activity, kolom sessions.podium_bonus — default kolom
+ * sama, dicek di check-migrations). Activity yang dibuat sebelum aturan per activity: kolom NULL =
+ * aturan lama 100 / 75 / 50 (session_podium_bonus di database).
+ */
 export const DEFAULT_PODIUM_BONUS = [10, 0, 0] as const;
+export const LEGACY_PODIUM_BONUS = [100, 75, 50] as const;
 export type PodiumBonus = [number, number, number];
 
-/** Kolom podium_bonus (integer[3]) → tuple; data rusak / kosong → default. */
-export const toPodiumBonus = (v: readonly number[] | null | undefined): PodiumBonus =>
-  v?.length === 3 ? [v[0], v[1], v[2]] : [...DEFAULT_PODIUM_BONUS];
+/** Kolom podium_bonus → tuple, atau null untuk aturan lama (NULL). */
+export const toPodiumBonus = (v: readonly number[] | null | undefined): PodiumBonus | null => (v?.length === 3 ? [v[0], v[1], v[2]] : null);
+
+/** Bonus yang benar-benar dibagikan: aturan lama (null) → 100 / 75 / 50. */
+export const effectivePodiumBonus = (v: PodiumBonus | null): PodiumBonus => v ?? [...LEGACY_PODIUM_BONUS];
 
 /** "juara 1 +10" / "juara 1 +100 · juara 2 +75 · juara 3 +50"; null kalau semuanya 0. */
 export function podiumBonusText(bonus: readonly number[]): string | null {
