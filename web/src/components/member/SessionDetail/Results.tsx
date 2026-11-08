@@ -3,7 +3,7 @@ import Link from "next/link";
 import { cx } from "@/lib/cx";
 import { formatAngka, formatTanggalPendek } from "@/lib/format";
 import { isUnstarted, roundList } from "@/lib/rounds";
-import { finalRanks, PODIUM_BONUS, type Ranked, sessionPoints, tieRule } from "@/lib/standings";
+import { finalRanks, podiumBonusText, type Ranked, sessionPoints, tieRule } from "@/lib/standings";
 import { formatSigned } from "@/lib/format";
 import { initials, teamName } from "@/lib/text";
 import type { MemberSessionDetail } from "@/server/member/session-detail";
@@ -213,7 +213,7 @@ export function HostResults({ detail: d, endedNotice }: { detail: MemberSessionD
           <strong>{formatAngka(total)} pts</strong>
           <small>
             +{d.format.attendancePoints} × {earning} member hadir{present > earning ? ` (${present - earning} peserta tanpa akun tidak dapat poin)` : ""}
-            {d.ended ? ` · bonus juara ${bonus ? `+${PODIUM_BONUS.join(" / +")}` : "–"}` : " · bonus juara dibagikan saat sesi ditutup"}
+            {d.ended ? ` · bonus ${bonus ? (podiumBonusText(d.format.podiumBonus) ?? "juara –") : "juara –"}` : podiumBonusText(d.format.podiumBonus) ? " · bonus juara dibagikan saat sesi ditutup" : ""}
           </small>
         </div>
       </section>

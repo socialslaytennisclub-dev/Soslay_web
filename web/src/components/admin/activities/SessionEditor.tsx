@@ -116,6 +116,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     targetPoints: String(session.play.targetPoints),
     leaderboardMode: session.play.leaderboardMode,
     showLeaderboard: session.play.showLeaderboard,
+    podiumBonus: session.play.podiumBonus.map(String) as PlayForm["podiumBonus"],
   });
   // Check-in yang diubah di halaman ini (id peserta → hadir?); sisanya dari server.
   const [checkInEdits, setCheckInEdits] = useState<Record<string, boolean>>({});
@@ -198,6 +199,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
         targetPoints: Number(play.targetPoints),
         leaderboardMode: play.leaderboardMode,
         showLeaderboard: play.showLeaderboard,
+        podiumBonus: play.podiumBonus.map((v) => Number(v) || 0) as [number, number, number],
       },
     };
     if (publish) setStatus("published");

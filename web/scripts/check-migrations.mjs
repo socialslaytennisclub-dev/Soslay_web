@@ -33,6 +33,9 @@ for (const file of (await readdir(dir)).filter((f) => f.endsWith(".sql")).sort()
 // ── Uji perilaku ────────────────────────────────────────────────────────────
 const one = async (sql, params) => (await db.query(sql, params)).rows[0];
 const as = (uid) => db.exec(`select set_config('request.jwt.claim.sub', '${uid ?? ""}', false)`);
+// Bonus juara per activity: default activity baru 10 / 0 / 0 (diuji di bawah). Uji lama memakai 100 / 75 / 50.
+console.assert((await one(`select column_default d from information_schema.columns where table_name = 'sessions' and column_name = 'podium_bonus'`)).d.startsWith(`'{10,0,0}'`), "default bonus juara activity baru = 10 / 0 / 0");
+await db.exec(`alter table sessions alter column podium_bonus set default '{100,75,50}'`);
 // Uji saldo di bawah memakai angka pasti → matikan bonus member baru dulu (diuji terpisah di akhir).
 const setSignupBonus = (on) => db.query(`update app_settings set value = jsonb_set(value, '{bonuses,0,enabled}', $1::jsonb) where key = 'points_rules'`, [String(on)]);
 await setSignupBonus(false);
@@ -1451,4 +1454,45 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const pts = await one(`select coalesce(sum(delta), 0)::int d, count(*)::int n from points_ledger where member_id = $1 and session_id = $2 and note like 'Review sesi · %'`, [host, s]);
   console.assert(pts.n === 1 && pts.d === (await one(`select review_bonus_points() p`)).p, `poin review host tertaut ke sesi ${JSON.stringify(pts)}`);
   console.log("✓ host sesi (tanpa booking) bisa memberi review (tanpa rating Host, poin tertaut ke sesi); orang lain ditolak");
+}
+
+// Bonus juara per activity: juara 2 & 3 = 0 → tidak ada baris bonus; nilai lain mengikuti activity; koreksi
+// memakai nilai activity itu juga.
+{
+  await as(null);
+  const venue = (await one(`select id from venues limit 1`)).id;
+  const people = [];
+  for (let i = 1; i <= 4; i++) {
+    const { id } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, `Podium ${i}`, `podium${i}@mail.com`]);
+    people.push(id);
+  }
+  const play = async (slug, bonus) => {
+    const s = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, match_format, court_count, round_count, podium_bonus)
+      values ($1, $1, 'weekly-mabar', $2, now() - interval '3 hours', now() - interval '1 hour', 8, 'published', 'rotating', 1, 1, $3) returning id`, [slug, venue, bonus])).id;
+    const ids = [];
+    for (const [i, m] of people.entries()) ids.push((await one(`insert into session_participants (session_id, full_name, kuy_reg_no, source, member_id) values ($1, $2, $3, 'admin', $4) returning id`, [s, `P${i}`, `${slug}${i}`, m])).id);
+    // Pemain 1–2 menang 6–2 (juara 1), pemain 3–4 kalah (juara 3).
+    await db.query(`insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2, score_a, score_b) values ($1, 1, 1, $2, $3, $4, $5, 6, 2)`, [s, ...ids]);
+    await db.query(`select finish_session($1, null, now())`, [s]);
+    const got = async (m) => (await one(`select coalesce(sum(delta), 0)::int d, count(*)::int n from points_ledger where member_id = $1 and session_id = $2 and reason = 'bonus'`, [m, s]));
+    return { s, ids, got };
+  };
+  const def = await play("podium-default", "{10,0,0}");
+  const first = await def.got(people[0]);
+  const third = await def.got(people[2]);
+  console.assert(first.d === 10 && third.n === 0, `10 / 0 / 0 → juara 1 +10, juara 3 tanpa baris (${JSON.stringify({ first, third })})`);
+  const custom = await play("podium-custom", "{30,0,15}");
+  console.assert((await custom.got(people[0])).d === 30 && (await custom.got(people[2])).d === 15, "nilai bonus mengikuti activity");
+  // Koreksi: tim 3–4 jadi pemenang → bonus pindah sesuai nilai activity (30 / 15).
+  const admin = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Podium', 'podium@soslay.test', 'active' from roles where name = 'Super Admin'`, [admin]);
+  await as(admin);
+  await db.query(`select correct_session_result($1, $2::jsonb)`, [custom.s, JSON.stringify([{ round_no: 1, court_no: 1, a1: custom.ids[0], a2: custom.ids[1], b1: custom.ids[2], b2: custom.ids[3], score_a: 1, score_b: 6 }])]);
+  await as(null);
+  console.assert((await custom.got(people[0])).d === 15 && (await custom.got(people[2])).d === 30, "koreksi memakai bonus activity");
+  // Nilai di luar aturan ditolak.
+  const bad = await db.query(`update sessions set podium_bonus = '{10,0}' where id = $1`, [def.s]).then(() => false, () => true);
+  console.assert(bad, "bonus juara harus 3 angka");
+  console.log("✓ bonus juara per activity: default 10 / 0 / 0, nilai 0 tanpa baris, koreksi ikut nilai activity");
 }

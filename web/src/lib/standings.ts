@@ -5,7 +5,19 @@
  * produktif) di atas; nilai sama persis berbagi peringkat. Bonus juara hanya untuk pemain yang sudah main.
  */
 
-export const PODIUM_BONUS = [100, 75, 50] as const;
+/** Bonus juara 1 / 2 / 3 activity baru (diatur per activity, kolom sessions.podium_bonus). */
+export const DEFAULT_PODIUM_BONUS = [10, 0, 0] as const;
+export type PodiumBonus = [number, number, number];
+
+/** Kolom podium_bonus (integer[3]) → tuple; data rusak / kosong → default. */
+export const toPodiumBonus = (v: readonly number[] | null | undefined): PodiumBonus =>
+  v?.length === 3 ? [v[0], v[1], v[2]] : [...DEFAULT_PODIUM_BONUS];
+
+/** "juara 1 +10" / "juara 1 +100 · juara 2 +75 · juara 3 +50"; null kalau semuanya 0. */
+export function podiumBonusText(bonus: readonly number[]): string | null {
+  const parts = bonus.map((pts, i) => (pts > 0 ? `juara ${i + 1} +${pts}` : null)).filter(Boolean);
+  return parts.length ? parts.join(" · ") : null;
+}
 
 /** points = total skor tim di match yang dimainkan; diff = selisih skor (skor sendiri − lawan). */
 type Standing = { points: number; wins: number; diff: number; played: number };
@@ -57,7 +69,6 @@ export function finalRanks<S extends Standing>(standings: S[], mode: Mode, { inc
   return out;
 }
 
-const podiumBonus = (rank: number) => PODIUM_BONUS[rank - 1] ?? 0;
 
 /**
  * Slay Point sesi (ringkasan host), sama dengan yang dicatat database: poin hadir untuk member yang
@@ -66,12 +77,12 @@ const podiumBonus = (rank: number) => PODIUM_BONUS[rank - 1] ?? 0;
  * false selama penutupan itu belum tercatat.
  */
 export function sessionPoints(
-  { people, standings, format }: { people: { id: string; checkedIn: boolean; member: boolean }[]; standings: (Standing & { id: string })[]; format: { attendancePoints: number; leaderboardMode: "points" | "wins" } },
+  { people, standings, format }: { people: { id: string; checkedIn: boolean; member: boolean }[]; standings: (Standing & { id: string })[]; format: { attendancePoints: number; leaderboardMode: "points" | "wins"; podiumBonus: readonly number[] } },
   withBonus = true,
 ) {
   const present = people.filter((p) => p.checkedIn).length;
   const members = new Set(people.filter((p) => p.member).map((p) => p.id));
   const earning = people.filter((p) => p.checkedIn && p.member).length;
-  const bonus = withBonus ? finalRanks(standings, format.leaderboardMode).reduce((sum, r) => sum + (members.has(r.s.id) ? podiumBonus(r.rank) : 0), 0) : 0;
+  const bonus = withBonus ? finalRanks(standings, format.leaderboardMode).reduce((sum, r) => sum + (members.has(r.s.id) ? (format.podiumBonus[r.rank - 1] ?? 0) : 0), 0) : 0;
   return { present, earning, bonus, total: earning * format.attendancePoints + bonus };
 }

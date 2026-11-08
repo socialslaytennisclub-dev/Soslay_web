@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 import type { MouseEvent, RefObject } from "react";
 import { formatAngka } from "@/lib/format";
 import { isUnstarted, type RoundPlan } from "@/lib/rounds";
-import { PODIUM_BONUS, sessionPoints } from "@/lib/standings";
+import { podiumBonusText, sessionPoints } from "@/lib/standings";
 import type { MemberSessionDetail } from "@/server/member/session-detail";
 import { endHostActivity } from "@/server/member/actions";
 import { Podium } from "./Results";
@@ -107,7 +107,7 @@ export function EndActivityDialog({
           <span>Slay Point yang dibagikan</span>
           <strong>{formatAngka(total)} pts</strong>
           <small>
-            +{d.format.attendancePoints} × {earning} member hadir · bonus juara +{PODIUM_BONUS.join(" / +")} (member saja)
+            +{d.format.attendancePoints} × {earning} member hadir{podiumBonusText(d.format.podiumBonus) ? ` · bonus ${podiumBonusText(d.format.podiumBonus)} (member saja)` : " · tanpa bonus juara"}
           </small>
         </div>
 

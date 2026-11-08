@@ -8,6 +8,7 @@ import { activityTypeLabels } from "./demo-data";
 import { isFinished, toRow } from "./session-rows";
 import { listTripDetails, tripDisplayStatus, tripSummary } from "./trips-repo";
 import { DEFAULT_PLAY, loadSessionPlay, NO_PHOTOS } from "./play-repo";
+import { DEFAULT_PODIUM_BONUS } from "@/lib/standings";
 import { DAY } from "./time";
 import type { ActivityListRow, SessionDetail, SessionParticipant, SessionSort, SessionsQuery, SessionsResult } from "./types";
 import { loadSessionReviews } from "./session-reviews";
@@ -231,7 +232,14 @@ export async function getSessionDraft(fromId?: string): Promise<SessionDetail> {
       participants: [],
       paid: 0,
       checkedIn: 0,
-      play: { ...source.play, liveStartedAt: null, endedAt: null },
+      // Bonus juara ikut disalin — kecuali 100 / 75 / 50, angka lama yang dicatat untuk activity yang sudah
+      // selesai sebelum bonus per activity ada (20261108050000) → activity baru memakai default 10 / 0 / 0.
+      play: {
+        ...source.play,
+        podiumBonus: source.play.podiumBonus.join() === "100,75,50" ? [...DEFAULT_PODIUM_BONUS] : source.play.podiumBonus,
+        liveStartedAt: null,
+        endedAt: null,
+      },
       hosts: [],
       matches: [],
       photos: NO_PHOTOS,

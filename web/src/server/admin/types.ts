@@ -279,6 +279,8 @@ export type SessionPlay = {
   /** Peringkat dari total poin atau jumlah menang. */
   leaderboardMode: "points" | "wins";
   showLeaderboard: boolean;
+  /** Slay Point juara 1 / 2 / 3 untuk activity ini (0 = tanpa bonus), dibagikan saat sesi ditutup. */
+  podiumBonus: [number, number, number];
   liveStartedAt: string | null;
   endedAt: string | null;
 };

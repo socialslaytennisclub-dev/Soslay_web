@@ -6,7 +6,7 @@ import { memberSessions } from "@/content/member";
 import { LEVEL_LABEL, PARTICIPANT_SOURCE_LABEL } from "@/lib/admin-labels";
 import { cityOf, type City } from "@/lib/format";
 import { sessionClosesAt } from "@/lib/session-close";
-import { compareStandings } from "@/lib/standings";
+import { compareStandings, DEFAULT_PODIUM_BONUS, toPodiumBonus, type PodiumBonus } from "@/lib/standings";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { TennisLevel } from "@/server/admin/types";
 import { localParts } from "@/server/public/sessions";
@@ -61,7 +61,7 @@ export type MemberSessionDetail = {
   checkInAt: string;
   phase: DetailPhase;
   venue: { name: string; address: string; mapsUrl: string | null };
-  format: { label: string; /** null = tanpa target poin (Rotating Partner): skor bebas. */ targetPoints: number | null; courts: number; rounds: number; lineup: boolean; leaderboardMode: "points" | "wins"; attendancePoints: number };
+  format: { label: string; /** null = tanpa target poin (Rotating Partner): skor bebas. */ targetPoints: number | null; courts: number; rounds: number; lineup: boolean; leaderboardMode: "points" | "wins"; attendancePoints: number; /** Slay Point juara 1 / 2 / 3 activity ini. */ podiumBonus: PodiumBonus };
   capacity: number;
   levels: string[];
   /** null = host yang tidak ikut main (tanpa booking) — tanpa e-ticket & info pendaftaran. */
@@ -143,6 +143,7 @@ type SessionRow = {
   target_points: number;
   leaderboard_mode: "points" | "wins";
   points_per_attendance: number;
+  podium_bonus: number[] | null;
   show_live_leaderboard: boolean;
   live_started_at: string | null;
   ended_at: string | null;
@@ -244,7 +245,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     supabase
       .from("sessions")
       .select(
-        "id, slug, title, description, type_slug, starts_at, ends_at, status, capacity, kuy_booking_url, recommended_levels, match_format, court_count, round_count, target_points, leaderboard_mode, points_per_attendance, show_live_leaderboard, live_started_at, ended_at, ended_by, current_round, started_rounds, photo_album_url, photo_cover_path, photo_count, photos_posted_at, activity_types(label), venues(name, city, address, maps_url)",
+        "id, slug, title, description, type_slug, starts_at, ends_at, status, capacity, kuy_booking_url, recommended_levels, match_format, court_count, round_count, target_points, leaderboard_mode, points_per_attendance, podium_bonus, show_live_leaderboard, live_started_at, ended_at, ended_by, current_round, started_rounds, photo_album_url, photo_cover_path, photo_count, photos_posted_at, activity_types(label), venues(name, city, address, maps_url)",
       )
       .eq("slug", slug)
       .maybeSingle<SessionRow>();
@@ -341,6 +342,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
       lineup: session.match_format === "americano" || session.match_format === "rotating",
       leaderboardMode: session.leaderboard_mode,
       attendancePoints: session.points_per_attendance,
+      podiumBonus: toPodiumBonus(session.podium_bonus),
     },
     capacity: session.capacity,
     levels: (session.recommended_levels ?? []).map((l) => LEVEL_LABEL[l]),
@@ -438,7 +440,7 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     checkInAt: checkInOpensAt(startsAt, null),
     phase: s.status === "done" ? "done" : "upcoming",
     venue: { name: s.venue, address: s.city, mapsUrl: null },
-    format: { label: "Americano Doubles", targetPoints: 21, courts: 2, rounds: 7, lineup: true, leaderboardMode: "points", attendancePoints: 50 },
+    format: { label: "Americano Doubles", targetPoints: 21, courts: 2, rounds: 7, lineup: true, leaderboardMode: "points", attendancePoints: 50, podiumBonus: [...DEFAULT_PODIUM_BONUS] },
     capacity: 8,
     levels: ["Beginner", "Intermediate"],
     ticket: { code: bookingCode("9f2a1c00", s.date), qrSvg: await qrSvg(`soslay:booking:demo-${s.slug}`), holder: names[0], type: "Player", status: s.status === "done" ? "attended" : "registered", checkedInAt: null },
