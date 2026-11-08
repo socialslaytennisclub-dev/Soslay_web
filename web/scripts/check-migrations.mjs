@@ -1429,6 +1429,11 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await rule({ key: "review", points: 25, enabled: false });
   const off = await reviewer("review-off");
   console.assert(off.n === 0, `aturan dimatikan → tanpa poin (${JSON.stringify(off)})`);
+  // Nilai rusak di aturan tidak boleh menggagalkan kirim review → 0 poin.
+  await rule({ key: "review", points: "abc", enabled: "ya" });
+  console.assert((await one(`select review_bonus_points() p`)).p === 0, "nilai poin review rusak → 0, bukan error");
+  const broken = await reviewer("review-rusak");
+  console.assert(broken.n === 0, `aturan rusak → review tetap terkirim tanpa poin (${JSON.stringify(broken)})`);
   await rule(null);
   console.log("✓ poin review sesi mengikuti Aturan poin: default +10, bisa diubah / dimatikan, sekali per sesi");
 }
@@ -1483,7 +1488,7 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
     // Pemain 1–2 menang 6–2 (juara 1), pemain 3–4 kalah (juara 3).
     await db.query(`insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2, score_a, score_b) values ($1, 1, 1, $2, $3, $4, $5, 6, 2)`, [s, ...ids]);
     await db.query(`select finish_session($1, null, now())`, [s]);
-    const got = async (m) => (await one(`select coalesce(sum(delta), 0)::int d, count(*)::int n from points_ledger where member_id = $1 and session_id = $2 and reason = 'bonus'`, [m, s]));
+    const got = async (m) => (await one(`select coalesce(sum(delta), 0)::int d, count(*)::int n from points_ledger where member_id = $1 and session_id = $2 and reason = 'bonus' and is_podium`, [m, s]));
     return { s, ids, got };
   };
   const def = await play("podium-default", null);
@@ -1495,10 +1500,17 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   // Koreksi: tim 3–4 jadi pemenang → bonus pindah sesuai nilai activity (30 / 15).
   const admin = (await one(`insert into auth.users default values returning id`)).id;
   await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Podium', 'podium@soslay.test', 'active' from roles where name = 'Super Admin'`, [admin]);
+  // Poin review (+10, reason 'bonus' + session_id, bukan bonus juara) tidak boleh ikut dikoreksi.
+  for (const m of [people[0], people[3]]) {
+    await db.query(`insert into points_ledger (member_id, delta, reason, session_id, note) values ($1, 10, 'bonus', $2, 'Review sesi · podium-custom')`, [m, custom.s]);
+  }
+  const reviewPts = async (m) => (await one(`select coalesce(sum(delta), 0)::int d from points_ledger where member_id = $1 and session_id = $2 and not is_podium`, [m, custom.s])).d;
   await as(admin);
   await db.query(`select correct_session_result($1, $2::jsonb)`, [custom.s, JSON.stringify([{ round_no: 1, court_no: 1, a1: custom.ids[0], a2: custom.ids[1], b1: custom.ids[2], b2: custom.ids[3], score_a: 1, score_b: 6 }])]);
   await as(null);
   console.assert((await custom.got(people[0])).d === 15 && (await custom.got(people[2])).d === 30, "koreksi memakai bonus activity");
+  console.assert((await reviewPts(people[0])) === 10 && (await reviewPts(people[3])) === 10, "koreksi tidak menarik poin review");
+  console.assert((await custom.got(people[3])).d === 30, `pemenang baru yang juga mereview dapat bonus juara penuh (${(await custom.got(people[3])).d})`);
   // Sesi sudah selesai → bonus terkunci (nilai sama tetap boleh, mis. simpan ulang form).
   const locked = await db.query(`update sessions set podium_bonus = '{50,0,0}' where id = $1`, [def.s]).then(() => false, (e) => e.hint === "podium_locked");
   console.assert(locked, "bonus juara activity selesai terkunci");

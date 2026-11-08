@@ -9,7 +9,9 @@
 /** Poin untuk review pertama sebuah sesi: 0 kalau dimatikan. Dibaca juga halaman member (teks "+N"). */
 create function review_bonus_points() returns integer language sql stable security definer set search_path = public as $$
   select coalesce(
-    (select case when coalesce((b ->> 'enabled')::boolean, true) then greatest(coalesce((b ->> 'points')::integer, 0), 0) else 0 end
+    -- Nilai rusak (bukan bilangan bulat) tidak boleh menggagalkan kirim review → 0 poin.
+    (select case when (b ->> 'enabled') is distinct from 'false' and (b ->> 'points') ~ '^\s*[0-9]{1,6}\s*$'
+                 then btrim(b ->> 'points')::integer else 0 end
        from app_settings, jsonb_array_elements(value -> 'bonuses') b
       where key = 'points_rules' and b ->> 'key' = 'review'
       limit 1),

@@ -11,6 +11,12 @@ alter table sessions add column podium_bonus integer[]
 -- Kolom ditambah tanpa default dulu → semua baris lama NULL (aturan lama); baru sesudahnya default activity baru.
 alter table sessions alter column podium_bonus set default '{10,0,0}';
 
+-- Baris bonus juara ditandai sendiri. Poin review kini juga reason 'bonus' + session_id (20261108040000),
+-- jadi Koreksi hasil tidak boleh menghitung semua 'bonus' sesi sebagai bonus juara (poin review ikut ditarik).
+alter table points_ledger add column is_podium boolean not null default false;
+update points_ledger set is_podium = true
+where reason = 'bonus' and (note like 'Bonus juara #%' or note like 'Koreksi bonus juara%');
+
 /** Bonus juara 1 / 2 / 3 sebuah activity; NULL = aturan lama 100 / 75 / 50. */
 create function session_podium_bonus(p_bonus integer[]) returns integer[] language sql immutable as $$
   select coalesce(p_bonus, '{100,75,50}')
@@ -35,10 +41,10 @@ begin
   returning * into v_s;
   if not found then return; end if;
 
-  insert into points_ledger (member_id, delta, reason, booking_id, session_id, note)
+  insert into points_ledger (member_id, delta, reason, booking_id, session_id, note, is_podium)
   select p.member_id, (session_podium_bonus(v_s.podium_bonus))[p.rk], 'bonus',
          (select b.id from bookings b where b.session_id = p_session and b.member_id = p.member_id limit 1),
-         p_session, format('Bonus juara #%s · %s', p.rk, v_s.title)
+         p_session, format('Bonus juara #%s · %s', p.rk, v_s.title), true
   from session_podium(p_session) p
   where coalesce((session_podium_bonus(v_s.podium_bonus))[p.rk], 0) > 0;
 end $$;
@@ -110,18 +116,18 @@ begin
     select member_id, rk, coalesce((session_podium_bonus(v_s.podium_bonus))[rk], 0) as pts from session_podium(p_session)
   ), current_bonus as (
     select member_id, sum(delta)::int as pts from points_ledger
-    where session_id = p_session and reason = 'bonus' group by member_id
+    where session_id = p_session and reason = 'bonus' and is_podium group by member_id
   ), diff as (
     select coalesce(t.member_id, c.member_id) as member_id, t.rk,
            coalesce(t.pts, 0) - coalesce(c.pts, 0) as delta
     from target t full join current_bonus c on c.member_id = t.member_id
   ), ins as (
-    insert into points_ledger (member_id, delta, reason, booking_id, session_id, note, created_by)
+    insert into points_ledger (member_id, delta, reason, booking_id, session_id, note, created_by, is_podium)
     select d.member_id, d.delta, 'bonus',
            (select b.id from bookings b where b.session_id = p_session and b.member_id = d.member_id limit 1),
            p_session,
            format('Koreksi bonus juara · %s · %s', v_s.title, case when d.rk is null then 'tidak lagi juara' else format('kini juara #%s', d.rk) end),
-           (select user_id from staff_members where user_id = auth.uid())
+           (select user_id from staff_members where user_id = auth.uid()), true
     from diff d where d.delta <> 0
     returning 1
   )
