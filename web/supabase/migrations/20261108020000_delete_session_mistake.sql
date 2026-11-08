@@ -18,11 +18,8 @@ begin
   if btrim(v_s.title) is distinct from btrim(p_title) then raise exception 'Judul yang diketik tidak sama dengan judul activity'; end if;
   if v_s.trip_id is not null then raise exception 'Activity paket trip — hapus / batalkan lewat halaman trip'; end if;
 
-  -- Sama dengan daftar peserta di admin: baris peserta + booking yang member-nya belum ada di daftar itu.
-  select (select count(*) from session_participants where session_id = p_session)
-       + (select count(*) from bookings b where b.session_id = p_session and b.status not in ('cancelled', 'waitlisted')
-            and not exists (select 1 from session_participants sp where sp.session_id = p_session and sp.member_id = b.member_id))
-  into v_people;
+  -- Sama dengan jumlah peserta di admin (session_fill_counts).
+  select coalesce((select filled from session_fill_counts() where session_id = p_session), 0) into v_people;
 
   -- Poin dari activity ini: kehadiran, bonus juara & bonus review (lewat session_id / booking), plus bonus
   -- review +10 peserta tanpa booking (impor Kuyy). Baris itu dicatat di transaksi yang sama dengan
@@ -42,7 +39,9 @@ begin
   -- hapus → pemasukannya dikoreksi di sini, selagi booking & activity masih ada.
   perform finance_sync_auto('ticket_manual_paid', 'bk:' || b.id, 0, 'ticket', null,
             'Bayar manual · ' || coalesce((select full_name from profiles where id = b.member_id), 'peserta'), p_session, now())
-  from bookings b where b.session_id = p_session;
+  from bookings b
+  where b.session_id = p_session
+    and exists (select 1 from finance_transactions t where t.source_ref = 'bk:' || b.id and t.deleted_at is null);
 
   -- Peserta dulu (trigger Keuangan mengoreksi selagi activity masih ada), lalu booking & activity
   -- (line-up, host, foto ikut terhapus lewat on delete cascade).

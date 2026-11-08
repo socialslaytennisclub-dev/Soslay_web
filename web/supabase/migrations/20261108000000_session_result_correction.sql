@@ -91,7 +91,7 @@ begin
   if not has_permission('activities', 'edit') then raise exception 'Hanya admin yang bisa mengoreksi hasil'; end if;
   select * into v_s from sessions where id = p_session for update;
   if not found then raise exception 'Sesi tidak ditemukan'; end if;
-  if v_s.ended_at is null and v_s.status <> 'completed' then raise exception 'Sesi belum berakhir — atur line-up & skor seperti biasa'; end if;
+  if not session_is_finished(v_s) then raise exception 'Sesi belum berakhir — atur line-up & skor seperti biasa'; end if;
 
   -- Selalu pg_temp.* (fungsi SECURITY DEFINER): nama tanpa skema bisa jatuh ke tabel public.
   drop table if exists pg_temp.correction;
@@ -99,39 +99,18 @@ begin
   select * from jsonb_to_recordset(coalesce(p_matches, '[]'))
     as l(round_no smallint, court_no smallint, a1 uuid, a2 uuid, b1 uuid, b2 uuid, score_a smallint, score_b smallint);
 
-  -- Slot berisi member id = peserta dari booking yang belum ada di daftar peserta (sama dengan Simpan
-  -- line-up). Hanya pemain yang dipakai di koreksi, dan di transaksi ini — kalau koreksi ditolak, baris
-  -- peserta ikut batal. Booking tambahan admin yang lunasnya sudah tercatat lewat "Tandai Lunas" (bk:)
-  -- disalin sebagai 'website' supaya Keuangan tidak mencatat pemasukannya dua kali.
-  insert into session_participants (session_id, member_id, kuy_reg_no, full_name, email, phone, instagram, tennis_level,
-                                    amount, source, payment_status, payment_channel)
-  select p_session, b.member_id, 'B-' || b.member_id, coalesce(pr.full_name, 'Member'), pr.email, pr.phone, pr.instagram, pr.tennis_level,
-         b.amount,
-         case when b.source = 'admin' and exists (select 1 from finance_transactions t where t.source_ref = 'bk:' || b.id and t.deleted_at is null)
-              then 'website' else b.source::text end,
-         (case when b.payment_status = 'paid' then 'paid' else 'pending' end)::payment_status,
-         case when b.source = 'admin' then 'manual' else 'kuy' end
-  from bookings b left join profiles pr on pr.id = b.member_id
-  where b.session_id = p_session and b.status in ('registered', 'attended')
-    and b.member_id in (select unnest(array[c.a1, c.a2, c.b1, c.b2]) from pg_temp.correction c)
-    and not exists (select 1 from session_participants sp where sp.session_id = p_session and sp.member_id = b.member_id)
-  on conflict (session_id, kuy_reg_no) do nothing;
-  update pg_temp.correction c set
-    a1 = coalesce((select sp.id from session_participants sp where sp.session_id = p_session and sp.member_id = c.a1 order by sp.imported_at limit 1), c.a1),
-    a2 = coalesce((select sp.id from session_participants sp where sp.session_id = p_session and sp.member_id = c.a2 order by sp.imported_at limit 1), c.a2),
-    b1 = coalesce((select sp.id from session_participants sp where sp.session_id = p_session and sp.member_id = c.b1 order by sp.imported_at limit 1), c.b1),
-    b2 = coalesce((select sp.id from session_participants sp where sp.session_id = p_session and sp.member_id = c.b2 order by sp.imported_at limit 1), c.b2);
+  -- Slot berisi member id = peserta booking tanpa baris peserta → baris peserta dibuat lewat
+  -- session_participant_for (sama dengan line-up host), hanya untuk pemain yang dipakai dan di transaksi
+  -- ini: kalau koreksi ditolak, baris pesertanya ikut batal. Bukan peserta → ditolak.
+  update pg_temp.correction set
+    a1 = session_participant_for(p_session, a1), a2 = session_participant_for(p_session, a2),
+    b1 = session_participant_for(p_session, b1), b2 = session_participant_for(p_session, b2);
 
   if exists (select 1 from pg_temp.correction where round_no < 1 or round_no > v_s.round_count or court_no < 1 or court_no > v_s.court_count) then
     raise exception 'Ronde / court di luar format sesi (% ronde · % court)', v_s.round_count, v_s.court_count;
   end if;
   select format('Ronde %s · Court %s', round_no, court_no) into v_bad from pg_temp.correction group by round_no, court_no having count(*) > 1 limit 1;
   if v_bad is not null then raise exception '% tercatat dua kali', v_bad; end if;
-  select format('Ronde %s · Court %s', c.round_no, c.court_no) into v_bad
-  from pg_temp.correction c, unnest(array[c.a1, c.a2, c.b1, c.b2]) p(id)
-  where p.id is null or not exists (select 1 from session_participants sp where sp.id = p.id and sp.session_id = p_session)
-  limit 1;
-  if v_bad is not null then raise exception 'Ada pemain di % yang bukan peserta sesi ini', v_bad; end if;
   select format('Ronde %s', round_no) into v_bad
   from pg_temp.correction c, unnest(array[c.a1, c.a2, c.b1, c.b2]) p(id)
   group by round_no, p.id having count(*) > 1 limit 1;
@@ -199,7 +178,7 @@ declare
   v_format  match_format;
   v_ended   boolean;
 begin
-  select m.session_id, s.target_points, s.match_format, (s.ended_at is not null or s.status = 'completed')
+  select m.session_id, s.target_points, s.match_format, session_is_finished(s)
   into v_session, v_target, v_format, v_ended
   from session_matches m join sessions s on s.id = m.session_id where m.id = p_match;
   if v_session is null then raise exception 'Match tidak ditemukan'; end if;

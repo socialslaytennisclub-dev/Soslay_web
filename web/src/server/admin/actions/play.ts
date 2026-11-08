@@ -285,21 +285,19 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
   return { ok: true, message: `${parts.join(" · ")}.` };
 }
 
-/** Slot line-up memakai id peserta, atau id member untuk peserta dari booking → id session_participants. */
-function rosterIdMap(roster: { id: unknown; member_id: unknown }[]) {
-  const idOf = new Map<string, string>();
-  for (const r of roster) {
-    idOf.set(r.id as string, r.id as string);
-    if (r.member_id) idOf.set(r.member_id as string, r.id as string);
-  }
-  return idOf;
-}
-
 /**
- * Daftar peserta sesi untuk line-up. Peserta booking (id = member id) yang belum ada di daftar peserta →
- * baris session_participants dulu (Koreksi hasil melakukannya di RPC correct_session_result).
+ * Simpan line-up. Match yang sudah ada skornya terkunci (tidak boleh berubah); sisanya diganti.
+ * Kalau sesi belum punya peserta import, peserta booking dijadikan daftar peserta dulu.
  */
-async function rosterWithBookings(supabase: Supabase, sessionId: string): Promise<{ roster: { id: unknown; member_id: unknown }[] } | { error: string }> {
+export async function saveLineup(sessionId: string, matches: Omit<SessionMatch, "scoreA" | "scoreB">[]): Promise<ActionResult> {
+  const auth = await requireEditor("activities");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const supabase = await createSupabaseServerClient();
+
+  const { data: session } = await supabase.from("sessions").select("court_count, round_count, ended_at, status").eq("id", sessionId).single();
+  if (!session) return { ok: false, error: "Sesi tidak ditemukan." };
+  if (isSessionEnded({ status: session.status as string, endedAt: session.ended_at as string | null })) return { ok: false, error: "Sesi sudah diakhiri — pakai \"Koreksi hasil\"." };
+
   // Peserta booking (id = member id) yang belum ada di daftar peserta → baris session_participants. Juga saat
   // daftar sudah terisi impor Kuyy: booking website setelah impor ikut bisa masuk line-up.
   const [{ data: existing }, { data: booked }] = await Promise.all([
@@ -334,28 +332,14 @@ async function rosterWithBookings(supabase: Supabase, sessionId: string): Promis
     }));
   if (rows.length) {
     const { data, error } = await supabase.from("session_participants").insert(rows).select("id, member_id");
-    if (error) return { error: `Gagal menyiapkan peserta: ${error.message}` };
+    if (error) return { ok: false, error: `Gagal menyiapkan peserta: ${error.message}` };
     roster = [...roster, ...(data ?? [])];
   }
-  return { roster };
-}
-
-/**
- * Simpan line-up. Match yang sudah ada skornya terkunci (tidak boleh berubah); sisanya diganti.
- * Kalau sesi belum punya peserta import, peserta booking dijadikan daftar peserta dulu.
- */
-export async function saveLineup(sessionId: string, matches: Omit<SessionMatch, "scoreA" | "scoreB">[]): Promise<ActionResult> {
-  const auth = await requireEditor("activities");
-  if ("error" in auth) return { ok: false, error: auth.error };
-  const supabase = await createSupabaseServerClient();
-
-  const { data: session } = await supabase.from("sessions").select("court_count, round_count, ended_at, status").eq("id", sessionId).single();
-  if (!session) return { ok: false, error: "Sesi tidak ditemukan." };
-  if (isSessionEnded({ status: session.status as string, endedAt: session.ended_at as string | null })) return { ok: false, error: "Sesi sudah diakhiri — pakai \"Koreksi hasil\"." };
-
-  const prepared = await rosterWithBookings(supabase, sessionId);
-  if ("error" in prepared) return { ok: false, error: prepared.error };
-  const idOf = rosterIdMap(prepared.roster);
+  const idOf = new Map<string, string>();
+  for (const r of roster ?? []) {
+    idOf.set(r.id as string, r.id as string);
+    if (r.member_id) idOf.set(r.member_id as string, r.id as string);
+  }
 
   const resolved = [];
   const usedPerRound = new Map<number, Set<string>>();

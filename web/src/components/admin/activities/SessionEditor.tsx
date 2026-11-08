@@ -254,13 +254,11 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
 
   const remove = async () => {
     // Sudah ada peserta → "Hapus activity salah input": peserta ikut terhapus, konfirmasi dengan mengetik judul.
-    // session.participants = daftar peserta + booking yang belum ada di daftar itu (sama dengan delete_session_mistake).
-    const people = session.participants.filter((p) => p.status !== "cancelled" && p.status !== "waitlisted").length;
     const withPeople = session.booked > 0 || session.participants.length > 0;
     if (withPeople) {
       const ok = await confirm({
         title: "Hapus activity salah input?",
-        body: `Activity ini dan ${people} pesertanya dihapus permanen, termasuk dari riwayat aktivitas member. Poin kehadiran / bonus juara dari activity ini dinetralkan, dan pemasukan otomatis peserta di Keuangan dikoreksi. Pembayaran yang perlu dikembalikan diurus di luar sistem.`,
+        body: `Activity ini dan ${session.booked} pesertanya dihapus permanen, termasuk dari riwayat aktivitas member. Poin kehadiran / bonus juara dari activity ini dinetralkan, dan pemasukan otomatis peserta di Keuangan dikoreksi. Pembayaran yang perlu dikembalikan diurus di luar sistem.`,
         confirmLabel: "Hapus activity & peserta",
         requireText: session.title,
       });

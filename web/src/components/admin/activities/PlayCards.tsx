@@ -236,12 +236,16 @@ export function LineupCard({
       }
     });
 
-  const cancelCorrection = () => {
-    if (dirty && !window.confirm("Buang perubahan koreksi?")) return;
-    setMatches(initial);
+  const exitCorrection = () => {
     setCorrecting(false);
     setDirty(false);
     setScoring(null);
+  };
+
+  const cancelCorrection = () => {
+    if (dirty && !window.confirm("Buang perubahan koreksi?")) return;
+    setMatches(initial);
+    exitCorrection();
   };
 
   const saveCorrection = () => {
@@ -250,26 +254,21 @@ export function LineupCard({
       const result = await correctSessionResult(sessionId, matches);
       toast.result(result);
       if (result.ok) {
-        setCorrecting(false);
-        setDirty(false);
-        setScoring(null);
+        exitCorrection();
         router.refresh();
       }
     });
   };
 
-  /** Mode koreksi: skor hanya diubah di draft, baru tersimpan lewat "Simpan koreksi". */
-  const setDraftScore = (m: SessionMatch, a: number | null, b: number | null) => {
-    setMatches((list) => list.map((x) => (matchKey(x) === matchKey(m) ? { ...x, scoreA: a, scoreB: b } : x)));
+  /** Mode koreksi: perubahan hanya di draft, baru tersimpan lewat "Simpan koreksi". */
+  const editDraft = (change: (list: SessionMatch[]) => SessionMatch[]) => {
+    setMatches(change);
     setDirty(true);
     setScoring(null);
   };
-
-  const removeMatch = (m: SessionMatch) => {
-    setMatches((list) => list.filter((x) => matchKey(x) !== matchKey(m)));
-    setDirty(true);
-    setScoring(null);
-  };
+  const setDraftScore = (m: SessionMatch, a: number | null, b: number | null) =>
+    editDraft((list) => list.map((x) => (matchKey(x) === matchKey(m) ? { ...x, scoreA: a, scoreB: b } : x)));
+  const removeMatch = (m: SessionMatch) => editDraft((list) => list.filter((x) => matchKey(x) !== matchKey(m)));
 
   const saveScore = (m: SessionMatch, a: number, b: number) =>
     correcting ? setDraftScore(m, a, b) : startSaving(async () => {
@@ -291,8 +290,7 @@ export function LineupCard({
   const addMatch = (court: number) => {
     const [p1, p2, p3, p4] = resting.map((p) => p.id);
     if (!p4) return;
-    setMatches((list) => [...list, { round, court, a: [p1, p2], b: [p3, p4], scoreA: null, scoreB: null }]);
-    setDirty(true);
+    editDraft((list) => [...list, { round, court, a: [p1, p2], b: [p3, p4], scoreA: null, scoreB: null }]);
   };
 
   /** Ganti pemain di satu slot court lewat dropdown (Figma ADM-12): pemain terpilih bertukar tempat (pemain rest juga bisa). */
@@ -332,9 +330,18 @@ export function LineupCard({
       title="Match list & line-up"
       subtitle="Atur siapa lawan siapa di tiap ronde. Tetap bisa diubah saat Live untuk court yang belum ada skornya."
       action={
-        ended && !disabledReason ? (
+        !disabledReason && (
           <span className={editor.cardActions}>
-            {correcting ? (
+            {!ended ? (
+              <>
+                <AdminButton size="sm" icon="sparkle" onClick={generate} disabled={playable === 0 || saving}>
+                  {matches.length ? "Acak ulang" : "Generate otomatis"}
+                </AdminButton>
+                <AdminButton variant="primary" size="sm" icon="check-bold" onClick={save} disabled={!dirty || saving || outOfFormat || unknown}>
+                  {saving ? "Menyimpan…" : "Simpan line-up"}
+                </AdminButton>
+              </>
+            ) : correcting ? (
               <>
                 <AdminButton size="sm" onClick={cancelCorrection} disabled={saving}>
                   Batal
@@ -351,17 +358,6 @@ export function LineupCard({
               )
             )}
           </span>
-        ) : (
-          !disabledReason && (
-          <span className={editor.cardActions}>
-            <AdminButton size="sm" icon="sparkle" onClick={generate} disabled={playable === 0 || saving}>
-              {matches.length ? "Acak ulang" : "Generate otomatis"}
-            </AdminButton>
-            <AdminButton variant="primary" size="sm" icon="check-bold" onClick={save} disabled={!dirty || saving || outOfFormat || unknown}>
-              {saving ? "Menyimpan…" : "Simpan line-up"}
-            </AdminButton>
-          </span>
-          )
         )
       }
     >
