@@ -15,7 +15,7 @@ begin
   if not has_permission('activities', 'edit') then raise exception 'Hanya admin yang bisa menghapus activity'; end if;
   select * into v_s from sessions where id = p_session for update;
   if not found then raise exception 'Activity tidak ditemukan'; end if;
-  if v_s.title is distinct from p_title then raise exception 'Judul yang diketik tidak sama dengan judul activity'; end if;
+  if btrim(v_s.title) is distinct from btrim(p_title) then raise exception 'Judul yang diketik tidak sama dengan judul activity'; end if;
   if v_s.trip_id is not null then raise exception 'Activity paket trip — hapus / batalkan lewat halaman trip'; end if;
 
   -- Sama dengan daftar peserta di admin: baris peserta + booking yang member-nya belum ada di daftar itu.
