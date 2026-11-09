@@ -13,7 +13,7 @@ export function parseMembersQuery(raw: RawParams): MembersQuery {
   const sort = one(raw.sort);
   const page = Number(one(raw.page));
   return {
-    tab: tab === "active" || tab === "new" || tab === "inactive" ? tab : "all",
+    tab: tab === "active" || tab === "new" || tab === "today" || tab === "inactive" ? tab : "all",
     q: one(raw.q),
     tier: tier && tier in TIER_LABEL ? (tier as Tier) : undefined,
     level: level && level in LEVEL_LABEL ? (level as TennisLevel) : undefined,

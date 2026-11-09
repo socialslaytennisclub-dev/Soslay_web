@@ -11,6 +11,7 @@ import {
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { AdminButton } from "@/components/admin/ui/AdminUI";
 import { getOverview } from "@/server/admin/repo";
+import { getAdminSession } from "@/server/admin/session";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = { title: "Overview — Admin SOSLAY" };
@@ -21,7 +22,9 @@ const RANGES = [4, 12, 52];
 export default async function AdminOverviewPage({ searchParams }: PageProps<"/admin">) {
   const { range: rawRange } = await searchParams;
   const range = RANGES.includes(Number(rawRange)) ? Number(rawRange) : 12;
-  const data = await getOverview(range);
+  const [data, admin] = await Promise.all([getOverview(range), getAdminSession()]);
+  // Sapaan memakai nama depan akun admin yang login (staff_members.full_name).
+  const firstName = ("name" in admin && admin.name.trim().split(/\s+/)[0]) || "Admin";
 
   const now = new Date(data.generatedAt);
   const dateLabel = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" }).format(now);
@@ -34,7 +37,7 @@ export default async function AdminOverviewPage({ searchParams }: PageProps<"/ad
       <div className={styles.content}>
         <div className={styles.greeting}>
           <div>
-            <h2 className={styles.hello}>Halo, Rara 👋</h2>
+            <h2 className={styles.hello}>Halo, {firstName} 👋</h2>
             <p className={styles.summary}>Ringkasan Soslay per {dateLabel}</p>
           </div>
           <div className={styles.actions}>

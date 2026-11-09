@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { pinWithin } from "@/animations";
 import { shrinkImage } from "@/lib/image-resize";
+import { useImageCrop } from "@/components/ui/ImageCropper/ImageCropper";
 import { Avatar, Button, Checkbox, ChoiceChips, DateField, SelectField, TextField } from "@/components/ui";
 import {
   cityOptions,
@@ -42,6 +43,7 @@ export function ProfileForm({ initial }: { initial?: MemberProfile }) {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Partial<Record<ProfileField, string>>>({});
   const [photoError, setPhotoError] = useState<string>();
+  const [crop, cropDialog] = useImageCrop();
   const [status, setStatus] = useState<string>();
   const [changingPassword, setChangingPassword] = useState(false);
   const layoutRef = useRef<HTMLDivElement>(null);
@@ -93,8 +95,11 @@ export function ProfileForm({ initial }: { initial?: MemberProfile }) {
   async function choosePhoto(picked: File | undefined) {
     if (!picked) return;
     if (!["image/jpeg", "image/png"].includes(picked.type)) return setPhotoError("Format harus JPG atau PNG.");
+    // Foto profil tampil bulat → crop persegi dulu.
+    const cropped = await crop(picked, 1, "Foto profil");
+    if (!cropped) return;
     // Foto HP besar diperkecil dulu (avatar cukup 1024 px) — batas 2 MB hanya untuk yang tetap besar.
-    const file = await shrinkImage(picked, { maxEdge: 1024, maxBytes: 500 * 1024 });
+    const file = await shrinkImage(cropped, { maxEdge: 1024, maxBytes: 500 * 1024 });
     if (file.size > MAX_PHOTO_BYTES) return setPhotoError("Ukuran foto maksimal 2 MB.");
     setPhotoError(undefined);
     photoFile.current = file;
@@ -162,6 +167,7 @@ export function ProfileForm({ initial }: { initial?: MemberProfile }) {
 
   return (
     <div ref={layoutRef} className={styles.layout}>
+      {cropDialog}
       <form className={styles.form} onSubmit={submit} noValidate>
         <FormCard id={basic.id} title={basic.title} subtitle={basic.subtitle}>
           <div className={styles.photoField}>

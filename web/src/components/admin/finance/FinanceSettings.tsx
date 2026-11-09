@@ -324,6 +324,26 @@ export function FinanceSettingsView({ accounts, balances, categories, usage, set
               <p className={styles.panelSub}>Sumber data dari modul lain (mulai go-live {dateLabel(settings.goLiveDate)}).</p>
             </div>
           </div>
+          <label className={styles.field} style={{ marginBottom: 12 }}>
+            <span>Tanggal go-live (mulai pencatatan otomatis)</span>
+            <input
+              className={styles.input}
+              type="date"
+              defaultValue={settings.goLiveDate}
+              disabled={pending}
+              onChange={(e) => {
+                const next = e.target.value;
+                if (!next || next === settings.goLiveDate) return;
+                const earlier = next < settings.goLiveDate;
+                if (!window.confirm(earlier ? `Majukan go-live ke ${dateLabel(next)}? Pemasukan peserta activity yang sudah selesai sejak tanggal itu langsung dicatat (Kuyy → Saldo Kuyy, manual → akun bayar manual).` : `Mundurkan go-live ke ${dateLabel(next)}? Transaksi yang sudah tercatat tidak dihapus.`)) {
+                  e.target.value = settings.goLiveDate;
+                  return;
+                }
+                run(() => saveFinanceSettings({ goLiveDate: next }));
+              }}
+            />
+            <small className={styles.panelSub}>Data sebelum tanggal ini diisi lewat import jurnal; sejak tanggal ini otomatis dari Activities, Shop &amp; form transaksi.</small>
+          </label>
           <Toggle label="Import peserta Kuyy (Activities)" hint="Kolom Dibayar per peserta → Tiket activity ke Saldo Kuyy. Rp0 tidak dicatat." checked={settings.autoKuyy} onChange={(v) => run(() => saveFinanceSettings({ autoKuyy: v }))} />
           <Toggle label="Tandai Lunas (Activities)" hint="Bayar manual → Tiket activity ke akun default di bawah. Batalkan lunas → koreksi." checked={settings.autoManualPaid} onChange={(v) => run(() => saveFinanceSettings({ autoManualPaid: v }))} />
           <Toggle label="Order shop" hint="Saat transfer pembeli diverifikasi → Penjualan merchandise. Order via WA dicatat manual." checked={settings.autoShop} onChange={(v) => run(() => saveFinanceSettings({ autoShop: v }))} />

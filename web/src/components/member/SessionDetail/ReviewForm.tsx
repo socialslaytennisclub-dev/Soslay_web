@@ -44,7 +44,76 @@ function Stars({ value, onChange, label, size = "md" }: { value: number; onChang
  * (maks. 500 karakter, tanpa foto). Review pertama dapat Slay Point (Aturan poin → Review sesi); bisa diubah sampai 7 hari
  * setelah sesi, setelah itu hanya bisa dibaca.
  */
+/** Tab Review: review milik sendiri (isi / ubah) + review peserta & host lain di activity ini. */
 export function ReviewTab({ detail: d }: { detail: MemberSessionDetail }) {
+  return (
+    <>
+      <MyReviewCard detail={d} />
+      <ParticipantReviews detail={d} />
+    </>
+  );
+}
+
+const average = (values: (number | null)[]) => {
+  const v = values.filter((x): x is number => x !== null);
+  return v.length ? (v.reduce((a, b) => a + b, 0) / v.length).toLocaleString("id-ID", { maximumFractionDigits: 1 }) : null;
+};
+
+function ParticipantReviews({ detail: d }: { detail: MemberSessionDetail }) {
+  const others = d.reviews.filter((r) => !r.me);
+  const all = d.reviews;
+  const summary = [
+    ["Sesi", average(all.map((r) => r.rating))],
+    ["Host", average(all.map((r) => r.host))],
+    ["Venue", average(all.map((r) => r.venue))],
+    ["Format", average(all.map((r) => r.format))],
+  ].filter(([, v]) => v !== null) as [string, string][];
+  return (
+    <section className={styles.card} aria-labelledby="reviews-title">
+      <header className={styles.cardHead}>
+        <div>
+          <h2 id="reviews-title" className={styles.cardTitle}>
+            Review peserta
+          </h2>
+          <p className={styles.muted}>{all.length ? `${all.length} review dari peserta & host activity ini` : "Belum ada review — jadilah yang pertama!"}</p>
+        </div>
+      </header>
+      {summary.length > 0 && (
+        <p className={styles.reviewTags}>
+          {summary.map(([label, v]) => (
+            <span key={label}>
+              {label} ★ {v}
+            </span>
+          ))}
+        </p>
+      )}
+      {others.length > 0 && (
+        <ul className={styles.reviewList}>
+          {others.map((r) => (
+            <li key={r.memberId} className={styles.reviewItem}>
+              <div className={styles.reviewItemHead}>
+                <strong>{r.name}</strong>
+                {r.isHost && <span className={cx(styles.pill, styles.pillOk)}>Host</span>}
+                <Stars value={r.rating} label={`Rating dari ${r.name}`} size="sm" />
+                <small className={styles.muted}>{formatTanggalPendek(r.at, d.city, "dateTime")}</small>
+              </div>
+              {r.highlights.length > 0 && (
+                <p className={styles.reviewTags}>
+                  {r.highlights.map((h) => (
+                    <span key={h}>{h}</span>
+                  ))}
+                </p>
+              )}
+              {r.comment && <blockquote className={styles.reviewQuote}>&ldquo;{r.comment}&rdquo;</blockquote>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function MyReviewCard({ detail: d }: { detail: MemberSessionDetail }) {
   const now = d.fetchedAt;
   const router = useRouter();
   const locked = now > new Date(d.reviewUntil).getTime();

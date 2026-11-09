@@ -8,6 +8,7 @@ import {
   Landmark,
   Paperclip,
   PiggyBank,
+  RefreshCw,
   Scale,
   Undo2,
   Wallet,
@@ -197,6 +198,7 @@ const ICONS = {
   "piggy-bank": PiggyBank,
   scale: Scale,
   undo: Undo2,
+  "arrows-clockwise": RefreshCw,
 } satisfies Record<string, LucideIcon>;
 
 export type AdminIconName = keyof typeof ICONS;

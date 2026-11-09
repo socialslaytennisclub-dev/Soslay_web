@@ -197,6 +197,11 @@
 
 .pill {
   flex: 0 0 auto;
+  /* Ikon + teks satu baris (tombol "✓ Hadir" host di HP sebelumnya turun jadi dua baris). */
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  line-height: 1.4;
   padding: 3px 12px;
   border-radius: var(--radius-full);
   background: var(--color-indigo-100);
@@ -3140,4 +3145,32 @@ button.link {
   font-size: 14px;
   font-style: italic;
   color: var(--color-navy-900);
+}
+
+/* ── Review peserta lain (tab Review) ── */
+.reviewList {
+  display: grid;
+  gap: var(--space-12);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reviewItem {
+  display: grid;
+  gap: var(--space-8);
+  padding-top: var(--space-12);
+  border-top: 1px solid var(--color-indigo-border);
+  min-width: 0;
+}
+
+.reviewItemHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.reviewItemHead small {
+  margin-left: auto;
 }

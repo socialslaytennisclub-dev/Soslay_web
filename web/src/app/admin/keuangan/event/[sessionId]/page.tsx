@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import styles from "@/components/admin/finance/Finance.module.css";
-import { LinkTxButton } from "@/components/admin/finance/LinkTx";
+import { LinkTxButton, SyncSessionButton } from "@/components/admin/finance/LinkTx";
 import { PageHead } from "@/components/admin/finance/FinanceUI";
 import { RecordTxButton } from "@/components/admin/finance/TxModal";
 import { TxTable } from "@/components/admin/finance/TxTable";
@@ -63,6 +63,7 @@ export default async function EventDetailPage({ params }: PageProps<"/admin/keua
           subtitle={`${dateLabel(session.startsAt.slice(0, 10))} · ${session.typeLabel} · ${session.participants} peserta`}
           actions={
             <>
+              <SyncSessionButton sessionId={sessionId} />
               <LinkTxButton sessionId={sessionId} candidates={candidates} />
               <RecordTxButton options={options} label="Catat pengeluaran event" presetSessionId={sessionId} />
             </>

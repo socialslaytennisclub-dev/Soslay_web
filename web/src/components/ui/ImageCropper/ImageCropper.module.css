@@ -1,0 +1,104 @@
+/* Crop foto setelah dipilih — rasio mengikuti tempat foto ditampilkan. */
+
+.dialog {
+  margin: auto;
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: var(--space-20);
+  border: 0;
+  border-radius: var(--radius-xl);
+  background: var(--color-white);
+  color: var(--color-navy-900);
+}
+
+.dialog::backdrop {
+  background: rgb(10 10 50 / 0.55);
+}
+
+.title {
+  margin: 0 0 4px;
+  font-family: var(--font-display);
+  font-size: 18px;
+}
+
+.hint {
+  margin: 0 0 var(--space-16);
+  font-size: 13px;
+  color: var(--color-indigo-muted);
+}
+
+.frame {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-radius: 12px;
+  background: #0a0a32;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.frame:active {
+  cursor: grabbing;
+}
+
+.frame img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: none;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+.grid {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  box-shadow: inset 0 0 0 2px rgb(255 255 255 / 0.85);
+  background:
+    linear-gradient(to right, transparent calc(33.33% - 0.5px), rgb(255 255 255 / 0.35) calc(33.33% - 0.5px), rgb(255 255 255 / 0.35) calc(33.33% + 0.5px), transparent calc(33.33% + 0.5px), transparent calc(66.66% - 0.5px), rgb(255 255 255 / 0.35) calc(66.66% - 0.5px), rgb(255 255 255 / 0.35) calc(66.66% + 0.5px), transparent calc(66.66% + 0.5px)),
+    linear-gradient(to bottom, transparent calc(33.33% - 0.5px), rgb(255 255 255 / 0.35) calc(33.33% - 0.5px), rgb(255 255 255 / 0.35) calc(33.33% + 0.5px), transparent calc(33.33% + 0.5px), transparent calc(66.66% - 0.5px), rgb(255 255 255 / 0.35) calc(66.66% - 0.5px), rgb(255 255 255 / 0.35) calc(66.66% + 0.5px), transparent calc(66.66% + 0.5px));
+}
+
+.zoom {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: var(--space-16);
+  font-size: 13px;
+}
+
+.zoom input {
+  flex: 1;
+  accent-color: var(--color-navy-900);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: var(--space-20);
+}
+
+.button {
+  min-height: 40px;
+  padding: 0 18px;
+  border: 1.5px solid var(--color-navy-900);
+  border-radius: var(--radius-full);
+  background: transparent;
+  color: var(--color-navy-900);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.primary {
+  border-color: var(--color-lime-500);
+  background: var(--color-lime-500);
+}
+
+.button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

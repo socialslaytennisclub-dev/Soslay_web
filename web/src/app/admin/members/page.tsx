@@ -26,6 +26,7 @@ export default async function AdminMembersPage({ searchParams }: PageProps<"/adm
     { value: "all", label: "Semua", count: result.counts.all },
     { value: "active", label: "Aktif", count: result.counts.active },
     { value: "new", label: "Baru", count: result.counts.new },
+    { value: "today", label: "Hari ini", count: result.counts.today },
     { value: "inactive", label: "Tidak aktif", count: result.counts.inactive },
   ];
 

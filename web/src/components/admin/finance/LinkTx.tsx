@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { AdminButton } from "@/components/admin/ui/AdminUI";
 import { toast } from "@/components/admin/ui/Toaster";
-import { linkTransaction } from "@/server/admin/actions/finance";
+import { linkTransaction, syncSessionFinance } from "@/server/admin/actions/finance";
 import styles from "./Finance.module.css";
 import { FinanceModal } from "./FinanceModal";
 
@@ -55,5 +55,29 @@ export function LinkTxButton({ sessionId, candidates }: { sessionId: string; can
         </div>
       </FinanceModal>
     </>
+  );
+}
+
+/**
+ * "Sync" di detail event: baca ulang pemasukan peserta dari activity (jalur Kuyy / manual, nominal, nama)
+ * — untuk perubahan di activity sesudah activity selesai.
+ */
+export function SyncSessionButton({ sessionId }: { sessionId: string }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  return (
+    <AdminButton
+      icon="arrows-clockwise"
+      disabled={pending}
+      onClick={() =>
+        start(async () => {
+          const r = await syncSessionFinance(sessionId);
+          toast.result(r);
+          if (r.ok) router.refresh();
+        })
+      }
+    >
+      {pending ? "Menyinkronkan…" : "Sync"}
+    </AdminButton>
   );
 }

@@ -17,6 +17,7 @@ import { MemberLinkField } from "./MemberLinkField";
 import styles from "./Content.module.css";
 import t from "./Testimonials.module.css";
 import { toast } from "../ui/Toaster";
+import { useImageCrop } from "@/components/ui/ImageCropper/ImageCropper";
 
 /** Label, link & foto per platform dari POST_PLATFORMS; di sini hanya ikon & warna badge admin. */
 const KIND: Record<PostPlatform, { icon: AdminIconName; tone: BadgeTone }> = {
@@ -160,6 +161,7 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
   });
   const [saving, start] = useTransition();
   const [uploading, setUploading] = useState(false);
+  const [crop, cropDialog] = useImageCrop();
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
   const kind = { ...KIND[form.platform], ...POST_PLATFORMS[form.platform] };
   const linkError = form.href.trim() ? postLinkError(form.platform, form.href) : null;
@@ -220,8 +222,11 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
     autoFetch(platform, form.href, form.image);
   };
 
-  const upload = async (file: File | undefined) => {
-    if (!file || uploading) return;
+  const upload = async (picked: File | undefined) => {
+    if (!picked || uploading) return;
+    // Crop sesuai kartu post di website (313 : 391).
+    const file = await crop(picked, 313 / 391, "Foto post");
+    if (!file) return;
     setUploading(true);
     const body = new FormData();
     body.append("file", await shrinkImage(file));
@@ -248,6 +253,7 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
 
   return (
     <aside className={t.panel} aria-label={isNew ? "Tambah post" : `Edit post ${post.handle}`}>
+      {cropDialog}
       <header className={ordersStyles.panelHead}>
         <div>
           <h2 className={ordersStyles.panelTitle}>{isNew ? "Post baru" : "Edit post"}</h2>

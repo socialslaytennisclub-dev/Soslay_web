@@ -91,6 +91,8 @@ export type MemberSessionDetail = {
   photos: { albumUrl: string; coverUrl: string | null; count: number | null; postedAt: string | null } | null;
   /** Review milik member ini (S3-P · tab Review). */
   myReview: MyReview | null;
+  /** Review semua peserta & host activity ini (session_reviews_for), terbaru di atas. */
+  reviews: SessionReviewItem[];
   /** Review bisa dikirim / diubah sampai saat ini (7 hari setelah sesi). */
   reviewUntil: string;
   /** Slay Point untuk review pertama (Aturan poin → Review sesi); 0 = tidak ada poin. */
@@ -111,6 +113,23 @@ export type MyReview = {
   testimonial: boolean;
   updatedAt: string;
 };
+
+/** Satu review di tab Review (nama depan saja; tanpa kontak / flag testimoni). */
+export type SessionReviewItem = {
+  memberId: string;
+  name: string;
+  isHost: boolean;
+  me: boolean;
+  rating: number;
+  host: number | null;
+  venue: number | null;
+  format: number | null;
+  highlights: string[];
+  comment: string | null;
+  at: string;
+};
+
+type ReviewRow = { member_id: string; name: string; is_host: boolean; rating: number; host_rating: number | null; venue_rating: number | null; format_rating: number | null; highlights: string[] | null; comment: string | null; updated_at: string };
 
 const REVIEW_WINDOW_MS = 7 * 86_400_000;
 
@@ -266,7 +285,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
   const fetchedAt = Date.now();
   const done = phaseOf(session, fetchedAt) === "done";
   const canReview = done && (Boolean(booking) || assigned === true);
-  const [{ data: myRows }, { data: roster }, { data: matches }, { data: canScore }, qr, { data: review }, { data: ledger }, { data: reviewPoints }] = await Promise.all([
+  const [{ data: myRows }, { data: roster }, { data: matches }, { data: canScore }, qr, { data: review }, { data: ledger }, { data: reviewPoints }, { data: allReviews }] = await Promise.all([
     // Baris peserta milik sendiri (RLS) — untuk no. registrasi Kuyy & jumlah bayar. Bisa lebih dari
     // satu (impor Kuyy + tambahan manual admin), jadi ambil semua: yang pertama untuk data daftar.
     supabase.from("session_participants").select("id, full_name, kuy_reg_no, checked_in_at, amount").eq("session_id", session.id).eq("member_id", user.id).order("imported_at"),
@@ -293,6 +312,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
           .order("created_at")
       : { data: [] },
     canReview ? supabase.rpc("review_bonus_points") : { data: DEFAULT_REVIEW_POINTS },
+    canReview ? supabase.rpc("session_reviews_for", { p_session: session.id }) : { data: [] },
   ]);
 
   // Member tampil dengan nama Soslay (RPC sudah memilih nama profil bila terhubung).
@@ -403,6 +423,19 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
           updatedAt: review.updated_at as string,
         }
       : null,
+    reviews: ((allReviews ?? []) as ReviewRow[]).map((r) => ({
+      memberId: r.member_id,
+      name: r.name,
+      isHost: r.is_host,
+      me: r.member_id === user.id,
+      rating: r.rating,
+      host: r.host_rating,
+      venue: r.venue_rating,
+      format: r.format_rating,
+      highlights: r.highlights ?? [],
+      comment: r.comment,
+      at: r.updated_at,
+    })),
     // Sama dengan RPC submit_session_review: 7 hari sejak diakhiri host, atau sejak ditutup otomatis.
     reviewUntil: new Date((session.ended_at ? new Date(session.ended_at).getTime() : sessionClosesAt(session.ends_at)) + REVIEW_WINDOW_MS).toISOString(),
     reviewPoints: typeof reviewPoints === "number" ? reviewPoints : DEFAULT_REVIEW_POINTS,
@@ -458,6 +491,7 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     ended: null,
     photos: null,
     myReview: null,
+    reviews: [],
     reviewUntil: new Date(sessionClosesAt(endsAt) + REVIEW_WINDOW_MS).toISOString(),
     reviewPoints: DEFAULT_REVIEW_POINTS,
     myPoints: [],

@@ -69,7 +69,8 @@ export type MemberDetail = MemberListItem & {
 };
 
 export type MembersQuery = {
-  tab?: "all" | "active" | "new" | "inactive";
+  /** today = daftar hari ini (WIB); new = 30 hari terakhir. */
+  tab?: "all" | "active" | "new" | "today" | "inactive";
   q?: string;
   tier?: Tier;
   level?: TennisLevel;
@@ -87,7 +88,7 @@ export type MembersResult = {
   page: number;
   pageSize: number;
   pageCount: number;
-  counts: { all: number; active: number; new: number; inactive: number };
+  counts: { all: number; active: number; new: number; today: number; inactive: number };
   cities: string[];
 };
 

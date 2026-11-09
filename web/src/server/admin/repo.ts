@@ -7,7 +7,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getDataset, type DataMember, type Dataset } from "./dataset";
 import { countSegmentsLive, listMembersLive, sidebarCountsLive } from "./member-list";
 import { jakartaWeekStart, TIERS } from "./demo-data";
-import { DAY, pctDelta } from "./time";
+import { DAY, pctDelta, startOfTodayWib } from "./time";
 import type {
   MemberChoice,
   MemberDetail,
@@ -61,6 +61,7 @@ function isNew(m: MemberListItem, now: Date) {
 function matchesTab(m: MemberListItem, tab: MembersQuery["tab"], now: Date) {
   if (tab === "active") return m.status === "active";
   if (tab === "new") return isNew(m, now);
+  if (tab === "today") return new Date(m.joinedAt).getTime() >= startOfTodayWib(now).getTime();
   if (tab === "inactive") return m.status === "inactive";
   return true;
 }
@@ -104,6 +105,7 @@ export async function listMembers(query: MembersQuery): Promise<MembersResult> {
       all: everyone.length,
       active: everyone.filter((m) => m.status === "active").length,
       new: everyone.filter((m) => isNew(m, d.now)).length,
+      today: everyone.filter((m) => matchesTab(m, "today", d.now)).length,
       inactive: everyone.filter((m) => m.status === "inactive").length,
     },
     cities: [...new Set(everyone.map((m) => m.city).filter(Boolean))].sort(),
