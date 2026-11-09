@@ -1593,3 +1593,26 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(null);
   console.log("✓ review activity terlihat oleh peserta & host (nama depan), tidak oleh orang luar");
 }
+
+// Juara yang masih tamu saat activity ditutup lalu daftar akun → bonus juara susulan saat baris pesertanya
+// tertaut ke member (sekali saja).
+{
+  await as(null);
+  const venue = (await one(`select id from venues limit 1`)).id;
+  const s = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, match_format, court_count, round_count, podium_bonus)
+    values ('juara-susulan', 'Juara Susulan', 'weekly-mabar', $1, now() - interval '3 hours', now() - interval '1 hour', 8, 'published', 'rotating', 1, 1, '{10,0,0}') returning id`, [venue])).id;
+  const ids = [];
+  for (let i = 1; i <= 4; i++) ids.push((await one(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount) values ($1, $2, $3, $4, 0) returning id`, [s, `Tamu ${i}`, `J${i}`, `tamu${i}`])).id);
+  await db.query(`insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2, score_a, score_b) values ($1, 1, 1, $2, $3, $4, $5, 4, 0)`, [s, ...ids]);
+  await db.query(`select finish_session($1, null, now())`, [s]);
+  console.assert((await one(`select count(*)::int n from points_ledger where session_id = $1 and is_podium`, [s])).n === 0, "tamu saat ditutup → belum ada bonus");
+  const { id: fredy } = await one(`insert into auth.users default values returning id`);
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Fredy Uji', 'fredy.uji@mail.com')`, [fredy]);
+  await db.query(`update session_participants set member_id = $2 where id = $1`, [ids[0], fredy]);
+  const got = async () => (await one(`select coalesce(sum(delta), 0)::int d, count(*)::int n from points_ledger where session_id = $1 and member_id = $2 and is_podium`, [s, fredy]));
+  const first = await got();
+  console.assert(first.d === 10 && first.n === 1, `daftar akun sesudah ditutup → bonus juara 1 susulan ${JSON.stringify(first)}`);
+  await db.query(`update session_participants set member_id = $2 where id = $1`, [ids[0], fredy]);
+  console.assert((await got()).n === 1, "bonus susulan tidak dobel");
+  console.log("✓ bonus juara susulan untuk juara yang baru daftar akun sesudah activity ditutup (sekali)");
+}
