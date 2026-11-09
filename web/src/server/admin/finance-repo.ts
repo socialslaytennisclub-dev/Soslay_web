@@ -6,7 +6,7 @@ import type { BalanceItem, FinAccount, FinCategory, FinSession, FinSettings, Fin
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { getDataset } from "./dataset";
+import { fetchFillCounts, getDataset } from "./dataset";
 import { activityTypeLabels } from "./demo-data";
 import { buildFinanceDemo } from "./finance-demo";
 import { getAdminSession, type AdminSession } from "./session";
@@ -30,7 +30,7 @@ export const getFinanceAccess = cache(async () => {
   return { session, role: financeRole(session), userId: session.mode === "live" ? session.userId : "demo" };
 });
 
-type FinSessionRow = { id: string; title: string; type_slug: string; starts_at: string; ends_at: string; venues: { name: string } | null; bookings: { status: string }[] };
+type FinSessionRow = { id: string; title: string; type_slug: string; starts_at: string; ends_at: string; venues: { name: string } | null };
 
 /**
  * Versi live: satu query ringan (sesi + venue + status booking), bukan seluruh dataset admin
@@ -39,10 +39,13 @@ type FinSessionRow = { id: string; title: string; type_slug: string; starts_at: 
 async function liveFinanceSessions(supabase: SupabaseClient): Promise<FinSession[]> {
   const PAGE = 1000;
   const rows: FinSessionRow[] = [];
+  // Peserta = semua yang ikut (member, tamu Kuyy / ghost, booking website) — sama dengan Activities.
+  const fills = fetchFillCounts(supabase);
+  fills.catch(() => undefined); // ditunggu di bawah; cegah "unhandled rejection" kalau query sesi gagal duluan
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from("sessions")
-      .select("id, title, type_slug, starts_at, ends_at, venues(name), bookings(status)")
+      .select("id, title, type_slug, starts_at, ends_at, venues(name)")
       .neq("status", "draft")
       .order("starts_at", { ascending: false })
       .order("id")
@@ -51,6 +54,7 @@ async function liveFinanceSessions(supabase: SupabaseClient): Promise<FinSession
     rows.push(...((data ?? []) as unknown as FinSessionRow[]));
     if ((data?.length ?? 0) < PAGE) break;
   }
+  const filled = await fills;
   return rows.map((s) => ({
     id: s.id,
     title: s.title,
@@ -59,7 +63,7 @@ async function liveFinanceSessions(supabase: SupabaseClient): Promise<FinSession
     venueName: s.venues?.name ?? "—",
     startsAt: new Date(s.starts_at).toISOString(),
     endsAt: new Date(s.ends_at).toISOString(),
-    participants: s.bookings.filter((b) => b.status !== "cancelled" && b.status !== "waitlisted").length,
+    participants: filled.get(s.id)?.filled ?? 0,
   }));
 }
 
@@ -76,7 +80,7 @@ async function financeSessions(): Promise<FinSession[]> {
       venueName: s.venueName,
       startsAt: s.startsAt.toISOString(),
       endsAt: s.endsAt.toISOString(),
-      participants: ds.bookingsOfSession(s.id).filter((b) => b.status !== "cancelled" && b.status !== "waitlisted").length,
+      participants: ds.filled(s.id),
     }))
     .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
 }
