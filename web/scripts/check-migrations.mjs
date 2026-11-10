@@ -1154,16 +1154,21 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert(again === newTrip && twins.trips === 1 && twins.n === 2 && twins.n1 === 1 && twins.t === "Baru (ubah)", `simpan trip ulang membuat kembar ${JSON.stringify(twins)}`);
   // Form basi: tab A & B memuat versi yang sama; A menambah activity n3 lalu simpan; B (tidak kenal n3) simpan →
   // ditolak (trip_stale), n3 tetap di trip & judul trip tidak tertimpa. Versi terbaru → diterima.
-  const ver = async () => (await one(`select updated_at::text v from trips where id = $1`, [newTrip])).v;
+  const ver = async () => (await one(`select form_version v from trips where id = $1`, [newTrip])).v;
   const loaded = await ver();
   const both = [act({ id: (await one(`select id from sessions where trip_key = 'n1'`)).id, key: "n1" }), act({ key: "n2", trip_order: 2 })];
-  await db.query(`select save_trip($1, $2::jsonb, $3::jsonb, '[]'::jsonb)`, [newTrip, JSON.stringify({ ...info, title: "Tab A", updated_at: loaded }), JSON.stringify([...both, act({ key: "n3", slug: "fix-n3", trip_order: 3 })])]);
-  const staleRejected = await rejects(`select save_trip($1, $2::jsonb, $3::jsonb, '[]'::jsonb)`, [newTrip, JSON.stringify({ ...info, title: "Tab B", updated_at: loaded }), JSON.stringify(both)], "trip_stale");
+  await db.query(`select save_trip($1, $2::jsonb, $3::jsonb, '[]'::jsonb)`, [newTrip, JSON.stringify({ ...info, title: "Tab A", form_version: loaded }), JSON.stringify([...both, act({ key: "n3", slug: "fix-n3", trip_order: 3 })])]);
+  const staleRejected = await rejects(`select save_trip($1, $2::jsonb, $3::jsonb, '[]'::jsonb)`, [newTrip, JSON.stringify({ ...info, title: "Tab B", form_version: loaded }), JSON.stringify(both)], "trip_stale");
   const afterStale = await one(`select title, (select count(*)::int from sessions where trip_id = $1) n, (select trip_id from sessions where trip_key = 'n3') n3 from trips where id = $1`, [newTrip]);
   console.assert(staleRejected && afterStale.title === "Tab A" && afterStale.n === 3 && afterStale.n3 === newTrip, `simpan dari form basi melepas activity / menimpa trip ${JSON.stringify(afterStale)}`);
-  await db.query(`select save_trip($1, $2::jsonb, $3::jsonb, '[]'::jsonb)`, [newTrip, JSON.stringify({ ...info, title: "Tab B (muat ulang)", updated_at: await ver() }), JSON.stringify(both)]);
+  await db.query(`select save_trip($1, $2::jsonb, $3::jsonb, '[]'::jsonb)`, [newTrip, JSON.stringify({ ...info, title: "Tab B (muat ulang)", form_version: await ver() }), JSON.stringify(both)]);
   const fresh = await one(`select title, (select count(*)::int from sessions where trip_id = $1) n from trips where id = $1`, [newTrip]);
   console.assert(fresh.title === "Tab B (muat ulang)" && fresh.n === 2, `simpan dengan versi terbaru ditolak ${JSON.stringify(fresh)}`);
+  // Perubahan baris trip di luar editor (mis. arsip / tampil di homepage) tidak membuat form basi.
+  const v2 = await ver();
+  await db.query(`update trips set show_on_homepage = not show_on_homepage where id = $1`, [newTrip]);
+  const notStale = await db.query(`select save_trip($1, $2::jsonb, $3::jsonb, '[]'::jsonb)`, [newTrip, JSON.stringify({ ...info, title: "Sesudah arsip", form_version: v2 }), JSON.stringify(both)]).then(() => true, () => false);
+  console.assert(notStale, "perubahan trip di luar editor tidak dianggap form basi");
 
   // 7. Tandai Lunas, akun default diganti, lalu batal lunas → koreksi di akun lama (BCA), bukan akun baru.
   const cash = (await one(`select id from finance_accounts where system_key = 'cash'`)).id;
@@ -1728,7 +1733,7 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const give = (uid, to, cat, sess = s) => as(uid).then(() => err(`select give_kudos($1, $2, $3)`, [sess, to, cat]));
   const kudosPts = async (m) => Number((await one(`select coalesce(sum(delta), 0) d from points_ledger where member_id = $1 and kudos_id is not null`, [m])).d);
   const agg = async (m) => {
-    await as(A);
+    await as(m);
     const r = (await one(`select member_kudos($1) k`, [m])).k;
     await as(null);
     return r;
@@ -1748,6 +1753,10 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   kb = await agg(B);
   console.assert(countOf(kb, "forehand") === 0 && countOf(kb, "serve") === 1 && kb.total === 1 && (await kudosPts(A)) === 1, `ganti kategori ${JSON.stringify(kb)}`);
   console.assert((await one(`select count(*)::int n from kudos where session_id = $1 and giver_member_id = $2 and receiver_member_id = $3`, [s, A, B])).n === 1, "kudos dobel");
+  // Simpan ulang kategori yang sama (perangkat kedua) → updated_at tidak bergeser (profil penerima tidak berkedip).
+  const stamp = async () => (await one(`select updated_at::text t from kudos where session_id = $1 and giver_member_id = $2 and receiver_member_id = $3 and deleted_at is null`, [s, A, B])).t;
+  const kudosStamp = await stamp();
+  console.assert((await give(A, B, "serve")) === null && (await stamp()) === kudosStamp && (await kudosPts(A)) === 1, "simpan ulang kategori sama menggeser updated_at / poin");
   // 4. Batal → agregat turun, poin −1; batal lagi tidak apa-apa.
   await as(A);
   console.assert((await one(`select cancel_kudos($1, $2) ok`, [s, B])).ok === true && (await one(`select cancel_kudos($1, $2) ok`, [s, B])).ok === false, "batal kudos tidak idempotent");
@@ -1787,6 +1796,10 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.exec(`revoke select on kudos from authenticated`);
   console.assert(leaked === 0, "member bisa membaca tabel kudos (pemberi)");
   console.assert(!(await one(`select has_function_privilege('anon', 'member_kudos(uuid)', 'execute') ok`)).ok, "anon bisa memanggil member_kudos");
+  // Agregat member lain tidak bisa dibaca sembarang member (hanya milik sendiri / admin / kartu peserta sesi).
+  await as(C);
+  console.assert((await one(`select member_kudos($1) k`, [D])).k === null, "member_kudos membuka agregat member lain");
+  await as(null);
   for (const fn of ["kudos_revoke(uuid, text, text)", "kudos_role(uuid, uuid)", "kudos_window_closes_at(uuid)", "kudos_on_attendance_undone()"]) {
     for (const role of ["anon", "authenticated"]) console.assert(!(await one(`select has_function_privilege($1, $2, 'execute') ok`, [role, fn])).ok, `${role} bisa memanggil ${fn}`);
   }

@@ -178,7 +178,7 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
   }));
   const { data: savedId, error } = await supabase.rpc("save_trip", {
     p_trip: input.id ?? null,
-    p_info: input.id ? { ...tripRow, updated_at: input.version || null } : { ...tripRow, slug: `${slugify(input.title)}-${crypto.randomUUID().slice(0, 4)}`, create_key: input.createKey ?? null },
+    p_info: input.id ? { ...tripRow, form_version: input.version ? Number(input.version) : null } : { ...tripRow, slug: `${slugify(input.title)}-${crypto.randomUUID().slice(0, 4)}`, create_key: input.createKey ?? null },
     p_activities: activities,
     p_rundown: input.rundown.map((r) => ({
       day: r.day,
@@ -195,7 +195,7 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
   // Versi baru trip ikut dikembalikan supaya simpan berikutnya dari form yang sama tidak dianggap basi.
   const [{ data: savedSessions }, { data: savedTrip }] = await Promise.all([
     supabase.from("sessions").select("id, trip_key").eq("trip_id", id).not("trip_key", "is", null),
-    supabase.from("trips").select("updated_at").eq("id", id).maybeSingle(),
+    supabase.from("trips").select("form_version").eq("id", id).maybeSingle(),
   ]);
   const byKey = new Map((savedSessions ?? []).map((s) => [s.trip_key as string, s.id as string]));
   const activityIds = Object.fromEntries(activities.flatMap((a) => {
@@ -205,7 +205,7 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
 
   await audit(auth.userId, `${input.id ? "mengubah" : "membuat"} trip ${tripRow.title}`, "trip", id);
   refreshPaths(...PUBLIC_SESSION_PATHS, "/admin/activities", `/admin/activities/trip/${id}`);
-  return { ok: true, id, activityIds, version: (savedTrip?.updated_at as string | undefined) ?? undefined, message: input.status === "published" ? "Trip dipublikasikan." : "Trip tersimpan sebagai draft." };
+  return { ok: true, id, activityIds, version: savedTrip?.form_version != null ? String(savedTrip.form_version) : undefined, message: input.status === "published" ? "Trip dipublikasikan." : "Trip tersimpan sebagai draft." };
 }
 
 export async function archiveTrip(id: string): Promise<ActionResult> {

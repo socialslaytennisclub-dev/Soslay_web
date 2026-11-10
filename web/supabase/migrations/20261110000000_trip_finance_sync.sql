@@ -46,6 +46,8 @@ declare
   label    text;
   stale    record;
   items    jsonb := '[]'::jsonb;
+  -- Isi lengkap pratinjau (pembayaran baru, koreksi & yang dilewati) untuk token — bukan hanya jumlahnya.
+  plan     jsonb := '[]'::jsonb;
   fixes    integer := 0;
   skipped  integer := 0;
   n0       integer;
@@ -84,6 +86,7 @@ begin
       group by source_ref having sum(amount) > 0
     loop
       fixes := fixes + 1;
+      plan := plan || jsonb_build_array(jsonb_build_array('move', stale.source_ref));
       if p_apply then perform finance_sync_auto('trip_payment', stale.source_ref, 0, 'ticket', null, label, null, now(), p_trip, p.kind); end if;
     end loop;
 
@@ -93,19 +96,22 @@ begin
       -- Transaksi otomatisnya pernah dihapus admin (mis. dobel dengan import jurnal) → jangan dibuat ulang.
       if active = 0 and exists (select 1 from finance_transactions where source = 'trip_payment' and source_ref = ref and deleted_at is not null) then
         skipped := skipped + 1;
+        plan := plan || jsonb_build_array(jsonb_build_array('skip', ref));
         continue;
       end if;
       items := items || jsonb_build_object('name', coalesce(p.full_name, 'peserta'), 'kind', p.kind, 'amount', target - active, 'date', p.received_on);
+      plan := plan || jsonb_build_array(jsonb_build_array('new', ref, target - active));
       if p_apply then perform finance_insert_trip_payment(ref, target - active, p.received_on, p.account_id, label, p_trip, p.kind); end if;
     elsif target < active then
       fixes := fixes + 1;
+      plan := plan || jsonb_build_array(jsonb_build_array('fix', ref, target, active));
       if p_apply then perform finance_sync_auto('trip_payment', ref, target, 'ticket', p.account_id, label, null, now(), p_trip, p.kind); end if;
     end if;
   end loop;
 
   select count(*) into n1 from finance_transactions where source = 'trip_payment' and trip_id = p_trip;
   return jsonb_build_object('new', items, 'corrections', fixes, 'skipped_deleted', skipped, 'changes', n1 - n0,
-                            'token', md5(items::text || ':' || fixes));
+                            'token', md5(plan::text));
 end $$;
 revoke execute on function finance_resync_trip(uuid, boolean, text) from public, anon;
 grant execute on function finance_resync_trip(uuid, boolean, text) to authenticated;

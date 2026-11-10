@@ -206,7 +206,15 @@ begin
   values (p_session, v_me, p_receiver, v_role, p_category)
   on conflict (session_id, giver_member_id, receiver_member_id) where deleted_at is null
   do update set category_key = excluded.category_key, receiver_role = excluded.receiver_role
+  -- Kategori sama (simpan ulang / perangkat kedua) → tidak diubah: updated_at tidak bergeser, jadi kudos
+  -- tidak hilang dari profil penerima sampai ringkasan berikutnya (penurunan sesaat membocorkan waktu).
+  where kudos.category_key is distinct from excluded.category_key or kudos.receiver_role is distinct from excluded.receiver_role
   returning id, (xmax = 0) into v_id, v_new;
+  if v_id is null then
+    select id into v_id from kudos
+    where session_id = p_session and giver_member_id = v_me and receiver_member_id = p_receiver and deleted_at is null;
+    v_new := false;
+  end if;
 
   if v_new then
     select title into v_title from sessions where id = p_session;
@@ -249,13 +257,14 @@ language sql stable set search_path = public as $$
 $$;
 
 /**
- * Agregat kudos seorang member (profil): total, jumlah pemberi, per kategori (semua kategori aktif + kategori
+ * Agregat kudos seorang member: total, jumlah pemberi, per kategori (semua kategori aktif + kategori
  * nonaktif yang pernah diterima). Tanpa data pemberi. Urutan: jumlah terbanyak → yang terbaru diterima.
  * Waktu diterima sengaja tidak dikirim (hanya urutannya) — jam persis bisa membocorkan pemberi (K-7).
+ * Internal: tanpa cek hak — dipanggil member_kudos (milik sendiri / admin) & session_person_card (orang satu sesi).
  */
-create function member_kudos(p_member uuid default null) returns jsonb
+create function kudos_summary(p_member uuid) returns jsonb
 language sql stable security definer set search_path = public as $$
-  with target as (select coalesce(p_member, auth.uid()) as id),
+  with target as (select p_member as id),
   mine as (
     select k.category_key, k.giver_member_id, k.id, k.created_at
     from kudos k, target t
@@ -270,7 +279,7 @@ language sql stable security definer set search_path = public as $$
     group by c.key
     having c.is_active or count(m.id) > 0
   )
-  select case when auth.uid() is null then null else jsonb_build_object(
+  select jsonb_build_object(
     'total', (select count(*)::int from mine),
     -- Pemberi yang akunnya dihapus (null) dihitung per kudos.
     'unique_givers', (select count(distinct coalesce(giver_member_id, id))::int from mine),
@@ -278,7 +287,21 @@ language sql stable security definer set search_path = public as $$
       select jsonb_agg(jsonb_build_object('key', key, 'label', label, 'group', "group", 'count', n)
              order by n desc, last_at desc nulls last, sort_order)
       from per), '[]'::jsonb)
-  ) end;
+  );
+$$;
+
+/**
+ * Kudos untuk profil: milik sendiri, atau member mana pun untuk admin (Activities / Members). Member lain →
+ * null — agregat orang lain hanya lewat kartu peserta sesi yang sama (session_person_card), supaya rincian
+ * semua member tidak bisa dipantau dari browser.
+ */
+create function member_kudos(p_member uuid default null) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select case
+    when auth.uid() is null then null
+    when coalesce(p_member, auth.uid()) = auth.uid() or has_permission('activities', 'view') or has_permission('members', 'view')
+      then kudos_summary(coalesce(p_member, auth.uid()))
+  end;
 $$;
 
 /** Chip "kudos teratas" per peserta untuk host & admin (menyusun line-up): agregat 6 bulan terakhir, tanpa pemberi. */
@@ -354,6 +377,7 @@ revoke execute on function kudos_window_closes_at(uuid) from public, anon, authe
 revoke execute on function kudos_role(uuid, uuid) from public, anon, authenticated;
 revoke execute on function kudos_visible_until() from public, anon, authenticated;
 revoke execute on function kudos_revoke(uuid, text, text) from public, anon, authenticated;
+revoke execute on function kudos_summary(uuid) from public, anon, authenticated;
 revoke execute on function kudos_on_attendance_undone() from public, anon, authenticated;
 revoke execute on function session_kudos(uuid) from public, anon;
 revoke execute on function give_kudos(uuid, uuid, text) from public, anon;
@@ -387,7 +411,7 @@ begin
     select member_id into v_member from bookings where session_id = p_session and member_id = p_person and status <> 'cancelled';
   end if;
   if v_member is null then return null; end if;
-  v_kudos := member_kudos(v_member);
+  v_kudos := kudos_summary(v_member);
   return jsonb_build_object(
     'sessions_attended', (select count(distinct session_id)::int from bookings where member_id = v_member and status = 'attended'),
     'kudos_total', v_kudos -> 'total',
