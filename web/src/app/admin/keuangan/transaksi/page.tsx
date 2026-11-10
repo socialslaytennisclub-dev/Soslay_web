@@ -38,12 +38,14 @@ export default async function FinanceTransactionsPage({ searchParams }: PageProp
   const src = one(raw.src) ?? "";
   const q = (one(raw.q) ?? "").toLowerCase();
   const batchId = one(raw.batch);
-  // "Lihat di Keuangan" dari trip Tennis Escape: transaksi pembayaran paket trip itu.
+  // "Lihat di Keuangan" dari trip Tennis Escape / baris Trip di Per event: pembayaran paket trip itu
+  // + transaksi yang dikaitkan ke activity-nya (tiket Kuyy, sewa lapangan, transport …).
   const tripId = one(raw.trip);
+  const tripSessions = new Set(tripId ? data.sessions.filter((s) => s.tripId === tripId).map((s) => s.id) : []);
   const page = Math.max(1, Number(one(raw.page)) || 1);
   const batch = batchId ? data.batches.find((b) => b.id === batchId) : undefined;
 
-  const inScope = (t: FinTx) => (batchId ? t.importBatchId === batchId : tripId ? t.tripId === tripId : allMonths || t.date.startsWith(month));
+  const inScope = (t: FinTx) => (batchId ? t.importBatchId === batchId : tripId ? t.tripId === tripId || (t.sessionId !== null && tripSessions.has(t.sessionId)) : allMonths || t.date.startsWith(month));
   const base = posted(data).filter(inScope);
   const matchFilters = (t: FinTx) =>
     (!cat || t.categoryId === cat) &&

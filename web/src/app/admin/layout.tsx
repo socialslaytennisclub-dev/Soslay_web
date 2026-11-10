@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { AdminSidebar } from "@/components/admin/shell/AdminSidebar";
+import { NotificationsProvider } from "@/components/admin/shell/Notifications";
 import { Toaster } from "@/components/admin/ui/Toaster";
 import { hasServiceRoleKey } from "@/lib/supabase/admin";
 import { pendingRedemptionCount } from "@/server/admin/points-repo";
+import { getAdminNotifications } from "@/server/admin/notifications";
 import { getSidebarCounts } from "@/server/admin/repo";
 import { canAccess, getAdminSession } from "@/server/admin/session";
 import type { AdminModule } from "@/server/admin/types";
@@ -55,7 +57,14 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
     );
   }
 
-  const [counts, pendingRedemptions] = await Promise.all([getSidebarCounts(), pendingRedemptionCount()]);
+  const sidebar = getSidebarCounts();
+  const redemptions = pendingRedemptionCount();
+  // Lonceng memuat hitungannya sendiri paralel; order & penukaran memakai hitungan badge sidebar yang sama.
+  const [counts, pendingRedemptions, notifications] = await Promise.all([
+    sidebar,
+    redemptions,
+    getAdminNotifications(session, sidebar.then((c) => c.ordersToProcess), redemptions),
+  ]);
   const hiddenHrefs = (Object.keys(MODULE_HREFS) as AdminModule[]).filter((m) => !canAccess(session, m)).flatMap((m) => MODULE_HREFS[m]);
 
   return (
@@ -76,7 +85,7 @@ export default async function AdminLayout({ children }: LayoutProps<"/admin">) {
             berfungsi. Isi di Vercel → Settings → Environment Variables (Production), lalu redeploy.
           </p>
         )}
-        {children}
+        <NotificationsProvider items={notifications}>{children}</NotificationsProvider>
       </div>
       <Toaster />
     </div>

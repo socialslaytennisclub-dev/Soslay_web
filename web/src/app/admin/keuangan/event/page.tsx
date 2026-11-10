@@ -16,7 +16,7 @@ import pageStyles from "../../page.module.css";
 
 export const metadata: Metadata = { title: "Laba per sesi & event" };
 
-const KIND_LABEL: Record<EventKind, string> = { mabar: "Mabar", coaching: "Coaching", event: "Event & trip" };
+const KIND_LABEL: Record<EventKind, string> = { mabar: "Mabar", coaching: "Coaching", event: "Event", trip: "Trip" };
 const SORTS = { profit: "Laba tertinggi", revenue: "Pendapatan tertinggi", date: "Tanggal terbaru", loss: "Rugi dulu" } as const;
 type Sort = keyof typeof SORTS;
 
@@ -32,7 +32,7 @@ export default async function EventProfitPage({ searchParams }: PageProps<"/admi
   const all = eventRows(data, month);
   const rows = all
     .filter((r) => kind === "all" || r.kind === kind)
-    .sort((a, b) => (sort === "revenue" ? b.revenue - a.revenue : sort === "date" ? b.session.startsAt.localeCompare(a.session.startsAt) : sort === "loss" ? a.profit - b.profit : b.profit - a.profit));
+    .sort((a, b) => (sort === "revenue" ? b.revenue - a.revenue : sort === "date" ? b.date.localeCompare(a.date) : sort === "loss" ? a.profit - b.profit : b.profit - a.profit));
   const revenue = all.reduce((s, r) => s + r.revenue, 0);
   const cost = all.reduce((s, r) => s + r.cost, 0);
   const losses = all.filter((r) => r.profit < 0).length;
@@ -54,7 +54,7 @@ export default async function EventProfitPage({ searchParams }: PageProps<"/admi
       <div className={pageStyles.content}>
         <PageHead
           title="Laba per sesi & event"
-          subtitle="Pendapatan dan biaya yang dikaitkan ke sesi / event. Biaya umum tidak dibagi ke event."
+          subtitle="Pendapatan dan biaya yang dikaitkan ke sesi, event & trip. Biaya umum tidak dibagi ke event."
           actions={
             <>
               <ParamSelect name="m" value={month} options={months} label="Periode" />
@@ -65,10 +65,10 @@ export default async function EventProfitPage({ searchParams }: PageProps<"/admi
         <FinanceTabs active="event" role={role} query={`?m=${month}`} />
 
         <div className={styles.kpis}>
-          <Kpi icon="tennis-ball" label="Sesi & event" value={String(all.length)} note={`${losses} rugi · ${noCost} belum ada biaya terkait`} />
-          <Kpi icon="trend-up" label="Pendapatan terkait" value={rpShort(revenue)} note="Tiket Kuyy, bayar manual & sistem" />
+          <Kpi icon="tennis-ball" label="Sesi, event & trip" value={String(all.length)} note={`${losses} rugi · ${noCost} belum ada biaya terkait`} />
+          <Kpi icon="trend-up" label="Pendapatan terkait" value={rpShort(revenue)} note="Tiket Kuyy, bayar manual, paket trip & sistem" />
           <Kpi icon="trend-down" label="Biaya terkait" value={rpShort(cost)} note="Sewa, honor, transport, konsumsi …" />
-          <Kpi icon="money" label="Laba sesi & event" value={rpShort(revenue - cost)} note={`Margin ${pct(revenue ? ((revenue - cost) / revenue) * 100 : null)}`} />
+          <Kpi icon="money" label="Laba sesi, event & trip" value={rpShort(revenue - cost)} note={`Margin ${pct(revenue ? ((revenue - cost) / revenue) * 100 : null)}`} />
         </div>
 
         {noCost > 0 && (
@@ -95,7 +95,7 @@ export default async function EventProfitPage({ searchParams }: PageProps<"/admi
               <table className={styles.table}>
                 <thead>
                   <tr>
-                    <th>Sesi / event</th>
+                    <th>Sesi / event / trip</th>
                     <th>Jenis</th>
                     <th className={styles.num}>Peserta</th>
                     <th className={styles.num}>Pendapatan</th>
@@ -106,19 +106,19 @@ export default async function EventProfitPage({ searchParams }: PageProps<"/admi
                 </thead>
                 <tbody>
                   {rows.map((r) => (
-                    <tr key={r.session.id}>
+                    <tr key={r.key}>
                       <td>
-                        <Link href={`/admin/keuangan/event/${r.session.id}`} className={styles.cellTitle}>
-                          {r.session.title} · {r.session.venueName}
+                        <Link href={r.href} className={styles.cellTitle}>
+                          {r.title} · {r.place}
                         </Link>
                         <span className={styles.cellSub}>
-                          {dateLabel(r.session.startsAt.slice(0, 10), false)} · {r.channel}
+                          {dateLabel(r.date, false)} · {r.channel}
                         </span>
                       </td>
                       <td>
-                        <span className={cx(styles.pill, r.kind === "event" ? styles.pillLime : r.kind === "coaching" ? styles.pillAuto : undefined)}>{KIND_LABEL[r.kind]}</span>
+                        <span className={cx(styles.pill, r.kind === "event" || r.kind === "trip" ? styles.pillLime : r.kind === "coaching" ? styles.pillAuto : undefined)}>{KIND_LABEL[r.kind]}</span>
                       </td>
-                      <td className={styles.num}>{r.session.participants}</td>
+                      <td className={styles.num}>{r.participants}</td>
                       <td className={styles.num}>{num(r.revenue)}</td>
                       <td className={styles.num}>{r.hasCost ? num(r.cost) : <span className={cx(styles.pill, styles.pillPink)}>Belum ada</span>}</td>
                       <td className={cx(styles.num, styles.strong, r.profit < 0 && styles.neg)}>
@@ -139,7 +139,7 @@ export default async function EventProfitPage({ searchParams }: PageProps<"/admi
           )}
           <div className={styles.tableFoot}>
             <span>
-              Menampilkan {rows.length} dari {all.length} sesi & event
+              Menampilkan {rows.length} dari {all.length} sesi, event & trip
             </span>
           </div>
         </section>
@@ -150,7 +150,7 @@ export default async function EventProfitPage({ searchParams }: PageProps<"/admi
           </h3>
           <div className={styles.recon}>
             <div>
-              <span>Laba dari transaksi terkait sesi & event (diakui bulan ini)</span>
+              <span>Laba dari transaksi terkait sesi, event & trip (diakui bulan ini)</span>
               <strong>{rp(recon.linkedProfit)}</strong>
             </div>
             <div>

@@ -8,7 +8,7 @@
  * - Transaksi kategori PPh yang dicatat manual = setoran pajak (mengurangi utang pajak), bukan beban.
  */
 import { isAutoSource, SOURCE_META } from "./sources";
-import type { BalanceItem, FinAccount, FinCategory, FinanceData, FinSession, FinTx, ReportGroup } from "./types";
+import type { BalanceItem, FinAccount, FinCategory, FinanceData, FinTx, ReportGroup } from "./types";
 
 // ── Tanggal (string YYYY-MM-DD / YYYY-MM) ─────────────────────────────────────
 export const monthOf = (d: string) => d.slice(0, 7);
@@ -424,13 +424,20 @@ export function yearly(data: FinanceData, year: number): Yearly {
 }
 
 // ── Per sesi & event (§6.3b) ─────────────────────────────────────────────────
-export type EventKind = "mabar" | "coaching" | "event";
+export type EventKind = "mabar" | "coaching" | "event" | "trip";
 export const eventKind = (typeSlug: string): EventKind =>
   /coach/.test(typeSlug) ? "coaching" : /escape|trip|match|tournament|event/.test(typeSlug) ? "event" : "mabar";
 
 export type EventRow = {
-  session: FinSession;
+  key: string;
   kind: EventKind;
+  title: string;
+  /** Venue (sesi) atau jumlah activity (trip). */
+  place: string;
+  /** Tanggal mulai, YYYY-MM-DD. */
+  date: string;
+  participants: number;
+  href: string;
   revenue: number;
   cost: number;
   profit: number;
@@ -439,33 +446,66 @@ export type EventRow = {
   hasCost: boolean;
 };
 
+/** Pendapatan, biaya & jalur bayar dari sekumpulan transaksi terkait. */
+function tally(data: FinanceData, txs: FinTx[]) {
+  const kuyy = data.accounts.find((a) => a.systemKey === "kuyy")?.id;
+  let revenue = 0;
+  let cost = 0;
+  const channels = new Set<string>();
+  for (const t of txs) {
+    if (t.type === "expense") cost += t.amount;
+    if (t.type !== "income") continue;
+    revenue += t.amount;
+    channels.add(
+      t.source === "kuyy_import" || t.accountId === kuyy || /kuy/i.test(t.description)
+        ? "Kuyy"
+        : t.source === "ticket"
+          ? "sistem"
+          : t.source === "trip_payment"
+            ? "paket trip"
+            : "bayar manual",
+    );
+  }
+  return { revenue, cost, profit: revenue - cost, margin: revenue ? ((revenue - cost) / revenue) * 100 : null, channel: [...channels].join(" + ") || "—", hasCost: cost > 0 };
+}
+
+/**
+ * Baris Per event bulan `ym`. Activity bagian dari trip tidak tampil sendiri: transaksinya dijumlahkan
+ * ke baris trip (bersama pembayaran paket trip), di bulan trip dimulai.
+ */
 export function eventRows(data: FinanceData, ym: string): EventRow[] {
   const bySession = postedBySession(data);
-  const kuyy = data.accounts.find((a) => a.systemKey === "kuyy")?.id;
-  return data.sessions
-    .filter((s) => monthOf(s.startsAt.slice(0, 10)) === ym)
-    .map((s) => {
-      let revenue = 0;
-      let cost = 0;
-      const channels = new Set<string>();
-      for (const t of bySession.get(s.id) ?? []) {
-        if (t.type === "expense") cost += t.amount;
-        if (t.type !== "income") continue;
-        revenue += t.amount;
-        channels.add(t.source === "kuyy_import" || t.accountId === kuyy || /kuy/i.test(t.description) ? "Kuyy" : t.source === "ticket" ? "sistem" : "bayar manual");
-      }
+  const tripIds = new Set(data.trips.map((t) => t.id));
+  const sessions: EventRow[] = data.sessions
+    .filter((s) => monthOf(s.startsAt.slice(0, 10)) === ym && !(s.tripId && tripIds.has(s.tripId)))
+    .map((s) => ({
+      key: s.id,
+      kind: eventKind(s.typeSlug),
+      title: s.title,
+      place: s.venueName,
+      date: s.startsAt.slice(0, 10),
+      participants: s.participants,
+      href: `/admin/keuangan/event/${s.id}`,
+      ...tally(data, bySession.get(s.id) ?? []),
+    }));
+  const trips: EventRow[] = data.trips
+    .filter((t) => monthOf(t.startsOn) === ym)
+    .map((t) => {
+      const activities = data.sessions.filter((s) => s.tripId === t.id);
+      const ids = new Set(activities.map((s) => s.id));
+      const txs = posted(data).filter((x) => x.tripId === t.id || (x.sessionId !== null && ids.has(x.sessionId)));
       return {
-        session: s,
-        kind: eventKind(s.typeSlug),
-        revenue,
-        cost,
-        profit: revenue - cost,
-        margin: revenue ? ((revenue - cost) / revenue) * 100 : null,
-        channel: [...channels].join(" + ") || "—",
-        hasCost: cost > 0,
+        key: `trip:${t.id}`,
+        kind: "trip" as const,
+        title: t.title,
+        place: `${activities.length} activity`,
+        date: t.startsOn,
+        participants: t.packages,
+        href: `/admin/keuangan/transaksi?m=all&trip=${t.id}`,
+        ...tally(data, txs),
       };
-    })
-    .filter((r) => r.revenue !== 0 || r.cost !== 0 || r.session.participants > 0);
+    });
+  return [...trips, ...sessions].filter((r) => r.revenue !== 0 || r.cost !== 0 || r.participants > 0);
 }
 
 /** Rekonsiliasi bulan: transaksi diakui bulan itu, terkait sesi vs tidak. */
@@ -477,7 +517,7 @@ export function eventReconciliation(data: FinanceData, ym: string) {
   let linkedCost = 0;
   const cats = catBy(data);
   for (const t of posted(data)) {
-    if (!t.sessionId || !between(t.recognizedOn, from, to) || !t.categoryId) continue;
+    if ((!t.sessionId && !t.tripId) || !between(t.recognizedOn, from, to) || !t.categoryId) continue;
     if (cats.get(t.categoryId)?.reportGroup === "tax") continue;
     if (t.type === "income") linkedRevenue += t.amount;
     if (t.type === "expense") linkedCost += t.amount;
