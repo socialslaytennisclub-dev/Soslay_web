@@ -3,6 +3,7 @@
 import { Check, Sparkles, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { Avatar } from "@/components/ui";
 import { useDialog } from "@/hooks/useDialog";
 import { cx } from "@/lib/cx";
 import { formatTanggalPendek, type City } from "@/lib/format";
@@ -110,9 +111,13 @@ export function KudosSection({ sessionId, kudos, city, demo = false }: { session
             const category = given[r.memberId];
             return (
               <li key={r.memberId} className={base.person}>
-                <span className={cx(base.personAvatar, base[`face${i % 4}`])} aria-hidden>
-                  {initials(r.name)}
-                </span>
+                {r.avatar ? (
+                  <Avatar name={r.name} src={r.avatar} size={44} className={base.personAvatar} />
+                ) : (
+                  <span className={cx(base.personAvatar, base[`face${i % 4}`])} aria-hidden>
+                    {initials(r.name)}
+                  </span>
+                )}
                 <span className={base.personText}>
                   <strong>{r.name}</strong>
                   <small>{r.role === "host" ? "Host · hanya kudos Sikap" : "Peserta hadir"}</small>

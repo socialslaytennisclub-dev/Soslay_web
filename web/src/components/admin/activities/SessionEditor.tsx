@@ -15,6 +15,7 @@ import { clearParticipants, removeParticipants } from "@/server/admin/actions/pl
 import { deleteSession, deleteSessionMistake, discardSessionUploads, saveSession, setCheckIn, uploadSessionCover, type SessionInput } from "@/server/admin/actions/sessions";
 import { hasTargetTotal, scoreTarget, usesLineup } from "@/lib/americano";
 import { effectivePodiumBonus, LEGACY_PODIUM_BONUS } from "@/lib/standings";
+import { KUDOS_TOP_DAYS } from "@/lib/kudos";
 import type { MemberChoice, SessionDetail, SessionHost, SessionParticipant, TennisLevel } from "@/server/admin/types";
 import { FormCard, MultiChips, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
@@ -477,9 +478,9 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
             {p.guests > 0 && ` · +${p.guests} teman`}
           </span>
         )}
-        {/* Kudos teratas member (semua sesi) — bantu menyusun line-up. */}
+        {/* Kudos teratas member (6 bulan terakhir, semua sesi) — bantu menyusun line-up. */}
         {p.kudosTop && (
-          <span title={`Kudos teratas: ${p.kudosTop.label} (${p.kudosTop.count})`}>
+          <span title={`Kudos teratas ${KUDOS_TOP_DAYS / 30} bulan terakhir: ${p.kudosTop.label} (${p.kudosTop.count})`}>
             <Badge tone="lime">
               ✦ {p.kudosTop.label} {p.kudosTop.count}
             </Badge>

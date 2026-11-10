@@ -1139,12 +1139,19 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const untouched = await one(`select t.title, s.title st from trips t join sessions s on s.trip_id = t.id where t.id = $1`, [trip]);
   console.assert(failed && untouched?.title === "Fix Trip" && untouched.st === "Fix A1", `save_trip tidak atomik ${JSON.stringify(untouched)}`);
   const newTrip = (await one(`select save_trip(null, $1::jsonb, $2::jsonb, $3::jsonb) id`, [
-    JSON.stringify({ ...info, slug: "fix-new" }),
+    JSON.stringify({ ...info, slug: "fix-new", create_key: "trip-form-1" }),
     JSON.stringify([act({ key: "n1", slug: "fix-n1" })]),
     JSON.stringify([{ day: "2030-01-01", time_label: "08.00", title: "Main", location: "", activity_key: "n1" }]),
   ])).id;
   const made = await one(`select (select count(*)::int from sessions where trip_id = $1) n, (select count(*)::int from trip_rundown_items r join sessions s on s.id = r.session_id where r.trip_id = $1) linked, (select created_by from trips where id = $1) by`, [newTrip]);
   console.assert(made.n === 1 && made.linked === 1 && made.by === tripAdmin, `save_trip baru ${JSON.stringify(made)}`);
+  // Simpan ulang dari form yang sama tanpa id (respons pertama hilang / tab kedua) → trip & activity yang sama, tidak kembar.
+  const again = (await one(`select save_trip(null, $1::jsonb, $2::jsonb, '[]'::jsonb) id`, [
+    JSON.stringify({ ...info, slug: "fix-new-2", create_key: "trip-form-1" }),
+    JSON.stringify([act({ key: "n1", slug: "fix-n1-2", title: "Baru (ubah)" }), act({ key: "n2", slug: "fix-n2", trip_order: 2 })]),
+  ])).id;
+  const twins = await one(`select (select count(*)::int from trips where create_key = 'trip-form-1') trips, (select count(*)::int from sessions where trip_id = $1) n, (select count(*)::int from sessions where slug like 'fix-n1%') n1, (select title from sessions where trip_key = 'n1') t`, [newTrip]);
+  console.assert(again === newTrip && twins.trips === 1 && twins.n === 2 && twins.n1 === 1 && twins.t === "Baru (ubah)", `simpan trip ulang membuat kembar ${JSON.stringify(twins)}`);
 
   // 7. Tandai Lunas, akun default diganti, lalu batal lunas → koreksi di akun lama (BCA), bukan akun baru.
   const cash = (await one(`select id from finance_accounts where system_key = 'cash'`)).id;
@@ -1690,6 +1697,8 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
 // Kudos (BR-23): kriteria uji spec bagian 6 (no. 13 & 14 — notifikasi — belum ada sistem notifikasi member).
 {
   await as(null);
+  // Jumlah di profil mengikuti ringkasan harian 20.00 WIB (diuji di akhir blok); di sini tanpa jeda.
+  await db.exec(`set app.kudos_no_delay = 'on'`);
   const venue = (await one(`select id from venues limit 1`)).id;
   const person = async (name) => {
     const { id } = await one(`insert into auth.users default values returning id`);
@@ -1868,5 +1877,28 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(null);
   const net = Number((await one(`select coalesce(sum(delta), 0) d from points_ledger where member_id = $1 and (kudos_id is not null or note like 'Activity dihapus%')`, [A])).d);
   console.assert(net === 0, `poin kudos sesudah activity dihapus ${net}`);
-  console.log("✓ kudos: beri / ganti / batal (+1 / tetap / −1), 1 per penerima, 403 / 404 / 422 / 409, host hanya Sikap, anonim, hapus admin + log, batal check-in, 3 teratas, jendela 3 minggu, kartu peserta");
+  // Profil mengikuti ringkasan harian: kudos yang baru diberi belum terlihat sampai 20.00 WIB berikutnya (K-7).
+  {
+    const s2 = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, ended_at)
+      values ('kudos-2', 'Kudos Delay', 'weekly-mabar', $1, now() - interval '4 hours', now() - interval '2 hours', 12, 'completed', now() - interval '1 hour') returning id`, [venue])).id;
+    await db.query(`insert into kudos (session_id, giver_member_id, receiver_member_id, receiver_role, category_key) values ($1, $2, $3, 'participant', 'lob')`, [s2, D, B]);
+    const lobNow = countOf(await agg(B), "lob");
+    await db.exec(`set app.kudos_no_delay = 'off'`);
+    const lobDelayed = countOf(await agg(B), "lob");
+    const cut = await one(`select kudos_visible_until() <= now() past, kudos_visible_until() > now() - interval '24 hours' recent, to_char(kudos_visible_until() at time zone 'Asia/Jakarta', 'HH24:MI') hm`);
+    await db.exec(`set app.kudos_no_delay = 'on'`);
+    console.assert(lobNow === 1 && lobDelayed === 0 && cut.past && cut.recent && cut.hm === "20:00", `jumlah kudos profil tidak menunggu ringkasan harian ${lobNow}/${lobDelayed} ${JSON.stringify(cut)}`);
+    console.assert(!(await one(`select has_function_privilege('authenticated', 'kudos_visible_until()', 'execute') ok`)).ok, "member bisa memanggil kudos_visible_until");
+  }
+  // Kategori hanya bisa diubah admin Settings (halaman Aturan poin), bukan member.
+  // Seperti Supabase, tabel bisa ditulis role authenticated — RLS yang menjaga. Dijalankan sebagai role itu.
+  await db.exec(`grant select, update on kudos_categories to authenticated`);
+  await as(A);
+  await db.exec(`set role authenticated`);
+  await db.query(`update kudos_categories set is_active = false where key = 'style'`).catch(() => null);
+  await db.exec(`reset role`);
+  await as(null);
+  console.assert((await one(`select is_active from kudos_categories where key = 'style'`)).is_active === true, "member bisa menonaktifkan kategori kudos");
+  await db.exec(`reset app.kudos_no_delay`);
+  console.log("✓ kudos: beri / ganti / batal (+1 / tetap / −1), 1 per penerima, 403 / 404 / 422 / 409, host hanya Sikap, anonim, hapus admin + log, batal check-in, 3 teratas, jendela 3 minggu, kartu peserta, profil per ringkasan harian");
 }

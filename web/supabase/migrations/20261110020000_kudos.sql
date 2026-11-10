@@ -9,7 +9,8 @@
 --  · Anonim: member tidak pernah membaca tabel kudos (RLS tanpa policy member) — hanya lewat RPC yang
 --    tidak mengembalikan pemberi. Admin Activities membaca semua & menghapus dengan alasan (tercatat di log).
 --  · Check-in dibatalkan → kudos dari / ke orang itu di sesi itu dihapus otomatis, poin pemberi ditarik.
--- Notifikasi K-9 belum dibuat: belum ada sistem notifikasi in-app untuk member.
+-- Notifikasi K-9 belum dibuat: belum ada sistem notifikasi in-app untuk member. Jumlah di profil tetap
+-- mengikuti jadwal ringkasan harian (20.00 WIB) lewat kudos_visible_until, supaya waktunya tidak membocorkan pemberi.
 
 -- ═══ Kategori (data, bukan hard-code) ═══════════════════════════════════════
 create table kudos_categories (
@@ -236,6 +237,18 @@ begin
 end $$;
 
 /**
+ * Batas waktu kudos yang sudah boleh terlihat di profil: ringkasan harian terakhir (20.00 WIB, K-9 / KD-3).
+ * Jumlah di profil hanya berubah sekali sehari, supaya waktu kudos bertambah tidak membocorkan pemberinya
+ * (K-7). Pengaturan app.kudos_no_delay = on (hanya bisa di sesi database langsung, mis. tes) → tanpa jeda.
+ */
+create function kudos_visible_until() returns timestamptz
+language sql stable set search_path = public as $$
+  select case when coalesce(nullif(current_setting('app.kudos_no_delay', true), ''), 'off') = 'on' then now()
+              else (date_trunc('day', (now() at time zone 'Asia/Jakarta') - interval '20 hours') + interval '20 hours') at time zone 'Asia/Jakarta'
+         end;
+$$;
+
+/**
  * Agregat kudos seorang member (profil): total, jumlah pemberi, per kategori (semua kategori aktif + kategori
  * nonaktif yang pernah diterima). Tanpa data pemberi. Urutan: jumlah terbanyak → yang terbaru diterima.
  * Waktu diterima sengaja tidak dikirim (hanya urutannya) — jam persis bisa membocorkan pemberi (K-7).
@@ -247,6 +260,8 @@ language sql stable security definer set search_path = public as $$
     select k.category_key, k.giver_member_id, k.id, k.created_at
     from kudos k, target t
     where k.receiver_member_id = t.id and k.deleted_at is null
+      -- Kudos baru / diganti sesudah ringkasan harian terakhir baru terlihat di ringkasan berikutnya.
+      and k.updated_at <= kudos_visible_until()
   ),
   per as (
     select c.key, c.label, c."group", c.sort_order, count(m.id)::int as n, max(m.created_at) as last_at
@@ -266,7 +281,7 @@ language sql stable security definer set search_path = public as $$
   ) end;
 $$;
 
-/** Chip "kudos teratas" per peserta untuk host & admin (menyusun line-up): agregat semua sesi, tanpa pemberi. */
+/** Chip "kudos teratas" per peserta untuk host & admin (menyusun line-up): agregat 6 bulan terakhir, tanpa pemberi. */
 create function session_kudos_top(p_session uuid)
 returns table (member_id uuid, category_key text, label text, count integer)
 language sql stable security definer set search_path = public as $$
@@ -274,6 +289,8 @@ language sql stable security definer set search_path = public as $$
   from kudos k
   join kudos_categories c on c.key = k.category_key
   where k.deleted_at is null
+    -- 6 bulan terakhir (= KUDOS_TOP_DAYS di web/src/lib/kudos.ts): kekuatan pemain sekarang, bukan setahun lalu.
+    and k.created_at > now() - interval '180 days'
     and k.receiver_member_id in (
       select b.member_id from bookings b where b.session_id = p_session and b.status <> 'cancelled'
       union
@@ -335,6 +352,7 @@ create trigger bookings_kudos_attendance_undone after update of status on bookin
 -- Default privileges Supabase memberi EXECUTE ke anon & authenticated → cabut, lalu beri yang dipanggil member.
 revoke execute on function kudos_window_closes_at(uuid) from public, anon, authenticated;
 revoke execute on function kudos_role(uuid, uuid) from public, anon, authenticated;
+revoke execute on function kudos_visible_until() from public, anon, authenticated;
 revoke execute on function kudos_revoke(uuid, text, text) from public, anon, authenticated;
 revoke execute on function kudos_on_attendance_undone() from public, anon, authenticated;
 revoke execute on function session_kudos(uuid) from public, anon;

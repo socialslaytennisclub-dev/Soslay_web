@@ -7,7 +7,7 @@ import { useDialog } from "@/hooks/useDialog";
 import { cx } from "@/lib/cx";
 import { initials } from "@/lib/text";
 import type { DetailPerson } from "@/server/member/session-detail";
-import type { KudosTop, PersonCard } from "@/lib/kudos";
+import { KUDOS_TOP_DAYS, type KudosTop, type PersonCard } from "@/lib/kudos";
 import { getKudosTopForHost, getPersonCard, setHostCheckIn } from "@/server/member/actions";
 import kudosStyles from "./Kudos.module.css";
 import styles from "./SessionDetail.module.css";
@@ -111,7 +111,7 @@ export function ParticipantList({ people, checkIn = false, kudosChips = false, s
             </button>
             {/* Kudos teratas (hanya dikirim untuk host): bantu menyusun line-up. */}
             {tops[p.id] && (
-              <span className={kudosStyles.chip} title={`Kudos teratas: ${tops[p.id].label} (${tops[p.id].count})`}>
+              <span className={kudosStyles.chip} title={`Kudos teratas ${KUDOS_TOP_DAYS / 30} bulan terakhir: ${tops[p.id].label} (${tops[p.id].count})`}>
                 <Sparkles size={12} aria-hidden />
                 {tops[p.id].label} {tops[p.id].count}
               </span>

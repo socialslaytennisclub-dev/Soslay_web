@@ -13,7 +13,7 @@ export function KudosCard({ kudos }: { kudos: MemberKudos }) {
       <header className={styles.cardHead}>
         <div>
           <h2 id="kudos-card-title">Kudos</h2>
-          <p className={styles.muted}>Kekuatan kamu menurut teman main — anonim, dari sesi yang sudah selesai.</p>
+          <p className={styles.muted}>Kekuatan kamu menurut teman main — anonim, dari sesi yang sudah selesai. Diperbarui tiap hari pukul 20.00 WIB.</p>
         </div>
         {kudos.total > 0 && (
           <Link href="/akun/kudos" className={styles.link}>
@@ -56,7 +56,7 @@ export function KudosDetail({ kudos }: { kudos: MemberKudos }) {
         <div>
           <h2 id="kudos-detail-title">Semua kudos</h2>
           <p className={styles.muted}>
-            {formatAngka(kudos.total)} kudos dari {formatAngka(kudos.uniqueGivers)} orang · nama pemberi tidak ditampilkan.
+            {formatAngka(kudos.total)} kudos dari {formatAngka(kudos.uniqueGivers)} orang · nama pemberi tidak ditampilkan · diperbarui tiap hari pukul 20.00 WIB.
           </p>
         </div>
       </header>

@@ -1,4 +1,5 @@
 import "server-only";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { DEFAULT_KUDOS_CATEGORIES, type KudosTop } from "@/lib/kudos";
 import { membersByIds } from "./identity";
@@ -53,4 +54,15 @@ export async function loadKudosTopAdmin(sessionId: string, load: boolean): Promi
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase.rpc("session_kudos_top", { p_session: sessionId });
   return new Map(((data ?? []) as { member_id: string; label: string; count: number }[]).map((r) => [r.member_id, { label: r.label, count: r.count }]));
+}
+
+export type AdminKudosCategory = { key: string; label: string; group: "skill" | "attitude"; active: boolean };
+
+/** Semua kategori kudos (termasuk nonaktif) untuk Slay Point → Aturan poin. Demo / tabel belum ada → isi awal. */
+export async function listKudosCategoriesAdmin(): Promise<AdminKudosCategory[]> {
+  if (!isSupabaseConfigured) return DEFAULT_KUDOS_CATEGORIES.map((c) => ({ ...c, active: true }));
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.from("kudos_categories").select("key, label, group, is_active").order("sort_order").returns<{ key: string; label: string; group: "skill" | "attitude"; is_active: boolean }[]>();
+  if (error || !data) return DEFAULT_KUDOS_CATEGORIES.map((c) => ({ ...c, active: true }));
+  return data.map((c) => ({ key: c.key, label: c.label, group: c.group, active: c.is_active }));
 }

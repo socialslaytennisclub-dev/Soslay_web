@@ -17,6 +17,9 @@ export const KUDOS_GROUP_LABEL: Record<KudosGroup, string> = { skill: "Skill", a
 export const KUDOS_WINDOW_DAYS = 21;
 export const KUDOS_WINDOW_MS = KUDOS_WINDOW_DAYS * 86_400_000;
 
+/** Chip "kudos teratas" untuk host & admin: kudos 6 bulan terakhir (= session_kudos_top di database). */
+export const KUDOS_TOP_DAYS = 180;
+
 export const DEFAULT_KUDOS_CATEGORIES: KudosCategory[] = [
   ...(
     [

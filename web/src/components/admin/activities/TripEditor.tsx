@@ -25,8 +25,8 @@ type ActivityForm = { key: string; id?: string; title: string; venueName: string
 type RundownForm = { key: string; day: string; time: string; title: string; location: string; activityKey: string | null };
 
 const num = (s: string) => Number(s || 0);
-let seq = 0;
-const newKey = () => `k${Date.now().toString(36)}${(seq++).toString(36)}`;
+// Acak global: disimpan di sessions.trip_key / trips.create_key (unik di database), bukan hanya di form.
+const newKey = () => `k${crypto.randomUUID()}`;
 
 const TYPES_HINT = "Tennis Escape = trip: berisi beberapa activity (court), rundown & paket bundling. Form berubah otomatis.";
 
@@ -41,6 +41,8 @@ type Props = {
 export function TripEditor({ initial, venues, types, candidates }: Props) {
   const router = useRouter();
   const uploads = useUploadCleanup(discardSessionUploads);
+  // Trip baru: key tetap selama form terbuka → simpan ulang (respons hilang, klik dua kali) memperbarui trip yang sama.
+  const [createKey] = useState(newKey);
   const [title, setTitle] = useState(initial?.title ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [area, setArea] = useState(initial?.area ?? "");
@@ -170,6 +172,7 @@ export function TripEditor({ initial, venues, types, candidates }: Props) {
     packageQuota: num(quota),
     minDp: num(minDp),
     inclusions,
+    createKey: initial ? undefined : createKey,
     activities: activities.map(
       (a): TripActivityInput => ({
         id: a.id,

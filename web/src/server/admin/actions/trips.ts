@@ -54,6 +54,8 @@ export type TripInput = {
   packageQuota: number;
   minDp: number;
   inclusions: string[];
+  /** Trip baru: key form (tetap selama form terbuka) — save_trip memakai trip yang sama bila disimpan ulang. */
+  createKey?: string;
   activities: TripActivityInput[];
   rundown: TripRundownInput[];
 };
@@ -174,7 +176,7 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
   }));
   const { data: savedId, error } = await supabase.rpc("save_trip", {
     p_trip: input.id ?? null,
-    p_info: input.id ? tripRow : { ...tripRow, slug: `${slugify(input.title)}-${crypto.randomUUID().slice(0, 4)}` },
+    p_info: input.id ? tripRow : { ...tripRow, slug: `${slugify(input.title)}-${crypto.randomUUID().slice(0, 4)}`, create_key: input.createKey ?? null },
     p_activities: activities,
     p_rundown: input.rundown.map((r) => ({
       day: r.day,
@@ -186,12 +188,11 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
   });
   if (error || !savedId) return { ok: false, error: `Gagal menyimpan trip: ${error?.message ?? "coba lagi"} — tidak ada perubahan yang tersimpan.` };
   const id = savedId as string;
-  // id sesi tiap activity (key form → id) supaya editor tahu activity baru sudah dibuat. Tanpa ini simpan
-  // berikutnya mengirim activity yang sama tanpa id → save_trip membuat sesi lagi & melepas yang lama
-  // dari trip (muncul sebagai activity tunggal kembar). trip_order = urutan di input (lihat di atas).
-  const { data: savedSessions } = await supabase.from("sessions").select("id, trip_order").eq("trip_id", id);
-  const byOrder = new Map((savedSessions ?? []).map((s) => [s.trip_order as number, s.id as string]));
-  const activityIds = Object.fromEntries(activities.flatMap((a) => (byOrder.has(a.trip_order) ? [[a.key, byOrder.get(a.trip_order)!]] : [])));
+  // id sesi tiap activity (key form → id) supaya editor langsung memakai id-nya. save_trip sendiri sudah
+  // mencocokkan key (sessions.trip_key), jadi simpan ulang tanpa id pun tidak membuat activity kembar.
+  const { data: savedSessions } = await supabase.from("sessions").select("id, trip_key").eq("trip_id", id).not("trip_key", "is", null);
+  const byKey = new Map((savedSessions ?? []).map((s) => [s.trip_key as string, s.id as string]));
+  const activityIds = Object.fromEntries(activities.flatMap((a) => (byKey.has(a.key) ? [[a.key, byKey.get(a.key)!]] : [])));
 
   await audit(auth.userId, `${input.id ? "mengubah" : "membuat"} trip ${tripRow.title}`, "trip", id);
   refreshPaths(...PUBLIC_SESSION_PATHS, "/admin/activities", `/admin/activities/trip/${id}`);

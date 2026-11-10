@@ -26,7 +26,9 @@ export async function activeKudosCategories(supabase: SupabaseClient): Promise<K
 /** Bagian kudos sesi selesai; null = bukan pemberi eligible (RPC yang menentukan). */
 export async function loadSessionKudos(supabase: SupabaseClient, sessionId: string): Promise<SessionKudos | null> {
   const [{ data, error }, categories] = await Promise.all([supabase.rpc("session_kudos", { p_session: sessionId }), activeKudosCategories(supabase)]);
-  // PGRST202 = migrasi kudos belum dipasang → bagian kudos disembunyikan.
+  // PGRST202 = migrasi kudos belum dipasang → bagian kudos disembunyikan diam-diam. Error lain dicatat di
+  // log server supaya bagian kudos yang hilang untuk semua peserta tidak luput.
+  if (error && error.code !== "PGRST202") console.error(`[kudos] session_kudos ${sessionId}: ${error.code ?? ""} ${error.message}`);
   if (error || !data) return null;
   const row = data as SessionKudosRow;
   return {
