@@ -24,6 +24,7 @@ import { PaymentCell, useParticipantPayment, viaLabel } from "./ParticipantPayme
 import { ParticipantsDrawer } from "./ParticipantsDrawer";
 import { WaInviteLink } from "./WaInviteLink";
 import { FormatCard, LineupCard, type PlayForm } from "./PlayCards";
+import { SessionKudos } from "./SessionKudos";
 import { SessionReviews } from "./SessionReviews";
 import styles from "./SessionEditor.module.css";
 import playStyles from "./Play.module.css";
@@ -476,6 +477,14 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
             {p.guests > 0 && ` · +${p.guests} teman`}
           </span>
         )}
+        {/* Kudos teratas member (semua sesi) — bantu menyusun line-up. */}
+        {p.kudosTop && (
+          <span title={`Kudos teratas: ${p.kudosTop.label} (${p.kudosTop.count})`}>
+            <Badge tone="lime">
+              ✦ {p.kudosTop.label} {p.kudosTop.count}
+            </Badge>
+          </span>
+        )}
         {/* Belum member → undang daftar lewat WhatsApp (wa.me ke nomor dari Kuyy). */}
         {!p.memberId && <WaInviteLink href={memberInviteWaLink(p, session.title)} />}
       </span>
@@ -870,6 +879,8 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
           )}
 
           {mode === "edit" && <SessionReviews reviews={session.reviews} />}
+
+          {mode === "edit" && (session.kudos.length > 0 || session.displayStatus === "completed" || session.play.endedAt) && <SessionKudos sessionId={session.id} kudos={session.kudos} />}
 
           {mode === "edit" && (
             <FormCard

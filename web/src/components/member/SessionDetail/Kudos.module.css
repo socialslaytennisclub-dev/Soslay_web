@@ -1,0 +1,296 @@
+/* Kudos (BR-23): bagian halaman sesi selesai + kartu profil. */
+
+.progress {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  color: var(--color-navy-900);
+}
+
+.progressBar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-border);
+}
+
+.progressBar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-lime-500);
+  transition: width 0.25s ease;
+}
+
+.closed {
+  padding: var(--space-10, 10px) var(--space-16);
+  border-radius: var(--radius-md);
+  background: #f2f2f7;
+  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  color: var(--color-indigo-muted);
+}
+
+.chip {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-navy-900);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: var(--weight-semibold);
+  line-height: 1.4;
+  color: var(--color-lime-500);
+  white-space: nowrap;
+}
+
+/* Chip di bawah nama peserta (bagian kudos sesi). */
+small + .chip {
+  margin-top: 4px;
+}
+
+.chipLight {
+  background: #eef0ff;
+  color: var(--color-navy-900);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.group legend {
+  margin-bottom: var(--space-8);
+  font-size: 13px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-indigo-muted);
+}
+
+.group legend small {
+  font-weight: var(--weight-medium);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.danger {
+  border-color: #f3c4c4;
+  color: #b42318;
+}
+
+/* HP: sheet dari bawah. */
+@media (max-width: 639px) {
+  .sheet {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 88vh;
+    margin: auto 0 0;
+    border-radius: 24px 24px 0 0;
+  }
+}
+
+/* ── Profil: kartu Kudos & halaman detail ── */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+  max-width: 880px;
+  padding-top: calc(var(--nav-height) + var(--space-32));
+  padding-bottom: var(--space-48);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  padding: var(--space-24);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-xl);
+  background: #fff;
+  font-family: var(--font-ui);
+  color: var(--color-navy-900);
+}
+
+.cardHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.cardHead h2 {
+  font-size: 18px;
+  font-weight: var(--weight-bold);
+}
+
+.muted {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-indigo-muted);
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-24);
+}
+
+.stats div {
+  display: flex;
+  flex-direction: column;
+}
+
+.stats strong {
+  font-size: 28px;
+  font-weight: var(--weight-bold);
+  line-height: 1.1;
+}
+
+.stats span {
+  font-size: 13px;
+  color: var(--color-indigo-muted);
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+}
+
+.link {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  color: var(--color-navy-900);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  white-space: nowrap;
+}
+
+.detailGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.detailGroup h3 {
+  font-size: 15px;
+  font-weight: var(--weight-bold);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: var(--space-8);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.grid li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: var(--space-10, 10px) var(--space-12);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-md);
+  font-size: 14px;
+}
+
+.grid li strong {
+  font-weight: var(--weight-bold);
+}
+
+.grid li.zero {
+  opacity: 0.4;
+}
+
+.inactive {
+  font-size: 11px;
+  color: var(--color-indigo-muted);
+}
+
+/* ── Kartu peserta (tab Peserta) ── */
+
+.personOpen {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-12);
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.personOpen:hover strong,
+.personOpen:focus-visible strong {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.cardPerson {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  min-width: 0;
+}
+
+.cardPerson h2 small {
+  font-size: 14px;
+  font-weight: var(--weight-medium);
+}
+
+.cardStats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-8);
+  margin: 0;
+}
+
+.cardStats div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 2px;
+  padding: var(--space-12);
+  border-radius: var(--radius-md);
+  background: #f4f4fb;
+}
+
+.cardStats dt {
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.cardStats dd {
+  margin: 0;
+  font-size: 20px;
+  font-weight: var(--weight-bold);
+  color: var(--color-navy-900);
+}

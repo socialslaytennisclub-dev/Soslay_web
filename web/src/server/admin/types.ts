@@ -1,3 +1,4 @@
+import type { KudosTop } from "@/lib/kudos";
 /**
  * Tipe data admin — cermin dari tabel/view di supabase/migrations (profiles, member_stats,
  * sessions + session_fill, bookings, orders, …). UI admin hanya bergantung pada tipe ini,
@@ -219,6 +220,8 @@ export type SessionParticipant = {
   source: "website" | "kuy" | "admin" | "trip";
   checkedIn: boolean;
   guests: number;
+  /** Kudos teratas member ini (semua sesi, BR-23) — chip di daftar peserta untuk menyusun line-up. */
+  kudosTop?: KudosTop | null;
 };
 
 export type SessionDetail = SessionRow & {
@@ -249,6 +252,19 @@ export type SessionDetail = SessionRow & {
   photos: SessionPhotos;
   /** Review dari peserta & host sesi (tab Review member), terbaru di atas. */
   reviews: SessionReview[];
+  /** Kudos activity ini (BR-23) termasuk yang dihapus, terbaru di atas — admin melihat pemberi. */
+  kudos: SessionKudosEntry[];
+};
+
+/** Satu kudos untuk admin (moderasi). giver null = akun pemberi sudah dihapus. */
+export type SessionKudosEntry = {
+  id: string;
+  giver: { id: string; name: string } | null;
+  receiver: { id: string; name: string };
+  receiverRole: "participant" | "host";
+  category: string;
+  at: string;
+  deleted: { at: string; reason: string | null; source: "giver" | "admin" | "system" } | null;
 };
 
 /** Satu review sesi untuk admin. Rating 1–5; null = tidak diisi. */

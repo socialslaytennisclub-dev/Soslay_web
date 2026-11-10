@@ -16,6 +16,7 @@ import { maxRound, NOT_IN_LINEUP, perspective, PlayerLiveCard } from "./LiveCard
 import { ParticipantList } from "./ParticipantList";
 import { QrCheckIn } from "./QrCheckIn";
 import { DoneSide, HostResults, PhotosTab, ResultsTab, ScoreDiff } from "./Results";
+import { KudosSection } from "./KudosSection";
 import { ReviewTab } from "./ReviewForm";
 import styles from "./SessionDetail.module.css";
 
@@ -28,6 +29,7 @@ const TAB_LABEL = {
   ronde: "Ronde",
   foto: "Foto",
   review: "Review",
+  kudos: "Kudos",
 } as const;
 
 export type DetailTab = keyof typeof TAB_LABEL;
@@ -35,14 +37,16 @@ export type DetailTab = keyof typeof TAB_LABEL;
 /**
  * Tab per kondisi (Figma Simplify): sebelum mulai & live → Info · Peserta · Live · Leaderboard ·
  * Ronde; selesai → Hasil · Ronde · Foto · Review · Info (peserta & host sesi bisa memberi review).
+ * Host yang tidak ikut main dapat tab Kudos sendiri (BR-23 · K-8); peserta memberi kudos di tab Review.
  */
-export function detailTabs(d: Pick<MemberSessionDetail, "phase" | "canReview">): DetailTab[] {
+export function detailTabs(d: Pick<MemberSessionDetail, "phase" | "canReview" | "isHost" | "ticket" | "plays" | "kudos">): DetailTab[] {
   if (d.phase !== "done") return ["info", "peserta", "live", "leaderboard", "ronde"];
-  return d.canReview ? ["hasil", "ronde", "foto", "review", "info"] : ["hasil", "ronde", "foto", "info"];
+  const kudosTab = d.kudos && hostOnly(d) ? (["kudos"] as const) : [];
+  return ["hasil", "ronde", "foto", ...kudosTab, ...(d.canReview ? (["review"] as const) : []), "info"];
 }
 
 /** Host yang tidak ikut main (Figma Simplify "Host (bukan peserta)"). */
-const hostOnly = (d: MemberSessionDetail) => d.isHost && !d.ticket && !d.plays;
+const hostOnly = (d: Pick<MemberSessionDetail, "isHost" | "ticket" | "plays">) => d.isHost && !d.ticket && !d.plays;
 
 const PANITIA_WA = "62642424792";
 const BRING = ["Raket tenis", "Sepatu non-marking", "Botol minum", "Handuk & baju ganti", "QR e-ticket"];
@@ -77,7 +81,7 @@ export function SessionDetail({ detail: d, tab, endedNotice = null }: { detail: 
   // Saat sesi berjalan / selesai, tab Live · Leaderboard · Ronde memakai lebar penuh (Figma UIF-07);
   // hasil sesi tampilan host juga penuh (HL-5b).
   const wide = (d.phase !== "upcoming" && (tab === "live" || tab === "leaderboard" || tab === "ronde")) || (tab === "hasil" && hostOnly(d));
-  const doneSide = d.phase === "done" && (tab === "hasil" || tab === "foto" || tab === "review");
+  const doneSide = d.phase === "done" && (tab === "hasil" || tab === "foto" || tab === "review" || tab === "kudos");
   const routeUrl = d.venue.mapsUrl ?? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${d.venue.name} ${d.venue.address}`)}`;
 
   return (
@@ -123,7 +127,7 @@ export function SessionDetail({ detail: d, tab, endedNotice = null }: { detail: 
                     </p>
                   </div>
                 </header>
-                <ParticipantList people={d.people} checkIn={d.canScore && d.phase !== "done"} sessionId={d.id} />
+                <ParticipantList people={d.people} checkIn={d.canScore && d.phase !== "done"} kudosChips={d.isHost} sessionId={d.id} />
               </section>
             )}
             {tab === "live" && <LiveTab detail={d} />}
@@ -131,7 +135,13 @@ export function SessionDetail({ detail: d, tab, endedNotice = null }: { detail: 
             {tab === "ronde" && <RoundsTab detail={d} />}
             {tab === "hasil" && (hostOnly(d) ? <HostResults detail={d} endedNotice={endedNotice} /> : <ResultsTab detail={d} />)}
             {tab === "foto" && <PhotosTab detail={d} />}
-            {tab === "review" && <ReviewTab detail={d} />}
+            {tab === "review" && (
+              <>
+                {d.kudos && !hostOnly(d) && <KudosSection sessionId={d.id} kudos={d.kudos} city={d.city} demo={d.demo} />}
+                <ReviewTab detail={d} />
+              </>
+            )}
+            {tab === "kudos" && d.kudos && <KudosSection sessionId={d.id} kudos={d.kudos} city={d.city} demo={d.demo} />}
           </div>
 
           {!wide && doneSide && (

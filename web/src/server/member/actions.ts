@@ -5,7 +5,11 @@ import { genderOptions, handOptions, playingFormatOptions, playingFrequencyOptio
 import { levelFromLabel } from "@/lib/levels";
 import { normalizeKuyId } from "@/lib/auth";
 import { validateProfile } from "@/lib/profile";
+import type { KudosTop, PersonCard } from "@/lib/kudos";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { demoKudosTopByPerson, demoPersonCard } from "../kudos-demo";
+import { loadKudosTop } from "./kudos";
 import { localPhone } from "@/lib/wa-invite";
 import { removePublicImage, uploadPublicImage } from "../storage";
 import { FORMAT, FREQUENCY, GENDER, HAND, toEnum } from "./profile";
@@ -222,4 +226,53 @@ export async function clearHostScore(matchId: string): Promise<HostScoreResult> 
   const { error } = await supabase.rpc("clear_match_score", { p_match: matchId });
   if (error) return { ok: false, error: /Hanya admin atau host/.test(error.message) ? "Hanya host sesi ini yang bisa mengubah skor." : /terkunci/.test(error.message) ? "Sesi sudah diakhiri — skor terkunci." : "Gagal mengurungkan skor. Coba lagi." };
   return { ok: true };
+}
+
+/** Pesan kudos dari kode error RPC (PT403 / PT404 / PT409 / PT422 = status HTTP lewat PostgREST). */
+const kudosError = (error: { code?: string; message: string }) =>
+  ["PT403", "PT404", "PT409", "PT422"].includes(error.code ?? "") || /Masa kasih kudos|Kudos dibuka|Kategori|diri sendiri|Host yang tidak|bukan peserta|Hanya peserta/.test(error.message)
+    ? `${error.message}.`
+    : "Kudos gagal disimpan. Coba lagi.";
+
+/** Beri / ganti kudos (BR-23): 1 kategori per penerima per sesi; kudos baru +1 Slay Point (database). */
+export async function giveKudos(sessionId: string, receiverId: string, category: string): Promise<HostScoreResult> {
+  const supabase = await createSupabaseServerClient("member");
+  const { error } = await supabase.rpc("give_kudos", { p_session: sessionId, p_receiver: receiverId, p_category: category });
+  return error ? { ok: false, error: kudosError(error) } : { ok: true };
+}
+
+/** Batalkan kudos saya ke penerima ini (Slay Point −1). */
+export async function cancelKudos(sessionId: string, receiverId: string): Promise<HostScoreResult> {
+  const supabase = await createSupabaseServerClient("member");
+  const { error } = await supabase.rpc("cancel_kudos", { p_session: sessionId, p_receiver: receiverId });
+  return error ? { ok: false, error: kudosError(error) } : { ok: true };
+}
+
+/**
+ * Kartu peserta di tab Peserta: jumlah sesi dihadiri + kudos (total, pemberi, 3 teratas). RPC mengecek pemanggil
+ * peserta / host / admin sesi itu. card null = tamu tanpa akun Soslay. Tanpa Supabase → angka contoh.
+ */
+export async function getPersonCard(sessionId: string, personId: string): Promise<{ ok: true; card: PersonCard | null } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured) return { ok: true, card: demoPersonCard(personId) };
+  const supabase = await createSupabaseServerClient("member");
+  const { data, error } = await supabase.rpc("session_person_card", { p_session: sessionId, p_person: personId });
+  if (error) return { ok: false, error: "Info peserta gagal dimuat. Coba lagi." };
+  const row = data as { sessions_attended: number; kudos_total: number; kudos_givers: number; kudos_top: { label: string; count: number }[] } | null;
+  return { ok: true, card: row && { sessionsAttended: row.sessions_attended, kudosTotal: row.kudos_total, kudosGivers: row.kudos_givers, kudosTop: row.kudos_top } };
+}
+
+/**
+ * Chip kudos teratas di tab Peserta untuk host (menyusun line-up): per id roster. Dimuat sekali saat tab
+ * dibuka — bukan di setiap muat ulang halaman live. Bukan host / admin → kosong (dicek RPC).
+ */
+export async function getKudosTopForHost(sessionId: string): Promise<Record<string, KudosTop>> {
+  if (!isSupabaseConfigured) return demoKudosTopByPerson();
+  const supabase = await createSupabaseServerClient("member");
+  const [{ data: roster }, top] = await Promise.all([supabase.rpc("session_roster", { p_session: sessionId }), loadKudosTop(supabase, sessionId)]);
+  const out: Record<string, KudosTop> = {};
+  for (const r of (roster ?? []) as { id: string; member_id: string | null }[]) {
+    const t = r.member_id ? top.get(r.member_id) : undefined;
+    if (t) out[r.id] = t;
+  }
+  return out;
 }
