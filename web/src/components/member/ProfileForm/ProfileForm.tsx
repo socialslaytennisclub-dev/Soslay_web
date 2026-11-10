@@ -1,5 +1,6 @@
 "use client";
 
+import { IMAGE_ASPECT } from "@/lib/image-aspect";
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { pinWithin } from "@/animations";
 import { shrinkImage } from "@/lib/image-resize";
@@ -96,7 +97,7 @@ export function ProfileForm({ initial }: { initial?: MemberProfile }) {
     if (!picked) return;
     if (!["image/jpeg", "image/png"].includes(picked.type)) return setPhotoError("Format harus JPG atau PNG.");
     // Foto profil tampil bulat → crop persegi dulu.
-    const cropped = await crop(picked, 1, "Foto profil");
+    const cropped = await crop(picked, IMAGE_ASPECT.avatar, "Foto profil");
     if (!cropped) return;
     // Foto HP besar diperkecil dulu (avatar cukup 1024 px) — batas 2 MB hanya untuk yang tetap besar.
     const file = await shrinkImage(cropped, { maxEdge: 1024, maxBytes: 500 * 1024 });

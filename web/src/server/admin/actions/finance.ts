@@ -411,7 +411,7 @@ export async function saveFinanceSettings(input: {
 }): Promise<ActionResult> {
   const auth = await requireFinance("full");
   if ("error" in auth) return fail(auth.error);
-  if (input.goLiveDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(input.goLiveDate)) return fail("Tanggal go-live tidak valid.");
+  if (input.goLiveDate !== undefined && !(/^\d{4}-\d{2}-\d{2}$/.test(input.goLiveDate) && input.goLiveDate >= "2020-01-01" && input.goLiveDate <= "2100-12-31")) return fail("Tanggal go-live tidak valid (tahun 2020–2100).");
   if (input.taxRate !== undefined && input.taxRate !== null && !(input.taxRate >= 0 && input.taxRate <= 100)) return fail("Tarif pajak 0–100%.");
   const map: Record<string, string> = {
     taxEnabled: "tax_enabled",
@@ -440,11 +440,17 @@ export async function saveFinanceSettings(input: {
       .select("id")
       .gte("starts_at", `${input.goLiveDate}T00:00:00+07:00`)
       .or("ended_at.not.is.null,status.eq.completed");
+    // Beberapa sekaligus (bukan satu per satu): ratusan activity berurutan bisa melewati batas waktu fungsi.
     const failed: string[] = [];
-    for (const { id } of finished ?? []) {
-      const { error: syncError } = await supabase.rpc("finance_resync_session", { p_session: id });
-      if (syncError) failed.push(syncError.message);
-    }
+    const queue = (finished ?? []).map((r) => r.id as string);
+    await Promise.all(
+      Array.from({ length: Math.min(5, queue.length) }, async () => {
+        for (let id = queue.shift(); id; id = queue.shift()) {
+          const { error: syncError } = await supabase.rpc("finance_resync_session", { p_session: id });
+          if (syncError) failed.push(syncError.message);
+        }
+      }),
+    );
     refresh();
     if (listError || failed.length) return fail(`Pengaturan tersimpan, tapi sinkron activity gagal: ${listError?.message ?? `${failed.length} activity — ${failed[0]}`}`);
     return done(`Pengaturan keuangan tersimpan · ${finished?.length ?? 0} activity sejak go-live disinkronkan.`);
@@ -462,10 +468,20 @@ export async function syncSessionFinance(sessionId: string): Promise<ActionResul
   const auth = await requireFinance("full");
   if ("error" in auth) return fail(auth.error);
   const supabase = await createSupabaseServerClient();
+  const [{ data: session }, { data: settings }] = await Promise.all([
+    supabase.from("sessions").select("starts_at").eq("id", sessionId).maybeSingle(),
+    supabase.from("finance_settings").select("go_live_date").maybeSingle(),
+  ]);
   const { data: count, error } = await supabase.rpc("finance_resync_session", { p_session: sessionId });
   if (error) return fail(`Gagal sinkron: ${error.message}`);
   await financeLog(auth.userId, "session", sessionId, "sinkron keuangan activity", null, { participants: count });
   refresh();
+  // Pemasukan baru hanya dicatat sejak go-live (koreksi tetap jalan) — jangan bilang "tercatat" kalau belum.
+  const startWib = session?.starts_at ? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(new Date(session.starts_at as string)) : null;
+  const goLive = settings?.go_live_date as string | undefined;
+  if (startWib && goLive && startWib < goLive) {
+    return done(`Activity ini sebelum go-live (${goLive}) — pemasukan peserta belum dicatat otomatis. Majukan go-live di Pengaturan Keuangan untuk mencatatnya.`);
+  }
   return done(`Keuangan activity disinkronkan · ${count ?? 0} peserta dibaca ulang.`);
 }
 

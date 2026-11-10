@@ -330,13 +330,30 @@ export function FinanceSettingsView({ accounts, balances, categories, usage, set
               className={styles.input}
               type="date"
               defaultValue={settings.goLiveDate}
+              min="2020-01-01"
+              max="2100-12-31"
               disabled={pending}
-              onChange={(e) => {
-                const next = e.target.value;
+              // Disimpan saat selesai mengisi (keluar dari kolom / Enter), bukan tiap ketikan: mengetik tahun
+              // memicu change untuk tanggal setengah jadi (mis. 0002-11-01) → konfirmasi & sinkron yang salah.
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  e.currentTarget.blur();
+                }
+              }}
+              onBlur={(e) => {
+                const input = e.currentTarget;
+                const next = input.value;
                 if (!next || next === settings.goLiveDate) return;
+                const year = Number(next.slice(0, 4));
+                if (year < 2020 || year > 2100) {
+                  toast.error("Tanggal go-live tidak valid (tahun 2020–2100).");
+                  input.value = settings.goLiveDate;
+                  return;
+                }
                 const earlier = next < settings.goLiveDate;
                 if (!window.confirm(earlier ? `Majukan go-live ke ${dateLabel(next)}? Pemasukan peserta activity yang sudah selesai sejak tanggal itu langsung dicatat (Kuyy → Saldo Kuyy, manual → akun bayar manual).` : `Mundurkan go-live ke ${dateLabel(next)}? Transaksi yang sudah tercatat tidak dihapus.`)) {
-                  e.target.value = settings.goLiveDate;
+                  input.value = settings.goLiveDate;
                   return;
                 }
                 run(() => saveFinanceSettings({ goLiveDate: next }));

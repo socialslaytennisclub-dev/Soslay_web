@@ -1,3 +1,4 @@
+import { IMAGE_ASPECT } from "@/lib/image-aspect";
 import { POST_PLATFORMS, type PostPlatform } from "@/lib/community-posts";
 import { cx } from "@/lib/cx";
 import { Icon } from "../Icon/Icon";
@@ -33,6 +34,7 @@ export function SocialPostCard({ platform, text, handle, image, imagePosition, h
     >
       <MediaCard
         className={styles.card}
+        style={{ aspectRatio: IMAGE_ASPECT.communityPost }}
         src={image}
         objectPosition={imagePosition}
         radius="md"

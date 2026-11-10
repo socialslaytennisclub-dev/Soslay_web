@@ -1,3 +1,4 @@
+import { IMAGE_ASPECT } from "@/lib/image-aspect";
 import Link from "next/link";
 import { MediaCard } from "../MediaCard/MediaCard";
 import { Text } from "../Text/Text";
@@ -17,7 +18,7 @@ export function VenueCard({ name, city, type, image, imagePosition, href }: Venu
   return (
     <Link href={href} className={styles.link} data-cursor="Lihat">
       <MediaCard
-        className={styles.card}
+        style={{ aspectRatio: IMAGE_ASPECT.venueCover }}
         src={image}
         alt={`${name} court`}
         objectPosition={imagePosition}

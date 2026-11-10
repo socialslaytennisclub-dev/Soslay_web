@@ -1,5 +1,6 @@
 "use client";
 
+import { IMAGE_ASPECT } from "@/lib/image-aspect";
 import Image from "next/image";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { normalizeHandle, POST_PLATFORM_KEYS, POST_PLATFORMS, postLinkError, type PostPlatform } from "@/lib/community-posts";
@@ -224,8 +225,8 @@ function PostEditor({ post, members, onClose, onSaved, onDelete }: { post: Commu
 
   const upload = async (picked: File | undefined) => {
     if (!picked || uploading) return;
-    // Crop sesuai kartu post di website (313 : 391).
-    const file = await crop(picked, 313 / 391, "Foto post");
+    // Crop sesuai kartu post di website (SocialPostCard).
+    const file = await crop(picked, IMAGE_ASPECT.communityPost, "Foto post");
     if (!file) return;
     setUploading(true);
     const body = new FormData();

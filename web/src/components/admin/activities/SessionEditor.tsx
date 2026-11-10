@@ -1,5 +1,6 @@
 "use client";
 
+import { IMAGE_ASPECT } from "@/lib/image-aspect";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -224,7 +225,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   const uploadCover = async (picked: File | undefined) => {
     if (!picked || uploading) return;
     // Crop dulu sesuai kotak cover (4:3), baru diupload.
-    const file = await crop(picked, 4 / 3, "Cover activity");
+    const file = await crop(picked, IMAGE_ASPECT.sessionCover, "Cover activity");
     if (!file) return;
     startUploading(async () => {
       // Foto HP > 4,5 MB ditolak Vercel sebelum sampai server → perkecil dulu di browser.
@@ -244,7 +245,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   /** Thumbnail Foto sesi — upload ke Storage yang sama dengan foto cover; tersimpan saat Simpan. */
   const uploadPhotoCover = async (picked: File | undefined) => {
     if (!picked || uploadingPhoto) return;
-    const file = await crop(picked, 16 / 9, "Thumbnail foto sesi");
+    const file = await crop(picked, IMAGE_ASPECT.sessionPhoto, "Thumbnail foto sesi");
     if (!file) return;
     startUploadingPhoto(async () => {
       const body = new FormData();
