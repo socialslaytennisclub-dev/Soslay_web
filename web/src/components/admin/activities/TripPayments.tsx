@@ -118,7 +118,7 @@ export function TripPayments({ tripId, tripTitle, activities, quota, due, minDp,
   const cancelBooking = async (b: TripBooking) => {
     const ok = await confirm({
       title: `Batalkan paket ${b.name}?`,
-      body: <p>{b.name} dikeluarkan dari semua {activities} activity trip. Pembayaran yang sudah masuk tetap tercatat — batalkan dari Riwayat bila dikembalikan.</p>,
+      body: <p>{b.name} dikeluarkan dari semua {activities} activity trip. Pembayaran yang sudah masuk ikut dikoreksi (keluar) dari Keuangan.</p>,
       confirmLabel: "Batalkan paket",
     });
     if (!ok) return;
