@@ -195,6 +195,10 @@ export function TripEditor({ initial, venues, types, candidates }: Props) {
       toast.result(r);
       if (!r.ok) return;
       if (publish) setStatus("published");
+      // Editor tidak di-mount ulang setelah simpan (key = id trip): tandai activity baru dengan id sesinya,
+      // agar simpan berikutnya memperbarui sesi itu — bukan membuat sesi baru & melepas yang lama dari trip.
+      const ids = r.activityIds ?? {};
+      setActivities((list) => list.map((a) => (a.id || !ids[a.key] ? a : { ...a, id: ids[a.key] })));
       router.replace(`/admin/activities/trip/${r.id}`);
       router.refresh();
     });

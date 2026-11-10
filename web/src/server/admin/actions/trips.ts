@@ -58,7 +58,7 @@ export type TripInput = {
   rundown: TripRundownInput[];
 };
 
-type SaveResult = ({ ok: true; message: string; id: string } | { ok: false; error: string });
+type SaveResult = ({ ok: true; message: string; id: string; activityIds?: Record<string, string> } | { ok: false; error: string });
 
 /** Pesan aturan database (kuota paket, trip diarsipkan, melebihi sisa tagihan…) — sudah siap ditampilkan. */
 function guardMessage(error: { hint?: string | null; details?: string | null; message: string }): string | null {
@@ -186,10 +186,16 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
   });
   if (error || !savedId) return { ok: false, error: `Gagal menyimpan trip: ${error?.message ?? "coba lagi"} — tidak ada perubahan yang tersimpan.` };
   const id = savedId as string;
+  // id sesi tiap activity (key form → id) supaya editor tahu activity baru sudah dibuat. Tanpa ini simpan
+  // berikutnya mengirim activity yang sama tanpa id → save_trip membuat sesi lagi & melepas yang lama
+  // dari trip (muncul sebagai activity tunggal kembar). trip_order = urutan di input (lihat di atas).
+  const { data: savedSessions } = await supabase.from("sessions").select("id, trip_order").eq("trip_id", id);
+  const byOrder = new Map((savedSessions ?? []).map((s) => [s.trip_order as number, s.id as string]));
+  const activityIds = Object.fromEntries(activities.flatMap((a) => (byOrder.has(a.trip_order) ? [[a.key, byOrder.get(a.trip_order)!]] : [])));
 
   await audit(auth.userId, `${input.id ? "mengubah" : "membuat"} trip ${tripRow.title}`, "trip", id);
   refreshPaths(...PUBLIC_SESSION_PATHS, "/admin/activities", `/admin/activities/trip/${id}`);
-  return { ok: true, id, message: input.status === "published" ? "Trip dipublikasikan." : "Trip tersimpan sebagai draft." };
+  return { ok: true, id, activityIds, message: input.status === "published" ? "Trip dipublikasikan." : "Trip tersimpan sebagai draft." };
 }
 
 export async function archiveTrip(id: string): Promise<ActionResult> {
