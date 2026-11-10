@@ -1152,6 +1152,18 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   ])).id;
   const twins = await one(`select (select count(*)::int from trips where create_key = 'trip-form-1') trips, (select count(*)::int from sessions where trip_id = $1) n, (select count(*)::int from sessions where slug like 'fix-n1%') n1, (select title from sessions where trip_key = 'n1') t`, [newTrip]);
   console.assert(again === newTrip && twins.trips === 1 && twins.n === 2 && twins.n1 === 1 && twins.t === "Baru (ubah)", `simpan trip ulang membuat kembar ${JSON.stringify(twins)}`);
+  // Form basi: tab A & B memuat versi yang sama; A menambah activity n3 lalu simpan; B (tidak kenal n3) simpan →
+  // ditolak (trip_stale), n3 tetap di trip & judul trip tidak tertimpa. Versi terbaru → diterima.
+  const ver = async () => (await one(`select updated_at::text v from trips where id = $1`, [newTrip])).v;
+  const loaded = await ver();
+  const both = [act({ id: (await one(`select id from sessions where trip_key = 'n1'`)).id, key: "n1" }), act({ key: "n2", trip_order: 2 })];
+  await db.query(`select save_trip($1, $2::jsonb, $3::jsonb, '[]'::jsonb)`, [newTrip, JSON.stringify({ ...info, title: "Tab A", updated_at: loaded }), JSON.stringify([...both, act({ key: "n3", slug: "fix-n3", trip_order: 3 })])]);
+  const staleRejected = await rejects(`select save_trip($1, $2::jsonb, $3::jsonb, '[]'::jsonb)`, [newTrip, JSON.stringify({ ...info, title: "Tab B", updated_at: loaded }), JSON.stringify(both)], "trip_stale");
+  const afterStale = await one(`select title, (select count(*)::int from sessions where trip_id = $1) n, (select trip_id from sessions where trip_key = 'n3') n3 from trips where id = $1`, [newTrip]);
+  console.assert(staleRejected && afterStale.title === "Tab A" && afterStale.n === 3 && afterStale.n3 === newTrip, `simpan dari form basi melepas activity / menimpa trip ${JSON.stringify(afterStale)}`);
+  await db.query(`select save_trip($1, $2::jsonb, $3::jsonb, '[]'::jsonb)`, [newTrip, JSON.stringify({ ...info, title: "Tab B (muat ulang)", updated_at: await ver() }), JSON.stringify(both)]);
+  const fresh = await one(`select title, (select count(*)::int from sessions where trip_id = $1) n from trips where id = $1`, [newTrip]);
+  console.assert(fresh.title === "Tab B (muat ulang)" && fresh.n === 2, `simpan dengan versi terbaru ditolak ${JSON.stringify(fresh)}`);
 
   // 7. Tandai Lunas, akun default diganti, lalu batal lunas → koreksi di akun lama (BCA), bukan akun baru.
   const cash = (await one(`select id from finance_accounts where system_key = 'cash'`)).id;
@@ -1177,7 +1189,7 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await byAcc(cash)) === 0, `akun default kosong: batal lunas tidak dikoreksi (Kas ${await byAcc(cash)})`);
   await db.exec(`update finance_settings set auto_manual_paid = true, manual_paid_account_id = '${bank}', go_live_date = '2026-12-01'`);
   await as(null);
-  console.log("✓ perbaikan review: booking jalur lain aman, tanpa dobel Kuyy, kuota & arsip paket, tidak bayar lebih, pembayaran tidak terhapus, save_trip atomik, koreksi di akun asal, otomatis mati tetap dikoreksi");
+  console.log("✓ perbaikan review: booking jalur lain aman, tanpa dobel Kuyy, kuota & arsip paket, tidak bayar lebih, pembayaran tidak terhapus, save_trip atomik & tolak form basi, koreksi di akun asal, otomatis mati tetap dikoreksi");
 
   // ── Peserta tambahan admin: "Ubah pembayaran" ikut aturan Keuangan seperti baris Kuyy ──
   {

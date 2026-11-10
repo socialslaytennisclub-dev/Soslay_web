@@ -43,6 +43,8 @@ export function TripEditor({ initial, venues, types, candidates }: Props) {
   const uploads = useUploadCleanup(discardSessionUploads);
   // Trip baru: key tetap selama form terbuka → simpan ulang (respons hilang, klik dua kali) memperbarui trip yang sama.
   const [createKey] = useState(newKey);
+  // Versi trip yang dilihat form ini; dikirim saat simpan (trip diubah di tab / admin lain → ditolak).
+  const [version, setVersion] = useState(initial?.version);
   const [title, setTitle] = useState(initial?.title ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [area, setArea] = useState(initial?.area ?? "");
@@ -173,6 +175,7 @@ export function TripEditor({ initial, venues, types, candidates }: Props) {
     minDp: num(minDp),
     inclusions,
     createKey: initial ? undefined : createKey,
+    version,
     activities: activities.map(
       (a): TripActivityInput => ({
         id: a.id,
@@ -198,10 +201,11 @@ export function TripEditor({ initial, venues, types, candidates }: Props) {
       toast.result(r);
       if (!r.ok) return;
       if (publish) setStatus("published");
-      // Editor tidak di-mount ulang setelah simpan (key = id trip): tandai activity baru dengan id sesinya,
-      // agar simpan berikutnya memperbarui sesi itu — bukan membuat sesi baru & melepas yang lama dari trip.
+      // Sampai data baru tiba (editor di-mount ulang saat versi trip berubah): pakai id sesi & versi terbaru,
+      // agar simpan berikutnya memperbarui sesi yang sama dan tidak ditolak sebagai basi.
       const ids = r.activityIds ?? {};
       setActivities((list) => list.map((a) => (a.id || !ids[a.key] ? a : { ...a, id: ids[a.key] })));
+      if (r.version) setVersion(r.version);
       router.replace(`/admin/activities/trip/${r.id}`);
       router.refresh();
     });

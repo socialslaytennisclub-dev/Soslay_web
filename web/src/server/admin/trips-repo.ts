@@ -20,6 +20,7 @@ type TripRowDb = {
   id: string; slug: string; title: string; description: string; area: string; starts_on: string; ends_on: string;
   cover_path: string | null; status: TripStatus; visibility: TripDetail["visibility"]; show_on_homepage: boolean; show_rundown: boolean;
   price_normal: number; price_early_bird: number | null; early_bird_until: string | null; package_quota: number; min_dp: number; inclusions: string[];
+  updated_at: string;
 };
 type BookingRowDb = { id: string; trip_id: string; member_id: string | null; full_name: string; phone: string | null; email: string | null; created_at: string; cancelled_at: string | null };
 type PaymentRowDb = {
@@ -99,6 +100,7 @@ async function loadLiveTrips(): Promise<RawTrip[]> {
     packageQuota: t.package_quota,
     minDp: t.min_dp,
     inclusions: t.inclusions ?? [],
+    version: t.updated_at,
     rundown: (rundownOf.get(t.id) ?? []).map((r) => ({ id: r.id, day: r.day, time: r.time_label, title: r.title, location: r.location, sessionId: r.session_id })),
     bookings: (bookingsOf.get(t.id) ?? [])
       .map((b) => ({
@@ -126,7 +128,7 @@ async function loadLiveTrips(): Promise<RawTrip[]> {
   }));
 }
 
-const demoRaw = (): RawTrip[] => [{ ...demoTrip, rundown: demoTripRundown, bookings: demoTripBookings.map((b) => ({ ...b, cancelled: false })) }];
+const demoRaw = (): RawTrip[] => [{ ...demoTrip, version: "", rundown: demoTripRundown, bookings: demoTripBookings.map((b) => ({ ...b, cancelled: false })) }];
 
 /** Semua trip (termasuk draft & arsip), lengkap. */
 export const listTripDetails = cache(async (): Promise<TripDetail[]> => {
