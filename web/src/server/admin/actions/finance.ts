@@ -485,6 +485,19 @@ export async function syncSessionFinance(sessionId: string): Promise<ActionResul
   return done(`Keuangan activity disinkronkan · ${count ?? 0} peserta dibaca ulang.`);
 }
 
+/** Peserta & pembayaran trip · "Sync ke Keuangan": catat DP / cicilan / pelunasan yang belum masuk (termasuk sebelum go-live). */
+export async function syncTripFinance(tripId: string): Promise<ActionResult> {
+  const auth = await requireFinance("full");
+  if ("error" in auth) return fail(auth.error);
+  const supabase = await createSupabaseServerClient();
+  const { data: count, error } = await supabase.rpc("finance_resync_trip", { p_trip: tripId });
+  if (error) return fail(`Gagal sinkron: ${error.message}`);
+  await financeLog(auth.userId, "trip", tripId, "sinkron keuangan trip", null, { transactions: count });
+  refresh();
+  revalidatePath(`/admin/activities/trip/${tripId}/peserta`);
+  return done(count ? `${count} transaksi pembayaran trip dicatat ke Keuangan.` : "Semua pembayaran trip sudah tercatat di Keuangan.");
+}
+
 // ── Neraca: saldo awal & pos manual (12n) ────────────────────────────────────
 export async function saveOpeningBalance(accountId: string, amount: number, openingDate: string): Promise<ActionResult> {
   const auth = await requireFinance("full");

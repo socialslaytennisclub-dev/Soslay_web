@@ -943,6 +943,19 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await net()) === 3200000 && (await byAcc(cash)) === 1700000 && (await byAcc(bank)) === 1500000, `A-10 ganti akun ${await byAcc(bank)} / ${await byAcc(cash)}`);
   await db.query(`update trip_payments set voided_at = now(), void_reason = 'salah input' where id = $1`, [pel]);
   console.assert((await net()) === 1500000, "A-10 pembayaran dibatalkan → koreksi");
+  // Sync trip (10 Nov): pembayaran sebelum go-live dilewati trigger → Sync mencatatnya sekali, di tanggal terima.
+  await db.query(`update finance_settings set go_live_date = current_date + 1 where true`);
+  const late = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'installment', 400000, current_date - 60, $2) returning id`, [bk, bank])).id;
+  console.assert((await net()) === 1500000, "pembayaran trip sebelum go-live tetap dicatat trigger");
+  await as(tripAdmin);
+  const synced = (await one(`select finance_resync_trip($1) n`, [trip])).n;
+  const lateTx = await one(`select date::text d, term from finance_transactions where source = 'trip_payment' and source_ref = $1`, ['tp:' + late + ':' + bank]);
+  console.assert(synced === 1 && (await net()) === 1900000 && lateTx?.term === "installment", `Sync trip tidak mencatat pembayaran sebelum go-live ${synced} ${await net()} ${JSON.stringify(lateTx)}`);
+  console.assert((await one(`select finance_resync_trip($1) n`, [trip])).n === 0 && (await net()) === 1900000, "Sync trip dua kali mencatat dobel");
+  await as(null);
+  await db.query(`update trip_payments set voided_at = now(), void_reason = 'tes' where id = $1`, [late]);
+  console.assert((await net()) === 1500000, "pembayaran hasil Sync dibatalkan tidak dikoreksi");
+  await db.query(`update finance_settings set go_live_date = '2020-01-01' where true`);
   // Batal paket → keluar dari semua activity.
   await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [bk]);
   console.assert((await tripRows(s1)) === 1 && (await tripRows(s2)) === 1, "paket dibatalkan masih terdaftar di activity");
