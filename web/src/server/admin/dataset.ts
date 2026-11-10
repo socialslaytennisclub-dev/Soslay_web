@@ -138,7 +138,7 @@ let demoDataset: Dataset | undefined;
 // ── Live (Supabase) ─────────────────────────────────────────────────────────
 /** PostgREST membatasi 1.000 baris per request → hitung dulu, lalu ambil semua halaman paralel. */
 /** Keterisian semua sesi (RPC session_fill_counts, satu baris per sesi, per halaman 1000). */
-async function fetchFillCounts(client: SupabaseClient): Promise<Map<string, { filled: number; trip: number }>> {
+export async function fetchFillCounts(client: SupabaseClient): Promise<Map<string, { filled: number; trip: number }>> {
   const PAGE = 1000;
   const counts = new Map<string, { filled: number; trip: number }>();
   for (let from = 0; ; from += PAGE) {

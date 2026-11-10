@@ -27,6 +27,7 @@ import { SessionReviews } from "./SessionReviews";
 import styles from "./SessionEditor.module.css";
 import playStyles from "./Play.module.css";
 import { useConfirm } from "../ui/ConfirmDialog";
+import { useImageCrop } from "@/components/ui/ImageCropper/ImageCropper";
 import { RowMenu } from "../ui/RowMenu";
 import { toast, ToastOnMount } from "../ui/Toaster";
 import { useUploadCleanup } from "../ui/useUploadCleanup";
@@ -220,8 +221,11 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   };
 
   /** Upload langsung ke Storage; URL baru tersimpan ke sesi saat admin menekan Simpan. */
-  const uploadCover = (file: File | undefined) => {
-    if (!file || uploading) return;
+  const uploadCover = async (picked: File | undefined) => {
+    if (!picked || uploading) return;
+    // Crop dulu sesuai kotak cover (4:3), baru diupload.
+    const file = await crop(picked, 4 / 3, "Cover activity");
+    if (!file) return;
     startUploading(async () => {
       // Foto HP > 4,5 MB ditolak Vercel sebelum sampai server → perkecil dulu di browser.
       const body = new FormData();
@@ -238,8 +242,10 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
   const sessionWhen = date ? new Intl.DateTimeFormat("id-ID", { weekday: "short", day: "numeric", month: "short", timeZone: "Asia/Jakarta" }).format(startsAt) : "";
 
   /** Thumbnail Foto sesi — upload ke Storage yang sama dengan foto cover; tersimpan saat Simpan. */
-  const uploadPhotoCover = (file: File | undefined) => {
-    if (!file || uploadingPhoto) return;
+  const uploadPhotoCover = async (picked: File | undefined) => {
+    if (!picked || uploadingPhoto) return;
+    const file = await crop(picked, 16 / 9, "Thumbnail foto sesi");
+    if (!file) return;
     startUploadingPhoto(async () => {
       const body = new FormData();
       body.append("file", await shrinkImage(file));
@@ -322,6 +328,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
 
   // ── Hapus peserta & absensi (terkunci begitu aktivitas sudah dikerjakan) ──
   const [confirm, confirmDialog] = useConfirm();
+  const [crop, cropDialog] = useImageCrop();
   const [editPayment, paymentDrawer] = useParticipantPayment(session.id, session.displayStatus === "completed");
   const [removing, setRemoving] = useState<string | null>(null);
   const checkedInCount = session.participants.filter(isCheckedIn).length;
@@ -492,6 +499,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
 
   return (
     <div className={styles.editor}>
+      {cropDialog}
       <div className={styles.bar}>
         <div className={styles.barLeft}>
           <Link href="/admin/activities" className={styles.back}>

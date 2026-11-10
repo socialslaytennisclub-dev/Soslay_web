@@ -1525,3 +1525,103 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert(bad, "bonus juara harus 3 angka");
   console.log("✓ bonus juara per activity: default 10 / 0 / 0, nilai 0 tanpa baris, koreksi ikut nilai activity");
 }
+
+// Keuangan: go-live dimajukan → finance_resync_session (per activity) mencatat pemasukan peserta activity yang sudah selesai;
+// finance_resync_session menyamakan nominal & nama dengan data activity. Hanya Super Admin Keuangan.
+{
+  await as(null);
+  const venue = (await one(`select id from venues limit 1`)).id;
+  await db.exec(`update finance_settings set go_live_date = '2099-01-01'`); // belum go-live
+  const s = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status)
+    values ('fin-sync', 'Fin Sync', 'weekly-mabar', $1, now() - interval '5 hours', now() - interval '3 hours', 8, 'published') returning id`, [venue])).id;
+  const kuy = (await one(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount) values ($1, 'Tamu Kuy', 'S1', 'tamukuy', 220000) returning id`, [s])).id;
+  const man = (await one(`insert into session_participants (session_id, full_name, kuy_reg_no, source, payment_channel, payment_status, amount) values ($1, 'Tamu BCA', 'S2', 'admin', 'manual', 'paid', 220000) returning id`, [s])).id;
+  await db.query(`update sessions set status = 'completed', ended_at = now() where id = $1`, [s]);
+  const net = async (source, ref) => Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source = $1 and source_ref = $2 and deleted_at is null`, [source, ref])).s);
+  console.assert((await net("kuyy_import", `sp:${kuy}`)) === 0, "sebelum go-live belum tercatat");
+  const fails = (sql, params) => db.query(sql, params).then(() => false, () => true);
+  const { id: nobody } = await one(`insert into auth.users default values returning id`);
+  await as(nobody);
+  console.assert(await fails(`select finance_resync_session($1)`, [s]), "bukan admin Keuangan tidak boleh sinkron");
+  const boss = (await one(`insert into auth.users default values returning id`)).id;
+  await as(null);
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Sync', 'sync@soslay.test', 'active' from roles where name = 'Super Admin'`, [boss]);
+  await db.exec(`update finance_settings set go_live_date = '2020-01-01'`);
+  await as(boss);
+  // Aplikasi menyinkronkan per activity (saveFinanceSettings) — sama di sini.
+  const synced = (await one(`select count(finance_resync_session(id))::int n from sessions where ended_at is not null or status = 'completed'`)).n;
+  console.assert(synced >= 1, `activity selesai sejak go-live disinkronkan (${synced})`);
+  console.assert((await net("kuyy_import", `sp:${kuy}`)) === 220000 && (await net("ticket_manual_paid", `sp:${man}`)) === 220000, "Kuyy → Saldo Kuyy, manual → akun bayar manual");
+  // Keterangan transaksi yang tertinggal dari nama peserta → disamakan oleh Sync.
+  await as(null);
+  await db.query(`update finance_transactions set description = 'Tiket Kuyy · Nama Lama' where source_ref = $1`, [`sp:${kuy}`]);
+  await as(boss);
+  await db.query(`select finance_resync_session($1)`, [s]);
+  console.assert((await one(`select description from finance_transactions where source_ref = $1 and amount > 0`, [`sp:${kuy}`])).description === "Tiket Kuyy · Tamu Kuy", "nama disamakan saat sync");
+  const before = Number((await one(`select count(*) n from finance_transactions`)).n);
+  await db.query(`select finance_resync_session($1)`, [s]);
+  console.assert(Number((await one(`select count(*) n from finance_transactions`)).n) === before, "sync ulang tanpa perubahan tidak menambah transaksi");
+  // Go-live dimundurkan sesudah tercatat → koreksi tetap jalan (dulu diam-diam dilewati).
+  await as(null);
+  await db.exec(`update finance_settings set go_live_date = '2099-01-01'`);
+  await db.query(`update session_participants set payment_status = 'pending' where id = $1`, [man]);
+  console.assert((await net("ticket_manual_paid", `sp:${man}`)) === 0, `batal lunas sesudah go-live dimundurkan → dikoreksi (${await net("ticket_manual_paid", `sp:${man}`)})`);
+  console.log("✓ Keuangan: go-live dimajukan → activity selesai tercatat; Sync menyamakan nominal & nama; koreksi tetap jalan walau go-live dimundurkan; hanya admin Keuangan");
+}
+
+// Review terlihat oleh peserta & host activity itu (session_reviews_for); orang lain tidak dapat apa-apa.
+{
+  await as(null);
+  const venue = (await one(`select id from venues limit 1`)).id;
+  const s = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, ended_at)
+    values ('review-lihat', 'Review Lihat', 'weekly-mabar', $1, now() - interval '4 hours', now() - interval '2 hours', 8, 'completed', now() - interval '1 hour') returning id`, [venue])).id;
+  const person = async (name) => {
+    const { id } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, name, `${id}@mail.com`]);
+    return id;
+  };
+  const a = await person("Ayu Lestari");
+  const b = await person("Budi Santoso");
+  const host = await person("Hana Host");
+  const stranger = await person("Orang Luar");
+  for (const m of [a, b]) await db.query(`insert into bookings (session_id, member_id) values ($1, $2)`, [s, m]);
+  await db.query(`insert into session_hosts (session_id, member_id, role) values ($1, $2, 'host')`, [s, host]);
+  await as(a);
+  await db.query(`select submit_session_review($1, 5::smallint, '{Format seru}', 4::smallint, null, null, 'Seru!', true)`, [s]);
+  await as(host);
+  const seen = (await db.query(`select name, rating, comment, host_rating from session_reviews_for($1)`, [s])).rows;
+  console.assert(seen.length === 1 && seen[0].name === "Ayu" && seen[0].comment === "Seru!", `host melihat review peserta (nama depan) ${JSON.stringify(seen)}`);
+  console.assert(seen[0].host_rating === null, "host tidak melihat rating Host dari peserta");
+  await as(a);
+  console.assert((await one(`select host_rating from session_reviews_for($1)`, [s])).host_rating === 4, "pemberi review melihat rating Host miliknya");
+  await as(host);
+  await as(b);
+  console.assert((await db.query(`select 1 from session_reviews_for($1)`, [s])).rows.length === 1, "peserta lain melihat review");
+  await as(stranger);
+  console.assert((await db.query(`select 1 from session_reviews_for($1)`, [s])).rows.length === 0, "orang luar tidak melihat review");
+  await as(null);
+  console.log("✓ review activity terlihat oleh peserta & host (nama depan), tidak oleh orang luar");
+}
+
+// Juara yang masih tamu saat activity ditutup lalu daftar akun → bonus juara susulan saat baris pesertanya
+// tertaut ke member (sekali saja).
+{
+  await as(null);
+  const venue = (await one(`select id from venues limit 1`)).id;
+  const s = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, match_format, court_count, round_count, podium_bonus)
+    values ('juara-susulan', 'Juara Susulan', 'weekly-mabar', $1, now() - interval '3 hours', now() - interval '1 hour', 8, 'published', 'rotating', 1, 1, '{10,0,0}') returning id`, [venue])).id;
+  const ids = [];
+  for (let i = 1; i <= 4; i++) ids.push((await one(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, amount) values ($1, $2, $3, $4, 0) returning id`, [s, `Tamu ${i}`, `J${i}`, `tamu${i}`])).id);
+  await db.query(`insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2, score_a, score_b) values ($1, 1, 1, $2, $3, $4, $5, 4, 0)`, [s, ...ids]);
+  await db.query(`select finish_session($1, null, now())`, [s]);
+  console.assert((await one(`select count(*)::int n from points_ledger where session_id = $1 and is_podium`, [s])).n === 0, "tamu saat ditutup → belum ada bonus");
+  const { id: fredy } = await one(`insert into auth.users default values returning id`);
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Fredy Uji', 'fredy.uji@mail.com')`, [fredy]);
+  await db.query(`update session_participants set member_id = $2 where id = $1`, [ids[0], fredy]);
+  const got = async () => (await one(`select coalesce(sum(delta), 0)::int d, count(*)::int n from points_ledger where session_id = $1 and member_id = $2 and is_podium`, [s, fredy]));
+  const first = await got();
+  console.assert(first.d === 10 && first.n === 1, `daftar akun sesudah ditutup → bonus juara 1 susulan ${JSON.stringify(first)}`);
+  await db.query(`update session_participants set member_id = $2 where id = $1`, [ids[0], fredy]);
+  console.assert((await got()).n === 1, "bonus susulan tidak dobel");
+  console.log("✓ bonus juara susulan untuk juara yang baru daftar akun sesudah activity ditutup (sekali)");
+}

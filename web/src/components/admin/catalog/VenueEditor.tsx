@@ -13,6 +13,7 @@ import { FormCard, MultiChips, SingleChips, TextArea, Toggle } from "../ui/Admin
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge } from "../ui/AdminUI";
 import { useConfirm } from "../ui/ConfirmDialog";
+import { useImageCrop } from "@/components/ui/ImageCropper/ImageCropper";
 import { useUploadCleanup } from "../ui/useUploadCleanup";
 import { toast, ToastOnMount } from "../ui/Toaster";
 
@@ -31,6 +32,7 @@ export function VenueEditor({ initial, imageOptions, initialNotice }: { initial:
   const [v, setV] = useState(initial);
   const [saving, start] = useTransition();
   const [uploading, setUploading] = useState<"coverPath" | "heroPath" | null>(null);
+  const [crop, cropDialog] = useImageCrop();
   const [confirm, confirmDialog] = useConfirm();
   const uploads = useUploadCleanup(discardVenueUploads);
   const set = <K extends keyof VenueForm>(key: K, value: VenueForm[K]) => setV((prev) => ({ ...prev, [key]: value }));
@@ -46,8 +48,11 @@ export function VenueEditor({ initial, imageOptions, initialNotice }: { initial:
   };
 
   /** Upload langsung ke Storage; URL baru tersimpan ke venue saat admin menekan Simpan. */
-  const upload = async (key: "coverPath" | "heroPath", file: File | undefined) => {
-    if (!file || uploading) return;
+  const upload = async (key: "coverPath" | "heroPath", picked: File | undefined) => {
+    if (!picked || uploading) return;
+    // Crop sesuai tempat tampilnya: cover = kartu venue, hero = banner detail venue.
+    const file = key === "coverPath" ? await crop(picked, 633 / 371, "Foto cover venue") : await crop(picked, 1312 / 560, "Foto hero venue");
+    if (!file) return;
     setUploading(key);
     // Foto HP > 4,5 MB ditolak Vercel sebelum sampai server → perkecil dulu di browser.
     const body = new FormData();
@@ -110,6 +115,7 @@ export function VenueEditor({ initial, imageOptions, initialNotice }: { initial:
 
   return (
     <div className={styles.editor}>
+      {cropDialog}
       <div className={styles.bar}>
         <div className={styles.barLeft}>
           <Link href="/admin/venues" className={styles.back}>

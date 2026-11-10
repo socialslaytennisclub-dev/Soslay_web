@@ -2,7 +2,7 @@ import "server-only";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { likeEscape } from "@/lib/text";
 import { FREQUENCY } from "./dataset";
-import { DAY } from "./time";
+import { DAY, startOfTodayWib } from "./time";
 import type { MemberListItem, MembersQuery, MembersResult, TennisLevel } from "./types";
 
 /**
@@ -43,6 +43,7 @@ function applyQuery(builder: ViewQuery, query: MembersQuery, now: Date): ViewQue
   let b = builder;
   if (query.tab === "active" || query.tab === "inactive") b = b.eq("status", query.tab);
   if (query.tab === "new") b = b.gt("joined_at", new Date(now.getTime() - 30 * DAY).toISOString());
+  if (query.tab === "today") b = b.gt("joined_at", new Date(startOfTodayWib(now).getTime() - 1).toISOString());
   const q = query.q?.trim().toLowerCase();
   if (q) b = b.like("search", `%${likeEscape(q)}%`);
   if (query.tier) b = b.eq("tier", query.tier);
@@ -92,11 +93,12 @@ export async function listMembersLive(query: MembersQuery, pageSize: number): Pr
       .range((page - 1) * pageSize, page * pageSize - 1);
 
   const requested = Math.max(1, query.page ?? 1);
-  const [first, all, active, fresh, inactive, cityRows] = await Promise.all([
+  const [first, all, active, fresh, today, inactive, cityRows] = await Promise.all([
     fetchPage(requested),
     count(client, {}, now),
     count(client, { tab: "active" }, now),
     count(client, { tab: "new" }, now),
+    count(client, { tab: "today" }, now),
     count(client, { tab: "inactive" }, now),
     client.from("profiles").select("city").not("city", "is", null),
   ]);
@@ -114,7 +116,7 @@ export async function listMembersLive(query: MembersQuery, pageSize: number): Pr
     page,
     pageSize,
     pageCount,
-    counts: { all, active, new: fresh, inactive },
+    counts: { all, active, new: fresh, today, inactive },
     cities: [...new Set((cityRows.data ?? []).map((r) => r.city as string).filter(Boolean))].sort(),
   };
 }

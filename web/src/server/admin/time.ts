@@ -7,3 +7,6 @@ export const monthKey = (d: Date) => new Date(d.getTime() + WIB).toISOString().s
 
 /** Persen perubahan, 1 desimal; 0 bila pembanding kosong. */
 export const pctDelta = (now: number, before: number) => (before ? Math.round(((now - before) / before) * 1000) / 10 : 0);
+
+/** Awal hari ini (00.00 WIB) — mis. filter member "daftar hari ini". */
+export const startOfTodayWib = (now: Date) => new Date(`${new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta" }).format(now)}T00:00:00+07:00`);

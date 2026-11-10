@@ -406,9 +406,12 @@ export async function saveFinanceSettings(input: {
   autoDepreciation?: boolean;
   manualPaidAccountId?: string;
   defaultBankAccountId?: string;
+  /** Tanggal (YYYY-MM-DD) mulai pencatatan otomatis. Dimajukan → activity sejak tanggal itu disinkronkan. */
+  goLiveDate?: string;
 }): Promise<ActionResult> {
   const auth = await requireFinance("full");
   if ("error" in auth) return fail(auth.error);
+  if (input.goLiveDate !== undefined && !/^\d{4}-\d{2}-\d{2}$/.test(input.goLiveDate)) return fail("Tanggal go-live tidak valid.");
   if (input.taxRate !== undefined && input.taxRate !== null && !(input.taxRate >= 0 && input.taxRate <= 100)) return fail("Tarif pajak 0–100%.");
   const map: Record<string, string> = {
     taxEnabled: "tax_enabled",
@@ -419,6 +422,7 @@ export async function saveFinanceSettings(input: {
     autoDepreciation: "auto_depreciation",
     manualPaidAccountId: "manual_paid_account_id",
     defaultBankAccountId: "default_bank_account_id",
+    goLiveDate: "go_live_date",
   };
   const row = Object.fromEntries(Object.entries(input).filter(([k, v]) => k in map && v !== undefined).map(([k, v]) => [map[k], v]));
   if (!Object.keys(row).length) return fail("Tidak ada perubahan.");
@@ -427,8 +431,42 @@ export async function saveFinanceSettings(input: {
   const { error } = await supabase.from("finance_settings").update({ ...row, updated_at: new Date().toISOString() }).eq("id", true);
   if (error) return fail(`Gagal menyimpan: ${error.message}`);
   await financeLog(auth.userId, "settings", null, "ubah pengaturan keuangan", before, row);
+  // Go-live dimajukan → pemasukan peserta activity yang sudah selesai sejak tanggal itu dicatat sekarang.
+  // Satu RPC per activity (bukan satu untuk semua): banyak activity sekaligus bisa melewati batas waktu
+  // statement dan membatalkan semuanya.
+  if (input.goLiveDate && before?.go_live_date && input.goLiveDate < (before.go_live_date as string)) {
+    const { data: finished, error: listError } = await supabase
+      .from("sessions")
+      .select("id")
+      .gte("starts_at", `${input.goLiveDate}T00:00:00+07:00`)
+      .or("ended_at.not.is.null,status.eq.completed");
+    const failed: string[] = [];
+    for (const { id } of finished ?? []) {
+      const { error: syncError } = await supabase.rpc("finance_resync_session", { p_session: id });
+      if (syncError) failed.push(syncError.message);
+    }
+    refresh();
+    if (listError || failed.length) return fail(`Pengaturan tersimpan, tapi sinkron activity gagal: ${listError?.message ?? `${failed.length} activity — ${failed[0]}`}`);
+    return done(`Pengaturan keuangan tersimpan · ${finished?.length ?? 0} activity sejak go-live disinkronkan.`);
+  }
   refresh();
   return done("Pengaturan keuangan tersimpan.");
+}
+
+/**
+ * Sync Keuangan satu activity: pemasukan peserta (Tiket Kuyy → Saldo Kuyy, Bayar manual → akun bayar
+ * manual) dibaca ulang dari data activity — jalur, nominal & nama yang diubah sesudah activity selesai ikut
+ * disamakan (lewat baris koreksi). Hanya untuk activity sejak go-live.
+ */
+export async function syncSessionFinance(sessionId: string): Promise<ActionResult> {
+  const auth = await requireFinance("full");
+  if ("error" in auth) return fail(auth.error);
+  const supabase = await createSupabaseServerClient();
+  const { data: count, error } = await supabase.rpc("finance_resync_session", { p_session: sessionId });
+  if (error) return fail(`Gagal sinkron: ${error.message}`);
+  await financeLog(auth.userId, "session", sessionId, "sinkron keuangan activity", null, { participants: count });
+  refresh();
+  return done(`Keuangan activity disinkronkan · ${count ?? 0} peserta dibaca ulang.`);
 }
 
 // ── Neraca: saldo awal & pos manual (12n) ────────────────────────────────────
