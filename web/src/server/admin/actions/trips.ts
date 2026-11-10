@@ -39,7 +39,7 @@ export type TripRundownInput = { day: string; time: string; title: string; locat
 export type TripInput = {
   id?: string;
   /** Versi trip saat form dimuat (TripDetail.version). Trip sudah diubah di tab / admin lain → simpan ditolak. */
-  version?: string;
+  version?: number | null;
   title: string;
   description: string;
   area: string;
@@ -62,7 +62,7 @@ export type TripInput = {
   rundown: TripRundownInput[];
 };
 
-type SaveResult = ({ ok: true; message: string; id: string; version?: string; activityIds?: Record<string, string> } | { ok: false; error: string });
+type SaveResult = ({ ok: true; message: string; id: string; version?: number; activityIds?: Record<string, string> } | { ok: false; error: string });
 
 /** Pesan aturan database (kuota paket, trip diarsipkan, melebihi sisa tagihan…) — sudah siap ditampilkan. */
 function guardMessage(error: { hint?: string | null; details?: string | null; message: string }): string | null {
@@ -178,7 +178,7 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
   }));
   const { data: savedId, error } = await supabase.rpc("save_trip", {
     p_trip: input.id ?? null,
-    p_info: input.id ? { ...tripRow, form_version: input.version ? Number(input.version) : null } : { ...tripRow, slug: `${slugify(input.title)}-${crypto.randomUUID().slice(0, 4)}`, create_key: input.createKey ?? null },
+    p_info: input.id ? { ...tripRow, form_version: input.version ?? null } : { ...tripRow, slug: `${slugify(input.title)}-${crypto.randomUUID().slice(0, 4)}`, create_key: input.createKey ?? null },
     p_activities: activities,
     p_rundown: input.rundown.map((r) => ({
       day: r.day,
@@ -205,7 +205,7 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
 
   await audit(auth.userId, `${input.id ? "mengubah" : "membuat"} trip ${tripRow.title}`, "trip", id);
   refreshPaths(...PUBLIC_SESSION_PATHS, "/admin/activities", `/admin/activities/trip/${id}`);
-  return { ok: true, id, activityIds, version: savedTrip?.form_version != null ? String(savedTrip.form_version) : undefined, message: input.status === "published" ? "Trip dipublikasikan." : "Trip tersimpan sebagai draft." };
+  return { ok: true, id, activityIds, version: (savedTrip?.form_version as number | undefined) ?? undefined, message: input.status === "published" ? "Trip dipublikasikan." : "Trip tersimpan sebagai draft." };
 }
 
 export async function archiveTrip(id: string): Promise<ActionResult> {

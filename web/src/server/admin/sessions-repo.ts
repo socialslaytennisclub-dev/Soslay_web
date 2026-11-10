@@ -12,7 +12,10 @@ import { DEFAULT_PODIUM_BONUS } from "@/lib/standings";
 import { DAY } from "./time";
 import type { ActivityListRow, SessionDetail, SessionParticipant, SessionSort, SessionsQuery, SessionsResult } from "./types";
 import { demoAdminKudos, demoKudosTop } from "../kudos-demo";
-import { loadKudosTopAdmin, loadSessionKudosAdmin } from "./session-kudos";
+import { loadSessionKudosAdmin } from "./session-kudos";
+import { loadKudosTop } from "../member/kudos";
+import type { KudosTop } from "@/lib/kudos";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { loadSessionReviews } from "./session-reviews";
 
 /**
@@ -161,7 +164,7 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
     loadSessionPlay(s, d.live),
     loadSessionReviews(s.id, d.live && finished),
     loadSessionKudosAdmin(s.id, d.live && finished),
-    loadKudosTopAdmin(s.id, d.live),
+    d.live ? createSupabaseServerClient().then((client) => loadKudosTop(client, s.id)) : new Map<string, KudosTop>(),
   ]);
   const hostIds = new Set(hosts.filter((h) => h.role === "host").map((h) => h.memberId));
   const reviews = reviewRows.map((r) => ({ ...r, isHost: hostIds.has(r.memberId) }));

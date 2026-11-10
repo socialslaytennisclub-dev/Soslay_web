@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { createContext, useContext, useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useRef, useSyncExternalStore, type ReactNode } from "react";
 import type { AdminNotification } from "@/server/admin/notifications";
+import { useClickOutside } from "@/hooks/useClickOutside";
+import { useDisclosure } from "@/hooks/useDisclosure";
 import { AdminIcon } from "../ui/AdminIcon";
 import styles from "./AdminShell.module.css";
 
@@ -48,7 +50,7 @@ const subscribe = (l: () => void) => {
 /** Lonceng + daftar antrean. Titik pink = ada yang berubah sejak lonceng terakhir dibuka. */
 export function NotificationBell() {
   const items = useContext(NotificationsContext);
-  const [open, setOpen] = useState(false);
+  const { isOpen: open, toggle: toggleOpen, close } = useDisclosure();
   const wrap = useRef<HTMLDivElement>(null);
   const current: Seen = Object.fromEntries(items.map((i) => [i.key, i.count]));
   // Server & render pertama: anggap sudah dilihat semua (tanpa titik) supaya sama dengan HTML server.
@@ -64,25 +66,11 @@ export function NotificationBell() {
     writeSeen(lowered);
   }, [shrunk, current]);
 
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (!wrap.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  useClickOutside(wrap, close, open);
 
   const toggle = () => {
     if (!open) writeSeen(current);
-    setOpen(!open);
+    toggleOpen();
   };
 
   return (
@@ -98,7 +86,7 @@ export function NotificationBell() {
             <ul className={styles.notifList}>
               {items.map((i) => (
                 <li key={i.key}>
-                  <Link href={i.href} className={styles.notifItem} onClick={() => setOpen(false)}>
+                  <Link href={i.href} className={styles.notifItem} onClick={close}>
                     <span className={styles.notifIcon}>
                       <AdminIcon name={i.icon} size={18} />
                     </span>

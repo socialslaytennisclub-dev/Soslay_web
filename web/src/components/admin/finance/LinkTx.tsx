@@ -5,7 +5,7 @@ import { useState, useTransition, type ReactNode } from "react";
 import { AdminButton } from "@/components/admin/ui/AdminUI";
 import { useConfirm } from "@/components/admin/ui/ConfirmDialog";
 import { formatRupiah } from "@/lib/format";
-import { shortDate } from "@/lib/trips";
+import { shortDate, PAYMENT_KIND_LABEL } from "@/lib/trips";
 import { toast } from "@/components/admin/ui/Toaster";
 import type { ActionResult } from "@/server/admin/actions/common";
 import { linkTransaction, previewTripSync, syncSessionFinance, syncTripFinance } from "@/server/admin/actions/finance";
@@ -95,7 +95,6 @@ export function SyncSessionButton({ sessionId }: { sessionId: string }) {
   return <SyncButton label="Sync" run={() => syncSessionFinance(sessionId)} />;
 }
 
-const KIND: Record<string, string> = { dp: "DP", installment: "Cicilan", settlement: "Pelunasan" };
 
 /**
  * "Sync ke Keuangan" untuk pembayaran paket trip (halaman trip & transaksi trip di Keuangan). Pratinjau
@@ -118,7 +117,7 @@ export function SyncTripButton({ tripId }: { tripId: string }) {
             <ul className={styles.syncList}>
               {p.items.map((i, n) => (
                 <li key={n}>
-                  {KIND[i.kind] ?? i.kind} · {i.name} · <strong>{formatRupiah(i.amount)}</strong> · {shortDate(i.date)}
+                  {PAYMENT_KIND_LABEL[i.kind as keyof typeof PAYMENT_KIND_LABEL] ?? i.kind} · {i.name} · <strong>{formatRupiah(i.amount)}</strong> · {shortDate(i.date)}
                 </li>
               ))}
             </ul>

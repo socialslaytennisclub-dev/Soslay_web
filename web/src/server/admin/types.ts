@@ -749,8 +749,8 @@ export type TripDetail = {
   packageQuota: number;
   minDp: number;
   inclusions: string[];
-  /** trips.updated_at (teks persis dari database) — dikirim balik saat simpan; trip berubah di tempat lain → simpan ditolak. Demo: "". */
-  version: string;
+  /** trips.form_version — dikirim balik saat simpan; trip disimpan dari editor lain sesudahnya → simpan ditolak. Demo: null. */
+  version: number | null;
   activities: TripActivity[];
   rundown: TripRundownItem[];
   bookings: TripBooking[];

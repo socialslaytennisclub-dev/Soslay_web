@@ -1,7 +1,7 @@
 import "server-only";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { DEFAULT_KUDOS_CATEGORIES, type KudosTop } from "@/lib/kudos";
+import { DEFAULT_KUDOS_CATEGORIES } from "@/lib/kudos";
 import { membersByIds } from "./identity";
 import type { SessionKudosEntry } from "./types";
 
@@ -46,14 +46,6 @@ export async function loadSessionKudosAdmin(sessionId: string, load: boolean): P
     at: r.updated_at,
     deleted: r.deleted_at ? { at: r.deleted_at, reason: r.deleted_reason, source: r.deleted_source ?? "admin" } : null,
   }));
-}
-
-/** Chip kudos teratas per member_id peserta (RPC session_kudos_top, agregat semua sesi tanpa pemberi). */
-export async function loadKudosTopAdmin(sessionId: string, load: boolean): Promise<Map<string, KudosTop>> {
-  if (!load) return new Map();
-  const supabase = await createSupabaseServerClient();
-  const { data } = await supabase.rpc("session_kudos_top", { p_session: sessionId });
-  return new Map(((data ?? []) as { member_id: string; label: string; count: number }[]).map((r) => [r.member_id, { label: r.label, count: r.count }]));
 }
 
 export type AdminKudosCategory = { key: string; label: string; group: "skill" | "attitude"; active: boolean };

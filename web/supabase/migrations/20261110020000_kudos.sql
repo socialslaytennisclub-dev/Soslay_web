@@ -97,7 +97,7 @@ language sql stable security definer set search_path = public as $$
   from sessions s
   where s.id = p_session
     and s.status in ('published', 'completed')
-    and (s.ended_at is not null or s.status = 'completed' or session_closes_at(s.ends_at) <= now());
+    and (session_is_finished(s) or session_closes_at(s.ends_at) <= now());
 $$;
 
 /** Peran member di kudos sesi ini: 'participant' (hadir), 'host' (host yang tidak ikut main), null = tidak ikut. */

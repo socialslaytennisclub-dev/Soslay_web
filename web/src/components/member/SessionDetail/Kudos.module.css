@@ -55,11 +55,6 @@ small + .chip {
   margin-top: 4px;
 }
 
-.chipLight {
-  background: #eef0ff;
-  color: var(--color-navy-900);
-}
-
 .group {
   display: flex;
   flex-direction: column;
@@ -225,11 +220,6 @@ small + .chip {
 
 .grid li.zero {
   opacity: 0.4;
-}
-
-.inactive {
-  font-size: 11px;
-  color: var(--color-indigo-muted);
 }
 
 /* ── Kartu peserta (tab Peserta) ── */

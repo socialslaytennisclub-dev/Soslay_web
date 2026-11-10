@@ -100,7 +100,7 @@ async function loadLiveTrips(): Promise<RawTrip[]> {
     packageQuota: t.package_quota,
     minDp: t.min_dp,
     inclusions: t.inclusions ?? [],
-    version: String(t.form_version),
+    version: t.form_version,
     rundown: (rundownOf.get(t.id) ?? []).map((r) => ({ id: r.id, day: r.day, time: r.time_label, title: r.title, location: r.location, sessionId: r.session_id })),
     bookings: (bookingsOf.get(t.id) ?? [])
       .map((b) => ({
@@ -128,7 +128,7 @@ async function loadLiveTrips(): Promise<RawTrip[]> {
   }));
 }
 
-const demoRaw = (): RawTrip[] => [{ ...demoTrip, version: "", rundown: demoTripRundown, bookings: demoTripBookings.map((b) => ({ ...b, cancelled: false })) }];
+const demoRaw = (): RawTrip[] => [{ ...demoTrip, version: null, rundown: demoTripRundown, bookings: demoTripBookings.map((b) => ({ ...b, cancelled: false })) }];
 
 /** Semua trip (termasuk draft & arsip), lengkap. */
 export const listTripDetails = cache(async (): Promise<TripDetail[]> => {

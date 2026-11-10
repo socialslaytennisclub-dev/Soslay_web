@@ -11,10 +11,10 @@ import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge } from "../ui/AdminUI";
 import confirmStyles from "../ui/ConfirmDialog.module.css";
 import { toast } from "../ui/Toaster";
+import { formatTanggalPendek } from "@/lib/format";
 import editor from "./SessionEditor.module.css";
 import styles from "./SessionReviews.module.css";
 
-const at = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
 
 const DELETED_BY = { giver: "dibatalkan pemberi", admin: "dihapus admin", system: "otomatis (check-in batal)" } as const;
 
@@ -70,7 +70,7 @@ export function SessionKudos({ sessionId, kudos }: { sessionId: string; kudos: S
                   <td>
                     <Badge tone="neutral">{k.category}</Badge>
                   </td>
-                  <td>{at.format(new Date(k.at))}</td>
+                  <td>{formatTanggalPendek(k.at, "Jakarta", "dateTime")}</td>
                   <td>
                     {k.deleted ? (
                       <span className={editor.muted} title={k.deleted.reason ?? undefined}>

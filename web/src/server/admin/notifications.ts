@@ -2,7 +2,7 @@ import "server-only";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { openSessionsEndAfter, sessionClosesAt } from "@/lib/session-close";
-import { startOfTodayWib } from "./time";
+import { DAY, startOfTodayWib } from "./time";
 import { getDataset } from "./dataset";
 import type { AdminIconName } from "@/components/admin/ui/AdminIcon";
 import { canAccess, type AdminSession } from "./session";
@@ -17,7 +17,6 @@ export type AdminNotification = {
   count: number;
 };
 
-const DAY = 86_400_000;
 /** Activity lama yang tidak pernah ditutup tidak dihitung selamanya — hanya yang selesai 14 hari terakhir. */
 const CLOSE_LOOKBACK_DAYS = 14;
 
@@ -27,7 +26,7 @@ async function liveCounts(now: Date, wantMembers: boolean, wantClose: boolean): 
   const client = await createSupabaseServerClient();
   const since = new Date(startOfTodayWib(now).getTime() - 1).toISOString();
   const [members, close] = await Promise.all([
-    wantMembers ? client.from("admin_member_list").select("id", { count: "exact", head: true }).gt("joined_at", since) : null,
+    wantMembers ? client.from("profiles").select("id", { count: "exact", head: true }).gt("joined_at", since) : null,
     wantClose
       ? client
           .from("sessions")

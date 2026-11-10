@@ -5,13 +5,24 @@
 --  · sessions.trip_key = key activity dari editor (acak, tetap selama form terbuka) → activity tanpa id
 --    dengan key yang sudah pernah disimpan memperbarui sesi itu (juga yang sempat terlepas dari trip).
 --  · trips.create_key = key form trip baru → trip baru yang disimpan ulang memperbarui trip yang sama.
+--
+-- Simpan trip dari form basi ditolak (review 10 Nov). Dua tab / dua admin membuka trip yang sama: tab yang
+-- dimuat lebih dulu tidak mengenal activity yang ditambahkan tab lain, sehingga simpannya melepas activity itu
+-- dari trip (muncul sebagai activity tunggal, peserta paket keluar) dan menimpa info trip dengan data lama.
+-- trips.form_version naik setiap kali trip disimpan lewat editor (save_trip). Editor mengirim versi yang ia
+-- muat (p_info.form_version); berbeda dengan yang tersimpan → ditolak dengan hint trip_stale. Perubahan lain
+-- pada baris trip (batal / arsip, edit sesi di halaman Edit activity) tidak dihitung — form tidak hilang
+-- karena hal yang tidak ia timpa.
 
 alter table sessions add column trip_key text;
 create unique index sessions_trip_key_unique on sessions (trip_key) where trip_key is not null;
 alter table trips add column create_key text;
 create unique index trips_create_key_unique on trips (create_key) where create_key is not null;
 
--- Sama dengan versi 20261106050000_trip_finance_review_fixes, kecuali pencocokan trip_key / create_key di atas.
+alter table trips add column form_version integer not null default 1;
+
+-- Sama dengan versi 20261106050000_trip_finance_review_fixes, kecuali pencocokan trip_key / create_key &
+-- pemeriksaan form_version di atas.
 create or replace function save_trip(p_trip uuid, p_info jsonb, p_activities jsonb, p_rundown jsonb)
 returns uuid language plpgsql set search_path = public as $$
 declare
@@ -22,6 +33,7 @@ declare
   v_id   uuid;
   keymap jsonb := '{}'::jsonb;
   keep   uuid[] := '{}';
+  v_ver  integer;
 begin
   if v_trip is null and r.create_key is not null then
     select id into v_trip from trips where create_key = r.create_key;
@@ -33,11 +45,19 @@ begin
             r.show_rundown, r.price_normal, r.price_early_bird, r.early_bird_until, r.package_quota, r.min_dp, coalesce(r.inclusions, '{}'), auth.uid(), r.create_key)
     returning id into v_trip;
   else
+    -- Form basi (trip sudah disimpan dari tab / admin lain sesudah form ini dimuat) → tolak, jangan menimpa
+    -- atau melepas activity yang tidak dikenal form itu. p_info.form_version kosong = tanpa pemeriksaan
+    -- (trip baru yang disimpan ulang lewat create_key).
+    select form_version into v_ver from trips where id = v_trip for update;
+    if found and (p_info ? 'form_version') and (p_info->>'form_version') is not null and v_ver <> (p_info->>'form_version')::integer then
+      raise exception 'Trip ini sudah diubah di tab atau oleh admin lain — muat ulang halaman, lalu ulangi perubahan Anda.' using hint = 'trip_stale';
+    end if;
     update trips set
       title = r.title, description = r.description, area = r.area, starts_on = r.starts_on, ends_on = r.ends_on,
       cover_path = r.cover_path, status = r.status, visibility = r.visibility, show_on_homepage = r.show_on_homepage,
       show_rundown = r.show_rundown, price_normal = r.price_normal, price_early_bird = r.price_early_bird,
-      early_bird_until = r.early_bird_until, package_quota = r.package_quota, min_dp = r.min_dp, inclusions = coalesce(r.inclusions, '{}')
+      early_bird_until = r.early_bird_until, package_quota = r.package_quota, min_dp = r.min_dp, inclusions = coalesce(r.inclusions, '{}'),
+      form_version = form_version + 1
     where id = v_trip;
     if not found then raise exception 'Trip tidak ditemukan.' using hint = 'trip_missing'; end if;
   end if;

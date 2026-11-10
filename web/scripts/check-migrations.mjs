@@ -26,9 +26,6 @@ await db.exec(`
   create table auth.users (id uuid primary key default gen_random_uuid(), email text, raw_user_meta_data jsonb);
   create function auth.uid() returns uuid language sql stable as
     $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
-  -- Seperti Supabase: fungsi baru di schema public otomatis bisa dieksekusi anon & authenticated
-  -- (revoke "from public" saja tidak cukup).
-  alter default privileges in schema public grant execute on functions to anon, authenticated;
 `);
 
 for (const file of (await readdir(dir)).filter((f) => f.endsWith(".sql")).sort()) {
