@@ -1,6 +1,8 @@
 import "server-only";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { openSessionsEndAfter, sessionClosesAt } from "@/lib/session-close";
+import { startOfTodayWib } from "./time";
 import { getDataset } from "./dataset";
 import type { AdminIconName } from "@/components/admin/ui/AdminIcon";
 import { canAccess, type AdminSession } from "./session";
@@ -16,13 +18,14 @@ export type AdminNotification = {
 };
 
 const DAY = 86_400_000;
-const NEW_MEMBER_DAYS = 7;
+/** Activity lama yang tidak pernah ditutup tidak dihitung selamanya — hanya yang selesai 14 hari terakhir. */
+const CLOSE_LOOKBACK_DAYS = 14;
 
 type Counts = { newMembers: number; toClose: { count: number; first: { id: string; title: string } | null } };
 
 async function liveCounts(now: Date, wantMembers: boolean, wantClose: boolean): Promise<Counts> {
   const client = await createSupabaseServerClient();
-  const since = new Date(now.getTime() - NEW_MEMBER_DAYS * DAY).toISOString();
+  const since = new Date(startOfTodayWib(now).getTime() - 1).toISOString();
   const [members, close] = await Promise.all([
     wantMembers ? client.from("admin_member_list").select("id", { count: "exact", head: true }).gt("joined_at", since) : null,
     wantClose
@@ -31,7 +34,8 @@ async function liveCounts(now: Date, wantMembers: boolean, wantClose: boolean): 
           .select("id, title", { count: "exact" })
           .eq("status", "published")
           .is("ended_at", null)
-          .lt("ends_at", now.toISOString())
+          .lt("ends_at", openSessionsEndAfter(now.getTime()))
+          .gt("ends_at", new Date(now.getTime() - CLOSE_LOOKBACK_DAYS * DAY).toISOString())
           .order("ends_at", { ascending: false })
           .limit(1)
       : null,
@@ -43,16 +47,17 @@ async function liveCounts(now: Date, wantMembers: boolean, wantClose: boolean): 
 async function demoCounts(): Promise<Counts> {
   const d = await getDataset();
   const now = d.now.getTime();
-  const open = d.sessions.filter((s) => s.status === "published" && s.endsAt.getTime() < now).sort((a, b) => b.endsAt.getTime() - a.endsAt.getTime());
+  const open = d.sessions
+    .filter((s) => s.status === "published" && sessionClosesAt(s.endsAt) < now && s.endsAt.getTime() > now - CLOSE_LOOKBACK_DAYS * DAY).sort((a, b) => b.endsAt.getTime() - a.endsAt.getTime());
   return {
-    newMembers: d.members.filter((m) => m.joinedAt.getTime() > now - NEW_MEMBER_DAYS * DAY).length,
+    newMembers: d.members.filter((m) => m.joinedAt.getTime() >= startOfTodayWib(d.now).getTime()).length,
     toClose: { count: open.length, first: open[0] ? { id: open[0].id, title: open[0].title } : null },
   };
 }
 
 /**
- * Isi lonceng notifikasi (diminta 10 Nov): member baru 7 hari, order perlu diproses, penukaran reward
- * menunggu, activity yang sudah lewat jam selesai tapi belum ditutup. Hanya modul yang boleh diakses.
+ * Isi lonceng notifikasi (diminta 10 Nov): member baru hari ini, order perlu diproses, penukaran reward
+ * menunggu, activity yang sudah lewat batas tutup (selesai + 30 menit, maks. 14 hari lalu) tapi belum ditutup. Hanya modul yang boleh diakses.
  * Hitungan order & penukaran = promise badge sidebar dari layout — dipakai bersama, tidak di-query ulang.
  */
 export async function getAdminNotifications(
@@ -88,7 +93,7 @@ export async function getAdminNotifications(
     items.push({ key: "redemptions", icon: "crown-simple", title: `${pendingRedemptions} penukaran reward menunggu`, detail: "Permintaan tukar Slay Point belum diproses.", href: "/admin/points?tab=redemptions", count: pendingRedemptions });
   }
   if (wantMembers && counts.newMembers > 0) {
-    items.push({ key: "members", icon: "user-plus", title: `${counts.newMembers} member baru`, detail: `Daftar dalam ${NEW_MEMBER_DAYS} hari terakhir.`, href: "/admin/members?tab=new", count: counts.newMembers });
+    items.push({ key: "members", icon: "user-plus", title: `${counts.newMembers} member baru hari ini`, detail: "Daftar akun hari ini (WIB).", href: "/admin/members?tab=today", count: counts.newMembers });
   }
   return items;
 }

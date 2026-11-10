@@ -948,13 +948,34 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const late = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'installment', 400000, current_date - 60, $2) returning id`, [bk, bank])).id;
   console.assert((await net()) === 1500000, "pembayaran trip sebelum go-live tetap dicatat trigger");
   await as(tripAdmin);
-  const synced = (await one(`select finance_resync_trip($1) n`, [trip])).n;
-  const lateTx = await one(`select date::text d, term from finance_transactions where source = 'trip_payment' and source_ref = $1`, ['tp:' + late + ':' + bank]);
-  console.assert(synced === 1 && (await net()) === 1900000 && lateTx?.term === "installment", `Sync trip tidak mencatat pembayaran sebelum go-live ${synced} ${await net()} ${JSON.stringify(lateTx)}`);
-  console.assert((await one(`select finance_resync_trip($1) n`, [trip])).n === 0 && (await net()) === 1900000, "Sync trip dua kali mencatat dobel");
+  const preview = (await one(`select finance_resync_trip($1, false) r`, [trip])).r;
+  console.assert(preview.new.length === 1 && preview.new[0].amount === 400000 && (await net()) === 1500000, `pratinjau Sync trip menulis / salah ${JSON.stringify(preview)}`);
+  const synced = (await one(`select finance_resync_trip($1) r`, [trip])).r;
+  const lateTx = await one(`select date::text date, term from finance_transactions where source = 'trip_payment' and source_ref = $1`, ['tp:' + late + ':' + bank]);
+  console.assert(synced.changes === 1 && (await net()) === 1900000 && lateTx?.term === "installment" && lateTx.date === (await one(`select (current_date - 60)::text d`)).d, `Sync trip tidak mencatat pembayaran sebelum go-live ${JSON.stringify(synced)} ${await net()} ${JSON.stringify(lateTx)}`);
+  console.assert((await one(`select finance_resync_trip($1) r`, [trip])).r.changes === 0 && (await net()) === 1900000, "Sync trip dua kali mencatat dobel");
   await as(null);
+  // Akun diganti sesudah Sync (tanggal sebelum go-live) → pindah ke akun baru, tidak hilang.
+  await db.query(`update trip_payments set account_id = $2 where id = $1`, [late, cash]);
+  console.assert((await net()) === 1900000 && (await byAcc(cash)) === 400000, `ganti akun pembayaran hasil Sync menghilangkan uangnya ${await net()} / ${await byAcc(cash)}`);
   await db.query(`update trip_payments set voided_at = now(), void_reason = 'tes' where id = $1`, [late]);
   console.assert((await net()) === 1500000, "pembayaran hasil Sync dibatalkan tidak dikoreksi");
+  // Transaksi otomatis yang dihapus admin (dobel dengan import jurnal) tidak dibuat ulang oleh Sync.
+  const dup = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'installment', 250000, current_date - 30, $2) returning id`, [bk, bank])).id;
+  await as(tripAdmin);
+  await db.query(`select finance_resync_trip($1)`, [trip]);
+  await as(null);
+  await db.query(`update finance_transactions set deleted_at = now(), deleted_reason = 'dobel import' where source_ref = $1`, ['tp:' + dup + ':' + bank]);
+  await as(tripAdmin);
+  const again = (await one(`select finance_resync_trip($1) r`, [trip])).r;
+  await as(null);
+  console.assert(again.changes === 0 && again.skipped_deleted === 1 && (await net()) === 1500000, `Sync trip membuat ulang transaksi yang dihapus ${JSON.stringify(again)}`);
+  // Ref akun lama yang tersisa (data lama) dikoreksi oleh Sync.
+  await db.query(`select finance_insert_trip_payment($1, 300000, current_date - 20, $2, 'tes', $3, 'installment')`, ['tp:' + dup + ':' + cash, cash, trip]);
+  await as(tripAdmin);
+  const stale = (await one(`select finance_resync_trip($1) r`, [trip])).r;
+  await as(null);
+  console.assert(stale.corrections === 1 && (await byAcc(cash)) === 0, `Sync trip tidak mengoreksi ref akun lama ${JSON.stringify(stale)} ${await byAcc(cash)}`);
   await db.query(`update finance_settings set go_live_date = '2020-01-01' where true`);
   // Batal paket → keluar dari semua activity.
   await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [bk]);

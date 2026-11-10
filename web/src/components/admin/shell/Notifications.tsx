@@ -43,7 +43,17 @@ export function NotificationBell() {
   const signature = items.map((i) => `${i.key}:${i.count}`).join("|");
   // Server & render pertama: anggap sudah dilihat (tanpa titik) supaya tidak beda dengan HTML server.
   const seen = useSyncExternalStore(subscribe, readSeen, () => signature);
-  const unseen = items.length > 0 && seen !== signature;
+  // Titik hanya kalau ada antrean yang BERTAMBAH sejak lonceng terakhir dibuka (berkurang = sudah ditangani).
+  const seenCounts = new Map(seen.split("|").map((part) => [part.split(":")[0], Number(part.split(":")[1]) || 0]));
+  const unseen = items.some((i) => i.count > (seenCounts.get(i.key) ?? 0));
+  // Antrean berkurang → turunkan juga angka "sudah dilihat", supaya kalau bertambah lagi titiknya menyala.
+  const lowered = [...seenCounts]
+    .map(([key, n]) => `${key}:${Math.min(n, items.find((i) => i.key === key)?.count ?? 0)}`)
+    .filter((part) => !part.endsWith(":0"))
+    .join("|");
+  useEffect(() => {
+    if (seen && lowered !== seen && seen !== signature) writeSeen(lowered);
+  }, [seen, lowered, signature]);
 
   useEffect(() => {
     if (!open) return;

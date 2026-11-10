@@ -1,10 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { AdminButton } from "@/components/admin/ui/AdminUI";
+import { useConfirm } from "@/components/admin/ui/ConfirmDialog";
 import { toast } from "@/components/admin/ui/Toaster";
-import { linkTransaction, syncSessionFinance, syncTripFinance } from "@/server/admin/actions/finance";
+import type { ActionResult } from "@/server/admin/actions/common";
+import { linkTransaction, previewTripSync, syncSessionFinance, syncTripFinance } from "@/server/admin/actions/finance";
 import styles from "./Finance.module.css";
 import { FinanceModal } from "./FinanceModal";
 
@@ -58,46 +60,65 @@ export function LinkTxButton({ sessionId, candidates }: { sessionId: string; can
   );
 }
 
+/** Tombol sinkron bersama: `run` mengembalikan hasil aksi, atau null kalau dibatalkan admin. */
+function SyncButton({ label, run, dialog }: { label: string; run: () => Promise<ActionResult | null>; dialog?: ReactNode }) {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  return (
+    <>
+      <AdminButton
+        icon="arrows-clockwise"
+        disabled={pending}
+        onClick={() =>
+          start(async () => {
+            const r = await run();
+            if (!r) return;
+            toast.result(r);
+            if (r.ok) router.refresh();
+          })
+        }
+      >
+        {pending ? "Menyinkronkan…" : label}
+      </AdminButton>
+      {dialog}
+    </>
+  );
+}
+
 /**
  * "Sync" di detail event: baca ulang pemasukan peserta dari activity (jalur Kuyy / manual, nominal, nama)
  * — untuk perubahan di activity sesudah activity selesai.
  */
-export function SyncTripButton({ tripId }: { tripId: string }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  return (
-    <AdminButton
-      icon="arrows-clockwise"
-      disabled={pending}
-      onClick={() =>
-        start(async () => {
-          const r = await syncTripFinance(tripId);
-          toast.result(r);
-          if (r.ok) router.refresh();
-        })
-      }
-    >
-      {pending ? "Menyinkronkan…" : "Sync ke Keuangan"}
-    </AdminButton>
-  );
+export function SyncSessionButton({ sessionId }: { sessionId: string }) {
+  return <SyncButton label="Sync" run={() => syncSessionFinance(sessionId)} />;
 }
 
-export function SyncSessionButton({ sessionId }: { sessionId: string }) {
-  const router = useRouter();
-  const [pending, start] = useTransition();
-  return (
-    <AdminButton
-      icon="arrows-clockwise"
-      disabled={pending}
-      onClick={() =>
-        start(async () => {
-          const r = await syncSessionFinance(sessionId);
-          toast.result(r);
-          if (r.ok) router.refresh();
-        })
-      }
-    >
-      {pending ? "Menyinkronkan…" : "Sync"}
-    </AdminButton>
-  );
+const KIND: Record<string, string> = { dp: "DP", installment: "Cicilan", settlement: "Pelunasan" };
+const rupiah = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
+
+/**
+ * "Sync ke Keuangan" untuk pembayaran paket trip (halaman trip & transaksi trip di Keuangan). Pratinjau
+ * dulu: pembayaran sebelum go-live bisa saja sudah masuk lewat import jurnal, dan Sync tidak bisa
+ * mengenalinya — admin memeriksa daftarnya sebelum dicatat.
+ */
+export function SyncTripButton({ tripId }: { tripId: string }) {
+  const [confirm, dialog] = useConfirm();
+  const run = async (): Promise<ActionResult | null> => {
+    const p = await previewTripSync(tripId);
+    if (!p.ok) return p;
+    const skipped = p.skippedDeleted ? ` ${p.skippedDeleted} transaksi yang pernah dihapus tidak dibuat ulang.` : "";
+    if (!p.items.length && !p.corrections) return { ok: true, message: `Semua pembayaran trip sudah tercatat di Keuangan.${skipped}` };
+    const total = p.items.reduce((s, i) => s + i.amount, 0);
+    const lines = p.items.map((i) => `• ${KIND[i.kind] ?? i.kind} · ${i.name} · ${rupiah(i.amount)} · ${i.date}`).join("\n");
+    const ok = await confirm({
+      title: p.items.length ? `Catat ${p.items.length} pembayaran trip (${rupiah(total)})?` : "Sinkronkan pembayaran trip?",
+      body:
+        (p.items.length
+          ? `${lines}\n\nPastikan pembayaran ini BELUM masuk lewat import jurnal — kalau sudah, Keuangan jadi dobel.`
+          : "") + (p.corrections ? `${p.items.length ? "\n" : ""}${p.corrections} koreksi (pembayaran dibatalkan / pindah akun).` : "") + skipped,
+      confirmLabel: "Ya, catat",
+    });
+    return ok ? syncTripFinance(tripId) : null;
+  };
+  return <SyncButton label="Sync ke Keuangan" run={run} dialog={dialog} />;
 }

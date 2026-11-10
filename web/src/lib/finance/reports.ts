@@ -469,6 +469,20 @@ function tally(data: FinanceData, txs: FinTx[]) {
   return { revenue, cost, profit: revenue - cost, margin: revenue ? ((revenue - cost) / revenue) * 100 : null, channel: [...channels].join(" + ") || "—", hasCost: cost > 0 };
 }
 
+/** Transaksi terposting per trip: pembayaran paket (trip_id) + transaksi activity trip (sessions.trip_id). */
+const postedByTrip = memo((data) => {
+  const tripOfSession = new Map(data.sessions.filter((s) => s.tripId).map((s) => [s.id, s.tripId as string]));
+  const map = new Map<string, FinTx[]>();
+  for (const t of posted(data)) {
+    const trip = t.tripId ?? (t.sessionId ? tripOfSession.get(t.sessionId) : undefined);
+    if (!trip) continue;
+    const list = map.get(trip);
+    if (list) list.push(t);
+    else map.set(trip, [t]);
+  }
+  return map;
+});
+
 /**
  * Baris Per event bulan `ym`. Activity bagian dari trip tidak tampil sendiri: transaksinya dijumlahkan
  * ke baris trip (bersama pembayaran paket trip), di bulan trip dimulai.
@@ -491,18 +505,16 @@ export function eventRows(data: FinanceData, ym: string): EventRow[] {
   const trips: EventRow[] = data.trips
     .filter((t) => monthOf(t.startsOn) === ym)
     .map((t) => {
-      const activities = data.sessions.filter((s) => s.tripId === t.id);
-      const ids = new Set(activities.map((s) => s.id));
-      const txs = posted(data).filter((x) => x.tripId === t.id || (x.sessionId !== null && ids.has(x.sessionId)));
+      const activities = data.sessions.filter((s) => s.tripId === t.id).length;
       return {
         key: `trip:${t.id}`,
         kind: "trip" as const,
         title: t.title,
-        place: `${activities.length} activity`,
+        place: `${activities} activity`,
         date: t.startsOn,
         participants: t.packages,
-        href: `/admin/keuangan/transaksi?m=all&trip=${t.id}`,
-        ...tally(data, txs),
+        href: `/admin/keuangan/transaksi?m=all&trip=${t.id}&with=activities`,
+        ...tally(data, postedByTrip(data).get(t.id) ?? []),
       };
     });
   return [...trips, ...sessions].filter((r) => r.revenue !== 0 || r.cost !== 0 || r.participants > 0);

@@ -485,17 +485,34 @@ export async function syncSessionFinance(sessionId: string): Promise<ActionResul
   return done(`Keuangan activity disinkronkan · ${count ?? 0} peserta dibaca ulang.`);
 }
 
+type TripSyncResult = { new: { name: string; kind: string; amount: number; date: string }[]; corrections: number; skipped_deleted: number; changes: number };
+
+/** Pratinjau "Sync ke Keuangan" trip: pembayaran yang akan dicatat (belum menulis apa pun). */
+export async function previewTripSync(
+  tripId: string,
+): Promise<{ ok: true; items: TripSyncResult["new"]; corrections: number; skippedDeleted: number } | { ok: false; error: string }> {
+  const auth = await requireFinance("full");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("finance_resync_trip", { p_trip: tripId, p_apply: false });
+  if (error) return { ok: false, error: `Gagal membaca pembayaran trip: ${error.message}` };
+  const r = data as TripSyncResult;
+  return { ok: true, items: r.new, corrections: r.corrections, skippedDeleted: r.skipped_deleted };
+}
+
 /** Peserta & pembayaran trip · "Sync ke Keuangan": catat DP / cicilan / pelunasan yang belum masuk (termasuk sebelum go-live). */
 export async function syncTripFinance(tripId: string): Promise<ActionResult> {
   const auth = await requireFinance("full");
   if ("error" in auth) return fail(auth.error);
   const supabase = await createSupabaseServerClient();
-  const { data: count, error } = await supabase.rpc("finance_resync_trip", { p_trip: tripId });
+  const { data, error } = await supabase.rpc("finance_resync_trip", { p_trip: tripId, p_apply: true });
   if (error) return fail(`Gagal sinkron: ${error.message}`);
-  await financeLog(auth.userId, "trip", tripId, "sinkron keuangan trip", null, { transactions: count });
+  const r = data as TripSyncResult;
+  await financeLog(auth.userId, "trip", tripId, "sinkron keuangan trip", null, { recorded: r.new, corrections: r.corrections });
   refresh();
   revalidatePath(`/admin/activities/trip/${tripId}/peserta`);
-  return done(count ? `${count} transaksi pembayaran trip dicatat ke Keuangan.` : "Semua pembayaran trip sudah tercatat di Keuangan.");
+  const skipped = r.skipped_deleted ? ` ${r.skipped_deleted} transaksi yang pernah dihapus tidak dibuat ulang.` : "";
+  return done(r.changes ? `${r.changes} transaksi pembayaran trip dicatat ke Keuangan.${skipped}` : `Semua pembayaran trip sudah tercatat di Keuangan.${skipped}`);
 }
 
 // ── Neraca: saldo awal & pos manual (12n) ────────────────────────────────────
