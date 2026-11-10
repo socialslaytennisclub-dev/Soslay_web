@@ -3,10 +3,6 @@
   border-radius: var(--radius-md);
 }
 
-.card {
-  aspect-ratio: 633 / 371;
-}
-
 .text {
   display: flex;
   flex-direction: column;

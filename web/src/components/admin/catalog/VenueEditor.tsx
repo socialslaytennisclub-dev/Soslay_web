@@ -1,5 +1,6 @@
 "use client";
 
+import { IMAGE_ASPECT } from "@/lib/image-aspect";
 import Image from "next/image";
 import Link from "next/link";
 import { useState, useTransition } from "react";
@@ -51,7 +52,7 @@ export function VenueEditor({ initial, imageOptions, initialNotice }: { initial:
   const upload = async (key: "coverPath" | "heroPath", picked: File | undefined) => {
     if (!picked || uploading) return;
     // Crop sesuai tempat tampilnya: cover = kartu venue, hero = banner detail venue.
-    const file = key === "coverPath" ? await crop(picked, 633 / 371, "Foto cover venue") : await crop(picked, 1312 / 560, "Foto hero venue");
+    const file = key === "coverPath" ? await crop(picked, IMAGE_ASPECT.venueCover, "Foto cover venue") : await crop(picked, IMAGE_ASPECT.venueHero, "Foto hero venue");
     if (!file) return;
     setUploading(key);
     // Foto HP > 4,5 MB ditolak Vercel sebelum sampai server → perkecil dulu di browser.

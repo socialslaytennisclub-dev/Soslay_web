@@ -80,6 +80,17 @@ async function count(client: Client, query: MembersQuery, now: Date) {
   return n ?? 0;
 }
 
+/** Member baru (30 hari) & yang daftar hari ini dari satu query: hitungan pasti + tanggal daftarnya. */
+async function newAndToday(client: Client, now: Date) {
+  const { data, count: n, error } = await applyQuery(memberView(client, "joined_at", { count: "exact" }), { tab: "new" }, now).range(0, 999);
+  if (error) throw new Error(`Gagal menghitung member: ${error.message}`);
+  const start = startOfTodayWib(now).getTime();
+  const rows = (data ?? []) as { joined_at: string }[];
+  // Lebih dari 1.000 member baru dalam 30 hari (baris terpotong) → hitung "hari ini" terpisah.
+  const today = rows.length < (n ?? 0) ? await count(client, { tab: "today" }, now) : rows.filter((r) => new Date(r.joined_at).getTime() >= start).length;
+  return { fresh: n ?? 0, today };
+}
+
 export async function listMembersLive(query: MembersQuery, pageSize: number): Promise<MembersResult> {
   const client = await createSupabaseServerClient();
   const now = new Date();
@@ -93,12 +104,11 @@ export async function listMembersLive(query: MembersQuery, pageSize: number): Pr
       .range((page - 1) * pageSize, page * pageSize - 1);
 
   const requested = Math.max(1, query.page ?? 1);
-  const [first, all, active, fresh, today, inactive, cityRows] = await Promise.all([
+  const [first, all, active, { fresh, today }, inactive, cityRows] = await Promise.all([
     fetchPage(requested),
     count(client, {}, now),
     count(client, { tab: "active" }, now),
-    count(client, { tab: "new" }, now),
-    count(client, { tab: "today" }, now),
+    newAndToday(client, now),
     count(client, { tab: "inactive" }, now),
     client.from("profiles").select("city").not("city", "is", null),
   ]);
