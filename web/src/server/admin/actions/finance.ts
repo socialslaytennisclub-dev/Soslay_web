@@ -432,11 +432,22 @@ export async function saveFinanceSettings(input: {
   if (error) return fail(`Gagal menyimpan: ${error.message}`);
   await financeLog(auth.userId, "settings", null, "ubah pengaturan keuangan", before, row);
   // Go-live dimajukan → pemasukan peserta activity yang sudah selesai sejak tanggal itu dicatat sekarang.
+  // Satu RPC per activity (bukan satu untuk semua): banyak activity sekaligus bisa melewati batas waktu
+  // statement dan membatalkan semuanya.
   if (input.goLiveDate && before?.go_live_date && input.goLiveDate < (before.go_live_date as string)) {
-    const { data: synced, error: syncError } = await supabase.rpc("finance_resync_since", { p_from: input.goLiveDate });
+    const { data: finished, error: listError } = await supabase
+      .from("sessions")
+      .select("id")
+      .gte("starts_at", `${input.goLiveDate}T00:00:00+07:00`)
+      .or("ended_at.not.is.null,status.eq.completed");
+    const failed: string[] = [];
+    for (const { id } of finished ?? []) {
+      const { error: syncError } = await supabase.rpc("finance_resync_session", { p_session: id });
+      if (syncError) failed.push(syncError.message);
+    }
     refresh();
-    if (syncError) return fail(`Pengaturan tersimpan, tapi sinkron activity gagal: ${syncError.message}`);
-    return done(`Pengaturan keuangan tersimpan · ${synced ?? 0} activity sejak go-live disinkronkan.`);
+    if (listError || failed.length) return fail(`Pengaturan tersimpan, tapi sinkron activity gagal: ${listError?.message ?? `${failed.length} activity — ${failed[0]}`}`);
+    return done(`Pengaturan keuangan tersimpan · ${finished?.length ?? 0} activity sejak go-live disinkronkan.`);
   }
   refresh();
   return done("Pengaturan keuangan tersimpan.");

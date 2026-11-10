@@ -22,7 +22,10 @@ begin
          p_session, format('Bonus juara #%s · %s', p.rk, v_s.title), true
   from session_podium(p_session) p
   where coalesce((session_podium_bonus(v_s.podium_bonus))[p.rk], 0) > 0
-    and not exists (select 1 from points_ledger l where l.session_id = p_session and l.member_id = p.member_id and l.is_podium);
+    and not exists (select 1 from points_ledger l where l.session_id = p_session and l.member_id = p.member_id and l.is_podium)
+    -- Bonus juara lama yang tidak tertaut ke activity (session_id kosong, judul sama) → anggap sudah dibagikan.
+    and not exists (select 1 from points_ledger l where l.session_id is null and l.member_id = p.member_id and l.is_podium
+                      and l.note like '%· ' || replace(replace(v_s.title, '%', '\%'), '_', '\_'));
   get diagnostics v_n = row_count;
   return v_n;
 end $$;
@@ -34,8 +37,16 @@ begin
   perform award_missing_podium(new.session_id);
   return null;
 end $$;
-create trigger session_participants_late_podium after insert or update of member_id on session_participants
+-- Ditunda sampai akhir transaksi (constraint trigger): di dalam Koreksi hasil, baris peserta baru dibuat
+-- SEBELUM skor diganti — bonus dihitung dari skor akhir, bukan skor lama (tanpa baris bonus + koreksi).
+-- Hanya saat member benar-benar baru tertaut (impor ulang Kuyy dengan member sama tidak memicu apa-apa).
+create constraint trigger session_participants_late_podium_insert after insert on session_participants
+  deferrable initially deferred
   for each row when (new.member_id is not null)
+  execute function session_participants_late_podium();
+create constraint trigger session_participants_late_podium_link after update of member_id on session_participants
+  deferrable initially deferred
+  for each row when (new.member_id is not null and old.member_id is distinct from new.member_id)
   execute function session_participants_late_podium();
 
 -- Susulan untuk activity yang sudah selesai.

@@ -67,21 +67,39 @@ function CropDialog({ request, onFinish }: { request: Request; onFinish: (file: 
     [request.aspect],
   );
 
+  // URL objek dicabut sesudah dialog benar-benar ditutup. StrictMode (dev) menjalankan cleanup lalu effect
+  // lagi pada komponen yang sama — pencabutan ditunda & dibatalkan oleh effect berikutnya, jadi foto tidak hilang.
+  const revoke = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (revoke.current) clearTimeout(revoke.current);
+    return () => {
+      revoke.current = setTimeout(() => URL.revokeObjectURL(url));
+    };
+  }, [url]);
+
   useEffect(() => {
     dialog.current?.showModal();
-    const measure = () => {
-      const width = frame.current?.clientWidth ?? 0;
+    let width = 0;
+    const first = requestAnimationFrame(() => {
+      width = frame.current?.clientWidth ?? 0;
       setFrameW(width);
-      const img = frame.current?.querySelector("img");
-      if (img?.naturalWidth) center({ w: img.naturalWidth, h: img.naturalHeight }, width);
+    });
+    // Ukuran layar berubah (mis. toolbar Safari mengecil saat menggeser) → bingkai diskalakan, potongan
+    // yang sudah dipilih tetap (zoom relatif ke bingkai; posisi ikut skala) — bukan kembali ke tengah.
+    const resize = () => {
+      const next = frame.current?.clientWidth ?? 0;
+      if (!next || next === width) return;
+      const ratio = next / (width || next);
+      width = next;
+      setFrameW(next);
+      setOffset((o) => ({ x: o.x * ratio, y: o.y * ratio }));
     };
-    measure();
-    window.addEventListener("resize", measure);
+    window.addEventListener("resize", resize);
     return () => {
-      window.removeEventListener("resize", measure);
-      URL.revokeObjectURL(url);
+      cancelAnimationFrame(first);
+      window.removeEventListener("resize", resize);
     };
-  }, [url, center]);
+  }, []);
 
   const changeZoom = (next: number) => {
     if (!natural) return;

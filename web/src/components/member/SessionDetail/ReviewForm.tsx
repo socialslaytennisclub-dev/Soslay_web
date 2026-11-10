@@ -64,7 +64,7 @@ function ParticipantReviews({ detail: d }: { detail: MemberSessionDetail }) {
   const all = d.reviews;
   const summary = [
     ["Sesi", average(all.map((r) => r.rating))],
-    ["Host", average(all.map((r) => r.host))],
+    // Rating Host orang lain tidak dikirim ke member (session_reviews_for) → tanpa rata-rata Host di sini.
     ["Venue", average(all.map((r) => r.venue))],
     ["Format", average(all.map((r) => r.format))],
   ].filter(([, v]) => v !== null) as [string, string][];

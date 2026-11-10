@@ -1526,7 +1526,7 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.log("✓ bonus juara per activity: default 10 / 0 / 0, nilai 0 tanpa baris, koreksi ikut nilai activity");
 }
 
-// Keuangan: go-live dimajukan → finance_resync_since mencatat pemasukan peserta activity yang sudah selesai;
+// Keuangan: go-live dimajukan → finance_resync_session (per activity) mencatat pemasukan peserta activity yang sudah selesai;
 // finance_resync_session menyamakan nominal & nama dengan data activity. Hanya Super Admin Keuangan.
 {
   await as(null);
@@ -1548,7 +1548,8 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Sync', 'sync@soslay.test', 'active' from roles where name = 'Super Admin'`, [boss]);
   await db.exec(`update finance_settings set go_live_date = '2020-01-01'`);
   await as(boss);
-  const synced = (await one(`select finance_resync_since('2020-01-01') n`)).n;
+  // Aplikasi menyinkronkan per activity (saveFinanceSettings) — sama di sini.
+  const synced = (await one(`select count(finance_resync_session(id))::int n from sessions where ended_at is not null or status = 'completed'`)).n;
   console.assert(synced >= 1, `activity selesai sejak go-live disinkronkan (${synced})`);
   console.assert((await net("kuyy_import", `sp:${kuy}`)) === 220000 && (await net("ticket_manual_paid", `sp:${man}`)) === 220000, "Kuyy → Saldo Kuyy, manual → akun bayar manual");
   // Keterangan transaksi yang tertinggal dari nama peserta → disamakan oleh Sync.
@@ -1560,8 +1561,12 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const before = Number((await one(`select count(*) n from finance_transactions`)).n);
   await db.query(`select finance_resync_session($1)`, [s]);
   console.assert(Number((await one(`select count(*) n from finance_transactions`)).n) === before, "sync ulang tanpa perubahan tidak menambah transaksi");
+  // Go-live dimundurkan sesudah tercatat → koreksi tetap jalan (dulu diam-diam dilewati).
   await as(null);
-  console.log("✓ Keuangan: go-live dimajukan → activity selesai tercatat; Sync menyamakan nominal & nama; hanya admin Keuangan");
+  await db.exec(`update finance_settings set go_live_date = '2099-01-01'`);
+  await db.query(`update session_participants set payment_status = 'pending' where id = $1`, [man]);
+  console.assert((await net("ticket_manual_paid", `sp:${man}`)) === 0, `batal lunas sesudah go-live dimundurkan → dikoreksi (${await net("ticket_manual_paid", `sp:${man}`)})`);
+  console.log("✓ Keuangan: go-live dimajukan → activity selesai tercatat; Sync menyamakan nominal & nama; koreksi tetap jalan walau go-live dimundurkan; hanya admin Keuangan");
 }
 
 // Review terlihat oleh peserta & host activity itu (session_reviews_for); orang lain tidak dapat apa-apa.
@@ -1584,8 +1589,12 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(a);
   await db.query(`select submit_session_review($1, 5::smallint, '{Format seru}', 4::smallint, null, null, 'Seru!', true)`, [s]);
   await as(host);
-  const seen = (await db.query(`select name, rating, comment from session_reviews_for($1)`, [s])).rows;
+  const seen = (await db.query(`select name, rating, comment, host_rating from session_reviews_for($1)`, [s])).rows;
   console.assert(seen.length === 1 && seen[0].name === "Ayu" && seen[0].comment === "Seru!", `host melihat review peserta (nama depan) ${JSON.stringify(seen)}`);
+  console.assert(seen[0].host_rating === null, "host tidak melihat rating Host dari peserta");
+  await as(a);
+  console.assert((await one(`select host_rating from session_reviews_for($1)`, [s])).host_rating === 4, "pemberi review melihat rating Host miliknya");
+  await as(host);
   await as(b);
   console.assert((await db.query(`select 1 from session_reviews_for($1)`, [s])).rows.length === 1, "peserta lain melihat review");
   await as(stranger);

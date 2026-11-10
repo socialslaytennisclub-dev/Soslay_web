@@ -5,8 +5,8 @@
 --  · finance_resync_session: baca ulang semua peserta & booking "Tandai Lunas" satu activity → jalur
 --    (Kuyy / manual), nominal & nama di transaksi otomatis disamakan dengan data activity (koreksi
 --    lewat baris koreksi seperti biasa, bukan menghapus).
---  · finance_resync_since: sama untuk semua activity selesai sejak tanggal tertentu (setelah go-live
---    dimajukan).
+--  · go-live dimajukan → aplikasi memanggil finance_resync_session per activity selesai sejak tanggal itu.
+--  · finance_sync_auto: go-live hanya membatasi pencatatan baru; koreksi selalu jalan.
 
 create function finance_resync_session(p_session uuid) returns integer
 language plpgsql security definer set search_path = public as $$
@@ -50,22 +50,48 @@ end $$;
 revoke execute on function finance_resync_session(uuid) from public, anon;
 grant execute on function finance_resync_session(uuid) to authenticated;
 
-/** Sinkron semua activity yang sudah selesai sejak tanggal (WIB) itu; mengembalikan jumlah activity. */
-create function finance_resync_since(p_from date) returns integer
-language plpgsql security definer set search_path = public as $$
+-- Sinkron banyak activity sekaligus (go-live dimajukan) dijalankan aplikasi per activity — satu RPC untuk
+-- semua activity bisa melewati batas waktu statement dan membatalkan semuanya.
+
+-- Sama dengan versi 20261106050000_trip_finance_review_fixes, kecuali pengecekan go-live (lihat di dalam).
+create or replace function finance_sync_auto(
+  p_source text, p_ref text, p_target bigint, p_category_key text, p_account_id uuid,
+  p_description text, p_session_id uuid, p_at timestamptz, p_trip_id uuid default null, p_term text default null,
+  p_enabled boolean default true
+) returns void language plpgsql security definer set search_path = public as $$
 declare
-  v_id uuid;
-  v_n  integer := 0;
+  diff     bigint;
+  take     bigint;
+  category uuid;
+  acc      record;
+  wib_date date := (p_at at time zone 'Asia/Jakarta')::date;
 begin
-  if not finance_full() then raise exception 'Hanya Super Admin Keuangan yang bisa sinkron'; end if;
-  for v_id in
-    select s.id from sessions s
-    where (s.starts_at at time zone 'Asia/Jakarta')::date >= p_from and session_is_finished(s)
+  select coalesce(p_target, 0) - coalesce(sum(amount), 0) into diff
+  from finance_transactions where source = p_source and source_ref = p_ref and deleted_at is null;
+  -- Go-live hanya membatasi pencatatan BARU. Koreksi (diff < 0) atas transaksi yang sudah tercatat tetap
+  -- jalan walau go-live sudah dimundurkan / tanggal koreksi sebelum go-live — kalau tidak, batal bayar,
+  -- Sync & hapus activity diam-diam tidak mengoreksi uang yang sudah tercatat.
+  if diff > 0 and wib_date < (select go_live_date from finance_settings) then return; end if;
+  if diff = 0 or (diff > 0 and (not p_enabled or p_account_id is null)) then return; end if;
+  select id into category from finance_categories where system_key = p_category_key;
+  if diff > 0 then
+    insert into finance_transactions (type, date, recognized_on, amount, category_id, account_id, description, activity_session_id, trip_id, term, source, source_ref)
+    values ('income', wib_date, wib_date, diff, category, p_account_id, p_description, p_session_id, p_trip_id, p_term, p_source, p_ref);
+    return;
+  end if;
+  for acc in
+    select account_id, sum(amount) as net, (array_agg(id order by created_at) filter (where amount > 0))[1] as original
+    from finance_transactions
+    where source = p_source and source_ref = p_ref and deleted_at is null
+    group by account_id
+    having sum(amount) > 0
+    order by (account_id = p_account_id) desc nulls last, max(created_at) desc
   loop
-    perform finance_resync_session(v_id);
-    v_n := v_n + 1;
+    exit when diff = 0;
+    take := least(acc.net, -diff);
+    insert into finance_transactions (type, date, recognized_on, amount, category_id, account_id, description, activity_session_id, trip_id, term, source, source_ref, corrects_transaction_id)
+    values ('income', wib_date, wib_date, -take, category, acc.account_id, 'Koreksi · ' || p_description, p_session_id, p_trip_id, p_term, p_source, p_ref, acc.original);
+    diff := diff + take;
   end loop;
-  return v_n;
 end $$;
-revoke execute on function finance_resync_since(date) from public, anon;
-grant execute on function finance_resync_since(date) to authenticated;
+revoke all on function finance_sync_auto(text, text, bigint, text, uuid, text, uuid, timestamptz, uuid, text, boolean) from public;
