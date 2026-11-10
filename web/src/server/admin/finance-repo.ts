@@ -2,7 +2,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cache } from "react";
 import { todayWib } from "@/lib/finance/format";
-import type { BalanceItem, FinAccount, FinCategory, FinSession, FinSettings, FinTarget, FinTx, FinanceData, FinanceRole, ImportBatch } from "@/lib/finance/types";
+import type { BalanceItem, FinAccount, FinCategory, FinSession, FinSettings, FinTarget, FinTrip, FinTx, FinanceData, FinanceRole, ImportBatch } from "@/lib/finance/types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -30,7 +30,7 @@ export const getFinanceAccess = cache(async () => {
   return { session, role: financeRole(session), userId: session.mode === "live" ? session.userId : "demo" };
 });
 
-type FinSessionRow = { id: string; title: string; type_slug: string; starts_at: string; ends_at: string; venues: { name: string } | null };
+type FinSessionRow = { id: string; title: string; type_slug: string; starts_at: string; ends_at: string; trip_id: string | null; venues: { name: string } | null };
 
 /**
  * Versi live: satu query ringan (sesi + venue + status booking), bukan seluruh dataset admin
@@ -45,7 +45,7 @@ async function liveFinanceSessions(supabase: SupabaseClient): Promise<FinSession
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await supabase
       .from("sessions")
-      .select("id, title, type_slug, starts_at, ends_at, venues(name)")
+      .select("id, title, type_slug, starts_at, ends_at, trip_id, venues(name)")
       .neq("status", "draft")
       .order("starts_at", { ascending: false })
       .order("id")
@@ -64,6 +64,26 @@ async function liveFinanceSessions(supabase: SupabaseClient): Promise<FinSession
     startsAt: new Date(s.starts_at).toISOString(),
     endsAt: new Date(s.ends_at).toISOString(),
     participants: filled.get(s.id)?.filled ?? 0,
+    tripId: s.trip_id,
+  }));
+}
+
+/** Trip Tennis Escape (bukan draft) + jumlah paket aktif — untuk baris Trip di Per event. */
+async function liveFinanceTrips(supabase: SupabaseClient): Promise<FinTrip[]> {
+  const [trips, bookings] = await Promise.all([
+    supabase.from("trips").select("id, title, starts_on, ends_on").neq("status", "draft").order("starts_on", { ascending: false }),
+    supabase.from("trip_bookings").select("trip_id").is("cancelled_at", null),
+  ]);
+  if (trips.error) throw new Error(`Gagal memuat trip: ${trips.error.message}`);
+  if (bookings.error) throw new Error(`Gagal memuat paket trip: ${bookings.error.message}`);
+  const sold = new Map<string, number>();
+  for (const b of (bookings.data ?? []) as { trip_id: string }[]) sold.set(b.trip_id, (sold.get(b.trip_id) ?? 0) + 1);
+  return ((trips.data ?? []) as { id: string; title: string; starts_on: string; ends_on: string }[]).map((t) => ({
+    id: t.id,
+    title: t.title,
+    startsOn: t.starts_on,
+    endsOn: t.ends_on,
+    packages: sold.get(t.id) ?? 0,
   }));
 }
 
@@ -81,6 +101,7 @@ async function financeSessions(): Promise<FinSession[]> {
       startsAt: s.startsAt.toISOString(),
       endsAt: s.endsAt.toISOString(),
       participants: ds.filled(s.id),
+      tripId: s.tripId ?? null,
     }))
     .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
 }
@@ -118,7 +139,7 @@ export const getPaymentAccounts = cache(async (): Promise<{ accounts: { id: stri
 export const getFinanceData = cache(async (): Promise<FinanceData> => {
   if (!isSupabaseConfigured) return (demoData ??= buildFinanceDemo(await financeSessions()));
   const supabase = await createSupabaseServerClient();
-  const [accounts, categories, transactions, items, settings, targets, batches, sessions] = await Promise.all([
+  const [accounts, categories, transactions, items, settings, targets, batches, sessions, trips] = await Promise.all([
     supabase.from("finance_accounts").select("*").order("sort_order").order("created_at"),
     supabase.from("finance_categories").select("*, finance_category_keywords(keyword)").order("sort_order").order("name"),
     fetchTransactions(supabase),
@@ -127,6 +148,7 @@ export const getFinanceData = cache(async (): Promise<FinanceData> => {
     supabase.from("finance_targets").select("*"),
     supabase.from("finance_import_batches").select("id, file_name, tx_total, imported_at, undo_until, status").order("imported_at", { ascending: false }).limit(20),
     liveFinanceSessions(supabase),
+    liveFinanceTrips(supabase),
   ]);
   for (const r of [accounts, categories, items, settings, targets]) if (r.error) throw new Error(`Gagal memuat keuangan: ${r.error.message}`);
   const s = settings.data;
@@ -149,6 +171,7 @@ export const getFinanceData = cache(async (): Promise<FinanceData> => {
     } satisfies FinSettings,
     targets: (targets.data ?? []).map((t): FinTarget => ({ year: t.year, netProfitTarget: Number(t.net_profit_target), monthly: t.monthly ?? null })),
     sessions,
+    trips,
     batches: (batches.data ?? []).map((b): ImportBatch => ({ id: b.id, fileName: b.file_name, txTotal: b.tx_total, importedAt: b.imported_at, undoUntil: b.undo_until, status: b.status })),
     today: todayWib(),
   };

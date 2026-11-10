@@ -9,6 +9,7 @@ import { RedemptionPanel, NewRedemptionPanel } from "@/components/admin/points/R
 import { RedemptionTable } from "@/components/admin/points/RedemptionTable";
 import { RewardCatalog } from "@/components/admin/points/RewardCatalog";
 import { RewardEditor } from "@/components/admin/points/RewardEditor";
+import { KudosCategories } from "@/components/admin/points/KudosCategories";
 import { BulkBonus, RulesForm } from "@/components/admin/points/RulesForm";
 import { TierCards } from "@/components/admin/points/TierCards";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
@@ -27,6 +28,8 @@ import {
   listTierBenefits,
 } from "@/server/admin/points-repo";
 import { one } from "@/server/admin/query";
+import { listKudosCategoriesAdmin } from "@/server/admin/session-kudos";
+import { canAccess, getAdminSession } from "@/server/admin/session";
 import { listSegments, memberChoices, segmentMemberIds } from "@/server/admin/repo";
 import { activityTypeOptions } from "@/server/admin/sessions-repo";
 import type { PointsReason, RedemptionStatus } from "@/server/admin/types";
@@ -163,13 +166,14 @@ async function RedemptionsTab({ all, status: rawStatus, selected }: { all: Await
 }
 
 async function RulesTab() {
-  const [rules, segments] = await Promise.all([getPointRules(), listSegments()]);
+  const [rules, segments, kudosCategories, session] = await Promise.all([getPointRules(), listSegments(), listKudosCategoriesAdmin(), getAdminSession()]);
   // Jumlah penerima sebenarnya (member yang disuspend tidak ikut).
   const recipients = await Promise.all(segments.map(async (s) => ({ id: s.id, name: s.name, count: (await segmentMemberIds(s.id))?.length ?? 0 })));
   return (
     <>
       <RulesForm initial={rules} types={activityTypeOptions()} />
       <BulkBonus segments={recipients} />
+      <KudosCategories initial={kudosCategories} canEdit={canAccess(session, "settings", "edit")} />
     </>
   );
 }

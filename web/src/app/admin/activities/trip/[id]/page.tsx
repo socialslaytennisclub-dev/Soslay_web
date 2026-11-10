@@ -19,7 +19,8 @@ export default async function AdminTripPage({ params }: PageProps<"/admin/activi
       <AdminTopbar breadcrumb={`CMS / Activities / ${trip.title}`} title={trip.title} />
       <div className={pageStyles.content}>
         <TripTabs tripId={trip.id} active="info" />
-        <TripEditor key={trip.id} initial={trip} venues={venues} types={activityTypeOptions()} candidates={candidates} />
+        {/* Di-mount ulang saat trip berubah (disimpan di sini / tab lain): form selalu mulai dari data terbaru. */}
+        <TripEditor key={`${trip.id}:${trip.version}`} initial={trip} venues={venues} types={activityTypeOptions()} candidates={candidates} />
       </div>
     </>
   );

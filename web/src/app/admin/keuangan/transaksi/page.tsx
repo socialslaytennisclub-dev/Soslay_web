@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import styles from "@/components/admin/finance/Finance.module.css";
 import { SearchBox, UndoImportButton } from "@/components/admin/finance/FinanceActions";
+import { SyncTripButton } from "@/components/admin/finance/LinkTx";
 import { FinanceTabs, PageHead, SegmentLinks, StatStrip } from "@/components/admin/finance/FinanceUI";
 import { ParamSelect } from "@/components/admin/finance/ParamSelect";
 import { RecordTxButton } from "@/components/admin/finance/TxModal";
@@ -38,12 +39,16 @@ export default async function FinanceTransactionsPage({ searchParams }: PageProp
   const src = one(raw.src) ?? "";
   const q = (one(raw.q) ?? "").toLowerCase();
   const batchId = one(raw.batch);
-  // "Lihat di Keuangan" dari trip Tennis Escape: transaksi pembayaran paket trip itu.
+  // "Lihat di Keuangan" dari trip Tennis Escape: pembayaran paket trip itu (cocok dengan "Bundling sudah
+  // masuk"). Baris Trip di Per event menambah ?with=activities: + transaksi yang dikaitkan ke activity-nya.
   const tripId = one(raw.trip);
+  const trip = tripId ? data.trips.find((t) => t.id === tripId) : undefined;
+  const withActivities = !!tripId && one(raw.with) === "activities";
+  const tripSessions = new Set(withActivities ? data.sessions.filter((s) => s.tripId === tripId).map((s) => s.id) : []);
   const page = Math.max(1, Number(one(raw.page)) || 1);
   const batch = batchId ? data.batches.find((b) => b.id === batchId) : undefined;
 
-  const inScope = (t: FinTx) => (batchId ? t.importBatchId === batchId : tripId ? t.tripId === tripId : allMonths || t.date.startsWith(month));
+  const inScope = (t: FinTx) => (batchId ? t.importBatchId === batchId : tripId ? t.tripId === tripId || (t.sessionId !== null && tripSessions.has(t.sessionId)) : allMonths || t.date.startsWith(month));
   const base = posted(data).filter(inScope);
   const matchFilters = (t: FinTx) =>
     (!cat || t.categoryId === cat) &&
@@ -62,7 +67,7 @@ export default async function FinanceTransactionsPage({ searchParams }: PageProp
 
   const href = (over: Record<string, string | number | undefined>) => {
     const p = new URLSearchParams();
-    const merged = { m: one(raw.m), tab: tab === "all" ? undefined : tab, cat, acc, src, q: one(raw.q), batch: batchId, trip: tripId, page: undefined as string | number | undefined, ...over };
+    const merged = { m: one(raw.m), tab: tab === "all" ? undefined : tab, cat, acc, src, q: one(raw.q), batch: batchId, trip: tripId, with: withActivities ? "activities" : undefined, page: undefined as string | number | undefined, ...over };
     for (const [k, v] of Object.entries(merged)) if (v !== undefined && v !== "" && v !== "all") p.set(k, String(v));
     const s = p.toString();
     return `/admin/keuangan/transaksi${s ? `?${s}` : ""}`;
@@ -111,6 +116,23 @@ export default async function FinanceTransactionsPage({ searchParams }: PageProp
             </span>
             <span className={styles.actions}>
               {undoable && role === "full" && <UndoImportButton batchId={batch.id} fileName={batch.fileName} count={batch.txTotal} />}
+              <Link className={styles.link} href="/admin/keuangan/transaksi">
+                Semua transaksi ›
+              </Link>
+            </span>
+          </div>
+        )}
+
+        {tripId && (
+          <div className={cx(styles.note, styles.chipOk)} style={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+            <span>
+              Trip · <strong>{trip?.title ?? "Tennis Escape"}</strong> — {withActivities ? "pembayaran paket + transaksi activity-nya" : "pembayaran paket saja"}.{" "}
+              <Link className={styles.link} href={href({ with: withActivities ? undefined : "activities" })}>
+                {withActivities ? "Paket saja" : "Tampilkan juga transaksi activity"}
+              </Link>
+            </span>
+            <span className={styles.actions}>
+              {role === "full" && <SyncTripButton tripId={tripId} />}
               <Link className={styles.link} href="/admin/keuangan/transaksi">
                 Semua transaksi ›
               </Link>

@@ -19,6 +19,9 @@ const db = new PGlite({ extensions: { citext, pg_trgm, pgcrypto } });
 await db.exec(`
   create role anon;
   create role authenticated;
+  -- Seperti Supabase: fungsi baru di schema public otomatis bisa dieksekusi anon & authenticated
+  -- (revoke "from public" saja tidak cukup).
+  alter default privileges in schema public grant execute on functions to anon, authenticated;
   create schema auth;
   create table auth.users (id uuid primary key default gen_random_uuid(), email text, raw_user_meta_data jsonb);
   create function auth.uid() returns uuid language sql stable as
@@ -943,6 +946,61 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await net()) === 3200000 && (await byAcc(cash)) === 1700000 && (await byAcc(bank)) === 1500000, `A-10 ganti akun ${await byAcc(bank)} / ${await byAcc(cash)}`);
   await db.query(`update trip_payments set voided_at = now(), void_reason = 'salah input' where id = $1`, [pel]);
   console.assert((await net()) === 1500000, "A-10 pembayaran dibatalkan → koreksi");
+  // Sync trip (10 Nov): pembayaran sebelum go-live dilewati trigger → Sync mencatatnya sekali, di tanggal terima.
+  await db.query(`update finance_settings set go_live_date = current_date + 1 where true`);
+  const late = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'installment', 400000, current_date - 60, $2) returning id`, [bk, bank])).id;
+  console.assert((await net()) === 1500000, "pembayaran trip sebelum go-live tetap dicatat trigger");
+  await as(tripAdmin);
+  const preview = (await one(`select finance_resync_trip($1, false) r`, [trip])).r;
+  console.assert(preview.new.length === 1 && preview.new[0].amount === 400000 && (await net()) === 1500000, `pratinjau Sync trip menulis / salah ${JSON.stringify(preview)}`);
+  const synced = (await one(`select finance_resync_trip($1) r`, [trip])).r;
+  const lateTx = await one(`select date::text date, term from finance_transactions where source = 'trip_payment' and source_ref = $1`, ['tp:' + late + ':' + bank]);
+  console.assert(synced.changes === 1 && (await net()) === 1900000 && lateTx?.term === "installment" && lateTx.date === (await one(`select (current_date - 60)::text d`)).d, `Sync trip tidak mencatat pembayaran sebelum go-live ${JSON.stringify(synced)} ${await net()} ${JSON.stringify(lateTx)}`);
+  console.assert((await one(`select finance_resync_trip($1) r`, [trip])).r.changes === 0 && (await net()) === 1900000, "Sync trip dua kali mencatat dobel");
+  // Data berubah sesudah pratinjau dikonfirmasi → dibatalkan, tidak mencatat yang belum dilihat admin.
+  const token = (await one(`select finance_resync_trip($1, false) r`, [trip])).r.token;
+  await as(null);
+  const sneaky = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'installment', 100000, current_date - 50, $2) returning id`, [bk, bank])).id;
+  await as(tripAdmin);
+  console.assert(await db.query(`select finance_resync_trip($1, true, $2)`, [trip, token]).then(() => false, () => true), "Sync trip mencatat pembayaran yang tidak ada di pratinjau");
+  const fresh = (await one(`select finance_resync_trip($1, false) r`, [trip])).r;
+  console.assert((await one(`select finance_resync_trip($1, true, $2) r`, [trip, fresh.token])).r.changes === 1, "Sync trip dengan token terbaru gagal");
+  await as(null);
+  await db.query(`update trip_payments set voided_at = now(), void_reason = 'tes' where id = $1`, [sneaky]);
+  console.assert((await net()) === 1900000, "pembatalan sesudah Sync tidak dikoreksi");
+  // Fungsi pencatat internal tidak bisa dipanggil langsung lewat RPC (default privileges Supabase).
+  for (const fn of ["finance_insert_trip_payment(text, bigint, date, uuid, text, uuid, text)", "finance_sync_auto(text, text, bigint, text, uuid, text, uuid, timestamptz, uuid, text, boolean)", "finance_sync_participant(session_participants, boolean, sessions, finance_settings)"]) {
+    for (const role of ["anon", "authenticated"]) {
+      console.assert(!(await one(`select has_function_privilege($1, $2, 'execute') ok`, [role, fn])).ok, `${role} bisa memanggil ${fn}`);
+    }
+  }
+  console.assert(!(await one(`select has_function_privilege('anon', 'finance_resync_trip(uuid, boolean, text)', 'execute') ok`)).ok, "anon bisa memanggil finance_resync_trip");
+  const { id: outsider } = await one(`insert into auth.users default values returning id`);
+  await as(outsider);
+  console.assert(await db.query(`select finance_resync_trip($1)`, [trip]).then(() => false, () => true), "member biasa bisa Sync trip");
+  await as(null);
+  // Akun diganti sesudah Sync (tanggal sebelum go-live) → pindah ke akun baru, tidak hilang.
+  await db.query(`update trip_payments set account_id = $2 where id = $1`, [late, cash]);
+  console.assert((await net()) === 1900000 && (await byAcc(cash)) === 400000, `ganti akun pembayaran hasil Sync menghilangkan uangnya ${await net()} / ${await byAcc(cash)}`);
+  await db.query(`update trip_payments set voided_at = now(), void_reason = 'tes' where id = $1`, [late]);
+  console.assert((await net()) === 1500000, "pembayaran hasil Sync dibatalkan tidak dikoreksi");
+  // Transaksi otomatis yang dihapus admin (dobel dengan import jurnal) tidak dibuat ulang oleh Sync.
+  const dup = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'installment', 250000, current_date - 30, $2) returning id`, [bk, bank])).id;
+  await as(tripAdmin);
+  await db.query(`select finance_resync_trip($1)`, [trip]);
+  await as(null);
+  await db.query(`update finance_transactions set deleted_at = now(), deleted_reason = 'dobel import' where source_ref = $1`, ['tp:' + dup + ':' + bank]);
+  await as(tripAdmin);
+  const again = (await one(`select finance_resync_trip($1) r`, [trip])).r;
+  await as(null);
+  console.assert(again.changes === 0 && again.skipped_deleted === 1 && (await net()) === 1500000, `Sync trip membuat ulang transaksi yang dihapus ${JSON.stringify(again)}`);
+  // Ref akun lama yang tersisa (data lama) dikoreksi oleh Sync.
+  await db.query(`select finance_insert_trip_payment($1, 300000, current_date - 20, $2, 'tes', $3, 'installment')`, ['tp:' + dup + ':' + cash, cash, trip]);
+  await as(tripAdmin);
+  const stale = (await one(`select finance_resync_trip($1) r`, [trip])).r;
+  await as(null);
+  console.assert(stale.corrections === 1 && (await byAcc(cash)) === 0, `Sync trip tidak mengoreksi ref akun lama ${JSON.stringify(stale)} ${await byAcc(cash)}`);
+  await db.query(`update finance_settings set go_live_date = '2020-01-01' where true`);
   // Batal paket → keluar dari semua activity.
   await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [bk]);
   console.assert((await tripRows(s1)) === 1 && (await tripRows(s2)) === 1, "paket dibatalkan masih terdaftar di activity");
@@ -1078,12 +1136,36 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const untouched = await one(`select t.title, s.title st from trips t join sessions s on s.trip_id = t.id where t.id = $1`, [trip]);
   console.assert(failed && untouched?.title === "Fix Trip" && untouched.st === "Fix A1", `save_trip tidak atomik ${JSON.stringify(untouched)}`);
   const newTrip = (await one(`select save_trip(null, $1::jsonb, $2::jsonb, $3::jsonb) id`, [
-    JSON.stringify({ ...info, slug: "fix-new" }),
+    JSON.stringify({ ...info, slug: "fix-new", create_key: "trip-form-1" }),
     JSON.stringify([act({ key: "n1", slug: "fix-n1" })]),
     JSON.stringify([{ day: "2030-01-01", time_label: "08.00", title: "Main", location: "", activity_key: "n1" }]),
   ])).id;
   const made = await one(`select (select count(*)::int from sessions where trip_id = $1) n, (select count(*)::int from trip_rundown_items r join sessions s on s.id = r.session_id where r.trip_id = $1) linked, (select created_by from trips where id = $1) by`, [newTrip]);
   console.assert(made.n === 1 && made.linked === 1 && made.by === tripAdmin, `save_trip baru ${JSON.stringify(made)}`);
+  // Simpan ulang dari form yang sama tanpa id (respons pertama hilang / tab kedua) → trip & activity yang sama, tidak kembar.
+  const again = (await one(`select save_trip(null, $1::jsonb, $2::jsonb, '[]'::jsonb) id`, [
+    JSON.stringify({ ...info, slug: "fix-new-2", create_key: "trip-form-1" }),
+    JSON.stringify([act({ key: "n1", slug: "fix-n1-2", title: "Baru (ubah)" }), act({ key: "n2", slug: "fix-n2", trip_order: 2 })]),
+  ])).id;
+  const twins = await one(`select (select count(*)::int from trips where create_key = 'trip-form-1') trips, (select count(*)::int from sessions where trip_id = $1) n, (select count(*)::int from sessions where slug like 'fix-n1%') n1, (select title from sessions where trip_key = 'n1') t`, [newTrip]);
+  console.assert(again === newTrip && twins.trips === 1 && twins.n === 2 && twins.n1 === 1 && twins.t === "Baru (ubah)", `simpan trip ulang membuat kembar ${JSON.stringify(twins)}`);
+  // Form basi: tab A & B memuat versi yang sama; A menambah activity n3 lalu simpan; B (tidak kenal n3) simpan →
+  // ditolak (trip_stale), n3 tetap di trip & judul trip tidak tertimpa. Versi terbaru → diterima.
+  const ver = async () => (await one(`select form_version v from trips where id = $1`, [newTrip])).v;
+  const loaded = await ver();
+  const both = [act({ id: (await one(`select id from sessions where trip_key = 'n1'`)).id, key: "n1" }), act({ key: "n2", trip_order: 2 })];
+  await db.query(`select save_trip($1, $2::jsonb, $3::jsonb, '[]'::jsonb)`, [newTrip, JSON.stringify({ ...info, title: "Tab A", form_version: loaded }), JSON.stringify([...both, act({ key: "n3", slug: "fix-n3", trip_order: 3 })])]);
+  const staleRejected = await rejects(`select save_trip($1, $2::jsonb, $3::jsonb, '[]'::jsonb)`, [newTrip, JSON.stringify({ ...info, title: "Tab B", form_version: loaded }), JSON.stringify(both)], "trip_stale");
+  const afterStale = await one(`select title, (select count(*)::int from sessions where trip_id = $1) n, (select trip_id from sessions where trip_key = 'n3') n3 from trips where id = $1`, [newTrip]);
+  console.assert(staleRejected && afterStale.title === "Tab A" && afterStale.n === 3 && afterStale.n3 === newTrip, `simpan dari form basi melepas activity / menimpa trip ${JSON.stringify(afterStale)}`);
+  await db.query(`select save_trip($1, $2::jsonb, $3::jsonb, '[]'::jsonb)`, [newTrip, JSON.stringify({ ...info, title: "Tab B (muat ulang)", form_version: await ver() }), JSON.stringify(both)]);
+  const fresh = await one(`select title, (select count(*)::int from sessions where trip_id = $1) n from trips where id = $1`, [newTrip]);
+  console.assert(fresh.title === "Tab B (muat ulang)" && fresh.n === 2, `simpan dengan versi terbaru ditolak ${JSON.stringify(fresh)}`);
+  // Perubahan baris trip di luar editor (mis. arsip / tampil di homepage) tidak membuat form basi.
+  const v2 = await ver();
+  await db.query(`update trips set show_on_homepage = not show_on_homepage where id = $1`, [newTrip]);
+  const notStale = await db.query(`select save_trip($1, $2::jsonb, $3::jsonb, '[]'::jsonb)`, [newTrip, JSON.stringify({ ...info, title: "Sesudah arsip", form_version: v2 }), JSON.stringify(both)]).then(() => true, () => false);
+  console.assert(notStale, "perubahan trip di luar editor tidak dianggap form basi");
 
   // 7. Tandai Lunas, akun default diganti, lalu batal lunas → koreksi di akun lama (BCA), bukan akun baru.
   const cash = (await one(`select id from finance_accounts where system_key = 'cash'`)).id;
@@ -1109,7 +1191,7 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await byAcc(cash)) === 0, `akun default kosong: batal lunas tidak dikoreksi (Kas ${await byAcc(cash)})`);
   await db.exec(`update finance_settings set auto_manual_paid = true, manual_paid_account_id = '${bank}', go_live_date = '2026-12-01'`);
   await as(null);
-  console.log("✓ perbaikan review: booking jalur lain aman, tanpa dobel Kuyy, kuota & arsip paket, tidak bayar lebih, pembayaran tidak terhapus, save_trip atomik, koreksi di akun asal, otomatis mati tetap dikoreksi");
+  console.log("✓ perbaikan review: booking jalur lain aman, tanpa dobel Kuyy, kuota & arsip paket, tidak bayar lebih, pembayaran tidak terhapus, save_trip atomik & tolak form basi, koreksi di akun asal, otomatis mati tetap dikoreksi");
 
   // ── Peserta tambahan admin: "Ubah pembayaran" ikut aturan Keuangan seperti baris Kuyy ──
   {
@@ -1624,4 +1706,221 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.query(`update session_participants set member_id = $2 where id = $1`, [ids[0], fredy]);
   console.assert((await got()).n === 1, "bonus susulan tidak dobel");
   console.log("✓ bonus juara susulan untuk juara yang baru daftar akun sesudah activity ditutup (sekali)");
+}
+
+// Kudos (BR-23): kriteria uji spec bagian 6 (no. 13 & 14 — notifikasi — belum ada sistem notifikasi member).
+{
+  await as(null);
+  // Jumlah di profil mengikuti ringkasan harian 20.00 WIB (diuji di akhir blok); di sini tanpa jeda.
+  await db.exec(`set app.kudos_no_delay = 'on'`);
+  const venue = (await one(`select id from venues limit 1`)).id;
+  const person = async (name) => {
+    const { id } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, name, `${name.toLowerCase().replace(/\W/g, "")}@kudos.test`]);
+    return id;
+  };
+  const s = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, ended_at)
+    values ('kudos-1', 'Kudos Mabar', 'weekly-mabar', $1, now() - interval '4 hours', now() - interval '2 hours', 12, 'completed', now() - interval '1 hour') returning id`, [venue])).id;
+  const [A, B, C, D, H, P, E] = [await person("Kudo Arya"), await person("Kudo Bima"), await person("Kudo Citra"), await person("Kudo Dodi"), await person("Kudo Host"), await person("Kudo Foto"), await person("Kudo Eka")];
+  for (const m of [A, B, D, E]) await db.query(`insert into bookings (session_id, member_id, status) values ($1, $2, 'attended')`, [s, m]);
+  await db.query(`insert into bookings (session_id, member_id) values ($1, $2)`, [s, C]); // tidak check-in
+  await db.query(`insert into session_hosts (session_id, member_id, role) values ($1, $2, 'host'), ($1, $3, 'photographer')`, [s, H, P]);
+
+  const err = (sql, params) => db.query(sql, params).then(() => null, (e) => e.code);
+  const give = (uid, to, cat, sess = s) => as(uid).then(() => err(`select give_kudos($1, $2, $3)`, [sess, to, cat]));
+  const kudosPts = async (m) => Number((await one(`select coalesce(sum(delta), 0) d from points_ledger where member_id = $1 and kudos_id is not null`, [m])).d);
+  const agg = async (m) => {
+    await as(m);
+    const r = (await one(`select member_kudos($1) k`, [m])).k;
+    await as(null);
+    return r;
+  };
+  const countOf = (k, key) => k.categories.find((c) => c.key === key)?.count ?? 0;
+
+  // Kategori: 13 Skill + 9 Sikap, data tabel; nonaktif tidak bisa dipilih.
+  const cats = await one(`select count(*) filter (where "group" = 'skill')::int skill, count(*) filter (where "group" = 'attitude')::int sikap from kudos_categories where is_active`);
+  console.assert(cats.skill === 13 && cats.sikap === 9, `kategori kudos ${JSON.stringify(cats)}`);
+
+  // 2. A memberi Forehand ke B → B Forehand +1, A +1 Slay Point.
+  console.assert((await give(A, B, "forehand")) === null, "A tidak bisa memberi kudos ke B");
+  let kb = await agg(B);
+  console.assert(countOf(kb, "forehand") === 1 && kb.total === 1 && kb.unique_givers === 1 && (await kudosPts(A)) === 1, `kudos pertama ${JSON.stringify(kb)} poin ${await kudosPts(A)}`);
+  // 3 & 5. Ganti ke Serve (juga "memberi lagi") → tetap 1 kudos, poin tetap.
+  console.assert((await give(A, B, "serve")) === null, "ganti kategori gagal");
+  kb = await agg(B);
+  console.assert(countOf(kb, "forehand") === 0 && countOf(kb, "serve") === 1 && kb.total === 1 && (await kudosPts(A)) === 1, `ganti kategori ${JSON.stringify(kb)}`);
+  console.assert((await one(`select count(*)::int n from kudos where session_id = $1 and giver_member_id = $2 and receiver_member_id = $3`, [s, A, B])).n === 1, "kudos dobel");
+  // Simpan ulang kategori yang sama (perangkat kedua) → updated_at tidak bergeser (profil penerima tidak berkedip).
+  const stamp = async () => (await one(`select updated_at::text t from kudos where session_id = $1 and giver_member_id = $2 and receiver_member_id = $3 and deleted_at is null`, [s, A, B])).t;
+  const kudosStamp = await stamp();
+  console.assert((await give(A, B, "serve")) === null && (await stamp()) === kudosStamp && (await kudosPts(A)) === 1, "simpan ulang kategori sama menggeser updated_at / poin");
+  // 4. Batal → agregat turun, poin −1; batal lagi tidak apa-apa.
+  await as(A);
+  console.assert((await one(`select cancel_kudos($1, $2) ok`, [s, B])).ok === true && (await one(`select cancel_kudos($1, $2) ok`, [s, B])).ok === false, "batal kudos tidak idempotent");
+  kb = await agg(B);
+  console.assert(kb.total === 0 && (await kudosPts(A)) === 0, `batal kudos ${JSON.stringify(kb)} poin ${await kudosPts(A)}`);
+  // Beri lagi sesudah batal → kudos baru, +1 lagi.
+  console.assert((await give(A, B, "forehand")) === null && (await kudosPts(A)) === 1, "beri lagi sesudah batal");
+  // 6. Diri sendiri → 422; 7. C tidak check-in → 403 & bukan penerima (404); fotografer & orang luar → 403.
+  console.assert((await give(A, A, "serve")) === "PT422", "kudos ke diri sendiri tidak ditolak 422");
+  console.assert((await give(C, B, "serve")) === "PT403", "peserta tidak hadir bisa memberi kudos");
+  console.assert((await give(A, C, "serve")) === "PT404", "peserta tidak hadir bisa menerima kudos");
+  console.assert((await give(P, B, "serve")) === "PT403" && (await give(E, P, "style")) === "PT404", "fotografer ikut kudos");
+  console.assert((await give(A, D, "tidak_ada")) === "PT422", "kategori tidak valid tidak ditolak");
+  await as(null);
+  await db.query(`update kudos_categories set is_active = false where key = 'lob'`);
+  console.assert((await give(A, D, "lob")) === "PT422", "kategori nonaktif masih bisa dipilih");
+  // 8. Host tidak ikut main: Forehand → 422, Organiser → tersimpan. 9. Host memberi Backhand → +1.
+  console.assert((await give(A, H, "forehand")) === "PT422", "host bukan pemain menerima kategori Skill");
+  console.assert((await give(A, H, "organiser")) === null, "host bukan pemain tidak bisa menerima Sikap");
+  console.assert((await give(H, D, "backhand")) === null && (await kudosPts(H)) === 1, "host bukan pemain tidak bisa memberi");
+  // Daftar penerima pemberi: tanpa diri sendiri & yang tidak hadir; hanya kudos saya.
+  await as(A);
+  const mine = (await one(`select session_kudos($1) k`, [s])).k;
+  const ids = mine.receivers.map((r) => r.member_id);
+  console.assert(mine.can_edit && ids.length === 4 && !ids.includes(A) && !ids.includes(C) && !ids.includes(P) && mine.receivers.find((r) => r.member_id === H).role === "host", `session_kudos ${JSON.stringify(ids)}`);
+  console.assert(mine.receivers.find((r) => r.member_id === D).category_key === null, "session_kudos membocorkan kudos orang lain (H → D)");
+  await as(C);
+  console.assert((await one(`select session_kudos($1) k`, [s])).k === null, "session_kudos untuk yang tidak hadir");
+  // 10. Agregat & tabel tidak membocorkan pemberi ke member.
+  await as(D);
+  const kd = JSON.stringify((await one(`select member_kudos($1) k`, [D])).k);
+  console.assert(!kd.includes(H) && !kd.includes("Kudo Host"), `member_kudos membocorkan pemberi ${kd}`);
+  await db.exec(`grant usage on schema public to authenticated; grant select on kudos to authenticated`);
+  await db.exec(`set role authenticated`);
+  const leaked = (await one(`select count(*)::int n from kudos`)).n;
+  await db.exec(`reset role`);
+  await db.exec(`revoke select on kudos from authenticated`);
+  console.assert(leaked === 0, "member bisa membaca tabel kudos (pemberi)");
+  console.assert(!(await one(`select has_function_privilege('anon', 'member_kudos(uuid)', 'execute') ok`)).ok, "anon bisa memanggil member_kudos");
+  // Agregat member lain tidak bisa dibaca sembarang member (hanya milik sendiri / admin / kartu peserta sesi).
+  await as(C);
+  console.assert((await one(`select member_kudos($1) k`, [D])).k === null, "member_kudos membuka agregat member lain");
+  await as(null);
+  for (const fn of ["kudos_revoke(uuid, text, text)", "kudos_role(uuid, uuid)", "kudos_window_closes_at(uuid)", "kudos_on_attendance_undone()"]) {
+    for (const role of ["anon", "authenticated"]) console.assert(!(await one(`select has_function_privilege($1, $2, 'execute') ok`, [role, fn])).ok, `${role} bisa memanggil ${fn}`);
+  }
+  // Chip kudos teratas: host & admin saja.
+  await as(H);
+  const top = (await db.query(`select * from session_kudos_top($1)`, [s])).rows;
+  console.assert(top.find((t) => t.member_id === D)?.category_key === "backhand" && top.find((t) => t.member_id === B)?.category_key === "forehand", `kudos teratas ${JSON.stringify(top)}`);
+  await as(E);
+  console.assert((await db.query(`select * from session_kudos_top($1)`, [s])).rows.length === 0, "kudos teratas terbaca peserta biasa");
+
+  // 11. Admin hapus dengan alasan → agregat turun, poin −1, tercatat di log; tanpa alasan / bukan admin ditolak.
+  const admin = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Kudos', 'admin-kudos@soslay.test', 'active' from roles where name = 'Super Admin'`, [admin]);
+  const ab = (await one(`select id from kudos where session_id = $1 and giver_member_id = $2 and receiver_member_id = $3 and deleted_at is null`, [s, A, B])).id;
+  await as(E);
+  console.assert((await err(`select admin_delete_kudos($1, 'iseng')`, [ab])) === "PT403", "member bisa menghapus kudos");
+  const ptsA = await kudosPts(A);
+  await as(admin);
+  console.assert((await err(`select admin_delete_kudos($1, '  ')`, [ab])) === "PT422", "hapus kudos tanpa alasan");
+  await db.query(`select admin_delete_kudos($1, 'Kudos salah orang')`, [ab]);
+  console.assert((await err(`select admin_delete_kudos($1, 'lagi')`, [ab])) === "PT409", "hapus kudos dua kali");
+  await as(null);
+  const row = await one(`select deleted_source, deleted_reason, deleted_by from kudos where id = $1`, [ab]);
+  const log = await one(`select actor_id, action from admin_audit_log where entity_type = 'kudos' and entity_id = $1`, [ab]);
+  console.assert(row.deleted_source === "admin" && row.deleted_reason === "Kudos salah orang" && row.deleted_by === admin && (await agg(B)).total === 0 && ptsA === 2 && (await kudosPts(A)) === 1, `hapus admin ${JSON.stringify(row)} poin ${await kudosPts(A)}`);
+  console.assert(log?.actor_id === admin && /Kudos salah orang/.test(log.action) && /Kudo Arya/.test(log.action), `log hapus kudos ${JSON.stringify(log)}`);
+
+  // 12. Check-in D dibatalkan → kudos dari / ke D hilang, poin pemberi ke D ditarik.
+  console.assert((await give(D, B, "volley")) === null && (await give(E, D, "slice")) === null, "kudos D");
+  const before = { D: await kudosPts(D), E: await kudosPts(E), H: await kudosPts(H) };
+  await as(null);
+  await db.query(`update bookings set status = 'registered' where session_id = $1 and member_id = $2`, [s, D]);
+  const left = (await one(`select count(*)::int n from kudos where session_id = $1 and deleted_at is null and $2 in (giver_member_id, receiver_member_id)`, [s, D])).n;
+  console.assert(left === 0 && before.D === 1 && (await kudosPts(D)) === 0 && before.E === 1 && (await kudosPts(E)) === 0 && before.H === 1 && (await kudosPts(H)) === 0, `batal check-in D ${left} ${JSON.stringify(before)}`);
+  console.assert((await one(`select count(*)::int n from kudos where session_id = $1 and deleted_source = 'system'`, [s])).n === 3, "hapus otomatis tidak bertanda system");
+
+  // 15. Tiga teratas: jumlah terbanyak, seri → yang terbaru diterima.
+  await db.query(`update bookings set status = 'attended' where session_id = $1 and member_id = $2`, [s, D]);
+  await give(A, E, "serve");
+  await give(B, E, "serve");
+  await give(D, E, "footwork");
+  await give(H, E, "fair_play");
+  await as(null);
+  await db.query(`update kudos set created_at = now() - interval '1 day' where receiver_member_id = $1 and category_key = 'footwork'`, [E]);
+  const ke = await agg(E);
+  console.assert(ke.categories.slice(0, 3).map((c) => c.key).join() === "serve,fair_play,footwork" && ke.total === 4 && ke.unique_givers === 4, `urutan kudos teratas ${JSON.stringify(ke.categories.slice(0, 3))}`);
+  console.assert(ke.categories.some((c) => c.key === "lob") === false && ke.categories.length === 21, "kategori nonaktif tanpa kudos tetap tampil");
+  await db.query(`update kudos_categories set is_active = true where key = 'lob'`);
+
+  // 1. Jendela kudos sejak diakhiri (sementara 3 minggu; spec 7 hari) = KUDOS_WINDOW_DAYS di web/src/lib/kudos.ts:
+  //    1 menit sebelum batas boleh, 1 menit sesudah → 409 & read-only.
+  const windowDays = Number((await readFile(path.resolve(import.meta.dirname, "../src/lib/kudos.ts"), "utf8")).match(/KUDOS_WINDOW_DAYS = (\d+)/)?.[1]);
+  const sqlDays = (await one(`select extract(day from kudos_window_closes_at($1) - ended_at)::int d from sessions where id = $1`, [s])).d;
+  console.assert(windowDays === 21 && sqlDays === windowDays, `jendela kudos: kode ${windowDays} hari vs database ${sqlDays} hari`);
+  await db.query(`update sessions set ended_at = now() - interval '21 days' + interval '1 minute' where id = $1`, [s]);
+  console.assert((await give(A, D, "lob")) === null, "kudos ditolak sebelum jendela tutup");
+  await as(null);
+  await db.query(`update sessions set ended_at = now() - interval '21 days' - interval '1 minute' where id = $1`, [s]);
+  console.assert((await give(A, D, "serve")) === "PT409" && (await err(`select cancel_kudos($1, $2)`, [s, D])) === "PT409", "kudos sesudah jendela tutup tidak ditolak 409");
+  console.assert((await one(`select session_kudos($1) k`, [s])).k.can_edit === false, "UI kudos tidak read-only sesudah jendela tutup");
+  // Sesi belum diakhiri / dibatalkan → tidak ada kudos.
+  await as(null);
+  const live = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status)
+    values ('kudos-live', 'Kudos Live', 'weekly-mabar', $1, now() - interval '1 hour', now() + interval '1 hour', 8, 'published') returning id`, [venue])).id;
+  for (const m of [A, B]) await db.query(`insert into bookings (session_id, member_id, status) values ($1, $2, 'attended')`, [live, m]);
+  console.assert((await give(A, B, "serve", live)) === "PT409", "kudos sebelum sesi diakhiri");
+  await as(null);
+  await db.query(`update sessions set status = 'cancelled', ended_at = now() where id = $1`, [live]);
+  console.assert((await give(A, B, "serve", live)) === "PT409", "kudos di sesi dibatalkan");
+
+  // Kartu peserta (klik nama di tab Peserta): sesi dihadiri + kudos teratas, tanpa pemberi; hanya orang sesi itu.
+  {
+    await as(A);
+    const card = (await one(`select session_person_card($1, $2) c`, [s, E])).c;
+    console.assert(card?.sessions_attended === 1 && card.kudos_total === 4 && card.kudos_top.map((t) => t.label).join() === "Serve,Fair play,Footwork", `kartu peserta ${JSON.stringify(card)}`);
+    console.assert(!JSON.stringify(card).includes(H) && !JSON.stringify(card).includes("Kudo Host"), "kartu peserta membocorkan pemberi kudos");
+    console.assert(!JSON.stringify((await one(`select member_kudos($1) k`, [E])).k).includes("last_received"), "member_kudos mengirim waktu kudos diterima");
+    const pid = (await one(`insert into session_participants (session_id, member_id, full_name, kuy_reg_no, checked_in_at) values ($1, $2, 'Kudo Eka', 'KD1', now()) returning id`, [s, E])).id;
+    console.assert((await one(`select session_person_card($1, $2) c`, [s, pid])).c?.kudos_total === 4, "kartu peserta lewat id baris peserta");
+    // Baris peserta tambahan tanpa check-in (mis. impor ulang Kuyy) tidak membatalkan kehadiran → kudos tetap.
+    await db.query(`insert into session_participants (session_id, member_id, full_name, kuy_reg_no) values ($1, $2, 'Kudo Eka', 'KD3')`, [s, E]);
+    const stillE = await one(`select (select status from bookings where session_id = $1 and member_id = $2) st, (select count(*)::int from kudos where session_id = $1 and receiver_member_id = $2 and deleted_at is null) n`, [s, E]);
+    console.assert(stillE.st === "attended" && stillE.n === 4, `impor ulang tanpa check-in menghapus kudos / kehadiran ${JSON.stringify(stillE)}`);
+    const guest = (await one(`insert into session_participants (session_id, full_name, kuy_reg_no) values ($1, 'Tamu', 'KD2') returning id`, [s])).id;
+    console.assert((await one(`select session_person_card($1, $2) c`, [s, guest])).c === null, "kartu peserta tamu tanpa akun");
+    const outsider = await person("Kudo Luar");
+    await as(outsider);
+    console.assert((await one(`select session_person_card($1, $2) c`, [s, E])).c === null, "kartu peserta terbaca orang luar sesi");
+    await as(null);
+  }
+  // Akun pemberi dihapus → kudos tetap terhitung, pemberi dianonimkan.
+  await as(null);
+  const totalE = (await agg(E)).total;
+  await db.query(`delete from profiles where id = $1`, [H]);
+  const ke2 = await agg(E);
+  console.assert(ke2.total === totalE && ke2.unique_givers === 4, `akun pemberi dihapus ${JSON.stringify(ke2)}`);
+  // Activity salah input dihapus → poin kudos ikut dinetralkan (sekali).
+  await db.query(`select set_config('request.jwt.claim.sub', $1, false)`, [admin]);
+  await db.query(`select delete_session_mistake($1, 'Kudos Mabar')`, [s]);
+  await as(null);
+  const net = Number((await one(`select coalesce(sum(delta), 0) d from points_ledger where member_id = $1 and (kudos_id is not null or note like 'Activity dihapus%')`, [A])).d);
+  console.assert(net === 0, `poin kudos sesudah activity dihapus ${net}`);
+  // Profil mengikuti ringkasan harian: kudos yang baru diberi belum terlihat sampai 20.00 WIB berikutnya (K-7).
+  {
+    const s2 = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, ended_at)
+      values ('kudos-2', 'Kudos Delay', 'weekly-mabar', $1, now() - interval '4 hours', now() - interval '2 hours', 12, 'completed', now() - interval '1 hour') returning id`, [venue])).id;
+    await db.query(`insert into kudos (session_id, giver_member_id, receiver_member_id, receiver_role, category_key) values ($1, $2, $3, 'participant', 'lob')`, [s2, D, B]);
+    const lobNow = countOf(await agg(B), "lob");
+    await db.exec(`set app.kudos_no_delay = 'off'`);
+    const lobDelayed = countOf(await agg(B), "lob");
+    const cut = await one(`select kudos_visible_until() <= now() past, kudos_visible_until() > now() - interval '24 hours' recent, to_char(kudos_visible_until() at time zone 'Asia/Jakarta', 'HH24:MI') hm`);
+    await db.exec(`set app.kudos_no_delay = 'on'`);
+    console.assert(lobNow === 1 && lobDelayed === 0 && cut.past && cut.recent && cut.hm === "20:00", `jumlah kudos profil tidak menunggu ringkasan harian ${lobNow}/${lobDelayed} ${JSON.stringify(cut)}`);
+    console.assert(!(await one(`select has_function_privilege('authenticated', 'kudos_visible_until()', 'execute') ok`)).ok, "member bisa memanggil kudos_visible_until");
+  }
+  // Kategori hanya bisa diubah admin Settings (halaman Aturan poin), bukan member.
+  // Seperti Supabase, tabel bisa ditulis role authenticated — RLS yang menjaga. Dijalankan sebagai role itu.
+  await db.exec(`grant select, update on kudos_categories to authenticated`);
+  await as(A);
+  await db.exec(`set role authenticated`);
+  await db.query(`update kudos_categories set is_active = false where key = 'style'`).catch(() => null);
+  await db.exec(`reset role`);
+  await as(null);
+  console.assert((await one(`select is_active from kudos_categories where key = 'style'`)).is_active === true, "member bisa menonaktifkan kategori kudos");
+  await db.exec(`reset app.kudos_no_delay`);
+  console.log("✓ kudos: beri / ganti / batal (+1 / tetap / −1), 1 per penerima, 403 / 404 / 422 / 409, host hanya Sikap, anonim, hapus admin + log, batal check-in, 3 teratas, jendela 3 minggu, kartu peserta, profil per ringkasan harian");
 }

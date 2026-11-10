@@ -1513,3 +1513,13 @@ select.input {
     display: none;
   }
 }
+
+/* Pratinjau "Sync ke Keuangan" trip: daftar pembayaran yang akan dicatat. */
+.syncList {
+  display: grid;
+  gap: 4px;
+  max-height: 240px;
+  margin: 0;
+  padding-left: 18px;
+  overflow-y: auto;
+}

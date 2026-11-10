@@ -38,6 +38,8 @@ export type TripRundownInput = { day: string; time: string; title: string; locat
 
 export type TripInput = {
   id?: string;
+  /** Versi trip saat form dimuat (TripDetail.version). Trip sudah diubah di tab / admin lain → simpan ditolak. */
+  version?: number | null;
   title: string;
   description: string;
   area: string;
@@ -54,11 +56,13 @@ export type TripInput = {
   packageQuota: number;
   minDp: number;
   inclusions: string[];
+  /** Trip baru: key form (tetap selama form terbuka) — save_trip memakai trip yang sama bila disimpan ulang. */
+  createKey?: string;
   activities: TripActivityInput[];
   rundown: TripRundownInput[];
 };
 
-type SaveResult = ({ ok: true; message: string; id: string } | { ok: false; error: string });
+type SaveResult = ({ ok: true; message: string; id: string; version?: number; activityIds?: Record<string, string> } | { ok: false; error: string });
 
 /** Pesan aturan database (kuota paket, trip diarsipkan, melebihi sisa tagihan…) — sudah siap ditampilkan. */
 function guardMessage(error: { hint?: string | null; details?: string | null; message: string }): string | null {
@@ -174,7 +178,7 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
   }));
   const { data: savedId, error } = await supabase.rpc("save_trip", {
     p_trip: input.id ?? null,
-    p_info: input.id ? tripRow : { ...tripRow, slug: `${slugify(input.title)}-${crypto.randomUUID().slice(0, 4)}` },
+    p_info: input.id ? { ...tripRow, form_version: input.version ?? null } : { ...tripRow, slug: `${slugify(input.title)}-${crypto.randomUUID().slice(0, 4)}`, create_key: input.createKey ?? null },
     p_activities: activities,
     p_rundown: input.rundown.map((r) => ({
       day: r.day,
@@ -184,12 +188,24 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
       activity_key: r.activityKey,
     })),
   });
-  if (error || !savedId) return { ok: false, error: `Gagal menyimpan trip: ${error?.message ?? "coba lagi"} — tidak ada perubahan yang tersimpan.` };
+  if (error || !savedId) return { ok: false, error: (error && guardMessage(error)) ?? `Gagal menyimpan trip: ${error?.message ?? "coba lagi"} — tidak ada perubahan yang tersimpan.` };
   const id = savedId as string;
+  // id sesi tiap activity (key form → id) supaya editor langsung memakai id-nya. save_trip sendiri sudah
+  // mencocokkan key (sessions.trip_key), jadi simpan ulang tanpa id pun tidak membuat activity kembar.
+  // Versi baru trip ikut dikembalikan supaya simpan berikutnya dari form yang sama tidak dianggap basi.
+  const [{ data: savedSessions }, { data: savedTrip }] = await Promise.all([
+    supabase.from("sessions").select("id, trip_key").eq("trip_id", id).not("trip_key", "is", null),
+    supabase.from("trips").select("form_version").eq("id", id).maybeSingle(),
+  ]);
+  const byKey = new Map((savedSessions ?? []).map((s) => [s.trip_key as string, s.id as string]));
+  const activityIds = Object.fromEntries(activities.flatMap((a) => {
+    const sessionId = byKey.get(a.key);
+    return sessionId ? [[a.key, sessionId]] : [];
+  }));
 
   await audit(auth.userId, `${input.id ? "mengubah" : "membuat"} trip ${tripRow.title}`, "trip", id);
   refreshPaths(...PUBLIC_SESSION_PATHS, "/admin/activities", `/admin/activities/trip/${id}`);
-  return { ok: true, id, message: input.status === "published" ? "Trip dipublikasikan." : "Trip tersimpan sebagai draft." };
+  return { ok: true, id, activityIds, version: (savedTrip?.form_version as number | undefined) ?? undefined, message: input.status === "published" ? "Trip dipublikasikan." : "Trip tersimpan sebagai draft." };
 }
 
 export async function archiveTrip(id: string): Promise<ActionResult> {

@@ -2,7 +2,7 @@ import "server-only";
 import { scoreTarget } from "@/lib/americano";
 import { cache } from "react";
 import QRCode from "qrcode";
-import { memberSessions } from "@/content/member";
+import { memberSessions, splitSessions } from "@/content/member";
 import { LEVEL_LABEL, PARTICIPANT_SOURCE_LABEL } from "@/lib/admin-labels";
 import { cityOf, type City } from "@/lib/format";
 import { sessionClosesAt } from "@/lib/session-close";
@@ -11,7 +11,10 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import type { TennisLevel } from "@/server/admin/types";
 import { localParts } from "@/server/public/sessions";
 import { closeExpiredSessions } from "@/server/close-sessions";
+import type { SessionKudos } from "@/lib/kudos";
 import { checkInOpensAt } from "./check-in";
+import { demoKudosSection } from "../kudos-demo";
+import { loadSessionKudos } from "./kudos";
 import { getMemberSession } from "./user";
 
 /**
@@ -97,8 +100,12 @@ export type MemberSessionDetail = {
   reviewUntil: string;
   /** Slay Point untuk review pertama (Aturan poin → Review sesi); 0 = tidak ada poin. */
   reviewPoints: number;
-  /** Slay Point dari sesi ini untuk member yang login (hadir, bonus juara, review). */
+  /** Bagian kudos (BR-23) untuk pemberi eligible setelah sesi diakhiri; null = tidak bisa memberi. */
+  kudos: SessionKudos | null;
+  /** Slay Point dari sesi ini untuk member yang login (hadir, bonus juara, review, kudos). */
   myPoints: { label: string; delta: number }[];
+  /** Mode demo (tanpa Supabase): aksi kudos hanya lokal. */
+  demo: boolean;
   /** Waktu data dibaca (ms) — patokan "sekarang" untuk tampilan (tombol Mulai Activity, kunci review). */
   fetchedAt: number;
 };
@@ -285,7 +292,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
   const fetchedAt = Date.now();
   const done = phaseOf(session, fetchedAt) === "done";
   const canReview = done && (Boolean(booking) || assigned === true);
-  const [{ data: myRows }, { data: roster }, { data: matches }, { data: canScore }, qr, { data: review }, { data: ledger }, { data: reviewPoints }, { data: allReviews }] = await Promise.all([
+  const [{ data: myRows }, { data: roster }, { data: matches }, { data: canScore }, qr, { data: review }, { data: ledger }, { data: reviewPoints }, { data: allReviews }, kudos] = await Promise.all([
     // Baris peserta milik sendiri (RLS) — untuk no. registrasi Kuyy & jumlah bayar. Bisa lebih dari
     // satu (impor Kuyy + tambahan manual admin), jadi ambil semua: yang pertama untuk data daftar.
     supabase.from("session_participants").select("id, full_name, kuy_reg_no, checked_in_at, amount").eq("session_id", session.id).eq("member_id", user.id).order("imported_at"),
@@ -313,6 +320,8 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
       : { data: [] },
     canReview ? supabase.rpc("review_bonus_points") : { data: DEFAULT_REVIEW_POINTS },
     canReview ? supabase.rpc("session_reviews_for", { p_session: session.id }) : { data: [] },
+    // Kudos (BR-23): daftar penerima + kudos saya, hanya setelah sesi diakhiri.
+    done ? loadSessionKudos(supabase, session.id) : null,
   ]);
 
   // Member tampil dengan nama Soslay (RPC sudah memilih nama profil bila terhubung).
@@ -440,9 +449,11 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     reviewUntil: new Date((session.ended_at ? new Date(session.ended_at).getTime() : sessionClosesAt(session.ends_at)) + REVIEW_WINDOW_MS).toISOString(),
     reviewPoints: typeof reviewPoints === "number" ? reviewPoints : DEFAULT_REVIEW_POINTS,
     fetchedAt,
+    demo: false,
+    kudos,
     myPoints: ((ledger ?? []) as { delta: number; reason: string; note: string | null; is_podium: boolean }[]).map((r) => ({
       // is_podium juga menandai baris "Koreksi bonus juara" (Koreksi hasil).
-      label: r.reason === "attendance" ? "Hadir" : r.is_podium ? "Bonus juara" : /^Review/.test(r.note ?? "") ? "Review" : "Bonus",
+      label: r.reason === "attendance" ? "Hadir" : r.is_podium ? "Bonus juara" : /^Review/.test(r.note ?? "") ? "Review" : /^Kudos/.test(r.note ?? "") ? "Kudos" : "Bonus",
       delta: r.delta,
     })),
   };
@@ -455,6 +466,7 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
   const offset = s.city === "Bali" ? "+08:00" : "+07:00";
   const startsAt = new Date(`${s.date}T${s.start}:00${offset}`).toISOString();
   const endsAt = new Date(`${s.date}T${s.end}:00${offset}`).toISOString();
+  const now = Date.now();
   const names = ["Arya Putra Dewangga", "Kevin Wijaya", "Anitya Ayu Silfia", "Nadia Salsabila", "Yudi Sadewa", "Agatha Putri", "Ardi Nugroho", "Fadil Rahman"];
   return {
     id: s.slug,
@@ -494,7 +506,17 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     reviews: [],
     reviewUntil: new Date(sessionClosesAt(endsAt) + REVIEW_WINDOW_MS).toISOString(),
     reviewPoints: DEFAULT_REVIEW_POINTS,
+    // Kudos contoh: sesi selesai terbaru seolah baru diakhiri kemarin (jendela masih terbuka), sesi lama read-only.
+    kudos:
+      s.status === "done"
+        ? demoKudosSection(
+            names.map((name, i) => ({ id: String(i), name, me: i === 0 })),
+            splitSessions(memberSessions).past[0]?.slug === s.slug ? now - 86_400_000 : sessionClosesAt(endsAt),
+            now,
+          )
+        : null,
     myPoints: [],
-    fetchedAt: Date.now(),
+    demo: true,
+    fetchedAt: now,
   };
 }

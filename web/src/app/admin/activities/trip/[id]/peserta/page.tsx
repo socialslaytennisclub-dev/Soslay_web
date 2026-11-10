@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { SyncTripButton } from "@/components/admin/finance/LinkTx";
 import { TripPayments } from "@/components/admin/activities/TripPayments";
 import styles from "@/components/admin/activities/TripPayments.module.css";
 import { TripTabs } from "@/components/admin/activities/TripTabs";
@@ -11,7 +12,7 @@ import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { settlementDue, shortDate, todayWib, tripRange } from "@/lib/trips";
 import { getDataset } from "@/server/admin/dataset";
-import { getPaymentAccounts } from "@/server/admin/finance-repo";
+import { getFinanceAccess, getPaymentAccounts } from "@/server/admin/finance-repo";
 import { getTrip, singlesRevenue, tripDisplayStatus, tripSummary } from "@/server/admin/trips-repo";
 import pageStyles from "../../../../page.module.css";
 
@@ -22,7 +23,7 @@ const DAY = 86_400_000;
 /** Admin / 05x-2 Trip — Peserta & pembayaran (BR-22). */
 export default async function TripPaymentsPage({ params }: PageProps<"/admin/activities/trip/[id]/peserta">) {
   const { id } = await params;
-  const [trip, payAccounts, d] = await Promise.all([getTrip(id), getPaymentAccounts(), getDataset()]);
+  const [trip, payAccounts, d, finance] = await Promise.all([getTrip(id), getPaymentAccounts(), getDataset(), getFinanceAccess()]);
   if (!trip) notFound();
   const revenue = await singlesRevenue(trip);
   const s = tripSummary(trip);
@@ -50,9 +51,12 @@ export default async function TripPaymentsPage({ params }: PageProps<"/admin/act
               {tripRange(trip.startsOn, trip.endsOn)} · {trip.activities.length} activity · pelunasan H-14: {shortDate(due)}
             </span>
           </div>
-          <AdminButton href={`/admin/keuangan/transaksi?m=all&trip=${trip.id}`} icon="hand-coins">
-            Lihat di Keuangan
-          </AdminButton>
+          <div className={styles.barLeft}>
+            {finance.role === "full" && <SyncTripButton tripId={trip.id} />}
+            <AdminButton href={`/admin/keuangan/transaksi?m=all&trip=${trip.id}`} icon="hand-coins">
+              Lihat di Keuangan
+            </AdminButton>
+          </div>
         </div>
         <TripTabs tripId={trip.id} active="peserta" />
 

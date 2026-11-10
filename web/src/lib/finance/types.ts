@@ -117,7 +117,12 @@ export type FinSession = {
   startsAt: string;
   endsAt: string;
   participants: number;
+  /** Activity bagian dari trip Tennis Escape — di Per event dijumlahkan ke baris trip-nya. */
+  tripId: string | null;
 };
+
+/** Trip Tennis Escape untuk laporan Per event: pembayaran paket (transaksi trip_id) + activity-nya. */
+export type FinTrip = { id: string; title: string; startsOn: string; endsOn: string; packages: number };
 
 export type ImportBatch = { id: string; fileName: string; txTotal: number; importedAt: string; undoUntil: string; status: "draft" | "imported" | "undone" };
 
@@ -129,6 +134,7 @@ export type FinanceData = {
   settings: FinSettings;
   targets: FinTarget[];
   sessions: FinSession[];
+  trips: FinTrip[];
   batches: ImportBatch[];
   /** "Hari ini" WIB (YYYY-MM-DD) — demo memakai tanggal tetap. */
   today: string;

@@ -15,6 +15,7 @@ import { clearParticipants, removeParticipants } from "@/server/admin/actions/pl
 import { deleteSession, deleteSessionMistake, discardSessionUploads, saveSession, setCheckIn, uploadSessionCover, type SessionInput } from "@/server/admin/actions/sessions";
 import { hasTargetTotal, scoreTarget, usesLineup } from "@/lib/americano";
 import { effectivePodiumBonus, LEGACY_PODIUM_BONUS } from "@/lib/standings";
+import { KUDOS_TOP_DAYS } from "@/lib/kudos";
 import type { MemberChoice, SessionDetail, SessionHost, SessionParticipant, TennisLevel } from "@/server/admin/types";
 import { FormCard, MultiChips, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
@@ -24,6 +25,7 @@ import { PaymentCell, useParticipantPayment, viaLabel } from "./ParticipantPayme
 import { ParticipantsDrawer } from "./ParticipantsDrawer";
 import { WaInviteLink } from "./WaInviteLink";
 import { FormatCard, LineupCard, type PlayForm } from "./PlayCards";
+import { SessionKudos } from "./SessionKudos";
 import { SessionReviews } from "./SessionReviews";
 import styles from "./SessionEditor.module.css";
 import playStyles from "./Play.module.css";
@@ -476,6 +478,14 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
             {p.guests > 0 && ` · +${p.guests} teman`}
           </span>
         )}
+        {/* Kudos teratas member (6 bulan terakhir, semua sesi) — bantu menyusun line-up. */}
+        {p.kudosTop && (
+          <span title={`Kudos teratas ${KUDOS_TOP_DAYS / 30} bulan terakhir: ${p.kudosTop.label} (${p.kudosTop.count})`}>
+            <Badge tone="lime">
+              ✦ {p.kudosTop.label} {p.kudosTop.count}
+            </Badge>
+          </span>
+        )}
         {/* Belum member → undang daftar lewat WhatsApp (wa.me ke nomor dari Kuyy). */}
         {!p.memberId && <WaInviteLink href={memberInviteWaLink(p, session.title)} />}
       </span>
@@ -870,6 +880,8 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
           )}
 
           {mode === "edit" && <SessionReviews reviews={session.reviews} />}
+
+          {mode === "edit" && (session.kudos.length > 0 || session.displayStatus === "completed" || session.play.endedAt) && <SessionKudos sessionId={session.id} kudos={session.kudos} />}
 
           {mode === "edit" && (
             <FormCard
