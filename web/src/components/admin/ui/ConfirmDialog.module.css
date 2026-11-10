@@ -49,7 +49,6 @@
 .body {
   display: flex;
   flex-direction: column;
-  white-space: pre-line;
   gap: var(--space-8);
   font-family: var(--font-ui);
   font-size: 14px;

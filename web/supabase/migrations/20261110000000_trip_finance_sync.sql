@@ -22,13 +22,20 @@ returns void language sql security definer set search_path = public as $$
   values ('income', p_received, p_received, p_amount, (select id from finance_categories where system_key = 'ticket'),
           p_account, p_label, null, p_trip, p_kind, 'trip_payment', p_ref);
 $$;
-revoke all on function finance_insert_trip_payment(text, bigint, date, uuid, text, uuid, text) from public;
+revoke all on function finance_insert_trip_payment(text, bigint, date, uuid, text, uuid, text) from public, anon, authenticated;
+
+-- Supabase memberi EXECUTE ke anon & authenticated lewat default privileges — "from public" saja tidak
+-- cukup (review 10 Nov). Fungsi pencatat internal Keuangan hanya dipanggil fungsi security definer lain.
+revoke all on function finance_sync_auto(text, text, bigint, text, uuid, text, uuid, timestamptz, uuid, text, boolean) from public, anon, authenticated;
+revoke all on function finance_sync_participant(session_participants, boolean, sessions, finance_settings) from public, anon, authenticated;
 
 /**
  * Sinkron pembayaran paket satu trip ke Keuangan. p_apply = false → hanya pratinjau (tidak menulis).
- * Mengembalikan { "new": [{name, kind, amount, date}], "corrections": n, "skipped_deleted": n, "changes": n }.
+ * Mengembalikan { "new": [{name, kind, amount, date}], "corrections": n, "skipped_deleted": n, "changes": n,
+ * "token": md5 pratinjau }. p_expect = token pratinjau yang dikonfirmasi admin: kalau data berubah di antara
+ * pratinjau & catat (admin lain mencatat / membatalkan pembayaran), dibatalkan — tidak mencatat yang belum dilihat.
  */
-create function finance_resync_trip(p_trip uuid, p_apply boolean default true) returns jsonb
+create function finance_resync_trip(p_trip uuid, p_apply boolean default true, p_expect text default null) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
   t        trips%rowtype;
@@ -43,12 +50,21 @@ declare
   skipped  integer := 0;
   n0       integer;
   n1       integer;
+  check_   jsonb;
 begin
   if not finance_full() then raise exception 'Hanya Super Admin Keuangan yang bisa sinkron'; end if;
   select * into t from trips where id = p_trip;
   if not found then raise exception 'Trip tidak ditemukan'; end if;
-  -- Dua klik bersamaan tidak boleh sama-sama mencatat pembayaran yang sama.
-  if p_apply then perform pg_advisory_xact_lock(hashtext('finance_resync_trip:' || p_trip)); end if;
+  if p_apply then
+    -- Dua klik bersamaan tidak boleh sama-sama mencatat pembayaran yang sama.
+    perform pg_advisory_xact_lock(hashtext('finance_resync_trip:' || p_trip));
+    if p_expect is not null then
+      check_ := finance_resync_trip(p_trip, false);
+      if check_ ->> 'token' is distinct from p_expect then
+        raise exception 'Pembayaran trip berubah sejak pratinjau — klik Sync lagi untuk melihat daftar terbaru' using hint = 'trip_sync_changed';
+      end if;
+    end if;
+  end if;
   select count(*) into n0 from finance_transactions where source = 'trip_payment' and trip_id = p_trip;
 
   for p in
@@ -65,7 +81,7 @@ begin
     for stale in
       select source_ref from finance_transactions
       where source = 'trip_payment' and source_ref like 'tp:' || p.id || ':%' and source_ref <> ref and deleted_at is null
-      group by source_ref having sum(amount) <> 0
+      group by source_ref having sum(amount) > 0
     loop
       fixes := fixes + 1;
       if p_apply then perform finance_sync_auto('trip_payment', stale.source_ref, 0, 'ticket', null, label, null, now(), p_trip, p.kind); end if;
@@ -88,10 +104,11 @@ begin
   end loop;
 
   select count(*) into n1 from finance_transactions where source = 'trip_payment' and trip_id = p_trip;
-  return jsonb_build_object('new', items, 'corrections', fixes, 'skipped_deleted', skipped, 'changes', n1 - n0);
+  return jsonb_build_object('new', items, 'corrections', fixes, 'skipped_deleted', skipped, 'changes', n1 - n0,
+                            'token', md5(items::text || ':' || fixes));
 end $$;
-revoke execute on function finance_resync_trip(uuid, boolean) from public, anon;
-grant execute on function finance_resync_trip(uuid, boolean) to authenticated;
+revoke execute on function finance_resync_trip(uuid, boolean, text) from public, anon;
+grant execute on function finance_resync_trip(uuid, boolean, text) to authenticated;
 
 -- Sama dengan versi 20261106040000_trips, kecuali: akun penerima diganti untuk pembayaran yang SUDAH
 -- tercatat (mis. lewat Sync, bertanggal sebelum go-live) → dipindah ke akun baru di tanggal terimanya.
@@ -119,6 +136,8 @@ begin
     from finance_transactions where source = 'trip_payment' and source_ref = ref and deleted_at is null;
     if new.amount > active then
       perform finance_insert_trip_payment(ref, new.amount - active, new.received_on, new.account_id, label, t.id, new.kind);
+    elsif new.amount < active then
+      perform finance_sync_auto('trip_payment', ref, new.amount, 'ticket', new.account_id, label, null, now(), t.id, new.kind);
     end if;
     return null;
   end if;

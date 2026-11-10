@@ -19,6 +19,9 @@ const db = new PGlite({ extensions: { citext, pg_trgm, pgcrypto } });
 await db.exec(`
   create role anon;
   create role authenticated;
+  -- Seperti Supabase: fungsi baru di schema public otomatis bisa dieksekusi anon & authenticated
+  -- (revoke "from public" saja tidak cukup).
+  alter default privileges in schema public grant execute on functions to anon, authenticated;
   create schema auth;
   create table auth.users (id uuid primary key default gen_random_uuid(), email text, raw_user_meta_data jsonb);
   create function auth.uid() returns uuid language sql stable as
@@ -954,6 +957,27 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const lateTx = await one(`select date::text date, term from finance_transactions where source = 'trip_payment' and source_ref = $1`, ['tp:' + late + ':' + bank]);
   console.assert(synced.changes === 1 && (await net()) === 1900000 && lateTx?.term === "installment" && lateTx.date === (await one(`select (current_date - 60)::text d`)).d, `Sync trip tidak mencatat pembayaran sebelum go-live ${JSON.stringify(synced)} ${await net()} ${JSON.stringify(lateTx)}`);
   console.assert((await one(`select finance_resync_trip($1) r`, [trip])).r.changes === 0 && (await net()) === 1900000, "Sync trip dua kali mencatat dobel");
+  // Data berubah sesudah pratinjau dikonfirmasi → dibatalkan, tidak mencatat yang belum dilihat admin.
+  const token = (await one(`select finance_resync_trip($1, false) r`, [trip])).r.token;
+  await as(null);
+  const sneaky = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'installment', 100000, current_date - 50, $2) returning id`, [bk, bank])).id;
+  await as(tripAdmin);
+  console.assert(await db.query(`select finance_resync_trip($1, true, $2)`, [trip, token]).then(() => false, () => true), "Sync trip mencatat pembayaran yang tidak ada di pratinjau");
+  const fresh = (await one(`select finance_resync_trip($1, false) r`, [trip])).r;
+  console.assert((await one(`select finance_resync_trip($1, true, $2) r`, [trip, fresh.token])).r.changes === 1, "Sync trip dengan token terbaru gagal");
+  await as(null);
+  await db.query(`update trip_payments set voided_at = now(), void_reason = 'tes' where id = $1`, [sneaky]);
+  console.assert((await net()) === 1900000, "pembatalan sesudah Sync tidak dikoreksi");
+  // Fungsi pencatat internal tidak bisa dipanggil langsung lewat RPC (default privileges Supabase).
+  for (const fn of ["finance_insert_trip_payment(text, bigint, date, uuid, text, uuid, text)", "finance_sync_auto(text, text, bigint, text, uuid, text, uuid, timestamptz, uuid, text, boolean)", "finance_sync_participant(session_participants, boolean, sessions, finance_settings)"]) {
+    for (const role of ["anon", "authenticated"]) {
+      console.assert(!(await one(`select has_function_privilege($1, $2, 'execute') ok`, [role, fn])).ok, `${role} bisa memanggil ${fn}`);
+    }
+  }
+  console.assert(!(await one(`select has_function_privilege('anon', 'finance_resync_trip(uuid, boolean, text)', 'execute') ok`)).ok, "anon bisa memanggil finance_resync_trip");
+  const { id: outsider } = await one(`insert into auth.users default values returning id`);
+  await as(outsider);
+  console.assert(await db.query(`select finance_resync_trip($1)`, [trip]).then(() => false, () => true), "member biasa bisa Sync trip");
   await as(null);
   // Akun diganti sesudah Sync (tanggal sebelum go-live) → pindah ke akun baru, tidak hilang.
   await db.query(`update trip_payments set account_id = $2 where id = $1`, [late, cash]);

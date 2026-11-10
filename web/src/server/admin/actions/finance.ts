@@ -485,28 +485,29 @@ export async function syncSessionFinance(sessionId: string): Promise<ActionResul
   return done(`Keuangan activity disinkronkan · ${count ?? 0} peserta dibaca ulang.`);
 }
 
-type TripSyncResult = { new: { name: string; kind: string; amount: number; date: string }[]; corrections: number; skipped_deleted: number; changes: number };
+type TripSyncResult = { new: { name: string; kind: string; amount: number; date: string }[]; corrections: number; skipped_deleted: number; changes: number; token: string };
 
 /** Pratinjau "Sync ke Keuangan" trip: pembayaran yang akan dicatat (belum menulis apa pun). */
 export async function previewTripSync(
   tripId: string,
-): Promise<{ ok: true; items: TripSyncResult["new"]; corrections: number; skippedDeleted: number } | { ok: false; error: string }> {
+): Promise<{ ok: true; items: TripSyncResult["new"]; corrections: number; skippedDeleted: number; token: string } | { ok: false; error: string }> {
   const auth = await requireFinance("full");
   if ("error" in auth) return { ok: false, error: auth.error };
   const supabase = await createSupabaseServerClient();
   const { data, error } = await supabase.rpc("finance_resync_trip", { p_trip: tripId, p_apply: false });
   if (error) return { ok: false, error: `Gagal membaca pembayaran trip: ${error.message}` };
   const r = data as TripSyncResult;
-  return { ok: true, items: r.new, corrections: r.corrections, skippedDeleted: r.skipped_deleted };
+  return { ok: true, items: r.new, corrections: r.corrections, skippedDeleted: r.skipped_deleted, token: r.token };
 }
 
 /** Peserta & pembayaran trip · "Sync ke Keuangan": catat DP / cicilan / pelunasan yang belum masuk (termasuk sebelum go-live). */
-export async function syncTripFinance(tripId: string): Promise<ActionResult> {
+/** `token` = token pratinjau yang dikonfirmasi: data berubah sesudahnya → ditolak, admin melihat daftar baru. */
+export async function syncTripFinance(tripId: string, token: string): Promise<ActionResult> {
   const auth = await requireFinance("full");
   if ("error" in auth) return fail(auth.error);
   const supabase = await createSupabaseServerClient();
-  const { data, error } = await supabase.rpc("finance_resync_trip", { p_trip: tripId, p_apply: true });
-  if (error) return fail(`Gagal sinkron: ${error.message}`);
+  const { data, error } = await supabase.rpc("finance_resync_trip", { p_trip: tripId, p_apply: true, p_expect: token });
+  if (error) return fail(error.hint === "trip_sync_changed" ? "Pembayaran trip berubah sejak pratinjau — klik Sync lagi untuk melihat daftar terbaru." : `Gagal sinkron: ${error.message}`);
   const r = data as TripSyncResult;
   await financeLog(auth.userId, "trip", tripId, "sinkron keuangan trip", null, { recorded: r.new, corrections: r.corrections });
   refresh();

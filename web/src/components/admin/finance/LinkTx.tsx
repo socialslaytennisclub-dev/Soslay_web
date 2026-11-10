@@ -4,6 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition, type ReactNode } from "react";
 import { AdminButton } from "@/components/admin/ui/AdminUI";
 import { useConfirm } from "@/components/admin/ui/ConfirmDialog";
+import { formatRupiah } from "@/lib/format";
+import { shortDate } from "@/lib/trips";
 import { toast } from "@/components/admin/ui/Toaster";
 import type { ActionResult } from "@/server/admin/actions/common";
 import { linkTransaction, previewTripSync, syncSessionFinance, syncTripFinance } from "@/server/admin/actions/finance";
@@ -94,7 +96,6 @@ export function SyncSessionButton({ sessionId }: { sessionId: string }) {
 }
 
 const KIND: Record<string, string> = { dp: "DP", installment: "Cicilan", settlement: "Pelunasan" };
-const rupiah = (n: number) => `Rp${n.toLocaleString("id-ID")}`;
 
 /**
  * "Sync ke Keuangan" untuk pembayaran paket trip (halaman trip & transaksi trip di Keuangan). Pratinjau
@@ -109,16 +110,27 @@ export function SyncTripButton({ tripId }: { tripId: string }) {
     const skipped = p.skippedDeleted ? ` ${p.skippedDeleted} transaksi yang pernah dihapus tidak dibuat ulang.` : "";
     if (!p.items.length && !p.corrections) return { ok: true, message: `Semua pembayaran trip sudah tercatat di Keuangan.${skipped}` };
     const total = p.items.reduce((s, i) => s + i.amount, 0);
-    const lines = p.items.map((i) => `• ${KIND[i.kind] ?? i.kind} · ${i.name} · ${rupiah(i.amount)} · ${i.date}`).join("\n");
     const ok = await confirm({
-      title: p.items.length ? `Catat ${p.items.length} pembayaran trip (${rupiah(total)})?` : "Sinkronkan pembayaran trip?",
-      body:
-        (p.items.length
-          ? `${lines}\n\nPastikan pembayaran ini BELUM masuk lewat import jurnal — kalau sudah, Keuangan jadi dobel.`
-          : "") + (p.corrections ? `${p.items.length ? "\n" : ""}${p.corrections} koreksi (pembayaran dibatalkan / pindah akun).` : "") + skipped,
+      title: p.items.length ? `Catat ${p.items.length} pembayaran trip (${formatRupiah(total)})?` : "Sinkronkan pembayaran trip?",
+      body: (
+        <>
+          {p.items.length > 0 && (
+            <ul className={styles.syncList}>
+              {p.items.map((i, n) => (
+                <li key={n}>
+                  {KIND[i.kind] ?? i.kind} · {i.name} · <strong>{formatRupiah(i.amount)}</strong> · {shortDate(i.date)}
+                </li>
+              ))}
+            </ul>
+          )}
+          {p.items.length > 0 && <p>Pastikan pembayaran ini BELUM masuk lewat import jurnal — kalau sudah, Keuangan jadi dobel.</p>}
+          {p.corrections > 0 && <p>{p.corrections} koreksi (pembayaran dibatalkan / pindah akun).</p>}
+          {skipped && <p>{skipped.trim()}</p>}
+        </>
+      ),
       confirmLabel: "Ya, catat",
     });
-    return ok ? syncTripFinance(tripId) : null;
+    return ok ? syncTripFinance(tripId, p.token) : null;
   };
   return <SyncButton label="Sync ke Keuangan" run={run} dialog={dialog} />;
 }

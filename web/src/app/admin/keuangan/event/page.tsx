@@ -36,7 +36,9 @@ export default async function EventProfitPage({ searchParams }: PageProps<"/admi
   const revenue = all.reduce((s, r) => s + r.revenue, 0);
   const cost = all.reduce((s, r) => s + r.cost, 0);
   const losses = all.filter((r) => r.profit < 0).length;
-  const noCost = all.filter((r) => !r.hasCost && r.revenue > 0).length;
+  const noCost = all.filter((r) => !r.hasCost && r.revenue > 0 && r.kind !== "trip").length;
+  // Biaya trip dikaitkan lewat activity trip-nya (tidak ada detail event untuk trip).
+  const tripsNoCost = all.filter((r) => !r.hasCost && r.revenue > 0 && r.kind === "trip").length;
   const recon = eventReconciliation(data, month);
   const href = (over: Record<string, string | undefined>) => {
     const p = new URLSearchParams({ m: month, ...(kind !== "all" ? { kind } : {}), ...(sort !== "profit" ? { sort } : {}) });
@@ -65,7 +67,7 @@ export default async function EventProfitPage({ searchParams }: PageProps<"/admi
         <FinanceTabs active="event" role={role} query={`?m=${month}`} />
 
         <div className={styles.kpis}>
-          <Kpi icon="tennis-ball" label="Sesi, event & trip" value={String(all.length)} note={`${losses} rugi · ${noCost} belum ada biaya terkait`} />
+          <Kpi icon="tennis-ball" label="Sesi, event & trip" value={String(all.length)} note={`${losses} rugi · ${noCost + tripsNoCost} belum ada biaya terkait`} />
           <Kpi icon="trend-up" label="Pendapatan terkait" value={rpShort(revenue)} note="Tiket Kuyy, bayar manual, paket trip & sistem" />
           <Kpi icon="trend-down" label="Biaya terkait" value={rpShort(cost)} note="Sewa, honor, transport, konsumsi …" />
           <Kpi icon="money" label="Laba sesi, event & trip" value={rpShort(revenue - cost)} note={`Margin ${pct(revenue ? ((revenue - cost) / revenue) * 100 : null)}`} />
@@ -75,6 +77,13 @@ export default async function EventProfitPage({ searchParams }: PageProps<"/admi
           <p className={styles.alert}>
             <AdminIcon name="warning-circle" size={16} />
             {noCost} sesi belum punya biaya terkait (mis. sewa lapangan belum dikaitkan) — labanya bisa terlihat terlalu besar. Kaitkan dari detail transaksi atau detail event.
+          </p>
+        )}
+
+        {tripsNoCost > 0 && (
+          <p className={styles.alert}>
+            <AdminIcon name="warning-circle" size={16} />
+            {tripsNoCost} trip belum punya biaya terkait — kaitkan biaya trip (hotel, transport, makan) ke salah satu activity trip itu lewat &ldquo;Kaitkan ke sesi&rdquo; di detail transaksi.
           </p>
         )}
 

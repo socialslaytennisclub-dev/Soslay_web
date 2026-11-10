@@ -13,18 +13,28 @@ export function NotificationsProvider({ items, children }: { items: AdminNotific
   return <NotificationsContext.Provider value={items}>{children}</NotificationsContext.Provider>;
 }
 
-const SEEN_KEY = "soslay.admin.notif-seen";
+const SEEN_KEY = "soslay.admin.notif-seen-v2";
+type Seen = Record<string, number>;
 const listeners = new Set<() => void>();
+/** Snapshot mentah (string) — stabil untuk useSyncExternalStore; diurai di komponen. */
 function readSeen(): string {
   try {
-    return localStorage.getItem(SEEN_KEY) ?? "";
+    return localStorage.getItem(SEEN_KEY) ?? "{}";
   } catch {
-    return "";
+    return "{}";
   }
 }
-function writeSeen(v: string) {
+function parseSeen(raw: string): Seen {
   try {
-    localStorage.setItem(SEEN_KEY, v);
+    const v: unknown = JSON.parse(raw);
+    return v && typeof v === "object" ? (v as Seen) : {};
+  } catch {
+    return {};
+  }
+}
+function writeSeen(v: Seen) {
+  try {
+    localStorage.setItem(SEEN_KEY, JSON.stringify(v));
   } catch {
     // Penyimpanan diblokir: titik tetap tampil, tidak masalah.
   }
@@ -40,20 +50,19 @@ export function NotificationBell() {
   const items = useContext(NotificationsContext);
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
-  const signature = items.map((i) => `${i.key}:${i.count}`).join("|");
-  // Server & render pertama: anggap sudah dilihat (tanpa titik) supaya tidak beda dengan HTML server.
-  const seen = useSyncExternalStore(subscribe, readSeen, () => signature);
-  // Titik hanya kalau ada antrean yang BERTAMBAH sejak lonceng terakhir dibuka (berkurang = sudah ditangani).
-  const seenCounts = new Map(seen.split("|").map((part) => [part.split(":")[0], Number(part.split(":")[1]) || 0]));
-  const unseen = items.some((i) => i.count > (seenCounts.get(i.key) ?? 0));
-  // Antrean berkurang → turunkan juga angka "sudah dilihat", supaya kalau bertambah lagi titiknya menyala.
-  const lowered = [...seenCounts]
-    .map(([key, n]) => `${key}:${Math.min(n, items.find((i) => i.key === key)?.count ?? 0)}`)
-    .filter((part) => !part.endsWith(":0"))
-    .join("|");
+  const current: Seen = Object.fromEntries(items.map((i) => [i.key, i.count]));
+  // Server & render pertama: anggap sudah dilihat semua (tanpa titik) supaya sama dengan HTML server.
+  const seen = parseSeen(useSyncExternalStore(subscribe, readSeen, () => JSON.stringify(current)));
+  // Titik hanya kalau ada antrean yang BERTAMBAH sejak lonceng terakhir dibuka.
+  const unseen = items.some((i) => i.count > (seen[i.key] ?? 0));
+  // Antrean berkurang (sudah ditangani) → turunkan angka "sudah dilihat", supaya kalau naik lagi titiknya menyala.
+  const shrunk = Object.keys(seen).some((k) => seen[k] > (current[k] ?? 0));
   useEffect(() => {
-    if (seen && lowered !== seen && seen !== signature) writeSeen(lowered);
-  }, [seen, lowered, signature]);
+    if (!shrunk) return;
+    const lowered = parseSeen(readSeen());
+    for (const k of Object.keys(lowered)) lowered[k] = Math.min(lowered[k], current[k] ?? 0);
+    writeSeen(lowered);
+  }, [shrunk, current]);
 
   useEffect(() => {
     if (!open) return;
@@ -72,7 +81,7 @@ export function NotificationBell() {
   }, [open]);
 
   const toggle = () => {
-    if (!open) writeSeen(signature);
+    if (!open) writeSeen(current);
     setOpen(!open);
   };
 
