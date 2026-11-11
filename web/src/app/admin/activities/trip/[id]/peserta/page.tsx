@@ -53,7 +53,7 @@ export default async function TripPaymentsPage({ params }: PageProps<"/admin/act
           </div>
           <div className={styles.barLeft}>
             {finance.role === "full" && <SyncTripButton tripId={trip.id} />}
-            <AdminButton href={`/admin/keuangan/transaksi?m=all&trip=${trip.id}`} icon="hand-coins">
+            <AdminButton href={`/admin/keuangan/trip/${trip.id}`} icon="hand-coins">
               Lihat di Keuangan
             </AdminButton>
           </div>

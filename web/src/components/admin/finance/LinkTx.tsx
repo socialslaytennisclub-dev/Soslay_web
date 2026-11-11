@@ -8,12 +8,12 @@ import { formatRupiah } from "@/lib/format";
 import { shortDate, PAYMENT_KIND_LABEL } from "@/lib/trips";
 import { toast } from "@/components/admin/ui/Toaster";
 import type { ActionResult } from "@/server/admin/actions/common";
-import { linkTransaction, previewTripSync, syncSessionFinance, syncTripFinance } from "@/server/admin/actions/finance";
+import { linkTransaction, linkTransactionToTrip, previewTripSync, syncSessionFinance, syncTripFinance } from "@/server/admin/actions/finance";
 import styles from "./Finance.module.css";
 import { FinanceModal } from "./FinanceModal";
 
-/** "Kaitkan transaksi" di detail event (12w): pilih transaksi yang belum terkait sesi. */
-export function LinkTxButton({ sessionId, candidates }: { sessionId: string; candidates: { id: string; label: string }[] }) {
+/** "Kaitkan transaksi" di detail event (12w) / detail trip: pilih transaksi yang belum terkait sesi / trip. */
+export function LinkTxButton({ sessionId, tripId, candidates }: { sessionId?: string; tripId?: string; candidates: { id: string; label: string }[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
@@ -23,7 +23,7 @@ export function LinkTxButton({ sessionId, candidates }: { sessionId: string; can
       <AdminButton icon="link-simple" onClick={() => setOpen(true)}>
         Kaitkan transaksi
       </AdminButton>
-      <FinanceModal open={open} onClose={() => setOpen(false)} title="Kaitkan transaksi" subtitle="Transaksi belum terkait sesi, ±45 hari dari tanggal event."
+      <FinanceModal open={open} onClose={() => setOpen(false)} title="Kaitkan transaksi" subtitle={tripId ? "Transaksi belum terkait sesi / trip, sejak 120 hari sebelum trip sampai 45 hari sesudahnya." : "Transaksi belum terkait sesi, ±45 hari dari tanggal event."}
         footer={
           <>
           <span className={styles.footNote}>{picked.length} dipilih</span>
@@ -33,7 +33,7 @@ export function LinkTxButton({ sessionId, candidates }: { sessionId: string; can
             onClick={() =>
               start(async () => {
                 for (const id of picked) {
-                  const r = await linkTransaction(id, sessionId);
+                  const r = tripId ? await linkTransactionToTrip(id, tripId) : await linkTransaction(id, sessionId ?? null);
                   if (!r.ok) return toast.error(r.error);
                 }
                 toast.success(`${picked.length} transaksi dikaitkan.`);

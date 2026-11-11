@@ -19,6 +19,8 @@ export type TxFormOptions = {
   accounts: { id: string; name: string; systemKey: string | null }[];
   categories: { id: string; name: string; kind: "income" | "expense"; systemKey: string | null; archived: boolean }[];
   sessions: { id: string; label: string }[];
+  /** Trip Tennis Escape (biaya hotel, transport, makan dikaitkan ke trip). */
+  trips: { id: string; label: string }[];
   /** Akun default per jenis (bank utama). */
   defaultAccountId: string | null;
 };
@@ -43,7 +45,7 @@ const fmt = (v: string) => amountDisplay(amountDigits(v));
  * Modal "Catat transaksi" (Figma 12c / 12h / 12h-2 / 12i, validasi 12j). Dipakai untuk catat baru,
  * edit, dan duplikat transaksi manual. Setelah simpan → toast dengan "Batalkan" 5 detik (12k).
  */
-export function TxModal({ open, onClose, options, initial, duplicate = false, presetSessionId }: { open: boolean; onClose: () => void; options: TxFormOptions; initial?: FinTx | null; duplicate?: boolean; presetSessionId?: string }) {
+export function TxModal({ open, onClose, options, initial, duplicate = false, presetSessionId, presetTripId }: { open: boolean; onClose: () => void; options: TxFormOptions; initial?: FinTx | null; duplicate?: boolean; presetSessionId?: string; presetTripId?: string }) {
   const formRef = useRef<HTMLFormElement>(null);
   const router = useRouter();
   const [pending, start] = useTransition();
@@ -254,6 +256,21 @@ export function TxModal({ open, onClose, options, initial, duplicate = false, pr
           </select>,
           type === "expense" ? "Biaya ikut dihitung di laba per sesi." : "Pendapatan ikut dihitung di laba per event.",
         )}
+      {(type === "income" || type === "expense") &&
+        options.trips.length > 0 &&
+        field(
+          opt("Kaitkan ke trip"),
+          "tripId",
+          <select name="tripId" defaultValue={initial?.tripId ?? (initial ? "" : (presetTripId ?? ""))} className={styles.input}>
+            <option value="">— Tidak dikaitkan —</option>
+            {options.trips.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>,
+          "Biaya trip (hotel, transport, makan) dihitung di laba trip. Pilih sesi ATAU trip — sesi activity trip otomatis ikut trip-nya.",
+        )}
 
       {type === "income" &&
         ticket &&
@@ -302,7 +319,8 @@ export function TxModal({ open, onClose, options, initial, duplicate = false, pr
 }
 
 /** Tombol "Catat transaksi" + modalnya (header halaman Keuangan). */
-export function RecordTxButton({ options, label = "Catat transaksi", variant = "primary", presetSessionId }: { options: TxFormOptions; label?: string; variant?: "primary" | "outline"; presetSessionId?: string }) {
+/** `presetTripId`: transaksi baru langsung terkait trip itu (detail trip Keuangan). */
+export function RecordTxButton({ options, label = "Catat transaksi", variant = "primary", presetSessionId, presetTripId }: { options: TxFormOptions; label?: string; variant?: "primary" | "outline"; presetSessionId?: string; presetTripId?: string }) {
   const [open, setOpen] = useState(false);
   const [key, setKey] = useState(0);
   return (
@@ -317,7 +335,7 @@ export function RecordTxButton({ options, label = "Catat transaksi", variant = "
       >
         {label}
       </AdminButton>
-      <TxModal key={key} open={open} onClose={() => setOpen(false)} options={options} presetSessionId={presetSessionId} />
+      <TxModal key={key} open={open} onClose={() => setOpen(false)} options={options} presetSessionId={presetSessionId} presetTripId={presetTripId} />
     </>
   );
 }

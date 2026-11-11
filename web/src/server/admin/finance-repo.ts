@@ -68,22 +68,23 @@ async function liveFinanceSessions(supabase: SupabaseClient): Promise<FinSession
   }));
 }
 
-/** Trip Tennis Escape (bukan draft) + jumlah paket aktif — untuk baris Trip di Per event. */
+/** Trip Tennis Escape (juga draft — transaksinya tetap bisa dikaitkan) + jumlah paket aktif — untuk baris Trip di Per event. */
 async function liveFinanceTrips(supabase: SupabaseClient): Promise<FinTrip[]> {
   const [trips, bookings] = await Promise.all([
-    supabase.from("trips").select("id, title, starts_on, ends_on").neq("status", "draft").order("starts_on", { ascending: false }),
+    supabase.from("trips").select("id, title, starts_on, ends_on, status").order("starts_on", { ascending: false }),
     supabase.from("trip_bookings").select("trip_id").is("cancelled_at", null),
   ]);
   if (trips.error) throw new Error(`Gagal memuat trip: ${trips.error.message}`);
   if (bookings.error) throw new Error(`Gagal memuat paket trip: ${bookings.error.message}`);
   const sold = new Map<string, number>();
   for (const b of (bookings.data ?? []) as { trip_id: string }[]) sold.set(b.trip_id, (sold.get(b.trip_id) ?? 0) + 1);
-  return ((trips.data ?? []) as { id: string; title: string; starts_on: string; ends_on: string }[]).map((t) => ({
+  return ((trips.data ?? []) as { id: string; title: string; starts_on: string; ends_on: string; status: string }[]).map((t) => ({
     id: t.id,
     title: t.title,
     startsOn: t.starts_on,
     endsOn: t.ends_on,
     packages: sold.get(t.id) ?? 0,
+    draft: t.status === "draft",
   }));
 }
 
