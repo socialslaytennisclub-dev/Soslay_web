@@ -16,7 +16,47 @@ returns bigint language sql immutable as $$
   select case when p_voided_at is null and p_booking_cancelled_at is null then p_amount else 0 end
 $$;
 
--- Sama dengan versi 20261110000000_trip_finance_sync, kecuali target dari trip_payment_target (peserta dibatalkan → 0).
+/**
+ * Catat bagian pembayaran trip yang belum ada di Keuangan (ref 'tp:<id>:<akun>' di bawah target) — satu aturan
+ * untuk Sync & peserta diaktifkan lagi. null = sudah lengkap. Hasil {action, amount, date}:
+ *  · 'skip' → transaksi positifnya pernah dihapus admin (mis. dobel dengan import jurnal) & tidak ada yang aktif:
+ *    tidak dibuat ulang (walau baris koreksinya masih ada);
+ *  · 'new'  → pernah tercatat lalu dikoreksi → dicatat ulang HARI INI (bulan lalu tidak berubah); belum pernah
+ *    tercatat → di tanggal terima;
+ *  · 'wait' → belum pernah tercatat & sebelum go-live, p_wait_go_live (trigger) → ditunggu lewat Sync (pratinjau).
+ * p_apply = false → hanya menghitung (pratinjau Sync).
+ */
+create function trip_payment_fill(p_ref text, p_target bigint, p_received date, p_account uuid, p_label text,
+                                  p_trip uuid, p_kind text, p_apply boolean, p_wait_go_live boolean)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v_active bigint;
+  v_recorded boolean;
+  v_date date;
+begin
+  select coalesce(sum(amount) filter (where deleted_at is null), 0), bool_or(deleted_at is null)
+  into v_active, v_recorded
+  from finance_transactions where source = 'trip_payment' and source_ref = p_ref;
+  if p_target <= v_active then return null; end if;
+  if not exists (select 1 from finance_transactions where source = 'trip_payment' and source_ref = p_ref and deleted_at is null and amount > 0)
+     and exists (select 1 from finance_transactions where source = 'trip_payment' and source_ref = p_ref and deleted_at is not null and amount > 0) then
+    return jsonb_build_object('action', 'skip');
+  end if;
+  if coalesce(v_recorded, false) then
+    v_date := (now() at time zone 'Asia/Jakarta')::date;
+  else
+    v_date := p_received;
+    if p_wait_go_live and p_received < (select go_live_date from finance_settings) then
+      return jsonb_build_object('action', 'wait');
+    end if;
+  end if;
+  if p_apply then perform finance_insert_trip_payment(p_ref, p_target - v_active, v_date, p_account, p_label, p_trip, p_kind); end if;
+  return jsonb_build_object('action', 'new', 'amount', p_target - v_active, 'date', v_date);
+end $$;
+revoke all on function trip_payment_fill(text, bigint, date, uuid, text, uuid, text, boolean, boolean) from public, anon, authenticated;
+
+-- Sama dengan versi 20261110000000_trip_finance_sync, kecuali target dari trip_payment_target (peserta dibatalkan → 0)
+-- dan pencatatan yang kurang lewat trip_payment_fill.
 create or replace function finance_resync_trip(p_trip uuid, p_apply boolean default true, p_expect text default null) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -35,6 +75,7 @@ declare
   n0       integer;
   n1       integer;
   check_   jsonb;
+  fill     jsonb;
 begin
   if not finance_full() then raise exception 'Hanya Super Admin Keuangan yang bisa sinkron'; end if;
   select * into t from trips where id = p_trip;
@@ -75,15 +116,14 @@ begin
     select coalesce(sum(amount), 0) into active
     from finance_transactions where source = 'trip_payment' and source_ref = ref and deleted_at is null;
     if target > active then
-      -- Transaksi otomatisnya pernah dihapus admin (mis. dobel dengan import jurnal) → jangan dibuat ulang.
-      if active = 0 and exists (select 1 from finance_transactions where source = 'trip_payment' and source_ref = ref and deleted_at is not null) then
+      fill := trip_payment_fill(ref, target, p.received_on, p.account_id, label, p_trip, p.kind, p_apply, false);
+      if fill ->> 'action' = 'skip' then
         skipped := skipped + 1;
         plan := plan || jsonb_build_array(jsonb_build_array('skip', ref));
         continue;
       end if;
-      items := items || jsonb_build_object('name', coalesce(p.full_name, 'peserta'), 'kind', p.kind, 'amount', target - active, 'date', p.received_on);
-      plan := plan || jsonb_build_array(jsonb_build_array('new', ref, target - active));
-      if p_apply then perform finance_insert_trip_payment(ref, target - active, p.received_on, p.account_id, label, p_trip, p.kind); end if;
+      items := items || jsonb_build_object('name', coalesce(p.full_name, 'peserta'), 'kind', p.kind, 'amount', (fill ->> 'amount')::bigint, 'date', fill ->> 'date');
+      plan := plan || jsonb_build_array(jsonb_build_array('new', ref, (fill ->> 'amount')::bigint, fill ->> 'date'));
     elsif target < active then
       fixes := fixes + 1;
       plan := plan || jsonb_build_array(jsonb_build_array('fix', ref, target, active));
@@ -109,6 +149,8 @@ declare
 begin
   select * into b from trip_bookings where id = p.booking_id;
   select * into t from trips where id = b.trip_id;
+  -- Kunci yang sama dengan Sync (finance_resync_trip): tidak ada dua jalur yang mencatat ref yang sama bersamaan.
+  perform pg_advisory_xact_lock(hashtext('finance_resync_trip:' || t.id));
   label := trip_payment_label(p.kind, b.full_name, t.title);
   if tg_op = 'UPDATE' and old.account_id is distinct from new.account_id then
     select coalesce(sum(amount), 0) into moved
@@ -141,29 +183,18 @@ declare
   t      trips;
   ref    text;
   label  text;
-  active bigint;
 begin
   select * into t from trips where id = new.trip_id;
+  -- Kunci yang sama dengan Sync (finance_resync_trip): aktifkan lagi & Sync tidak mencatat ref yang sama bersamaan.
+  perform pg_advisory_xact_lock(hashtext('finance_resync_trip:' || t.id));
   for p in select * from trip_payments where booking_id = new.id and voided_at is null order by received_on, created_at loop
     ref := 'tp:' || p.id || ':' || p.account_id;
     label := trip_payment_label(p.kind, new.full_name, t.title);
     if new.cancelled_at is not null then
       perform finance_sync_auto('trip_payment', ref, trip_payment_target(p.amount, p.voided_at, new.cancelled_at), 'ticket', p.account_id, label, null, now(), t.id, p.kind);
     else
-      select coalesce(sum(amount), 0) into active
-      from finance_transactions where source = 'trip_payment' and source_ref = ref and deleted_at is null;
-      if trip_payment_target(p.amount, p.voided_at, null) <= active then continue; end if;
-      if exists (select 1 from finance_transactions where source = 'trip_payment' and source_ref = ref and deleted_at is null) then
-        -- Pernah tercatat (lalu dikoreksi saat dibatalkan) → catat lagi HARI INI (seperti koreksinya), bukan di
-        -- tanggal terima: bulan yang sudah lewat / dilaporkan tidak berubah. Walau sebelum go-live.
-        perform finance_insert_trip_payment(ref, p.amount - active, (now() at time zone 'Asia/Jakarta')::date, p.account_id, label, t.id, p.kind);
-      elsif exists (select 1 from finance_transactions where source = 'trip_payment' and source_ref = ref) then
-        -- Transaksinya pernah dihapus admin (mis. dobel dengan import jurnal) → jangan dibuat ulang (sama dengan Sync).
-        continue;
-      else
-        perform finance_sync_auto('trip_payment', ref, p.amount, 'ticket', p.account_id, label, null,
-                                  (p.received_on + time '12:00') at time zone 'Asia/Jakarta', t.id, p.kind);
-      end if;
+      -- Diaktifkan lagi → bagian yang kurang dicatat lewat aturan yang sama dengan Sync (tanggal & transaksi dihapus).
+      perform trip_payment_fill(ref, trip_payment_target(p.amount, p.voided_at, null), p.received_on, p.account_id, label, t.id, p.kind, true, true);
     end if;
   end loop;
   return null;
