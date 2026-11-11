@@ -7,7 +7,16 @@
 --  · Sync tidak mencatatnya dan mengoreksi yang sudah tercatat (data lama: klik Sync sekali);
 --  · peserta diaktifkan lagi → pembayarannya tercatat lagi di tanggal terimanya.
 
--- Sama dengan versi 20261110000000_trip_finance_sync, kecuali target 0 untuk peserta yang dibatalkan.
+/**
+ * Nilai pembayaran trip yang dihitung Keuangan — satu aturan untuk Sync, trigger pembayaran & trigger
+ * pembatalan peserta: pembayaran dibatalkan (void) atau peserta paketnya dibatalkan → 0.
+ */
+create function trip_payment_target(p_amount bigint, p_voided_at timestamptz, p_booking_cancelled_at timestamptz)
+returns bigint language sql immutable as $$
+  select case when p_voided_at is null and p_booking_cancelled_at is null then p_amount else 0 end
+$$;
+
+-- Sama dengan versi 20261110000000_trip_finance_sync, kecuali target dari trip_payment_target (peserta dibatalkan → 0).
 create or replace function finance_resync_trip(p_trip uuid, p_apply boolean default true, p_expect text default null) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare
@@ -49,8 +58,7 @@ begin
     order by tp.received_on, tp.created_at
   loop
     ref := 'tp:' || p.id || ':' || p.account_id;
-    -- Peserta dibatalkan → pembayarannya tidak dihitung (dikoreksi ke 0), sama dengan pembayaran dibatalkan.
-    target := case when p.voided_at is null and p.booking_cancelled is null then p.amount else 0 end;
+    target := trip_payment_target(p.amount, p.voided_at, p.booking_cancelled);
     label := trip_payment_label(p.kind, p.full_name, t.title);
 
     -- Akun penerima pernah diganti: sisa di ref akun lama dikoreksi ke 0.
@@ -88,7 +96,7 @@ begin
                             'token', md5(plan::text));
 end $$;
 
--- Sama dengan versi 20261110000000_trip_finance_sync, kecuali target 0 untuk peserta yang dibatalkan.
+-- Sama dengan versi 20261110000000_trip_finance_sync, kecuali target dari trip_payment_target.
 create or replace function finance_on_trip_payment() returns trigger language plpgsql security definer set search_path = public as $$
 declare
   p      trip_payments := case when tg_op = 'DELETE' then old else new end;
@@ -107,7 +115,7 @@ begin
     from finance_transactions where source = 'trip_payment' and source_ref = 'tp:' || old.id || ':' || old.account_id and deleted_at is null;
     perform finance_sync_auto('trip_payment', 'tp:' || old.id || ':' || old.account_id, 0, 'ticket', old.account_id, label, null, now(), t.id, old.kind);
   end if;
-  if moved > 0 and new.voided_at is null and b.cancelled_at is null then
+  if moved > 0 and trip_payment_target(new.amount, new.voided_at, b.cancelled_at) > 0 then
     select coalesce(sum(amount), 0) into active
     from finance_transactions where source = 'trip_payment' and source_ref = ref and deleted_at is null;
     if new.amount > active then
@@ -118,7 +126,7 @@ begin
     return null;
   end if;
   perform finance_sync_auto('trip_payment', ref,
-    case when tg_op = 'DELETE' or p.voided_at is not null or b.cancelled_at is not null then 0 else p.amount end,
+    case when tg_op = 'DELETE' then 0 else trip_payment_target(p.amount, p.voided_at, b.cancelled_at) end,
     'ticket', p.account_id, label, null,
     case when exists (select 1 from finance_transactions where source = 'trip_payment' and source_ref = ref and deleted_at is null)
          then now() else (p.received_on + time '12:00') at time zone 'Asia/Jakarta' end,
@@ -140,15 +148,18 @@ begin
     ref := 'tp:' || p.id || ':' || p.account_id;
     label := trip_payment_label(p.kind, new.full_name, t.title);
     if new.cancelled_at is not null then
-      perform finance_sync_auto('trip_payment', ref, 0, 'ticket', p.account_id, label, null, now(), t.id, p.kind);
+      perform finance_sync_auto('trip_payment', ref, trip_payment_target(p.amount, p.voided_at, new.cancelled_at), 'ticket', p.account_id, label, null, now(), t.id, p.kind);
     else
       select coalesce(sum(amount), 0) into active
       from finance_transactions where source = 'trip_payment' and source_ref = ref and deleted_at is null;
-      if p.amount <= active then continue; end if;
-      -- Pernah tercatat (lalu dikoreksi saat dibatalkan) → catat lagi di tanggal terimanya walau sebelum
-      -- go-live; belum pernah tercatat → aturan biasa (go-live), sisanya lewat Sync.
+      if trip_payment_target(p.amount, p.voided_at, null) <= active then continue; end if;
       if exists (select 1 from finance_transactions where source = 'trip_payment' and source_ref = ref and deleted_at is null) then
-        perform finance_insert_trip_payment(ref, p.amount - active, p.received_on, p.account_id, label, t.id, p.kind);
+        -- Pernah tercatat (lalu dikoreksi saat dibatalkan) → catat lagi HARI INI (seperti koreksinya), bukan di
+        -- tanggal terima: bulan yang sudah lewat / dilaporkan tidak berubah. Walau sebelum go-live.
+        perform finance_insert_trip_payment(ref, p.amount - active, (now() at time zone 'Asia/Jakarta')::date, p.account_id, label, t.id, p.kind);
+      elsif exists (select 1 from finance_transactions where source = 'trip_payment' and source_ref = ref) then
+        -- Transaksinya pernah dihapus admin (mis. dobel dengan import jurnal) → jangan dibuat ulang (sama dengan Sync).
+        continue;
       else
         perform finance_sync_auto('trip_payment', ref, p.amount, 'ticket', p.account_id, label, null,
                                   (p.received_on + time '12:00') at time zone 'Asia/Jakarta', t.id, p.kind);

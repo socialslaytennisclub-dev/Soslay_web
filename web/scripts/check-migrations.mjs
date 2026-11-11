@@ -1178,6 +1178,26 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.query(`update trip_bookings set cancelled_at = null where id = $1`, [cxl]);
   console.assert((await cxlNet()) === 500000, `peserta diaktifkan lagi: pembayaran tidak tercatat lagi (${await cxlNet()})`);
   await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [cxl]);
+  // Diaktifkan lagi: pembayaran lama dicatat ulang HARI INI (bulan lalu tidak berubah); transaksi yang pernah
+  // dihapus admin (dobel dengan import jurnal) tidak dibuat ulang.
+  {
+    const goLive = (await one(`select go_live_date::text d from finance_settings`)).d;
+    await db.exec(`update finance_settings set go_live_date = '2020-01-01' where true`);
+    const old = (await one(`insert into trip_bookings (trip_id, full_name) values ($1, 'Aktif Lagi') returning id`, [newTrip])).id;
+    const oldPay = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'dp', 300000, current_date - 40, $2) returning id`, [old, bank])).id;
+    await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [old]);
+    await db.query(`update trip_bookings set cancelled_at = null where id = $1`, [old]);
+    const back = await one(`select date::text d, (select current_date::text) today, (select coalesce(sum(amount), 0)::int from finance_transactions where source_ref like $1 and deleted_at is null) net from finance_transactions where source_ref like $1 and amount > 0 order by created_at desc limit 1`, [`tp:${oldPay}:%`]);
+    console.assert(back.net === 300000 && back.d === back.today, `aktif lagi: dicatat ulang di tanggal terima, bukan hari ini ${JSON.stringify(back)}`);
+    const gone = (await one(`insert into trip_bookings (trip_id, full_name) values ($1, 'Pernah Dihapus') returning id`, [newTrip])).id;
+    const gonePay = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'dp', 200000, current_date, $2) returning id`, [gone, bank])).id;
+    await db.query(`update finance_transactions set deleted_at = now() where source_ref like $1`, [`tp:${gonePay}:%`]);
+    await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [gone]);
+    await db.query(`update trip_bookings set cancelled_at = null where id = $1`, [gone]);
+    const goneNet = Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source_ref like $1 and deleted_at is null`, [`tp:${gonePay}:%`])).s);
+    console.assert(goneNet === 0, `aktif lagi membuat ulang transaksi yang dihapus admin (${goneNet})`);
+    await db.query(`update finance_settings set go_live_date = $1 where true`, [goLive]);
+  }
 
   // 7. Tandai Lunas, akun default diganti, lalu batal lunas → koreksi di akun lama (BCA), bukan akun baru.
   const cash = (await one(`select id from finance_accounts where system_key = 'cash'`)).id;
