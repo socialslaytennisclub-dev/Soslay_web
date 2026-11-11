@@ -447,7 +447,7 @@ export type EventRow = {
 };
 
 /** Pendapatan, biaya & jalur bayar dari sekumpulan transaksi terkait. */
-function tally(data: FinanceData, txs: FinTx[]) {
+export function tally(data: FinanceData, txs: FinTx[]) {
   const kuyy = data.accounts.find((a) => a.systemKey === "kuyy")?.id;
   let revenue = 0;
   let cost = 0;

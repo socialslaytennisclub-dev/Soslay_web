@@ -8,13 +8,12 @@ import { formatRupiah } from "@/lib/format";
 import { shortDate, PAYMENT_KIND_LABEL } from "@/lib/trips";
 import { toast } from "@/components/admin/ui/Toaster";
 import type { ActionResult } from "@/server/admin/actions/common";
-import { linkTransaction, linkTransactionToTrip, previewTripSync, syncSessionFinance, syncTripFinance } from "@/server/admin/actions/finance";
+import { linkTransactions, previewTripSync, syncSessionFinance, syncTripFinance } from "@/server/admin/actions/finance";
 import styles from "./Finance.module.css";
 import { FinanceModal } from "./FinanceModal";
 
 /** "Kaitkan transaksi" di detail event (12w) / detail trip: pilih transaksi yang belum terkait sesi / trip. */
 export function LinkTxButton({ sessionId, tripId, candidates }: { sessionId?: string; tripId?: string; candidates: { id: string; label: string }[] }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState<string[]>([]);
   const [pending, start] = useTransition();
@@ -32,14 +31,12 @@ export function LinkTxButton({ sessionId, tripId, candidates }: { sessionId?: st
             disabled={!picked.length || pending}
             onClick={() =>
               start(async () => {
-                for (const id of picked) {
-                  const r = tripId ? await linkTransactionToTrip(id, tripId) : await linkTransaction(id, sessionId ?? null);
-                  if (!r.ok) return toast.error(r.error);
-                }
-                toast.success(`${picked.length} transaksi dikaitkan.`);
+                // Satu aksi untuk semua yang dipilih — aksi itu sendiri me-refresh halaman.
+                const r = await linkTransactions(picked, tripId ? { tripId } : { sessionId: sessionId ?? null });
+                if (!r.ok) return toast.error(r.error);
+                toast.success(r.message);
                 setPicked([]);
                 setOpen(false);
-                router.refresh();
               })
             }
           >

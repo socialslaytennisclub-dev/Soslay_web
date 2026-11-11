@@ -9,14 +9,14 @@ import { TxTable } from "@/components/admin/finance/TxTable";
 import { Kpi } from "@/components/admin/overview/Overview";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { cx } from "@/lib/cx";
-import { dateLabel, pct, rp, rpShort } from "@/lib/finance/format";
-import { posted, postedBySession } from "@/lib/finance/reports";
-import { toTxViews, txFormOptions } from "@/lib/finance/views";
+import { dateLabel, pct, rpShort } from "@/lib/finance/format";
+import { postedBySession, tally } from "@/lib/finance/reports";
+import { linkCandidates, toTxViews, txFormOptions } from "@/lib/finance/views";
+import { addDays } from "@/lib/trips";
 import { financePage } from "@/server/admin/finance-page";
 import pageStyles from "../../../page.module.css";
 
 export const metadata: Metadata = { title: "Detail event" };
-
 
 /** Admin / 12w — Detail event: pendapatan per jalur/termin, biaya per kategori, transaksi terkait. */
 export default async function EventDetailPage({ params }: PageProps<"/admin/keuangan/event/[sessionId]">) {
@@ -27,18 +27,13 @@ export default async function EventDetailPage({ params }: PageProps<"/admin/keua
   const session = data.sessions.find((s) => s.id === sessionId);
   if (!session) notFound();
   const linked = postedBySession(data).get(sessionId) ?? [];
-  const income = linked.filter((t) => t.type === "income");
-  const expense = linked.filter((t) => t.type === "expense");
-  const revenue = income.reduce((s, t) => s + t.amount, 0);
-  const cost = expense.reduce((s, t) => s + t.amount, 0);
-  const profit = revenue - cost;
+  const { revenue, cost, profit, margin } = tally(data, linked);
+  const incomeCount = linked.filter((t) => t.type === "income").length;
+  const expenseCount = linked.filter((t) => t.type === "expense").length;
 
   // Kandidat "Kaitkan transaksi": belum terkait, ±45 hari dari tanggal sesi.
-  const start = new Date(session.startsAt).getTime();
-  const candidates = posted(data)
-    .filter((t) => !t.sessionId && !t.tripId && (t.type === "income" || t.type === "expense") && Math.abs(new Date(t.date).getTime() - start) < 45 * 86_400_000)
-    .slice(0, 80)
-    .map((t) => ({ id: t.id, label: `${dateLabel(t.date)} · ${t.description} · ${t.type === "expense" ? "−" : "+"}${rp(t.amount)}` }));
+  const day = session.startsAt.slice(0, 10);
+  const candidates = linkCandidates(data, addDays(day, -45), addDays(day, 45), day, 80);
 
   const options = txFormOptions(data, role, userName);
 
@@ -59,9 +54,9 @@ export default async function EventDetailPage({ params }: PageProps<"/admin/keua
           }
         />
         <div className={styles.kpis}>
-          <Kpi icon="trend-up" label="Pendapatan" value={rpShort(revenue)} note={`${income.length} transaksi terkait`} />
-          <Kpi icon="trend-down" label="Biaya terkait" value={rpShort(cost)} note={`${expense.length} transaksi terkait`} />
-          <Kpi icon="money" label="Laba" value={rpShort(profit)} note={`Margin ${pct(revenue ? (profit / revenue) * 100 : null)}`} />
+          <Kpi icon="trend-up" label="Pendapatan" value={rpShort(revenue)} note={`${incomeCount} transaksi terkait`} />
+          <Kpi icon="trend-down" label="Biaya terkait" value={rpShort(cost)} note={`${expenseCount} transaksi terkait`} />
+          <Kpi icon="money" label="Laba" value={rpShort(profit)} note={`Margin ${pct(margin)}`} />
           <Kpi icon="users-three" label="Laba per peserta" value={session.participants ? rpShort(Math.round(profit / session.participants)) : "—"} note={`${session.participants} peserta`} />
         </div>
 
