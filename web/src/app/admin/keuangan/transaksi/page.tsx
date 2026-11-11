@@ -40,7 +40,7 @@ export default async function FinanceTransactionsPage({ searchParams }: PageProp
   const q = (one(raw.q) ?? "").toLowerCase();
   const batchId = one(raw.batch);
   // "Lihat di Keuangan" dari trip Tennis Escape: pembayaran paket trip itu (cocok dengan "Bundling sudah
-  // masuk"). Baris Trip di Per event menambah ?with=activities: + transaksi yang dikaitkan ke activity-nya.
+  // masuk"). ?with=activities: semua transaksi trip (biaya yang dikaitkan ke trip + transaksi activity-nya).
   const tripId = one(raw.trip);
   const trip = tripId ? data.trips.find((t) => t.id === tripId) : undefined;
   const withActivities = !!tripId && one(raw.with) === "activities";
@@ -48,7 +48,7 @@ export default async function FinanceTransactionsPage({ searchParams }: PageProp
   const page = Math.max(1, Number(one(raw.page)) || 1);
   const batch = batchId ? data.batches.find((b) => b.id === batchId) : undefined;
 
-  const inScope = (t: FinTx) => (batchId ? t.importBatchId === batchId : tripId ? t.tripId === tripId || (t.sessionId !== null && tripSessions.has(t.sessionId)) : allMonths || t.date.startsWith(month));
+  const inScope = (t: FinTx) => (batchId ? t.importBatchId === batchId : tripId ? (withActivities ? t.tripId === tripId || (t.sessionId !== null && tripSessions.has(t.sessionId)) : t.tripId === tripId && t.source === "trip_payment") : allMonths || t.date.startsWith(month));
   const base = posted(data).filter(inScope);
   const matchFilters = (t: FinTx) =>
     (!cat || t.categoryId === cat) &&
@@ -126,9 +126,9 @@ export default async function FinanceTransactionsPage({ searchParams }: PageProp
         {tripId && (
           <div className={cx(styles.note, styles.chipOk)} style={{ alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
             <span>
-              Trip · <strong>{trip?.title ?? "Tennis Escape"}</strong> — {withActivities ? "pembayaran paket + transaksi activity-nya" : "pembayaran paket saja"}.{" "}
+              Trip · <strong>{trip?.title ?? "Tennis Escape"}</strong> — {withActivities ? "semua transaksi trip (paket, biaya trip & activity-nya)" : "pembayaran paket saja"}.{" "}
               <Link className={styles.link} href={href({ with: withActivities ? undefined : "activities" })}>
-                {withActivities ? "Paket saja" : "Tampilkan juga transaksi activity"}
+                {withActivities ? "Paket saja" : "Tampilkan semua transaksi trip"}
               </Link>
             </span>
             <span className={styles.actions}>

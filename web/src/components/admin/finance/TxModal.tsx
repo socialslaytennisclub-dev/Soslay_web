@@ -19,6 +19,8 @@ export type TxFormOptions = {
   accounts: { id: string; name: string; systemKey: string | null }[];
   categories: { id: string; name: string; kind: "income" | "expense"; systemKey: string | null; archived: boolean }[];
   sessions: { id: string; label: string }[];
+  /** Trip Tennis Escape (biaya hotel, transport, makan dikaitkan ke trip). */
+  trips: { id: string; label: string }[];
   /** Akun default per jenis (bank utama). */
   defaultAccountId: string | null;
 };
@@ -238,7 +240,6 @@ export function TxModal({ open, onClose, options, initial, duplicate = false, pr
 
       {(type === "income" || type === "expense") && field(opt(type === "expense" ? "Vendor / penerima" : "Pembayar"), "counterparty", <input name="counterparty" defaultValue={initial?.counterparty ?? ""} className={styles.input} />)}
 
-      {presetTripId && !initial && <input type="hidden" name="tripId" value={presetTripId} />}
       {(type === "income" || type === "expense") &&
         field(
           <>
@@ -254,6 +255,21 @@ export function TxModal({ open, onClose, options, initial, duplicate = false, pr
             ))}
           </select>,
           type === "expense" ? "Biaya ikut dihitung di laba per sesi." : "Pendapatan ikut dihitung di laba per event.",
+        )}
+      {(type === "income" || type === "expense") &&
+        options.trips.length > 0 &&
+        field(
+          opt("Kaitkan ke trip"),
+          "tripId",
+          <select name="tripId" defaultValue={initial?.tripId ?? (initial ? "" : (presetTripId ?? ""))} className={styles.input}>
+            <option value="">— Tidak dikaitkan —</option>
+            {options.trips.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.label}
+              </option>
+            ))}
+          </select>,
+          "Biaya trip (hotel, transport, makan) dihitung di laba trip. Pilih sesi ATAU trip — sesi activity trip otomatis ikut trip-nya.",
         )}
 
       {type === "income" &&

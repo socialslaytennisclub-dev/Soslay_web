@@ -155,6 +155,15 @@ if (!demo) {
     await check(`/admin/activities/trip/${tripId}`, { includes: ["Activities dalam trip", "Rundown", "Paket bundling"] });
     await check(`/admin/activities/trip/${tripId}/peserta`, { includes: ["Peserta bundling", "Sisa tagihan", "Catat pembayaran"] });
     await check(`/admin/keuangan/transaksi?m=all&trip=${tripId}`, { includes: ["Rally in Paradise"] });
+    // Detail trip Keuangan: pendapatan & biaya = baris Trip di Per event (bulan trip dimulai).
+    const tripFin = await check(`/admin/keuangan/trip/${tripId}`, { includes: ["Rincian trip", "Kaitkan transaksi", "Catat pengeluaran trip"] });
+    const perEventPath = tripFin.match(/href="(\/admin\/keuangan\/event\?m=\d{4}-\d{2}&amp;kind=trip)"/)?.[1]?.replace(/&amp;/g, "&");
+    if (!perEventPath) failures.push(`/admin/keuangan/trip/${tripId} → tidak ada link kembali ke Per event`);
+    else {
+      const row = (await check(perEventPath)).split(`href="/admin/keuangan/trip/${tripId}"`)[1] ?? "";
+      const [revenue, cost] = [...row.matchAll(/>(\d{1,3}(?:\.\d{3})+)</g)].map((m) => m[1]);
+      if (!revenue || !tripFin.includes(`Rp${revenue}`) || (cost && !tripFin.includes(`Rp${cost}`))) failures.push(`detail trip ≠ baris Per event (${revenue} / ${cost})`);
+    }
   } else failures.push("/admin/activities?type=trip → tidak ada link trip");
   await check("/admin/activities/trip/new", { includes: ["Buat trip", "Tambah activity"] });
   if (demo) {

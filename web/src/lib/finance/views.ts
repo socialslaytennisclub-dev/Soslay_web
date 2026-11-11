@@ -102,6 +102,7 @@ export function txFormOptions(data: FinanceData, role: FinanceRole, userName: st
       .filter((c) => selectableCategory(data, c, c.id))
       .map((c) => ({ id: c.id, name: c.systemKey === "tax" ? `${c.name} (setoran)` : c.name, kind: c.kind, systemKey: c.systemKey, archived: c.isArchived })),
     sessions: data.sessions.slice(0, 300).map((s) => ({ id: s.id, label: `${s.title} · ${dateLabel(s.startsAt.slice(0, 10))} · ${s.venueName}` })),
+    trips: data.trips.map((t) => ({ id: t.id, label: `${t.title} · ${dateLabel(t.startsOn)}` })),
     defaultAccountId: data.settings.defaultBankAccountId ?? data.accounts.find((a) => a.systemKey === "bank_main")?.id ?? null,
   };
 }

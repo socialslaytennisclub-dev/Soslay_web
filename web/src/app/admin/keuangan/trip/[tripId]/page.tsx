@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import styles from "@/components/admin/finance/Finance.module.css";
 import { LinkTxButton, SyncTripButton } from "@/components/admin/finance/LinkTx";
 import { PageHead } from "@/components/admin/finance/FinanceUI";
+import { LinkedBreakdown } from "@/components/admin/finance/LinkedBreakdown";
 import { RecordTxButton } from "@/components/admin/finance/TxModal";
 import { TxTable } from "@/components/admin/finance/TxTable";
 import { Kpi } from "@/components/admin/overview/Overview";
@@ -11,14 +12,13 @@ import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { cx } from "@/lib/cx";
 import { dateLabel, pct, rp, rpShort } from "@/lib/finance/format";
 import { posted, postedByTrip } from "@/lib/finance/reports";
-import { SOURCE_META } from "@/lib/finance/sources";
 import { toTxViews, txFormOptions } from "@/lib/finance/views";
 import { financePage } from "@/server/admin/finance-page";
+import { getFinanceAccess } from "@/server/admin/finance-repo";
 import pageStyles from "../../../page.module.css";
 
 export const metadata: Metadata = { title: "Detail trip" };
 
-const TERM = { dp: "DP", installment: "Cicilan", settlement: "Pelunasan" } as const;
 const DAY = 86_400_000;
 
 /**
@@ -27,10 +27,12 @@ const DAY = 86_400_000;
  * makan) dikaitkan langsung ke trip lewat "Kaitkan transaksi" / "Catat pengeluaran trip".
  */
 export default async function TripFinancePage({ params }: PageProps<"/admin/keuangan/trip/[tripId]">) {
+  const { tripId } = await params;
+  // Pencatat keuangan tidak punya halaman laba: ke daftar pembayaran paket trip ini (seperti dulu).
+  if ((await getFinanceAccess()).role === "recorder") redirect(`/admin/keuangan/transaksi?m=all&trip=${tripId}`);
   const ctx = await financePage("full");
   if (!ctx) return null;
   const { data, role, userId, userName } = ctx;
-  const { tripId } = await params;
   const trip = data.trips.find((t) => t.id === tripId);
   if (!trip) notFound();
   const activities = data.sessions.filter((s) => s.tripId === tripId).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
@@ -40,19 +42,7 @@ export default async function TripFinancePage({ params }: PageProps<"/admin/keua
   const revenue = income.reduce((s, t) => s + t.amount, 0);
   const cost = expense.reduce((s, t) => s + t.amount, 0);
   const profit = revenue - cost;
-  const cat = new Map(data.categories.map((c) => [c.id, c.name]));
 
-  const byChannel = new Map<string, number>();
-  for (const t of income) {
-    const channel = SOURCE_META[t.source].channel;
-    const key = t.term ? `${channel} · ${TERM[t.term]}` : channel;
-    byChannel.set(key, (byChannel.get(key) ?? 0) + t.amount);
-  }
-  const byCategory = new Map<string, number>();
-  for (const t of expense) {
-    const name = cat.get(t.categoryId ?? "") ?? "—";
-    byCategory.set(name, (byCategory.get(name) ?? 0) + t.amount);
-  }
   // Per activity trip: transaksi yang dikaitkan ke activity itu (tiket satuan Kuyy, sewa lapangan…).
   const perActivity = activities.map((s) => {
     const txs = linked.filter((t) => t.sessionId === s.id);
@@ -73,6 +63,8 @@ export default async function TripFinancePage({ params }: PageProps<"/admin/keua
       const d = new Date(t.date).getTime();
       return d >= start - 120 * DAY && d <= end + 45 * DAY;
     })
+    // Terdekat ke tanggal trip dulu, supaya transaksi yang dicari tidak terpotong batas daftar.
+    .sort((a, b) => Math.abs(new Date(a.date).getTime() - start) - Math.abs(new Date(b.date).getTime() - start))
     .slice(0, 120)
     .map((t) => ({ id: t.id, label: `${dateLabel(t.date)} · ${t.description} · ${t.type === "expense" ? "−" : "+"}${rp(t.amount)}` }));
 
@@ -96,48 +88,13 @@ export default async function TripFinancePage({ params }: PageProps<"/admin/keua
           }
         />
         <div className={styles.kpis}>
-          <Kpi icon="trend-up" label="Pendapatan" value={rpShort(revenue)} note={`${income.length} transaksi terkait`} />
-          <Kpi icon="trend-down" label="Biaya terkait" value={rpShort(cost)} note={`${expense.length} transaksi terkait`} />
+          <Kpi icon="trend-up" label="Pendapatan" value={rpShort(revenue)} note={`${income.length} transaksi · ${rp(revenue)}`} />
+          <Kpi icon="trend-down" label="Biaya terkait" value={rpShort(cost)} note={`${expense.length} transaksi · ${rp(cost)}`} />
           <Kpi icon="money" label="Laba" value={rpShort(profit)} note={`Margin ${pct(revenue ? (profit / revenue) * 100 : null)}`} />
           <Kpi icon="users-three" label="Laba per paket" value={trip.packages ? rpShort(Math.round(profit / trip.packages)) : "—"} note={`${trip.packages} paket`} />
         </div>
 
-        <div className={styles.gridHalf}>
-          <section className={styles.panel}>
-            <h3 className={styles.panelTitle} style={{ marginBottom: 16 }}>
-              Pendapatan per jalur / termin
-            </h3>
-            <div className={styles.bars}>
-              {[...byChannel].map(([k, v]) => (
-                <div key={k} className={styles.barRow} style={{ gridTemplateColumns: "1fr auto" }}>
-                  <span>{k}</span>
-                  <strong>{rp(v)}</strong>
-                  <span className={styles.track}>
-                    <span className={styles.fill} style={{ display: "block", width: `${revenue ? (v / revenue) * 100 : 0}%` }} />
-                  </span>
-                </div>
-              ))}
-              {!byChannel.size && <p className={styles.muted}>Belum ada pendapatan terkait. Klik Sync untuk mencatat pembayaran paket.</p>}
-            </div>
-          </section>
-          <section className={styles.panel}>
-            <h3 className={styles.panelTitle} style={{ marginBottom: 16 }}>
-              Biaya per kategori
-            </h3>
-            <div className={styles.bars}>
-              {[...byCategory].map(([k, v]) => (
-                <div key={k} className={styles.barRow} style={{ gridTemplateColumns: "1fr auto" }}>
-                  <span>{k}</span>
-                  <strong>{rp(v)}</strong>
-                  <span className={styles.track}>
-                    <span className={cx(styles.fill, styles.fillNavy)} style={{ display: "block", width: `${cost ? (v / cost) * 100 : 0}%` }} />
-                  </span>
-                </div>
-              ))}
-              {!byCategory.size && <p className={styles.alert}>Belum ada biaya terkait — kaitkan hotel, transport, makan, sewa lapangan lewat &ldquo;Kaitkan transaksi&rdquo;.</p>}
-            </div>
-          </section>
-        </div>
+        <LinkedBreakdown data={data} linked={linked} emptyIncome="Belum ada pendapatan terkait. Klik Sync untuk mencatat pembayaran paket." emptyCost="Belum ada biaya terkait — kaitkan hotel, transport, makan, sewa lapangan lewat Kaitkan transaksi." />
 
         <section className={cx(styles.panel, styles.panelFlush)}>
           <div className={styles.panelHead}>
