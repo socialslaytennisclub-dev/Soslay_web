@@ -36,7 +36,7 @@ function useTripMenu(trip: TripDetail): [RowMenuItem[], React.ReactNode] {
     { label: "Peserta & pembayaran", icon: "users-three", onSelect: () => router.push(`${base}/peserta`) },
     { label: "Tambah activity", icon: "plus-bold", onSelect: () => router.push(`${base}#activities`) },
     { label: "Rundown", icon: "list-bullets", onSelect: () => router.push(`${base}#rundown`) },
-    { label: "Lihat di Keuangan", icon: "hand-coins", onSelect: () => router.push(`/admin/keuangan/transaksi?m=all&trip=${trip.id}`) },
+    { label: "Lihat di Keuangan", icon: "hand-coins", onSelect: () => router.push(`/admin/keuangan/trip/${trip.id}`) },
     { label: "Pratinjau halaman member", icon: "eye", onSelect: () => window.open(`/akun/trip/${trip.slug}`, "_blank", "noopener") },
     {
       label: "Duplikat trip",

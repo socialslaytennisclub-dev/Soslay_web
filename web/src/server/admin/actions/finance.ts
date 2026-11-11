@@ -84,6 +84,8 @@ export async function saveTransaction(formData: FormData): Promise<TxResult> {
   const removeProof = formData.get("removeProof") === "1";
 
   const data = await getFinanceData();
+  const tripParam = text(formData.get("tripId"));
+  const presetTrip = tripParam && data.trips.some((t) => t.id === tripParam) ? tripParam : null;
   const existingTx = id ? data.transactions.find((t) => t.id === id) : undefined;
   const category = data.categories.find((c) => c.id === categoryId);
   const fields: TxFieldErrors = {};
@@ -150,6 +152,8 @@ export async function saveTransaction(formData: FormData): Promise<TxResult> {
     note,
     term: type === "income" && category?.systemKey === "ticket" ? term : null,
     activity_session_id: type === "income" || type === "expense" ? sessionId : null,
+    // "Catat pengeluaran trip" di detail trip Keuangan: transaksi baru langsung terkait trip itu.
+    ...(!id && (type === "income" || type === "expense") && presetTrip ? { trip_id: presetTrip } : {}),
     updated_by: auth.userId,
     ...proofFields,
   };
@@ -242,6 +246,21 @@ export async function restoreTransaction(id: string): Promise<ActionResult> {
   await financeLog(auth.userId, "transaction", id, `batalkan hapus ${tx.code}`, null, null);
   refresh();
   return done(`${tx.code} dipulihkan.`);
+}
+
+/** Kaitkan / lepas transaksi ke trip (detail trip Keuangan · "Kaitkan transaksi"): biaya hotel, transport, makan… */
+export async function linkTransactionToTrip(id: string, tripId: string | null): Promise<ActionResult> {
+  const auth = await requireFinance("full");
+  if ("error" in auth) return fail(auth.error);
+  const supabase = await createSupabaseServerClient();
+  const { data: tx } = await supabase.from("finance_transactions").select("code, type, trip_id").eq("id", id).maybeSingle();
+  if (!tx) return fail("Transaksi tidak ditemukan.");
+  if (tx.type !== "income" && tx.type !== "expense") return fail("Hanya pemasukan / pengeluaran yang bisa dikaitkan ke trip.");
+  const { error } = await supabase.from("finance_transactions").update({ trip_id: tripId, updated_by: auth.userId }).eq("id", id);
+  if (error) return fail(`Gagal menyimpan: ${error.message}`);
+  await financeLog(auth.userId, "transaction", id, `${tripId ? "kaitkan" : "lepas"} trip ${tx.code}`, { trip_id: tx.trip_id }, { trip_id: tripId });
+  refresh();
+  return done(tripId ? `${tx.code} dikaitkan ke trip.` : `${tx.code} dilepas dari trip.`);
 }
 
 /** Kaitkan / lepas transaksi ke sesi (Per event · "Kaitkan transaksi"). */

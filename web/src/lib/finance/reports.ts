@@ -470,7 +470,7 @@ function tally(data: FinanceData, txs: FinTx[]) {
 }
 
 /** Transaksi terposting per trip: pembayaran paket (trip_id) + transaksi activity trip (sessions.trip_id). */
-const postedByTrip = memo((data) => {
+export const postedByTrip = memo((data) => {
   const tripOfSession = new Map(data.sessions.filter((s) => s.tripId).map((s) => [s.id, s.tripId as string]));
   const map = new Map<string, FinTx[]>();
   for (const t of posted(data)) {
@@ -513,7 +513,7 @@ export function eventRows(data: FinanceData, ym: string): EventRow[] {
         place: `${activities} activity`,
         date: t.startsOn,
         participants: t.packages,
-        href: `/admin/keuangan/transaksi?m=all&trip=${t.id}&with=activities`,
+        href: `/admin/keuangan/trip/${t.id}`,
         ...tally(data, postedByTrip(data).get(t.id) ?? []),
       };
     });
