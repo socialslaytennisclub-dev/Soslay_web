@@ -304,8 +304,8 @@ export async function cancelTripBooking(bookingId: string): Promise<ActionResult
   const { data, error } = await supabase.from("trip_bookings").update({ cancelled_at: new Date().toISOString() }).eq("id", bookingId).is("cancelled_at", null).select("trip_id, full_name").maybeSingle();
   if (error || !data) return { ok: false, error: `Gagal membatalkan: ${error?.message ?? "peserta tidak ditemukan"}` };
   await audit(auth.userId, `membatalkan paket ${data.full_name}`, "trip", data.trip_id as string);
-  refreshPaths(`/admin/activities/trip/${data.trip_id}/peserta`, "/admin/activities");
-  return { ok: true, message: `Paket ${data.full_name} dibatalkan · keluar dari semua activity trip. Pembayaran yang sudah masuk tetap tercatat — batalkan dari Riwayat bila dikembalikan.` };
+  refreshPaths(`/admin/activities/trip/${data.trip_id}/peserta`, "/admin/activities", "/admin/keuangan");
+  return { ok: true, message: `Paket ${data.full_name} dibatalkan · keluar dari semua activity trip. Pembayarannya ikut dikoreksi (keluar) dari Keuangan.` };
 }
 
 const PROOF_TYPES = { "image/jpeg": "jpg", "image/png": "png", "application/pdf": "pdf" };

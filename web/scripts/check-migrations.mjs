@@ -1166,6 +1166,49 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.query(`update trips set show_on_homepage = not show_on_homepage where id = $1`, [newTrip]);
   const notStale = await db.query(`select save_trip($1, $2::jsonb, $3::jsonb, '[]'::jsonb)`, [newTrip, JSON.stringify({ ...info, title: "Sesudah arsip", form_version: v2 }), JSON.stringify(both)]).then(() => true, () => false);
   console.assert(notStale, "perubahan trip di luar editor tidak dianggap form basi");
+  // Peserta paket dibatalkan → pembayarannya keluar dari Keuangan & tidak dicatat lagi oleh Sync; diaktifkan lagi → tercatat lagi.
+  const cxl = (await one(`insert into trip_bookings (trip_id, full_name) values ($1, 'Batal Paket') returning id`, [newTrip])).id;
+  const cxlPay = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'dp', 500000, current_date, $2) returning id`, [cxl, bank])).id;
+  const cxlNet = async () => Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source = 'trip_payment' and source_ref like $1 and deleted_at is null`, [`tp:${cxlPay}:%`])).s);
+  const cxlBefore = await cxlNet();
+  await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [cxl]);
+  const cxlAfter = await cxlNet();
+  const cxlSync = (await one(`select finance_resync_trip($1) r`, [newTrip])).r;
+  console.assert(cxlBefore === 500000 && cxlAfter === 0 && (await cxlNet()) === 0 && !cxlSync.new.some((x) => x.name === "Batal Paket"), `peserta dibatalkan tetap di Keuangan / dicatat Sync ${cxlBefore} → ${cxlAfter} ${JSON.stringify(cxlSync)}`);
+  await db.query(`update trip_bookings set cancelled_at = null where id = $1`, [cxl]);
+  console.assert((await cxlNet()) === 500000, `peserta diaktifkan lagi: pembayaran tidak tercatat lagi (${await cxlNet()})`);
+  await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [cxl]);
+  // Diaktifkan lagi: pembayaran lama dicatat ulang HARI INI (bulan lalu tidak berubah); transaksi yang pernah
+  // dihapus admin (dobel dengan import jurnal) tidak dibuat ulang.
+  {
+    const goLive = (await one(`select go_live_date::text d from finance_settings`)).d;
+    await db.exec(`update finance_settings set go_live_date = '2020-01-01' where true`);
+    await db.query(`update trips set package_quota = package_quota + 10 where id = $1`, [newTrip]); // peserta uji tambahan
+    const old = (await one(`insert into trip_bookings (trip_id, full_name) values ($1, 'Aktif Lagi') returning id`, [newTrip])).id;
+    const oldPay = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'dp', 300000, current_date - 40, $2) returning id`, [old, bank])).id;
+    await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [old]);
+    await db.query(`update trip_bookings set cancelled_at = null where id = $1`, [old]);
+    const back = await one(`select date::text d, (select current_date::text) today, (select coalesce(sum(amount), 0)::int from finance_transactions where source_ref like $1 and deleted_at is null) net from finance_transactions where source_ref like $1 and amount > 0 order by created_at desc limit 1`, [`tp:${oldPay}:%`]);
+    console.assert(back.net === 300000 && back.d === back.today, `aktif lagi: dicatat ulang di tanggal terima, bukan hari ini ${JSON.stringify(back)}`);
+    const gone = (await one(`insert into trip_bookings (trip_id, full_name) values ($1, 'Pernah Dihapus') returning id`, [newTrip])).id;
+    const gonePay = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'dp', 200000, current_date, $2) returning id`, [gone, bank])).id;
+    await db.query(`update finance_transactions set deleted_at = now() where source_ref like $1`, [`tp:${gonePay}:%`]);
+    await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [gone]);
+    await db.query(`update trip_bookings set cancelled_at = null where id = $1`, [gone]);
+    const goneNet = Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source_ref like $1 and deleted_at is null`, [`tp:${gonePay}:%`])).s);
+    console.assert(goneNet === 0, `aktif lagi membuat ulang transaksi yang dihapus admin (${goneNet})`);
+    // Dihapus sesudah dibatalkan (baris koreksi dibiarkan) → aktif lagi tidak mencatat dua kali lipat.
+    const late = (await one(`insert into trip_bookings (trip_id, full_name) values ($1, 'Hapus Belakangan') returning id`, [newTrip])).id;
+    const latePay = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'dp', 250000, current_date, $2) returning id`, [late, bank])).id;
+    await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [late]);
+    await db.query(`update finance_transactions set deleted_at = now() where source_ref like $1 and amount > 0`, [`tp:${latePay}:%`]);
+    await db.query(`update trip_bookings set cancelled_at = null where id = $1`, [late]);
+    const lateRows = await one(`select coalesce(sum(amount) filter (where deleted_at is null), 0)::int net, count(*) filter (where amount > 0 and deleted_at is null)::int pos from finance_transactions where source_ref like $1`, [`tp:${latePay}:%`]);
+    console.assert(lateRows.pos === 0 && lateRows.net === -250000, `aktif lagi sesudah transaksi asli dihapus mencatat ulang ${JSON.stringify(lateRows)}`);
+    for (const b of [old, gone, late]) await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [b]);
+    await db.query(`update trips set package_quota = package_quota - 10 where id = $1`, [newTrip]);
+    await db.query(`update finance_settings set go_live_date = $1 where true`, [goLive]);
+  }
 
   // 7. Tandai Lunas, akun default diganti, lalu batal lunas → koreksi di akun lama (BCA), bukan akun baru.
   const cash = (await one(`select id from finance_accounts where system_key = 'cash'`)).id;
@@ -1191,7 +1234,7 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await byAcc(cash)) === 0, `akun default kosong: batal lunas tidak dikoreksi (Kas ${await byAcc(cash)})`);
   await db.exec(`update finance_settings set auto_manual_paid = true, manual_paid_account_id = '${bank}', go_live_date = '2026-12-01'`);
   await as(null);
-  console.log("✓ perbaikan review: booking jalur lain aman, tanpa dobel Kuyy, kuota & arsip paket, tidak bayar lebih, pembayaran tidak terhapus, save_trip atomik & tolak form basi, koreksi di akun asal, otomatis mati tetap dikoreksi");
+  console.log("✓ perbaikan review: booking jalur lain aman, tanpa dobel Kuyy, kuota & arsip paket, tidak bayar lebih, pembayaran tidak terhapus, save_trip atomik & tolak form basi, peserta batal keluar dari Keuangan, koreksi di akun asal, otomatis mati tetap dikoreksi");
 
   // ── Peserta tambahan admin: "Ubah pembayaran" ikut aturan Keuangan seperti baris Kuyy ──
   {
