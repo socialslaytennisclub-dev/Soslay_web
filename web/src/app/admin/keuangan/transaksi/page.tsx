@@ -44,13 +44,16 @@ export default async function FinanceTransactionsPage({ searchParams }: PageProp
   const tripId = one(raw.trip);
   const trip = tripId ? data.trips.find((t) => t.id === tripId) : undefined;
   const withActivities = !!tripId && one(raw.with) === "activities";
-  // Semua transaksi trip = sama persis dengan detail trip / baris Trip di Per event (satu transaksi, satu trip).
-  const tripTxIds = new Set(withActivities && tripId ? (postedByTrip(data).get(tripId) ?? []).map((t) => t.id) : []);
   const page = Math.max(1, Number(one(raw.page)) || 1);
   const batch = batchId ? data.batches.find((b) => b.id === batchId) : undefined;
 
-  const inScope = (t: FinTx) => (batchId ? t.importBatchId === batchId : tripId ? (withActivities ? tripTxIds.has(t.id) : t.tripId === tripId && t.sessionId === null && t.type === "income") : allMonths || t.date.startsWith(month));
-  const base = posted(data).filter(inScope);
+  // Trip: sama persis dengan detail trip / baris Trip di Per event (satu transaksi, satu trip); "paket saja" =
+  // pemasukan trip tanpa sesi.
+  const base = batchId
+    ? posted(data).filter((t) => t.importBatchId === batchId)
+    : tripId
+      ? (postedByTrip(data).get(tripId) ?? []).filter((t) => withActivities || (t.sessionId === null && t.type === "income"))
+      : posted(data).filter((t) => allMonths || t.date.startsWith(month));
   const matchFilters = (t: FinTx) =>
     (!cat || t.categoryId === cat) &&
     (!acc || t.accountId === acc || t.toAccountId === acc) &&

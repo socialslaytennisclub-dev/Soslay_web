@@ -11,15 +11,14 @@ import { Kpi } from "@/components/admin/overview/Overview";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { cx } from "@/lib/cx";
 import { dateLabel, pct, rp, rpShort } from "@/lib/finance/format";
-import { posted, postedByTrip } from "@/lib/finance/reports";
-import { toTxViews, txFormOptions } from "@/lib/finance/views";
+import { postedByTrip, tally } from "@/lib/finance/reports";
+import { linkCandidates, toTxViews, txFormOptions } from "@/lib/finance/views";
+import { addDays, tripRange } from "@/lib/trips";
 import { financePage } from "@/server/admin/finance-page";
 import { getFinanceAccess } from "@/server/admin/finance-repo";
 import pageStyles from "../../../page.module.css";
 
 export const metadata: Metadata = { title: "Detail trip" };
-
-const DAY = 86_400_000;
 
 /**
  * Detail trip di Keuangan (pola sama dengan detail event 12w): pembayaran paket (transaksi trip_id) + transaksi
@@ -37,39 +36,30 @@ export default async function TripFinancePage({ params }: PageProps<"/admin/keua
   if (!trip) notFound();
   const activities = data.sessions.filter((s) => s.tripId === tripId).sort((a, b) => a.startsAt.localeCompare(b.startsAt));
   const linked = postedByTrip(data).get(tripId) ?? [];
-  const income = linked.filter((t) => t.type === "income");
-  const expense = linked.filter((t) => t.type === "expense");
-  const revenue = income.reduce((s, t) => s + t.amount, 0);
-  const cost = expense.reduce((s, t) => s + t.amount, 0);
-  const profit = revenue - cost;
+  // Sama dengan baris Trip di Per event (tally).
+  const { revenue, cost, profit, margin } = tally(data, linked);
+  const incomeCount = linked.filter((t) => t.type === "income").length;
+  const expenseCount = linked.filter((t) => t.type === "expense").length;
 
-  // Per activity trip: transaksi yang dikaitkan ke activity itu (tiket satuan Kuyy, sewa lapangan…).
-  const perActivity = activities.map((s) => {
-    const txs = linked.filter((t) => t.sessionId === s.id);
-    const rev = txs.filter((t) => t.type === "income").reduce((sum, t) => sum + t.amount, 0);
-    const cst = txs.filter((t) => t.type === "expense").reduce((sum, t) => sum + t.amount, 0);
-    return { s, rev, cst };
-  });
-  // Langsung ke trip (tanpa activity): pembayaran paket + transaksi yang dikaitkan ke trip.
-  const packageIncome = income.filter((t) => !t.sessionId).reduce((s, t) => s + t.amount, 0);
-  const tripCost = expense.filter((t) => !t.sessionId).reduce((s, t) => s + t.amount, 0);
+  // Satu kali lewat: per activity trip (tiket satuan Kuyy, sewa lapangan…) & langsung ke trip ("" = pembayaran
+  // paket + biaya yang dikaitkan ke trip).
+  const parts = new Map<string, { rev: number; cst: number }>();
+  for (const t of linked) {
+    const key = t.sessionId ?? "";
+    const part = parts.get(key) ?? { rev: 0, cst: 0 };
+    if (t.type === "income") part.rev += t.amount;
+    if (t.type === "expense") part.cst += t.amount;
+    parts.set(key, part);
+  }
+  const perActivity = activities.map((s) => ({ s, ...(parts.get(s.id) ?? { rev: 0, cst: 0 }) }));
+  const { rev: packageIncome, cst: tripCost } = parts.get("") ?? { rev: 0, cst: 0 };
+  const packageProfit = packageIncome - tripCost;
 
-  // Kandidat "Kaitkan transaksi": belum terkait sesi / trip, 120 hari sebelum trip (DP, booking hotel) s.d. 45 hari sesudahnya.
-  const start = new Date(trip.startsOn).getTime();
-  const end = new Date(trip.endsOn).getTime();
-  const candidates = posted(data)
-    .filter((t) => !t.sessionId && !t.tripId && (t.type === "income" || t.type === "expense"))
-    .filter((t) => {
-      const d = new Date(t.date).getTime();
-      return d >= start - 120 * DAY && d <= end + 45 * DAY;
-    })
-    // Terdekat ke tanggal trip dulu, supaya transaksi yang dicari tidak terpotong batas daftar.
-    .sort((a, b) => Math.abs(new Date(a.date).getTime() - start) - Math.abs(new Date(b.date).getTime() - start))
-    .slice(0, 120)
-    .map((t) => ({ id: t.id, label: `${dateLabel(t.date)} · ${t.description} · ${t.type === "expense" ? "−" : "+"}${rp(t.amount)}` }));
+  // Kandidat "Kaitkan transaksi": 120 hari sebelum trip (DP, booking hotel) s.d. 45 hari sesudahnya.
+  const candidates = linkCandidates(data, addDays(trip.startsOn, -120), addDays(trip.endsOn, 45), trip.startsOn, 120);
 
   const options = txFormOptions(data, role, userName);
-  const range = trip.startsOn === trip.endsOn ? dateLabel(trip.startsOn) : `${dateLabel(trip.startsOn, false)} – ${dateLabel(trip.endsOn)}`;
+  const range = tripRange(trip.startsOn, trip.endsOn);
 
   return (
     <>
@@ -88,11 +78,11 @@ export default async function TripFinancePage({ params }: PageProps<"/admin/keua
           }
         />
         <div className={styles.kpis}>
-          <Kpi icon="trend-up" label="Pendapatan" value={rpShort(revenue)} note={`${income.length} transaksi · ${rp(revenue)}`} />
-          <Kpi icon="trend-down" label="Biaya terkait" value={rpShort(cost)} note={`${expense.length} transaksi · ${rp(cost)}`} />
-          <Kpi icon="money" label="Laba" value={rpShort(profit)} note={`Margin ${pct(revenue ? (profit / revenue) * 100 : null)}`} />
+          <Kpi icon="trend-up" label="Pendapatan" value={rpShort(revenue)} note={`${incomeCount} transaksi · ${rp(revenue)}`} />
+          <Kpi icon="trend-down" label="Biaya terkait" value={rpShort(cost)} note={`${expenseCount} transaksi · ${rp(cost)}`} />
+          <Kpi icon="money" label="Laba" value={rpShort(profit)} note={`Margin ${pct(margin)}`} />
           {/* Hanya bagian paket (pembayaran paket − biaya trip langsung): tiket satuan activity tidak ikut dibagi per paket. */}
-          <Kpi icon="users-three" label="Laba per paket" value={trip.packages ? rpShort(Math.round((packageIncome - tripCost) / trip.packages)) : "—"} note={`${trip.packages} paket · tanpa tiket satuan activity`} />
+          <Kpi icon="users-three" label="Laba per paket" value={trip.packages ? rpShort(Math.round(packageProfit / trip.packages)) : "—"} note={`${trip.packages} paket · tanpa tiket satuan activity`} />
         </div>
 
         <LinkedBreakdown data={data} linked={linked} emptyIncome="Belum ada pendapatan terkait. Klik Sync untuk mencatat pembayaran paket." emptyCost="Belum ada biaya terkait — kaitkan hotel, transport, makan, sewa lapangan lewat Kaitkan transaksi." />
@@ -124,7 +114,7 @@ export default async function TripFinancePage({ params }: PageProps<"/admin/keua
                   </td>
                   <td className={styles.num}>{rp(packageIncome)}</td>
                   <td className={styles.num}>{rp(tripCost)}</td>
-                  <td className={cx(styles.num, styles.strong, packageIncome - tripCost < 0 && styles.neg)}>{rp(packageIncome - tripCost)}</td>
+                  <td className={cx(styles.num, styles.strong, packageProfit < 0 && styles.neg)}>{rp(packageProfit)}</td>
                 </tr>
                 {perActivity.map(({ s, rev, cst }) => (
                   <tr key={s.id}>

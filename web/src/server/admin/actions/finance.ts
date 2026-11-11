@@ -86,8 +86,8 @@ export async function saveTransaction(formData: FormData): Promise<TxResult> {
   const data = await getFinanceData();
   const tripParam = text(formData.get("tripId"));
   // Trip (form "Kaitkan ke trip"): biaya hotel / transport / makan trip. Kosong = tidak terkait trip.
-  const tripLink = tripParam && data.trips.some((t) => t.id === tripParam) ? tripParam : null;
-  if (tripParam && !tripLink) return { ok: false, error: "Trip yang dikaitkan tidak ditemukan." };
+  if (tripParam && !data.trips.some((t) => t.id === tripParam)) return { ok: false, error: "Trip yang dikaitkan tidak ditemukan." };
+  const tripLink = tripParam || null;
   const existingTx = id ? data.transactions.find((t) => t.id === id) : undefined;
   const category = data.categories.find((c) => c.id === categoryId);
   const fields: TxFieldErrors = {};
@@ -254,42 +254,39 @@ export async function restoreTransaction(id: string): Promise<ActionResult> {
   return done(`${tx.code} dipulihkan.`);
 }
 
-/** Kaitkan / lepas transaksi ke trip (detail trip Keuangan · "Kaitkan transaksi"): biaya hotel, transport, makan… */
-export async function linkTransactionToTrip(id: string, tripId: string | null): Promise<ActionResult> {
+/**
+ * Kaitkan / lepas transaksi ke sesi (detail event · Per event) atau ke trip (detail trip: biaya hotel, transport,
+ * makan…) — satu aksi untuk semua yang dipilih (satu cek akses, satu update, satu refresh). Satu transaksi dihitung
+ * di satu baris Per event: sesi & trip sekaligus hanya bila sesinya activity trip itu.
+ */
+export async function linkTransactions(ids: string[], target: { sessionId: string | null } | { tripId: string | null }): Promise<ActionResult> {
   const auth = await requireFinance("full");
   if ("error" in auth) return fail(auth.error);
+  if (!ids.length) return fail("Pilih transaksi dulu.");
+  const toTrip = "tripId" in target;
+  const value = toTrip ? target.tripId : target.sessionId;
   const supabase = await createSupabaseServerClient();
-  const { data: tx } = await supabase.from("finance_transactions").select("code, type, trip_id, activity_session_id").eq("id", id).maybeSingle();
-  if (!tx) return fail("Transaksi tidak ditemukan.");
-  if (tx.type !== "income" && tx.type !== "expense") return fail("Hanya pemasukan / pengeluaran yang bisa dikaitkan ke trip.");
-  if (tripId && tx.activity_session_id) {
-    const { data: s2 } = await supabase.from("sessions").select("trip_id").eq("id", tx.activity_session_id).maybeSingle();
-    if (s2?.trip_id !== tripId) return fail(`${tx.code} sudah terkait sesi lain — lepas dari sesi dulu.`);
+  const { data: rows } = await supabase.from("finance_transactions").select("id, code, type, activity_session_id, trip_id").in("id", ids);
+  const txs = (rows ?? []) as { id: string; code: string; type: string; activity_session_id: string | null; trip_id: string | null }[];
+  if (txs.length !== ids.length) return fail("Transaksi tidak ditemukan.");
+  const bad = txs.find((t) => t.type !== "income" && t.type !== "expense");
+  if (bad) return fail(`${bad.code}: hanya pemasukan / pengeluaran yang bisa dikaitkan ke ${toTrip ? "trip" : "sesi"}.`);
+  if (value) {
+    // Trip sesi-sesi yang terlibat (sesi tujuan, atau sesi yang sudah terkait di transaksinya) — satu query.
+    const sessionIds = toTrip ? txs.map((t) => t.activity_session_id).filter((x): x is string => !!x) : [value];
+    const { data: sess } = sessionIds.length ? await supabase.from("sessions").select("id, trip_id").in("id", sessionIds) : { data: [] };
+    const tripOf = new Map(((sess ?? []) as { id: string; trip_id: string | null }[]).map((x) => [x.id, x.trip_id]));
+    const clash = txs.find((t) =>
+      toTrip ? t.activity_session_id && tripOf.get(t.activity_session_id) !== value : t.trip_id && tripOf.get(value) !== t.trip_id,
+    );
+    if (clash) return fail(toTrip ? `${clash.code} sudah terkait sesi lain — lepas dari sesi dulu.` : `${clash.code} sudah terkait trip — lepas dari trip dulu (Ubah transaksi → Kaitkan ke trip).`);
   }
-  const { error } = await supabase.from("finance_transactions").update({ trip_id: tripId, updated_by: auth.userId }).eq("id", id);
+  const column = toTrip ? "trip_id" : "activity_session_id";
+  const { error } = await supabase.from("finance_transactions").update({ [column]: value, updated_by: auth.userId }).in("id", ids);
   if (error) return fail(`Gagal menyimpan: ${error.message}`);
-  await financeLog(auth.userId, "transaction", id, `${tripId ? "kaitkan" : "lepas"} trip ${tx.code}`, { trip_id: tx.trip_id }, { trip_id: tripId });
+  await Promise.all(txs.map((t) => financeLog(auth.userId, "transaction", t.id, `${value ? "kaitkan" : "lepas"} ${toTrip ? "trip" : "sesi"} ${t.code}`, { [column]: t[column] }, { [column]: value })));
   refresh();
-  return done(tripId ? `${tx.code} dikaitkan ke trip.` : `${tx.code} dilepas dari trip.`);
-}
-
-/** Kaitkan / lepas transaksi ke sesi (Per event · "Kaitkan transaksi"). */
-export async function linkTransaction(id: string, sessionId: string | null): Promise<ActionResult> {
-  const auth = await requireFinance("full");
-  if ("error" in auth) return fail(auth.error);
-  const supabase = await createSupabaseServerClient();
-  const { data: tx } = await supabase.from("finance_transactions").select("code, type, activity_session_id, trip_id").eq("id", id).maybeSingle();
-  if (!tx) return fail("Transaksi tidak ditemukan.");
-  if (tx.type !== "income" && tx.type !== "expense") return fail("Hanya pemasukan / pengeluaran yang bisa dikaitkan ke sesi.");
-  if (sessionId && tx.trip_id) {
-    const { data: s2 } = await supabase.from("sessions").select("trip_id").eq("id", sessionId).maybeSingle();
-    if (s2?.trip_id !== tx.trip_id) return fail(`${tx.code} sudah terkait trip — lepas dari trip dulu (Ubah transaksi → Kaitkan ke trip).`);
-  }
-  const { error } = await supabase.from("finance_transactions").update({ activity_session_id: sessionId, updated_by: auth.userId }).eq("id", id);
-  if (error) return fail(`Gagal menyimpan: ${error.message}`);
-  await financeLog(auth.userId, "transaction", id, `${sessionId ? "kaitkan" : "lepas"} sesi ${tx.code}`, { activity_session_id: tx.activity_session_id }, { activity_session_id: sessionId });
-  refresh();
-  return done(sessionId ? `${tx.code} dikaitkan ke sesi.` : `${tx.code} dilepas dari sesi.`);
+  return done(`${txs.length} transaksi ${value ? "dikaitkan ke" : "dilepas dari"} ${toTrip ? "trip" : "sesi"}.`);
 }
 
 // ── Akun ─────────────────────────────────────────────────────────────────────

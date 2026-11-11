@@ -1,6 +1,6 @@
 /** View-model daftar transaksi & opsi form — disusun di server, dikirim ke komponen klien. */
-import { dateLabel } from "./format";
-import { groupTransactions, signedAmount, type TxRow } from "./reports";
+import { dateLabel, rp } from "./format";
+import { groupTransactions, posted, signedAmount, type TxRow } from "./reports";
 import { canEditTx, isAutoSource, SOURCE_META } from "./sources";
 import type { FinanceData, FinanceRole, FinCategory, FinTx } from "./types";
 
@@ -105,4 +105,18 @@ export function txFormOptions(data: FinanceData, role: FinanceRole, userName: st
     trips: data.trips.map((t) => ({ id: t.id, label: `${t.title} · ${dateLabel(t.startsOn)}${t.draft ? " · draft" : ""}` })),
     defaultAccountId: data.settings.defaultBankAccountId ?? data.accounts.find((a) => a.systemKey === "bank_main")?.id ?? null,
   };
+}
+
+/**
+ * Pilihan "Kaitkan transaksi" (detail event / trip): pemasukan & pengeluaran yang belum terkait sesi / trip,
+ * bertanggal `from`–`to` (YYYY-MM-DD), terdekat ke `around` dulu supaya yang dicari tidak terpotong `limit`.
+ */
+export function linkCandidates(data: FinanceData, from: string, to: string, around: string, limit: number): { id: string; label: string }[] {
+  const center = Date.parse(around);
+  return posted(data)
+    .filter((t) => !t.sessionId && !t.tripId && (t.type === "income" || t.type === "expense") && t.date >= from && t.date <= to)
+    .map((t) => ({ t, gap: Math.abs(Date.parse(t.date) - center) }))
+    .sort((a, b) => a.gap - b.gap)
+    .slice(0, limit)
+    .map(({ t }) => ({ id: t.id, label: `${dateLabel(t.date)} · ${t.description} · ${t.type === "expense" ? "−" : "+"}${rp(t.amount)}` }));
 }
