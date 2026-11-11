@@ -1175,11 +1175,14 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const cxlAfter = await cxlNet();
   const cxlSync = (await one(`select finance_resync_trip($1) r`, [newTrip])).r;
   console.assert(cxlBefore === 500000 && cxlAfter === 0 && (await cxlNet()) === 0 && !cxlSync.new.some((x) => x.name === "Batal Paket"), `peserta dibatalkan tetap di Keuangan / dicatat Sync ${cxlBefore} → ${cxlAfter} ${JSON.stringify(cxlSync)}`);
+  // "Keluarkan" = dihapus: tidak ada baris yang tampil (bukan pemasukan + baris koreksi).
+  const cxlVisible = (await one(`select count(*)::int n from finance_transactions where source_ref like $1 and deleted_at is null`, [`tp:${cxlPay}:%`])).n;
+  console.assert(cxlVisible === 0, `peserta dibatalkan masih tampil di Keuangan (${cxlVisible} baris)`);
   await db.query(`update trip_bookings set cancelled_at = null where id = $1`, [cxl]);
   console.assert((await cxlNet()) === 500000, `peserta diaktifkan lagi: pembayaran tidak tercatat lagi (${await cxlNet()})`);
   await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [cxl]);
-  // Diaktifkan lagi: pembayaran lama dicatat ulang HARI INI (bulan lalu tidak berubah); transaksi yang pernah
-  // dihapus admin (dobel dengan import jurnal) tidak dibuat ulang.
+  // Diaktifkan lagi: transaksi yang dihapus karena pembatalan dipulihkan apa adanya (tanggal asli, tanpa baris
+  // baru); transaksi yang pernah dihapus admin (dobel dengan import jurnal) tidak dibuat ulang.
   {
     const goLive = (await one(`select go_live_date::text d from finance_settings`)).d;
     await db.exec(`update finance_settings set go_live_date = '2020-01-01' where true`);
@@ -1188,8 +1191,8 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
     const oldPay = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'dp', 300000, current_date - 40, $2) returning id`, [old, bank])).id;
     await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [old]);
     await db.query(`update trip_bookings set cancelled_at = null where id = $1`, [old]);
-    const back = await one(`select date::text d, (select current_date::text) today, (select coalesce(sum(amount), 0)::int from finance_transactions where source_ref like $1 and deleted_at is null) net from finance_transactions where source_ref like $1 and amount > 0 order by created_at desc limit 1`, [`tp:${oldPay}:%`]);
-    console.assert(back.net === 300000 && back.d === back.today, `aktif lagi: dicatat ulang di tanggal terima, bukan hari ini ${JSON.stringify(back)}`);
+    const back = await one(`select count(*)::int n, min(date)::text d, (select (current_date - 40)::text) received, coalesce(sum(amount), 0)::int net from finance_transactions where source_ref like $1 and deleted_at is null`, [`tp:${oldPay}:%`]);
+    console.assert(back.n === 1 && back.net === 300000 && back.d === back.received, `aktif lagi: transaksi tidak dipulihkan apa adanya ${JSON.stringify(back)}`);
     const gone = (await one(`insert into trip_bookings (trip_id, full_name) values ($1, 'Pernah Dihapus') returning id`, [newTrip])).id;
     const gonePay = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'dp', 200000, current_date, $2) returning id`, [gone, bank])).id;
     await db.query(`update finance_transactions set deleted_at = now() where source_ref like $1`, [`tp:${gonePay}:%`]);
@@ -1197,15 +1200,7 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
     await db.query(`update trip_bookings set cancelled_at = null where id = $1`, [gone]);
     const goneNet = Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source_ref like $1 and deleted_at is null`, [`tp:${gonePay}:%`])).s);
     console.assert(goneNet === 0, `aktif lagi membuat ulang transaksi yang dihapus admin (${goneNet})`);
-    // Dihapus sesudah dibatalkan (baris koreksi dibiarkan) → aktif lagi tidak mencatat dua kali lipat.
-    const late = (await one(`insert into trip_bookings (trip_id, full_name) values ($1, 'Hapus Belakangan') returning id`, [newTrip])).id;
-    const latePay = (await one(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'dp', 250000, current_date, $2) returning id`, [late, bank])).id;
-    await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [late]);
-    await db.query(`update finance_transactions set deleted_at = now() where source_ref like $1 and amount > 0`, [`tp:${latePay}:%`]);
-    await db.query(`update trip_bookings set cancelled_at = null where id = $1`, [late]);
-    const lateRows = await one(`select coalesce(sum(amount) filter (where deleted_at is null), 0)::int net, count(*) filter (where amount > 0 and deleted_at is null)::int pos from finance_transactions where source_ref like $1`, [`tp:${latePay}:%`]);
-    console.assert(lateRows.pos === 0 && lateRows.net === -250000, `aktif lagi sesudah transaksi asli dihapus mencatat ulang ${JSON.stringify(lateRows)}`);
-    for (const b of [old, gone, late]) await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [b]);
+    for (const b of [old, gone]) await db.query(`update trip_bookings set cancelled_at = now() where id = $1`, [b]);
     await db.query(`update trips set package_quota = package_quota - 10 where id = $1`, [newTrip]);
     await db.query(`update finance_settings set go_live_date = $1 where true`, [goLive]);
   }
