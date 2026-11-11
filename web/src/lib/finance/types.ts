@@ -122,7 +122,8 @@ export type FinSession = {
 };
 
 /** Trip Tennis Escape untuk laporan Per event: pembayaran paket (transaksi trip_id) + activity-nya. */
-export type FinTrip = { id: string; title: string; startsOn: string; endsOn: string; packages: number };
+/** draft = trip belum dipublikasikan (tetap bisa punya DP / biaya — ikut di Keuangan, diberi label). */
+export type FinTrip = { id: string; title: string; startsOn: string; endsOn: string; packages: number; draft: boolean };
 
 export type ImportBatch = { id: string; fileName: string; txTotal: number; importedAt: string; undoUntil: string; status: "draft" | "imported" | "undone" };
 

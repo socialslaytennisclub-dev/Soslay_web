@@ -12,7 +12,7 @@ import { AdminIcon } from "@/components/admin/ui/AdminIcon";
 import { AdminButton } from "@/components/admin/ui/AdminUI";
 import { cx } from "@/lib/cx";
 import { dateTimeWib, monthLabel, pct, rp, rpSigned } from "@/lib/finance/format";
-import { firstDay, groupTransactions, lastDay, posted, profitLoss } from "@/lib/finance/reports";
+import { firstDay, groupTransactions, lastDay, posted, postedByTrip, profitLoss } from "@/lib/finance/reports";
 import { isAutoSource } from "@/lib/finance/sources";
 import type { FinTx } from "@/lib/finance/types";
 import { txFormOptions, txViews } from "@/lib/finance/views";
@@ -39,16 +39,17 @@ export default async function FinanceTransactionsPage({ searchParams }: PageProp
   const src = one(raw.src) ?? "";
   const q = (one(raw.q) ?? "").toLowerCase();
   const batchId = one(raw.batch);
-  // "Lihat di Keuangan" dari trip Tennis Escape: pembayaran paket trip itu (cocok dengan "Bundling sudah
-  // masuk"). ?with=activities: semua transaksi trip (biaya yang dikaitkan ke trip + transaksi activity-nya).
+  // "Lihat di Keuangan" dari trip Tennis Escape: pembayaran paket trip itu — pemasukan yang dikaitkan ke trip
+  // tanpa sesi (otomatis, import jurnal, atau dicatat manual). ?with=activities: semua transaksi trip (biaya yang dikaitkan ke trip + transaksi activity-nya).
   const tripId = one(raw.trip);
   const trip = tripId ? data.trips.find((t) => t.id === tripId) : undefined;
   const withActivities = !!tripId && one(raw.with) === "activities";
-  const tripSessions = new Set(withActivities ? data.sessions.filter((s) => s.tripId === tripId).map((s) => s.id) : []);
+  // Semua transaksi trip = sama persis dengan detail trip / baris Trip di Per event (satu transaksi, satu trip).
+  const tripTxIds = new Set(withActivities && tripId ? (postedByTrip(data).get(tripId) ?? []).map((t) => t.id) : []);
   const page = Math.max(1, Number(one(raw.page)) || 1);
   const batch = batchId ? data.batches.find((b) => b.id === batchId) : undefined;
 
-  const inScope = (t: FinTx) => (batchId ? t.importBatchId === batchId : tripId ? (withActivities ? t.tripId === tripId || (t.sessionId !== null && tripSessions.has(t.sessionId)) : t.tripId === tripId && t.source === "trip_payment") : allMonths || t.date.startsWith(month));
+  const inScope = (t: FinTx) => (batchId ? t.importBatchId === batchId : tripId ? (withActivities ? tripTxIds.has(t.id) : t.tripId === tripId && t.sessionId === null && t.type === "income") : allMonths || t.date.startsWith(month));
   const base = posted(data).filter(inScope);
   const matchFilters = (t: FinTx) =>
     (!cat || t.categoryId === cat) &&

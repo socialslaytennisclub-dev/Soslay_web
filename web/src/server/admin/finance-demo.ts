@@ -182,7 +182,7 @@ export function buildFinanceDemo(sessions: FinSession[]): FinanceData {
     },
     targets: [{ year: 2026, netProfitTarget: 350_000_000, monthly: null }],
     sessions,
-    trips: [{ id: demoTrip.id, title: demoTrip.title, startsOn: demoTrip.startsOn, endsOn: demoTrip.endsOn, packages: demoTripBookings.length }],
+    trips: [{ id: demoTrip.id, title: demoTrip.title, startsOn: demoTrip.startsOn, endsOn: demoTrip.endsOn, packages: demoTripBookings.length, draft: false }],
     batches: [],
     today: FINANCE_DEMO_TODAY,
   };

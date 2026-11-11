@@ -469,12 +469,16 @@ function tally(data: FinanceData, txs: FinTx[]) {
   return { revenue, cost, profit: revenue - cost, margin: revenue ? ((revenue - cost) / revenue) * 100 : null, channel: [...channels].join(" + ") || "—", hasCost: cost > 0 };
 }
 
-/** Transaksi terposting per trip: pembayaran paket (trip_id) + transaksi activity trip (sessions.trip_id). */
+/**
+ * Transaksi terposting per trip: pembayaran paket / biaya trip (trip_id, tanpa sesi) + transaksi activity trip
+ * (sessions.trip_id). Transaksi bersesi selalu mengikuti sesinya — trip_id yang tidak cocok (mis. activity
+ * dipindah ke trip lain) tidak membuatnya terhitung dua kali (di baris sesi / trip lain sekaligus).
+ */
 export const postedByTrip = memo((data) => {
   const tripOfSession = new Map(data.sessions.filter((s) => s.tripId).map((s) => [s.id, s.tripId as string]));
   const map = new Map<string, FinTx[]>();
   for (const t of posted(data)) {
-    const trip = t.tripId ?? (t.sessionId ? tripOfSession.get(t.sessionId) : undefined);
+    const trip = t.sessionId ? tripOfSession.get(t.sessionId) : (t.tripId ?? undefined);
     if (!trip) continue;
     const list = map.get(trip);
     if (list) list.push(t);
@@ -509,7 +513,7 @@ export function eventRows(data: FinanceData, ym: string): EventRow[] {
       return {
         key: `trip:${t.id}`,
         kind: "trip" as const,
-        title: t.title,
+        title: t.draft ? `${t.title} (draft)` : t.title,
         place: `${activities} activity`,
         date: t.startsOn,
         participants: t.packages,

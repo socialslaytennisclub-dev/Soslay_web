@@ -91,7 +91,8 @@ export default async function TripFinancePage({ params }: PageProps<"/admin/keua
           <Kpi icon="trend-up" label="Pendapatan" value={rpShort(revenue)} note={`${income.length} transaksi · ${rp(revenue)}`} />
           <Kpi icon="trend-down" label="Biaya terkait" value={rpShort(cost)} note={`${expense.length} transaksi · ${rp(cost)}`} />
           <Kpi icon="money" label="Laba" value={rpShort(profit)} note={`Margin ${pct(revenue ? (profit / revenue) * 100 : null)}`} />
-          <Kpi icon="users-three" label="Laba per paket" value={trip.packages ? rpShort(Math.round(profit / trip.packages)) : "—"} note={`${trip.packages} paket`} />
+          {/* Hanya bagian paket (pembayaran paket − biaya trip langsung): tiket satuan activity tidak ikut dibagi per paket. */}
+          <Kpi icon="users-three" label="Laba per paket" value={trip.packages ? rpShort(Math.round((packageIncome - tripCost) / trip.packages)) : "—"} note={`${trip.packages} paket · tanpa tiket satuan activity`} />
         </div>
 
         <LinkedBreakdown data={data} linked={linked} emptyIncome="Belum ada pendapatan terkait. Klik Sync untuk mencatat pembayaran paket." emptyCost="Belum ada biaya terkait — kaitkan hotel, transport, makan, sewa lapangan lewat Kaitkan transaksi." />
