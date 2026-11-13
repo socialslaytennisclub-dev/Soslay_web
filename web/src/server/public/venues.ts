@@ -60,7 +60,8 @@ export const getWebsiteVenues = cache(async (): Promise<WebsiteVenue[]> => {
         imagePosition: content?.imagePosition ?? "50% 50%",
         tagline: v.tagline ?? "",
         description: v.description ?? "",
-        heroImage: v.hero_path ?? content?.heroImage,
+        // Foto hero hanya dari master (admin Venues); kosong → pakai foto cover master.
+        heroImage: v.hero_path ?? undefined,
         area: v.area ?? content?.area,
         showOnHomepage: v.show_on_homepage,
       };

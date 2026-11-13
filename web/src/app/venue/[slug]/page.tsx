@@ -64,7 +64,7 @@ export default async function VenueDetailPage({ params }: PageProps<"/venue/[slu
             eyebrow={venuePage.detail.eyebrow}
             title={venue.name}
             intro={venue.description}
-            photo={guide?.hero ?? { src: heroImage, alt: `${venue.name} court`, position: venue.heroImage ? undefined : venue.imagePosition }}
+            photo={{ src: heroImage, alt: `${venue.name} court`, position: venue.heroImage ? undefined : venue.imagePosition }}
             card={{ name: venue.name, ...venueCardInfo(venue, cityInEnglish), ink: guide?.theme.ink }}
             cta={guide ? { label: venuePage.detail.guideCta, href: guideHref(venue.slug) } : undefined}
           />
