@@ -1,3 +1,4 @@
+import type { ShopBank } from "@/content/checkout";
 import type { InstantSettings, OrderStage, ShippingMethod, ShippingRate } from "@/lib/checkout";
 
 /** Tipe bersama checkout & halaman pesanan member (dipakai server dan komponen klien). */
@@ -80,6 +81,8 @@ export type MyOrder = {
   distanceKm: number | null;
   /** Titik lokasi Instant. */
   pin: { lat: number; lng: number } | null;
+  /** Rekening tujuan saat pesanan dibuat (null = pesanan lama → rekening dari pengaturan sekarang). */
+  bank: ShopBank | null;
   weightGrams: number | null;
   courier: string | null;
   trackingNumber: string | null;

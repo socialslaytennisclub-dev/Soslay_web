@@ -1,4 +1,5 @@
 import "server-only";
+import type { ShopBank } from "@/content/checkout";
 import { cache } from "react";
 import { DEFAULT_INSTANT, orderStage, variantLabel, pickupDeadline, type ShippingMethod, type ShippingRate } from "@/lib/checkout";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -161,7 +162,7 @@ export const toProof = (p: ProofRow): ProofView => ({
 export const PROOF_COLUMNS = "id, status, file_name, mime, file_size, sender_name, sender_bank, amount, transfer_date, note, uploaded_at, reject_reason, reject_message, reviewed_at";
 
 export const ORDER_COLUMNS = `code, status, payment_status, placed_at, subtotal, shipping_fee, unique_code, total, pay_deadline, recipient_name, recipient_phone,
-  shipping_address, shipping_city, postal_code, shipping_method, shipping_lat, shipping_lng, distance_km, weight_grams, courier, tracking_number, tracking_url, proof_rejections,
+  shipping_address, shipping_city, postal_code, shipping_method, shipping_lat, shipping_lng, distance_km, weight_grams, payment_bank, courier, tracking_number, tracking_url, proof_rejections,
   points_awarded, paid_at, shipped_at, completed_at, cancelled_at, cancel_reason,
   pickup:sessions!orders_pickup_session_id_fkey(id, title, starts_at, ends_at, venues(name)),
   order_items(product_name, options, unit_price, quantity, product_variants(products(slug))),
@@ -184,6 +185,7 @@ export type OrderRow = {
   postal_code: string | null;
   shipping_method: ShippingMethod | null;
   shipping_lat: number | null;
+  payment_bank: ShopBank | null;
   shipping_lng: number | null;
   distance_km: number | null;
   weight_grams: number | null;
@@ -226,6 +228,7 @@ export async function toMyOrder(o: OrderRow): Promise<MyOrder> {
     recipient: { name: o.recipient_name, phone: o.recipient_phone, address: o.shipping_address, city: o.shipping_city ?? "", postalCode: o.postal_code ?? "" },
     distanceKm: o.distance_km === null ? null : Number(o.distance_km),
     pin: o.shipping_lat !== null && o.shipping_lng !== null ? { lat: o.shipping_lat, lng: o.shipping_lng } : null,
+    bank: o.payment_bank,
     weightGrams: o.weight_grams,
     courier: o.courier,
     trackingNumber: o.tracking_number,

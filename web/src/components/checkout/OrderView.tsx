@@ -13,7 +13,9 @@ import { ChangePickup, ConfirmReceived, CopyButton, Countdown, ProofForm, Replac
  * Halaman pesanan member: satu URL untuk seluruh perjalanan pesanan (Figma 05 Pembayaran ·
  * 06 Menunggu verifikasi · 06a Upload ulang · 07 Pembayaran diterima) + dikirim / siap diambil / selesai / batal.
  */
-export function OrderView({ order, pickupSessions, memberName, bank: shopBank }: { order: MyOrder; pickupSessions: PickupSession[]; memberName: string; bank: ShopBank }) {
+export function OrderView({ order, pickupSessions, memberName, bank }: { order: MyOrder; pickupSessions: PickupSession[]; memberName: string; bank: ShopBank }) {
+  // Rekening yang berlaku saat pesanan dibuat; pesanan lama (sebelum snapshot) memakai pengaturan sekarang.
+  const shopBank = order.bank ?? bank;
   const { stage } = order;
   const pendingProof = order.proofs.find((p) => p.status === "pending");
   const lastRejected = order.proofs.find((p) => p.status === "rejected");

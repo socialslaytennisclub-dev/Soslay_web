@@ -4,10 +4,11 @@ import "leaflet/dist/leaflet.css";
 import type { LatLngExpression, Map as LeafletMap, Marker } from "leaflet";
 import { CircleCheck, Link2, LocateFixed, Monitor, Smartphone } from "lucide-react";
 import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
+import { parseCoords, type LatLng } from "@/lib/geo";
 import { resolveMapsLink } from "@/server/maps";
 import styles from "./MapPicker.module.css";
 
-export type LatLng = { lat: number; lng: number };
+export type { LatLng };
 
 type Props = {
   value: LatLng | null;
@@ -23,19 +24,6 @@ type Props = {
 
 const JAKARTA: LatLng = { lat: -6.2088, lng: 106.8456 };
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
-
-/**
- * Koordinat dari teks yang ditempel: "-6.2607, 106.8136" atau link Google Maps
- * (…!3d-6.26!4d106.81… = titik tempat, …@-6.26,106.81,17z… / ?q=-6.26,106.81 = titik peta).
- */
-export function parseCoords(raw: string): LatLng | null {
-  const place = raw.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
-  const m = place ?? raw.match(/(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
-  if (!m) return null;
-  const lat = Number(m[1]);
-  const lng = Number(m[2]);
-  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat: round6(lat), lng: round6(lng) } : null;
-}
 
 /**
  * Titik lokasi dari link Google Maps: member menempel link share Google Maps → server mengubahnya jadi
@@ -54,6 +42,7 @@ export function MapPicker({ value, onChange, fallbackCenter = JAKARTA, origin, h
   const [error, setError] = useState<string>();
   const [note, setNote] = useState<string>();
   const inputId = useId();
+  const latest = useRef(0);
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -143,6 +132,8 @@ export function MapPicker({ value, onChange, fallbackCenter = JAKARTA, origin, h
 
   const applyLink = async (raw: string) => {
     const text = raw.trim();
+    // Hanya hasil permintaan terakhir yang dipakai (link lama yang lebih lambat tidak menimpa pin baru).
+    const request = ++latest.current;
     setError(undefined);
     setNote(undefined);
     if (!text) return;
@@ -157,6 +148,7 @@ export function MapPicker({ value, onChange, fallbackCenter = JAKARTA, origin, h
     setBusy(true);
     try {
       const link = await resolveMapsLink(text);
+      if (request !== latest.current) return;
       if (link.ok) {
         flyTo({ lat: link.lat, lng: link.lng });
         setNote(`Titik lokasi ditemukan${link.name ? `: ${link.name}` : ""}. Cek pin di peta — geser kalau kurang pas.`);
@@ -164,9 +156,10 @@ export function MapPicker({ value, onChange, fallbackCenter = JAKARTA, origin, h
         setError(`${link.error} Coba salin ulang link dari Google Maps, atau klik titiknya langsung di peta.`);
       }
     } catch {
+      if (request !== latest.current) return;
       setError("Link belum bisa dibaca sekarang — coba lagi, atau klik titiknya langsung di peta.");
     } finally {
-      setBusy(false);
+      if (request === latest.current) setBusy(false);
     }
   };
 

@@ -35,33 +35,23 @@ export async function saveShopSettings(s: ShopSettings): Promise<ActionResult> {
   const cities = rates.map((r) => r.city.toLowerCase());
   if (new Set(cities).size !== cities.length) return fail("Ada kota yang tercantum dua kali di ongkir J&T.");
 
+  // Satu transaksi di database: rekening, gudang + Instant, dan ongkir J&T tersimpan semua atau tidak sama sekali.
   const supabase = await createSupabaseServerClient();
-  const now = new Date().toISOString();
-  const { data: existing } = await supabase.from("shipping_rates").select("city");
-  const removed = (existing ?? []).map((r) => r.city as string).filter((c) => !rates.some((r) => r.city === c));
-
-  const results = await Promise.all([
-    supabase.from("app_settings").upsert({ key: "shop_bank", value: bank, updated_at: now }, { onConflict: "key" }),
-    supabase.from("shipping_instant_settings").upsert(
-      {
-        id: true,
-        origin_address: i.originAddress.trim(),
-        origin_lat: i.originLat,
-        origin_lng: i.originLng,
-        base_fee: Math.round(i.baseFee),
-        base_km: i.baseKm,
-        per_km_fee: Math.round(i.perKmFee),
-        max_km: i.maxKm,
-        cutoff_time: i.cutoff,
-        updated_at: now,
-      },
-      { onConflict: "id" },
-    ),
-    rates.length ? supabase.from("shipping_rates").upsert(rates.map((r) => ({ ...r, updated_at: now })), { onConflict: "city" }) : null,
-    removed.length ? supabase.from("shipping_rates").delete().in("city", removed) : null,
-  ]);
-  const failed = results.find((r) => r?.error);
-  if (failed?.error) return fail(`Gagal menyimpan: ${failed.error.message}`);
+  const { error } = await supabase.rpc("save_shop_settings", {
+    p_bank: bank,
+    p_instant: {
+      origin_address: i.originAddress.trim(),
+      origin_lat: i.originLat,
+      origin_lng: i.originLng,
+      base_fee: Math.round(i.baseFee),
+      base_km: i.baseKm,
+      per_km_fee: Math.round(i.perKmFee),
+      max_km: i.maxKm,
+      cutoff_time: i.cutoff,
+    },
+    p_rates: rates,
+  });
+  if (error) return fail(`Gagal menyimpan: ${error.message}`);
 
   await audit(auth.userId, "mengubah pengaturan shop & pengiriman", "settings", "shop");
   refreshPaths("/admin/settings", "/akun/checkout");

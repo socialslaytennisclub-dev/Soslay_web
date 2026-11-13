@@ -57,7 +57,8 @@ export function CheckoutForm({ ctx }: { ctx: CheckoutContext }) {
   const subtotal = items.reduce((s, i) => s + i.price * i.quantity, 0);
   const weight = items.reduce((s, i) => s + (ctx.weights[i.productSlug] ?? 300) * i.quantity, 0);
   const rate = ctx.rates.find((r) => r.city === recipient.city);
-  const inJakarta = rate?.province === "DKI Jakarta";
+  // Instant: kota di DKI Jakarta menurut daftar resmi — tidak bergantung pada baris ongkir J&T.
+  const inJakarta = provinceOf(recipient.city) === "DKI Jakarta";
   const quote = useMemo(() => (pin ? instantQuote(estimateRouteKm(pin.lat, pin.lng, ctx.instant), ctx.instant) : null), [pin, ctx.instant]);
   const session = ctx.pickupSessions.find((s) => s.id === sessionId);
 

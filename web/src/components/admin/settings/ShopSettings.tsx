@@ -11,8 +11,10 @@ import { toast } from "../ui/Toaster";
 import styles from "./Settings.module.css";
 
 const num = (v: string) => Number(v.replace(/[^\d]/g, "")) || 0;
-const dec = (v: string) => {
-  const n = Number(v.replace(",", ".").replace(/[^\d.]/g, ""));
+/** Teks km yang sedang diketik ("2," / "2.5") → angka; teks mentahnya disimpan terpisah supaya titik/koma tidak hilang. */
+const kmText = (v: string) => v.replace(",", ".").replace(/[^\d.]/g, "").replace(/(\..*)\./g, "$1");
+const kmValue = (t: string) => {
+  const n = Number(t);
   return Number.isFinite(n) ? n : 0;
 };
 
@@ -20,6 +22,12 @@ const dec = (v: string) => {
 export function ShopSettingsForm({ initial }: { initial: ShopSettings }) {
   const [s, setS] = useState(initial);
   const [saving, start] = useTransition();
+  const [km, setKm] = useState({ base: String(initial.instant.baseKm), max: String(initial.instant.maxKm) });
+  const setKmField = (field: "base" | "max", raw: string) => {
+    const t = kmText(raw);
+    setKm((p) => ({ ...p, [field]: t }));
+    inst(field === "base" ? "baseKm" : "maxKm", kmValue(t));
+  };
   const dirty = JSON.stringify(s) !== JSON.stringify(initial);
   const bank = (k: keyof ShopSettings["bank"], v: string) => setS((p) => ({ ...p, bank: { ...p.bank, [k]: v } }));
   const inst = <K extends keyof ShopSettings["instant"]>(k: K, v: ShopSettings["instant"][K]) => setS((p) => ({ ...p, instant: { ...p.instant, [k]: v } }));
@@ -76,7 +84,7 @@ export function ShopSettingsForm({ initial }: { initial: ShopSettings }) {
           </Field>
           <Field label="Termasuk jarak">
             <span className={styles.affix}>
-              <input inputMode="decimal" value={s.instant.baseKm} onChange={(e) => inst("baseKm", dec(e.target.value))} />
+              <input inputMode="decimal" value={km.base} onChange={(e) => setKmField("base", e.target.value)} />
               <span className={styles.muted}>km pertama</span>
             </span>
           </Field>
@@ -89,7 +97,7 @@ export function ShopSettingsForm({ initial }: { initial: ShopSettings }) {
           </Field>
           <Field label="Jarak maksimal">
             <span className={styles.affix}>
-              <input inputMode="decimal" value={s.instant.maxKm} onChange={(e) => inst("maxKm", dec(e.target.value))} />
+              <input inputMode="decimal" value={km.max} onChange={(e) => setKmField("max", e.target.value)} />
               <span className={styles.muted}>km</span>
             </span>
           </Field>
@@ -158,7 +166,13 @@ export function ShopSettingsForm({ initial }: { initial: ShopSettings }) {
 
       <div className={styles.formFooter}>
         <div className={styles.formActions}>
-          <AdminButton disabled={!dirty} onClick={() => setS(initial)}>
+          <AdminButton
+            disabled={!dirty}
+            onClick={() => {
+              setS(initial);
+              setKm({ base: String(initial.instant.baseKm), max: String(initial.instant.maxKm) });
+            }}
+          >
             Batalkan
           </AdminButton>
           <AdminButton variant="primary" icon="check-bold" disabled={!dirty || saving} onClick={save}>

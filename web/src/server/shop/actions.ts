@@ -2,12 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { estimateRouteKm, instantQuote, jntFee, PROOF_MAX_BYTES, PROOF_TYPES, SHIPPING_LABEL, variantLabel } from "@/lib/checkout";
+import { provinceOf } from "@/content/wilayah";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getShopCatalog } from "@/server/public/products";
 import { uploadPrivateFile } from "@/server/storage";
 import { demoOrders, demoProofFiles, nextDemoCode } from "./demo-store";
 import { getCheckoutContext, PROOF_BUCKET } from "./orders";
+import { getShopBank } from "./settings";
 import type { CheckoutLine, ShipInput, ShopResult } from "./types";
 
 /** Aksi member: buat pesanan, kirim bukti transfer, konfirmasi diterima, ganti sesi pickup. */
@@ -42,7 +44,7 @@ export async function placeOrder(lines: CheckoutLine[], ship: ShipInput): Promis
 }
 
 async function placeDemoOrder(lines: CheckoutLine[], ship: ShipInput): Promise<ShopResult<{ code: string }>> {
-  const [{ products }, ctx] = await Promise.all([getShopCatalog(), getCheckoutContext()]);
+  const [{ products }, ctx, bank] = await Promise.all([getShopCatalog(), getCheckoutContext(), getShopBank()]);
   if (!ship.name.trim() || !ship.phone.trim()) return { ok: false, error: "Isi nama & nomor HP penerima." };
   const items = [];
   let weight = 0;
@@ -62,7 +64,7 @@ async function placeDemoOrder(lines: CheckoutLine[], ship: ShipInput): Promise<S
     if (!rate) return { ok: false, error: "Pengiriman ke kota ini belum tersedia, hubungi admin." };
     fee = jntFee(rate.perKg, weight);
   } else if (ship.method === "instant") {
-    if (rate?.province !== "DKI Jakarta") return { ok: false, error: "Instant hanya untuk alamat di DKI Jakarta." };
+    if (provinceOf(ship.city ?? "") !== "DKI Jakarta") return { ok: false, error: "Instant hanya untuk alamat di DKI Jakarta." };
     if (ship.lat === undefined || ship.lng === undefined) return { ok: false, error: "Atur titik lokasi di peta dulu." };
     km = estimateRouteKm(ship.lat, ship.lng, ctx.instant);
     const q = instantQuote(km, ctx.instant);
@@ -93,6 +95,7 @@ async function placeDemoOrder(lines: CheckoutLine[], ship: ShipInput): Promise<S
     recipient: ship.method === "pickup" ? { name: ship.name, phone: ship.phone, address: "Pickup di Mabar Session", city: "", postalCode: "" } : { name: ship.name, phone: ship.phone, address: ship.address ?? "", city: ship.city ?? "", postalCode: ship.postalCode ?? "" },
     distanceKm: km,
     pin: ship.method === "instant" && ship.lat !== undefined && ship.lng !== undefined ? { lat: ship.lat, lng: ship.lng } : null,
+    bank,
     weightGrams: weight,
     courier: SHIPPING_LABEL[ship.method].summary,
     trackingNumber: null,

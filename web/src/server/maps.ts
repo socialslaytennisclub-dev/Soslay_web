@@ -2,8 +2,9 @@
 
 /**
  * Link Google Maps → koordinat, tanpa API key. Link pendek (maps.app.goo.gl, goo.gl, share.google, g.co)
- * dibuka di server dan redirect-nya diikuti manual (hanya ke domain Google) sampai ketemu link yang memuat
- * titik: …!3d<lat>!4d<lng> (titik tempat), …@<lat>,<lng>, ?q=<lat>,<lng>, ll=/center=.
+ * dibuka di server dan redirect-nya diikuti manual (hanya ke domain Google yang terdaftar) sampai ketemu link yang
+ * memuat titik (aturan baca: src/lib/geo.ts). Hanya untuk member / tim yang login; hasil di-cache & dibatasi
+ * per akun supaya server tidak bisa dipakai sebagai proxy dan tidak diblokir Google.
  * Sebagian link hanya membawa nama tempat (mis. share.google → halaman Google Search). Nama itu dicari lewat
  * pencarian internal Google Maps (search?tbm=map). CATATAN: jalur ini TIDAK RESMI (bukan API Google) —
  * dipilih pemilik klub karena gratis; bisa berhenti bekerja bila Google mengubah format / memblokir.
@@ -11,12 +12,31 @@
  * Pengganti resmi: Google Places API (Text Search) dengan API key di environment server.
  */
 
+import { parseCoords } from "@/lib/geo";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getAdminSession } from "./admin/session";
+
 export type ResolvedLink = { ok: true; lat: number; lng: number; name: string | null } | { ok: false; name: string | null; error: string };
 
 const MAX_HOPS = 6;
 
-const isGoogleHost = (host: string) =>
-  host === "share.google" || host === "goo.gl" || host === "maps.app.goo.gl" || host === "g.co" || /^(www\.|maps\.)?google\.[a-z.]{2,6}$/.test(host);
+/** Hanya domain resmi Google yang dibuka server (bukan pola google.* — google.xx.io bisa milik siapa saja). */
+const GOOGLE_HOSTS = new Set([
+  "share.google",
+  "goo.gl",
+  "maps.app.goo.gl",
+  "g.co",
+  "google.com",
+  "www.google.com",
+  "maps.google.com",
+  "google.co.id",
+  "www.google.co.id",
+  "maps.google.co.id",
+]);
+const isGoogleHost = (host: string) => GOOGLE_HOSTS.has(host.toLowerCase());
+
+const coordsFrom = (text: string) => parseCoords(text);
 
 const safeDecode = (s: string) => {
   try {
@@ -26,23 +46,39 @@ const safeDecode = (s: string) => {
   }
 };
 
-function coordsFrom(text: string): { lat: number; lng: number } | null {
-  const t = safeDecode(text.replace(/\+/g, " "));
-  const m =
-    t.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/) ??
-    t.match(/@(-?\d{1,2}\.\d+),(-?\d{1,3}\.\d+)/) ??
-    t.match(/[?&](?:q|query|ll|center|destination|daddr)=(-?\d{1,2}\.\d+),\s*(-?\d{1,3}\.\d+)/);
-  if (!m) return null;
-  const lat = Number(m[1]);
-  const lng = Number(m[2]);
-  if (Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
-  return { lat: Math.round(lat * 1e6) / 1e6, lng: Math.round(lng * 1e6) / 1e6 };
+// ── Cache & batas pemakaian (per proses server) ──────────────────────────────
+const CACHE_TTL = 24 * 3600_000;
+const CACHE_MAX = 500;
+const LIMIT = 20;
+const LIMIT_WINDOW = 10 * 60_000;
+type Memo = { cache: Map<string, { at: number; result: ResolvedLink }>; calls: Map<string, number[]> };
+const g = globalThis as typeof globalThis & { __soslayMapLinks?: Memo };
+const memo: Memo = (g.__soslayMapLinks ??= { cache: new Map(), calls: new Map() });
+
+/** Akun pemanggil: member (sesi member) atau tim admin; mode demo (tanpa Supabase) diizinkan. */
+async function callerId(): Promise<string | null> {
+  if (!isSupabaseConfigured) return "demo";
+  const member = await createSupabaseServerClient("member");
+  const {
+    data: { user },
+  } = await member.auth.getUser();
+  if (user) return user.id;
+  const admin = await getAdminSession();
+  return admin.mode === "live" ? admin.userId : null;
+}
+
+function overLimit(id: string): boolean {
+  const now = Date.now();
+  const recent = (memo.calls.get(id) ?? []).filter((t) => now - t < LIMIT_WINDOW);
+  if (recent.length >= LIMIT) return true;
+  memo.calls.set(id, [...recent, now]);
+  return false;
 }
 
 function nameFrom(url: URL): string | null {
   // google.com/share.google?q=<token> — token link, bukan nama tempat.
   if (url.pathname === "/share.google") return null;
-  const place = url.pathname.match(/\/maps\/place\/([^/]+)/);
+  const place = url.pathname.match(/\/maps\/(?:place|search)\/([^/@]+)/);
   const raw = place?.[1] ?? url.searchParams.get("q") ?? url.searchParams.get("query");
   if (!raw) return null;
   const name = (place ? safeDecode(raw.replace(/\+/g, " ")) : raw).trim();
@@ -74,9 +110,26 @@ async function lookupPlace(name: string): Promise<{ lat: number; lng: number } |
 }
 
 export async function resolveMapsLink(input: string): Promise<ResolvedLink> {
+  const id = await callerId();
+  if (!id) return { ok: false, name: null, error: "Masuk dulu untuk memakai link Google Maps." };
+  const key = input.trim();
+  const hit = memo.cache.get(key);
+  if (hit && Date.now() - hit.at < CACHE_TTL) return hit.result;
+  if (overLimit(id)) return { ok: false, name: null, error: "Terlalu banyak link dicoba — tunggu beberapa menit." };
+
+  const result = await resolve(key);
+  // Gagal karena jaringan tidak di-cache supaya bisa dicoba lagi.
+  if (result.ok || !/tidak bisa dibuka/.test(result.error)) {
+    if (memo.cache.size >= CACHE_MAX) memo.cache.delete(memo.cache.keys().next().value!);
+    memo.cache.set(key, { at: Date.now(), result });
+  }
+  return result;
+}
+
+async function resolve(input: string): Promise<ResolvedLink> {
   let url: URL;
   try {
-    url = new URL(input.trim());
+    url = new URL(input);
   } catch {
     return { ok: false, name: null, error: "Link tidak valid." };
   }
