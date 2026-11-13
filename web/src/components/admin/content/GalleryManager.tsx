@@ -18,6 +18,7 @@ import testimonialStyles from "./Testimonials.module.css";
 
 const day = new Intl.DateTimeFormat("id-ID", { weekday: "short", day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
 const num = new Intl.NumberFormat("id-ID");
+const venueOf = (p: AdminGalleryPhoto) => p.activity.venueName || "Tanpa venue";
 const activityLabel = (a: { title: string; venueName: string; date: string }) => `${day.format(new Date(a.date))} · ${a.title}${a.venueName ? ` · ${a.venueName}` : ""}`;
 
 type Props = {
@@ -34,7 +35,15 @@ export function GalleryManager({ initial, activities, totalPhotos, totalAlbums, 
   const [photos, setPhotos] = useState(initial);
   const [editing, setEditing] = useState<AdminGalleryPhoto | "new" | null>(null);
   const [, start] = useTransition();
-  const shown = preview ? photos.slice(0, preview) : photos;
+  const [venue, setVenue] = useState<string | null>(null);
+  // Tab venue: dikelompokkan dari venue activity tiap foto, terbanyak dulu.
+  const venues = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const p of photos) counts.set(venueOf(p), (counts.get(venueOf(p)) ?? 0) + 1);
+    return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "id"));
+  }, [photos]);
+  const active = venue && venues.some(([name]) => name === venue) ? venue : null;
+  const shown = preview ? photos.slice(0, preview) : active ? photos.filter((p) => venueOf(p) === active) : photos;
 
   const remove = (photo: AdminGalleryPhoto) => {
     if (!window.confirm("Hapus foto ini dari galeri venue? Tindakan ini tidak bisa dibatalkan.")) return;
@@ -91,6 +100,23 @@ export function GalleryManager({ initial, activities, totalPhotos, totalAlbums, 
           </AdminButton>
         )}
       </header>
+
+      {!preview && venues.length > 0 && (
+        <div className={styles.filterPills} role="tablist" aria-label="Venue">
+          {[[null, "Semua venue", photos.length] as const, ...venues.map(([name, count]) => [name, name, count] as const)].map(([value, label, count]) => (
+            <button
+              key={label}
+              type="button"
+              role="tab"
+              aria-selected={active === value}
+              className={cx(styles.pill, active === value && styles.pillOn)}
+              onClick={() => setVenue(value)}
+            >
+              {label} <span className={galleryStyles.pillCount}>{num.format(count)}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {shown.length === 0 ? (
         <p className={ordersStyles.empty}>Belum ada foto. Upload foto, pilih activity-nya, lalu tag member yang ikut main.</p>
