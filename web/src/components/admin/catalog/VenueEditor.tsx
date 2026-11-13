@@ -183,7 +183,13 @@ export function VenueEditor({ initial, imageOptions, initialNotice }: { initial:
             </div>
             <SingleChips label="Tipe court *" options={typeOptions} value={v.type as (typeof VENUE_TYPES)[number]} onChange={(t) => set("type", t)} />
             <TextArea label="Deskripsi" value={v.description} onChange={(x) => set("description", x)} maxLength={500} rows={4} />
+            <label className={styles.field}>
+              <span className={styles.label}>Warna court</span>
+              <input className={styles.input} value={v.courtColor} maxLength={60} onChange={(e) => set("courtColor", e.target.value)} placeholder="mis. Terracotta-walled, Blue, Green clay" />
+              <span className={styles.muted}>Tampil di kartu venue sebagai “{v.courtColor.trim() || "…"} court”.</span>
+            </label>
             <TextArea label="Tagline (hero detail venue)" value={v.tagline} onChange={(x) => set("tagline", x)} maxLength={140} rows={2} />
+            <span className={styles.muted}>Tampil sebagai tulisan tangan di kartu venue; bintang ✦ ditambahkan otomatis di akhir kalimat.</span>
           </FormCard>
 
           <FormCard title="Lokasi" subtitle="Dipakai untuk peta & petunjuk arah peserta">

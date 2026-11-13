@@ -10,8 +10,9 @@ import { UpcomingActivities } from "@/components/venue/UpcomingActivities/Upcomi
 import { VenueGallery } from "@/components/venue/VenueGallery/VenueGallery";
 import { photosForVenue } from "@/content/gallery";
 import { findGuide, guideHref } from "@/content/guides";
-import { cityHref, venueCities, venuePage } from "@/content/venues";
+import { cityHref, venueCardInfo, venueCities, venuePage } from "@/content/venues";
 import { formatTanggalISO } from "@/lib/format";
+import { cityInEnglish } from "@/lib/venue-options";
 import { upcomingSessions } from "@/lib/sessions";
 import { getWebsiteSessions } from "@/server/public/sessions";
 import { findWebsiteVenue, getWebsiteVenues } from "@/server/public/venues";
@@ -64,12 +65,7 @@ export default async function VenueDetailPage({ params }: PageProps<"/venue/[slu
             title={venue.name}
             intro={venue.description}
             photo={guide?.hero ?? { src: heroImage, alt: `${venue.name} court`, position: venue.heroImage ? undefined : venue.imagePosition }}
-            card={{
-              name: venue.name,
-              facts: guide?.facts ?? [venue.type, venue.area ?? venue.city].filter(Boolean),
-              note: guide?.note,
-              ink: guide?.theme.ink,
-            }}
+            card={{ name: venue.name, ...venueCardInfo(venue, cityInEnglish), ink: guide?.theme.ink }}
             cta={guide ? { label: venuePage.detail.guideCta, href: guideHref(venue.slug) } : undefined}
           />
           <UpcomingActivities venueName={venue.name} sessions={upcoming} />

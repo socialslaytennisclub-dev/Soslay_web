@@ -136,6 +136,7 @@ function validateVenue(v: VenueForm): string | null {
   if (!isKnownCity(v.city)) return "Pilih kota dari daftar.";
   if (!isVenueTimezone(v.timezone)) return "Pilih zona waktu.";
   if (!v.type.trim()) return "Pilih tipe court.";
+  if (v.courtColor.trim().length > 60) return "Warna court maksimal 60 karakter.";
   if (!v.address.trim()) return "Alamat lengkap wajib diisi.";
   if (!v.mapsUrl.trim()) return "Link Google Maps wajib diisi.";
   if (!(VENUE_SURFACES as readonly string[]).includes(v.surface)) return "Pilih permukaan lapangan.";
@@ -167,7 +168,8 @@ export async function saveVenue(input: VenueForm): Promise<ActionResult> {
     timezone: input.timezone,
     surface: input.surface,
     facilities: input.facilities,
-    tagline: input.tagline.trim() || null,
+    court_color: input.courtColor.trim() || null,
+    tagline: input.tagline.trim().replace(/\s*✦+$/, "") || null,
     description: input.description.trim() || null,
     cover_path: input.coverPath || null,
     hero_path: input.heroPath || null,

@@ -591,6 +591,8 @@ export type VenueForm = {
   /** Permukaan lapangan ("Hard Court", …) — kosong untuk venue lama sebelum diisi. */
   surface: string;
   facilities: string[];
+  /** Warna court, mis. "Terracotta-walled" → kartu venue: "Terracotta-walled court". */
+  courtColor: string;
   tagline: string;
   description: string;
   coverPath: string;

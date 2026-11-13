@@ -1,5 +1,5 @@
 /**
- * Participant Guide per venue (Figma 151:52 "Participant Guide — Common Ground Menteng").
+ * Participant Guide per venue (Figma 151:52 "Participant Guide — Common Grounds Menteng").
  * Dirender di /venue/[slug]/guide. Venue lain cukup ditambah entri baru di `participantGuides`.
  */
 
@@ -9,12 +9,9 @@ export type GuidePhoto = { src: string; alt: string; position?: string };
 
 export type ParticipantGuide = {
   venueSlug: string;
-  venueName: string;
+  // Nama venue diambil dari master venue (halaman guide memakai venue.name).
   intro: string;
-  /** Satu baris fakta di kartu info hero. */
-  facts: string[];
-  /** Catatan tulisan tangan (font Caveat) di kartu hero. */
-  note: string;
+  // Kartu info hero (tipe · warna court · kota, dan tagline + ✦) diambil dari master venue — lihat venueCardInfo.
   hero: GuidePhoto;
   /** Warna khas venue — dipakai panel "Court Vibe" & aksen tulisan tangan. */
   theme: { panel: string; ink: string };
@@ -55,11 +52,8 @@ export type ParticipantGuide = {
 export const participantGuides: ParticipantGuide[] = [
   {
     venueSlug: "common-grounds-menteng",
-    venueName: "Common Ground Menteng",
     intro: "A hidden tennis courtyard in the heart of Menteng. Check upcoming sessions, the participant guide, and highlights from past sessions — all on one page.",
-    facts: ["Outdoor", "Terracotta-walled court", "Central Jakarta"],
-    note: "warm walls, soft light, very photogenic ✦",
-    hero: { src: `${IMG}/hero.webp`, alt: "Soslay members jumping together in front of the terracotta wall at Common Ground Menteng", position: "50% 45%" },
+    hero: { src: `${IMG}/hero.webp`, alt: "Soslay members jumping together in front of the terracotta wall at Common Grounds Menteng", position: "50% 45%" },
     theme: { panel: "#c4673f", ink: "#8f4429" },
     outfit: {
       title: "What to wear?",
