@@ -61,7 +61,7 @@ export const getCheckoutContext = cache(async (): Promise<CheckoutContext> => {
     return {
       demo: true,
       loggedIn: true,
-      recipient: last?.recipient ?? { name: "Arya Putra Dewangga", phone: "0812-3456-7890", address: "Jl. Kemang Raya No. 12, Bangka, Mampang Prapatan", city: "Jakarta Selatan", postalCode: "12730" },
+      recipient: last?.recipient ?? { name: "Arya Putra Dewangga", phone: "0812-3456-7890", address: "Jl. Kemang Raya No. 12, Bangka, Mampang Prapatan", city: "Kota Jakarta Selatan", postalCode: "12730" },
       pin: last?.pin ?? null,
       bankShort: (await getShopBank()).short,
       rates: DEMO_RATES,

@@ -14,6 +14,7 @@ import { localPhone } from "@/lib/wa-invite";
 import { removePublicImage, uploadPublicImage } from "../storage";
 import { FORMAT, FREQUENCY, GENDER, HAND, toEnum } from "./profile";
 import type { MemberAddress } from "../shop/types";
+import { provinceOf } from "@/content/wilayah";
 
 const AVATAR_BUCKET = "avatars";
 
@@ -293,7 +294,7 @@ export async function saveMyAddress(a: MemberAddress): Promise<{ ok: true } | { 
   if (!name) return { ok: false, error: "Isi nama penerima." };
   if (phone.replace(/\D/g, "").length < 9) return { ok: false, error: "Nomor HP penerima belum lengkap." };
   if (address.length < 10) return { ok: false, error: "Tulis alamat lengkap (jalan, nomor, kelurahan, kecamatan)." };
-  if (!a.city) return { ok: false, error: "Pilih kota / kabupaten." };
+  if (!provinceOf(a.city)) return { ok: false, error: "Pilih provinsi lalu kabupaten / kota." };
   if (!/^\d{5}$/.test(postal)) return { ok: false, error: "Kode pos 5 angka." };
   const pin = a.pin && Math.abs(a.pin.lat) <= 90 && Math.abs(a.pin.lng) <= 180 ? a.pin : null;
 

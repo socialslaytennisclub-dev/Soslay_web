@@ -18,17 +18,17 @@ export const demoOrders = (): Map<string, DemoShopOrder> => store.orders;
 export const demoProofFiles = (): Store["files"] => store.files;
 export const nextDemoCode = (): string => `SOS-${++store.seq}`;
 
-/** Sama dengan isi awal shipping_rates di migrasi. */
+/** Sama dengan isi shipping_rates setelah migrasi 20261113010000 (nama resmi Kemendagri). */
 export const DEMO_RATES: ShippingRate[] = [
-  ["Jakarta Selatan", "DKI Jakarta", 18000],
-  ["Jakarta Pusat", "DKI Jakarta", 18000],
-  ["Jakarta Barat", "DKI Jakarta", 18000],
-  ["Jakarta Timur", "DKI Jakarta", 18000],
-  ["Jakarta Utara", "DKI Jakarta", 18000],
-  ["Tangerang", "Banten", 20000],
-  ["Bekasi", "Jawa Barat", 20000],
-  ["Depok", "Jawa Barat", 20000],
-  ["Bogor", "Jawa Barat", 21000],
-  ["Bandung", "Jawa Barat", 22000],
-  ["Bali", "Bali", 27000],
+  ["Kota Jakarta Selatan", "DKI Jakarta", 18000],
+  ["Kota Jakarta Pusat", "DKI Jakarta", 18000],
+  ["Kota Jakarta Barat", "DKI Jakarta", 18000],
+  ["Kota Jakarta Timur", "DKI Jakarta", 18000],
+  ["Kota Jakarta Utara", "DKI Jakarta", 18000],
+  ["Kota Tangerang", "Banten", 20000],
+  ["Kota Bekasi", "Jawa Barat", 20000],
+  ["Kota Depok", "Jawa Barat", 20000],
+  ["Kota Bogor", "Jawa Barat", 21000],
+  ["Kota Bandung", "Jawa Barat", 22000],
+  ["Kota Denpasar", "Bali", 27000],
 ].map(([city, province, perKg]) => ({ city: city as string, province: province as string, perKg: perKg as number, eta: "2–3" }));

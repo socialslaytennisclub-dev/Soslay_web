@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
 import { MapPicker } from "@/components/ui/MapPicker/MapPicker";
-import { cityOptions } from "@/content/member";
+import { citiesOf, PROVINCE_NAMES, provinceOf } from "@/content/wilayah";
 import {
   billableKg,
   estimateRouteKm,
@@ -44,7 +44,9 @@ export function CheckoutForm({ ctx }: { ctx: CheckoutContext }) {
   const items = selection?.items ?? [];
 
   const [method, setMethod] = useState<ShippingMethod>("jnt");
-  const [recipient, setRecipient] = useState<Recipient>(ctx.recipient);
+  // Nama kota lama (sebelum daftar resmi Kemendagri) tidak dikenali → member diminta memilih ulang.
+  const [recipient, setRecipient] = useState<Recipient>(() => (provinceOf(ctx.recipient.city) ? ctx.recipient : { ...ctx.recipient, city: "" }));
+  const [province, setProvince] = useState(() => provinceOf(ctx.recipient.city));
   const complete = Boolean(recipient.name && recipient.phone && recipient.address && recipient.city && recipient.postalCode);
   const [editing, setEditing] = useState(!complete);
   const [pin, setPin] = useState<{ lat: number; lng: number } | null>(ctx.pin);
@@ -168,10 +170,26 @@ export function CheckoutForm({ ctx }: { ctx: CheckoutContext }) {
               <textarea className={styles.input} value={recipient.address} onChange={(e) => setRecipient({ ...recipient, address: e.target.value })} autoComplete="street-address" placeholder="Nama jalan, nomor, RT/RW, kelurahan, kecamatan" />
             </label>
             <label className={styles.field}>
-              <span className={styles.label}>Kota / kabupaten</span>
-              <select className={styles.input} value={recipient.city} onChange={(e) => setRecipient({ ...recipient, city: e.target.value })}>
-                <option value="">Pilih kota</option>
-                {[...new Set([...ctx.rates.map((r) => r.city), ...cityOptions])].map((c) => (
+              <span className={styles.label}>Provinsi</span>
+              <select
+                className={styles.input}
+                value={province}
+                onChange={(e) => {
+                  setProvince(e.target.value);
+                  setRecipient({ ...recipient, city: "" });
+                }}
+              >
+                <option value="">Pilih provinsi</option>
+                {PROVINCE_NAMES.map((p) => (
+                  <option key={p}>{p}</option>
+                ))}
+              </select>
+            </label>
+            <label className={styles.field}>
+              <span className={styles.label}>Kabupaten / kota</span>
+              <select className={styles.input} value={recipient.city} disabled={!province} onChange={(e) => setRecipient({ ...recipient, city: e.target.value })}>
+                <option value="">{province ? "Pilih kabupaten / kota" : "Pilih provinsi dulu"}</option>
+                {citiesOf(province).map((c) => (
                   <option key={c}>{c}</option>
                 ))}
               </select>

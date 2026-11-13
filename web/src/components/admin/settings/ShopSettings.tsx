@@ -2,6 +2,7 @@
 
 import { useState, useTransition, type ReactNode } from "react";
 import { MapPicker } from "@/components/ui/MapPicker/MapPicker";
+import { citiesOf, PROVINCE_NAMES } from "@/content/wilayah";
 import { saveShopSettings } from "@/server/admin/actions/shop-settings";
 import type { ShopSettings } from "@/server/shop/settings";
 import { FormCard } from "../ui/AdminForm";
@@ -110,8 +111,8 @@ export function ShopSettingsForm({ initial }: { initial: ShopSettings }) {
       >
         <div className={styles.rateTable} role="table" aria-label="Tarif J&T per kota">
           <div className={styles.rateHead} role="row">
-            <span role="columnheader">Kota / kabupaten</span>
             <span role="columnheader">Provinsi</span>
+            <span role="columnheader">Kabupaten / kota</span>
             <span role="columnheader">Tarif / kg</span>
             <span role="columnheader">Estimasi (hari)</span>
             <span role="columnheader">Aktif</span>
@@ -121,8 +122,23 @@ export function ShopSettingsForm({ initial }: { initial: ShopSettings }) {
           </div>
           {s.rates.map((r, i) => (
             <div key={i} className={styles.rateRow} role="row">
-              <input className={styles.input} aria-label="Kota" value={r.city} onChange={(e) => rate(i, { city: e.target.value })} placeholder="Nama kota" />
-              <input className={styles.input} aria-label="Provinsi" value={r.province} onChange={(e) => rate(i, { province: e.target.value })} placeholder="Provinsi" />
+              <select className={styles.input} aria-label="Provinsi" value={r.province} onChange={(e) => rate(i, { province: e.target.value, city: "" })}>
+                <option value="">Pilih provinsi</option>
+                {/* Nama lama yang tidak ada di daftar tetap tampil supaya bisa diganti. */}
+                {r.province && !PROVINCE_NAMES.includes(r.province) && <option value={r.province}>{r.province} (nama lama)</option>}
+                {PROVINCE_NAMES.map((name) => (
+                  <option key={name}>{name}</option>
+                ))}
+              </select>
+              <select className={styles.input} aria-label="Kabupaten / kota" value={r.city} disabled={!r.province} onChange={(e) => rate(i, { city: e.target.value })}>
+                <option value="">{r.province ? "Pilih kabupaten / kota" : "Pilih provinsi dulu"}</option>
+                {r.city && !citiesOf(r.province).includes(r.city) && <option value={r.city}>{r.city} (nama lama)</option>}
+                {citiesOf(r.province).map((c) => (
+                  <option key={c} disabled={s.rates.some((x, j) => j !== i && x.city === c)}>
+                    {c}
+                  </option>
+                ))}
+              </select>
               <span className={styles.affix}>
                 <span className={styles.muted}>Rp</span>
                 <input inputMode="numeric" aria-label="Tarif per kg" value={r.perKg} onChange={(e) => rate(i, { perKg: num(e.target.value) })} />

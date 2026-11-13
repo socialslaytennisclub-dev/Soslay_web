@@ -1,5 +1,6 @@
 "use server";
 
+import { citiesOf } from "@/content/wilayah";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { ShopSettings } from "@/server/shop/settings";
 import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } from "./common";
@@ -27,7 +28,9 @@ export async function saveShopSettings(s: ShopSettings): Promise<ActionResult> {
   if (!/^\d{2}:\d{2}$/.test(i.cutoff)) return fail("Isi batas jam kirim (mis. 15:00).");
 
   const rates = s.rates.map((r) => ({ city: r.city.trim(), province: r.province.trim(), per_kg: Math.round(r.perKg), eta_days: r.eta.trim() || "2–3", is_active: r.active }));
-  if (rates.some((r) => !r.city || !r.province)) return fail("Setiap baris ongkir J&T butuh nama kota & provinsi.");
+  if (rates.some((r) => !r.city || !r.province)) return fail("Setiap baris ongkir J&T butuh provinsi & kabupaten/kota.");
+  const wrong = rates.find((r) => !citiesOf(r.province).includes(r.city));
+  if (wrong) return fail(`"${wrong.city}" tidak ada di daftar kabupaten/kota ${wrong.province} — pilih ulang dari dropdown.`);
   if (rates.some((r) => r.per_kg <= 0)) return fail("Tarif J&T per kg harus lebih dari 0.");
   const cities = rates.map((r) => r.city.toLowerCase());
   if (new Set(cities).size !== cities.length) return fail("Ada kota yang tercantum dua kali di ongkir J&T.");

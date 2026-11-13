@@ -31,6 +31,25 @@ create policy "admin write instant settings" on shipping_instant_settings for al
   using (has_permission('orders', 'edit') or has_permission('settings', 'edit'))
   with check (has_permission('orders', 'edit') or has_permission('settings', 'edit'));
 
+-- Nama kota ongkir J&T mengikuti daftar resmi Kemendagri (dropdown provinsi → kabupaten/kota,
+-- web/src/content/wilayah.ts). Isi awal dari 20261113000000 diganti ke nama resminya.
+update shipping_rates r set city = m.new_city, province = m.new_province, updated_at = now()
+from (values
+  ('Jakarta Selatan', 'Kota Jakarta Selatan', 'DKI Jakarta'),
+  ('Jakarta Pusat',   'Kota Jakarta Pusat',   'DKI Jakarta'),
+  ('Jakarta Barat',   'Kota Jakarta Barat',   'DKI Jakarta'),
+  ('Jakarta Timur',   'Kota Jakarta Timur',   'DKI Jakarta'),
+  ('Jakarta Utara',   'Kota Jakarta Utara',   'DKI Jakarta'),
+  ('Tangerang',       'Kota Tangerang',       'Banten'),
+  ('Bekasi',          'Kota Bekasi',          'Jawa Barat'),
+  ('Depok',           'Kota Depok',           'Jawa Barat'),
+  ('Bogor',           'Kota Bogor',           'Jawa Barat'),
+  ('Bandung',         'Kota Bandung',         'Jawa Barat'),
+  ('Bali',            'Kota Denpasar',        'Bali')
+) as m(old_city, new_city, new_province)
+where r.city = m.old_city
+  and not exists (select 1 from shipping_rates x where x.city = m.new_city);
+
 alter table shipping_instant_settings
   add constraint shipping_instant_settings_numbers check (base_fee >= 0 and base_km >= 0 and per_km_fee >= 0 and max_km > 0),
   add constraint shipping_instant_settings_origin check (origin_lat between -90 and 90 and origin_lng between -180 and 180);

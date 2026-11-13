@@ -1,16 +1,8 @@
 import "server-only";
 import { cache } from "react";
-import { cityOptions } from "@/content/member";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getShopSettings } from "@/server/shop/settings";
 import type { MemberAddress } from "@/server/shop/types";
 import { getMemberSession } from "./user";
-
-/** Pilihan kota alamat: kota ongkir J&T aktif + kota profil (sama dengan form checkout). */
-export const getAddressCities = cache(async (): Promise<string[]> => {
-  const { rates } = await getShopSettings();
-  return [...new Set([...rates.filter((r) => r.active).map((r) => r.city), ...cityOptions])];
-});
 
 /** Alamat pengiriman member yang login; null = mode demo / belum login. */
 export const getMyAddress = cache(async (): Promise<MemberAddress | null> => {

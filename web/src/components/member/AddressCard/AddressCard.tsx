@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Button, SelectField, TextField } from "@/components/ui";
 import { MapPicker } from "@/components/ui/MapPicker/MapPicker";
+import { citiesOf, PROVINCE_NAMES, provinceOf } from "@/content/wilayah";
 import { saveMyAddress } from "@/server/member/actions";
 import type { MemberAddress } from "@/server/shop/types";
 import formStyles from "../ProfileForm/ProfileForm.module.css";
@@ -12,7 +13,7 @@ const DEMO: MemberAddress = {
   name: "Arya Putra Dewangga",
   phone: "0812-3456-7890",
   address: "Jl. Kemang Raya No. 12, Bangka, Mampang Prapatan",
-  city: "Jakarta Selatan",
+  city: "Kota Jakarta Selatan",
   postalCode: "12730",
   pin: null,
 };
@@ -21,10 +22,11 @@ const DEMO: MemberAddress = {
  * Tab Profile › Alamat pengiriman: dipakai otomatis di checkout Shop. Titik peta dibutuhkan untuk
  * pengiriman Instant (ongkir dihitung dari jarak gudang → titik ini).
  */
-export function AddressCard({ initial, cities }: { initial: MemberAddress | null; cities: string[] }) {
+export function AddressCard({ initial }: { initial: MemberAddress | null }) {
   const live = Boolean(initial);
   const [saved, setSaved] = useState<MemberAddress>(initial ?? DEMO);
   const [a, setA] = useState<MemberAddress>(initial ?? DEMO);
+  const [province, setProvince] = useState(() => provinceOf((initial ?? DEMO).city));
   const [status, setStatus] = useState<string>();
   const [pending, start] = useTransition();
   const dirty = JSON.stringify(a) !== JSON.stringify(saved);
@@ -66,7 +68,18 @@ export function AddressCard({ initial, cities }: { initial: MemberAddress | null
           <textarea className={styles.textarea} rows={3} value={a.address} autoComplete="street-address" placeholder="Nama jalan, nomor, RT/RW, kelurahan, kecamatan" onChange={(e) => set("address", e.target.value)} />
         </label>
         <div className={formStyles.grid}>
-          <SelectField label="Kota / kabupaten" required options={cities} value={a.city} placeholder="Pilih kota" onChange={(v) => set("city", v)} />
+          <SelectField
+            label="Provinsi"
+            required
+            options={PROVINCE_NAMES}
+            value={province}
+            placeholder="Pilih provinsi"
+            onChange={(v) => {
+              setProvince(v);
+              set("city", "");
+            }}
+          />
+          <SelectField label="Kabupaten / kota" required options={citiesOf(province)} value={a.city} placeholder={province ? "Pilih kabupaten / kota" : "Pilih provinsi dulu"} onChange={(v) => set("city", v)} />
           <TextField label="Kode pos" required inputMode="numeric" autoComplete="postal-code" value={a.postalCode} onChange={(e) => set("postalCode", e.target.value.replace(/\D/g, "").slice(0, 5))} />
         </div>
         <div className={styles.field}>
@@ -85,7 +98,14 @@ export function AddressCard({ initial, cities }: { initial: MemberAddress | null
           {status ?? ""}
         </p>
         <div className={styles.buttons}>
-          <Button variant="outline" onClick={() => setA(saved)} disabled={!dirty || pending}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              setA(saved);
+              setProvince(provinceOf(saved.city));
+            }}
+            disabled={!dirty || pending}
+          >
             Batal
           </Button>
           <Button variant="primary" onClick={save} disabled={!dirty || pending}>
