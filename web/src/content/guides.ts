@@ -4,6 +4,7 @@
  */
 
 const IMG = "/images/guide/common-grounds";
+const RANA = "/images/guide/rana-grounds";
 
 export type GuidePhoto = { src: string; alt: string; position?: string };
 
@@ -40,7 +41,9 @@ export type ParticipantGuide = {
     palette: { name: string; hex: string; dark?: boolean }[];
     note: string;
     feature: GuidePhoto;
+    /** 2 foto (bertumpuk) atau 3 foto (2 berdampingan + 1 lebar di bawahnya). */
     side: GuidePhoto[];
+    /** Baris foto di bawah panel — boleh kosong. */
     strip: GuidePhoto[];
   };
   tips: {
@@ -141,6 +144,98 @@ export const participantGuides: ParticipantGuide[] = [
         { title: "Hydrate early", body: "Walled courts trap heat. Bring a full bottle." },
         { title: "Respect the venue", body: "It's a shared space: keep the lounge tidy and the vibe friendly." },
         { title: "Say hi to someone new", body: "Come for tennis, leave with new friends. Have fun!" },
+      ],
+    },
+  },
+  /** Figma 2377:2 "Participant Guide — Rana Grounds Mampang". */
+  {
+    venueSlug: "rana-grounds",
+    intro: "Everything you need to know before you step on court — what to wear, what to bring, and what the venue feels like.",
+    hero: { src: `${RANA}/hero.webp`, alt: "Soslay members rallying on the synthetic grass court under the white arched roof at Rana Grounds", position: "50% 65%" },
+    theme: { panel: "#5a7c40", ink: "#2f5a47" },
+    outfit: {
+      title: "What should I wear?",
+      body: "Synthetic grass, a white arched roof and bright, airy light — this court was made for tennis whites. Go head-to-toe white or ivory. Skip greens and teals.",
+      palette: [
+        { name: "Optic White", role: "Your base", hex: "#ffffff" },
+        { name: "Ivory", role: "Soft layer", hex: "#f3eee0" },
+        { name: "Jet Black", role: "Contrast", hex: "#111111" },
+      ],
+      avoid: [
+        { name: "Grass", hex: "#4f8a3c" },
+        { name: "Teal", hex: "#174a46" },
+        { name: "Mint", hex: "#9fd8c0" },
+        { name: "Olive", hex: "#7a7f3a" },
+      ],
+      avoidNote:
+        "Greens and teals melt into the grass and banners — let your whites do the talking. All-white crowd? Add texture — pleats, cable knit, a crisp collar — so your whites stand out from everyone else's.",
+      looks: [
+        { title: "White tennis dress", caption: "Simple white dress, white socks & sneakers", photo: { src: `${RANA}/outfit-dress.webp`, alt: "Member wearing a simple white tennis dress" } },
+        { title: "Tee + pleated skirt", caption: "Graphic white tee, white pleated skirt", photo: { src: `${RANA}/outfit-skirt.webp`, alt: "Member wearing a white tee and pleated skirt" } },
+        { title: "White + dark shorts", caption: "White tee, dark shorts, white cap", photo: { src: `${RANA}/outfit-shorts.webp`, alt: "Member wearing a white tee, dark shorts and a white cap" } },
+        { title: "Wide-leg whites", caption: "White set, wide-leg pants, bucket hat", photo: { src: `${RANA}/outfit-wide-leg.webp`, alt: "Member wearing a white set with wide-leg pants and a bucket hat" } },
+      ],
+    },
+    bring: {
+      title: "What should I bring?",
+      body: "Bring the essentials — we'll take care of the rest. The court is covered, so you're shaded — but it still gets warm and bright under the roof.",
+      items: [
+        { name: "Racket", note: "Bring a spare if you have one" },
+        { name: "Tennis shoes", note: "Non-marking soles" },
+        { name: "White socks", note: "Keeps the look clean" },
+        { name: "Water bottle", note: "It still gets warm under the roof" },
+        { name: "Small towel", note: "For between games" },
+        { name: "Hair tie / headband", note: "Keeps you cool mid-rally" },
+        { name: "Grippy tennis shoes", note: "Made for synthetic grass" },
+        { name: "Extra white layer", note: "For the after-session photos", optional: true },
+        { name: "Spare tee", note: "For hanging out after", optional: true },
+      ],
+    },
+    photoReference: {
+      title: ["The mood we're", "shooting for."],
+      body: "This isn't a shot list of specific photos — it's the kind of photography and visual mood we go for at Social Slay sessions: real moments, airy light, whites on green grass.",
+      columns: [
+        [
+          { label: "In action", photo: { src: `${RANA}/ref-in-action.webp`, alt: "A member hitting a forehand on the grass court", position: "50% 50%" } },
+          { label: "The little details", photo: { src: `${RANA}/ref-details.webp`, alt: "Close-up details of a player on court", position: "50% 50%" } },
+        ],
+        [
+          { label: "With your people", photo: { src: `${RANA}/ref-people.webp`, alt: "Members celebrating together on court", position: "45% 65%" } },
+          { label: "Portrait", photo: { src: `${RANA}/ref-portrait.webp`, alt: "Portrait of a member in tennis whites", position: "50% 100%" } },
+        ],
+        [
+          { label: "Blur in motion", photo: { src: `${RANA}/ref-motion.webp`, alt: "Motion-blurred player stretching for a ball under the roof", position: "50% 70%" } },
+          { label: "Candid moments", photo: { src: `${RANA}/ref-candid.webp`, alt: "Members sharing a candid moment by the court", position: "50% 41%" } },
+        ],
+      ],
+    },
+    courtVibe: {
+      title: "A glimpse of where you'll be playing.",
+      body: "A covered court under a white arched roof, with lush synthetic grass, mesh walls and deep-teal Rana banners. Bright, airy light — and no sunburn.",
+      palette: [
+        { name: "Rana teal", hex: "#174a46", dark: true },
+        { name: "Grass green", hex: "#4f8a3c", dark: true },
+        { name: "White roof", hex: "#f2f0ea" },
+        { name: "Coral logo", hex: "#e8735a", dark: true },
+        { name: "White lines", hex: "#ffffff" },
+      ],
+      note: "grass-court energy, zero sunburn ↗",
+      feature: { src: `${RANA}/court-main.webp`, alt: "Soslay members lined up with rackets on the grass court under the arched roof", position: "50% 100%" },
+      side: [
+        { src: `${RANA}/court-side-1.webp`, alt: "Sign by the court: the first synthetic grass tennis court in Jakarta", position: "50% 100%" },
+        { src: `${RANA}/court-side-2.webp`, alt: "Close-up of the white lines on the synthetic grass", position: "50% 100%" },
+        { src: `${RANA}/court-wide.webp`, alt: "A member walking on court in front of the Rana Grounds banner", position: "50% 40%" },
+      ],
+      strip: [],
+    },
+    tips: {
+      title: "Before you come.",
+      items: [
+        { title: "Come photo-ready", body: "Head-to-toe white or ivory. Skip greens and teals." },
+        { title: "Grass-court ready", body: "Synthetic grass — wear comfy tennis shoes with good grip." },
+        { title: "Hydrate early", body: "It gets warm under the roof. Bring a full bottle." },
+        { title: "Respect the venue", body: "It's a shared space — keep the lounge tidy and the vibe friendly." },
+        { title: "Meet someone new", body: "Come for the tennis, stay for the people. Have fun!" },
       ],
     },
   },

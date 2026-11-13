@@ -184,18 +184,20 @@ export function CourtVibeSection({ guide }: SectionProps) {
             </div>
             <div className={styles.courtPhotos}>
               <Photo photo={courtVibe.feature} className={styles.courtFeature} sizes="(min-width: 1200px) 380px, 100vw" />
-              <div className={styles.courtSide}>
+              <div className={cx(styles.courtSide, courtVibe.side.length === 3 && styles.courtSideTrio)}>
                 {courtVibe.side.map((photo) => (
                   <Photo key={photo.src} photo={photo} className={styles.courtSmall} sizes="(min-width: 1200px) 380px, 50vw" />
                 ))}
               </div>
             </div>
           </div>
-          <div className={styles.courtStrip}>
-            {courtVibe.strip.map((photo) => (
-              <Photo key={photo.src} photo={photo} className={styles.courtSmall} sizes="(min-width: 1200px) 400px, (min-width: 768px) 33vw, 100vw" />
-            ))}
-          </div>
+          {courtVibe.strip.length > 0 && (
+            <div className={styles.courtStrip}>
+              {courtVibe.strip.map((photo) => (
+                <Photo key={photo.src} photo={photo} className={styles.courtSmall} sizes="(min-width: 1200px) 400px, (min-width: 768px) 33vw, 100vw" />
+              ))}
+            </div>
+          )}
         </div>
       </Container>
     </section>

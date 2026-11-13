@@ -561,6 +561,16 @@
   aspect-ratio: 4 / 3;
 }
 
+/* 3 foto (Figma 2377:240): 2 foto berdampingan + 1 foto lebar di bawahnya. */
+.courtSideTrio > :nth-child(-n + 2) {
+  aspect-ratio: 3 / 4;
+}
+
+.courtSideTrio > :nth-child(3) {
+  grid-column: 1 / -1;
+  aspect-ratio: 3 / 2;
+}
+
 .courtStrip {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -847,6 +857,10 @@
   .courtSide .courtSmall {
     aspect-ratio: auto;
     height: 260px;
+  }
+
+  .courtSideTrio {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .courtStrip {
