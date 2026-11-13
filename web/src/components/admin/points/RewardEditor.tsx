@@ -4,7 +4,11 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { REWARD_CATEGORY_LABEL, TIER_LABEL } from "@/lib/admin-labels";
-import { deleteReward, saveReward, type RewardInput } from "@/server/admin/actions/points";
+import { useImageCrop } from "@/components/ui/ImageCropper/ImageCropper";
+import { cx } from "@/lib/cx";
+import { IMAGE_ASPECT } from "@/lib/image-aspect";
+import { shrinkImage } from "@/lib/image-resize";
+import { deleteReward, discardRewardUploads, saveReward, uploadRewardPhoto, type RewardInput } from "@/server/admin/actions/points";
 import type { AdminReward, RewardCategory, Tier } from "@/server/admin/types";
 import ordersStyles from "../orders/Orders.module.css";
 import settingsStyles from "../settings/Settings.module.css";
@@ -14,6 +18,8 @@ import { AdminButton } from "../ui/AdminUI";
 import styles from "./Points.module.css";
 import { RewardThumb } from "./RewardCatalog";
 import { toast } from "../ui/Toaster";
+import { useUploadCleanup } from "../ui/useUploadCleanup";
+import sessionStyles from "../activities/SessionEditor.module.css";
 
 const digits = (v: string) => v.replace(/\D/g, "");
 
@@ -32,6 +38,9 @@ export function RewardEditor({ reward, imageOptions, closeHref }: { reward: Admi
     active: reward.active,
   });
   const [saving, start] = useTransition();
+  const [uploading, setUploading] = useState(false);
+  const [crop, cropDialog] = useImageCrop();
+  const uploads = useUploadCleanup(discardRewardUploads);
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm((f) => ({ ...f, [key]: value }));
 
   const input = (): RewardInput => ({
@@ -45,9 +54,28 @@ export function RewardEditor({ reward, imageOptions, closeHref }: { reward: Admi
     active: form.active,
   });
 
+  /** Upload langsung ke Storage (crop 4:3 = kartu katalog member); URL tersimpan saat Simpan. */
+  const upload = async (picked: File | undefined) => {
+    if (!picked || uploading) return;
+    const file = await crop(picked, IMAGE_ASPECT.reward, "Foto reward");
+    if (!file) return;
+    setUploading(true);
+    // Foto HP besar diperkecil di browser dulu (Vercel menolak body > 4,5 MB).
+    const body = new FormData();
+    body.append("file", await shrinkImage(file));
+    const result = await uploadRewardPhoto(body).catch(() => ({ ok: false as const, error: "Upload gagal — coba lagi." }));
+    setUploading(false);
+    if (!result.ok) return toast.error(result.error);
+    uploads.track(result.url);
+    set("image", result.url);
+    toast.success(`Foto terupload — tekan ${isNew ? "Tambah reward" : "Simpan reward"} untuk menerapkannya.`);
+  };
+
   const save = () =>
     start(async () => {
-      const result = await saveReward(reward.id, input());
+      // Tunggu upload selesai — kalau tidak, reward tersimpan dengan foto lama.
+      if (uploading) return;
+      const result = await uploads.save(() => saveReward(reward.id, input()), { isNew, stored: [reward.image], current: [form.image || null] });
       toast.result(result);
       if (result.ok && isNew && result.id) router.replace(`/admin/points?reward=${result.id}`, { scroll: false });
     });
@@ -63,6 +91,7 @@ export function RewardEditor({ reward, imageOptions, closeHref }: { reward: Admi
 
   return (
     <aside className={styles.panel} aria-label={isNew ? "Tambah reward" : `Edit ${reward.name}`}>
+      {cropDialog}
       <header className={ordersStyles.panelHead}>
         <div>
           <h2 className={ordersStyles.panelTitle}>{isNew ? "Reward baru" : "Edit reward"}</h2>
@@ -121,17 +150,32 @@ export function RewardEditor({ reward, imageOptions, closeHref }: { reward: Admi
           </label>
         </div>
 
-        <label className={settingsStyles.field}>
+        <div className={settingsStyles.field}>
           <span className={settingsStyles.label}>Foto</span>
-          <select className={styles.select} value={form.image} onChange={(e) => set("image", e.target.value)}>
+          <select aria-label="Pilih foto yang sudah ada" className={styles.select} value={form.image} onChange={(e) => set("image", e.target.value)}>
             <option value="">Tanpa foto (ikon)</option>
-            {imageOptions.map((src) => (
+            {[...new Set([form.image, ...imageOptions].filter(Boolean))].map((src) => (
               <option key={src} value={src}>
-                {src.split("/").pop()}
+                {src.startsWith("https://") ? `Upload: ${src.split("/").pop()}` : src.replace("/images/", "")}
               </option>
             ))}
           </select>
-        </label>
+          <label className={cx(sessionStyles.dropzone, uploading && sessionStyles.dropzoneBusy)}>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="visually-hidden"
+              disabled={uploading}
+              onChange={(e) => {
+                upload(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+            <AdminIcon name="upload-simple" size={20} />
+            <strong>{uploading ? "Mengupload…" : "Atau upload foto baru"}</strong>
+            <span className={settingsStyles.muted}>JPG/PNG/WebP · maks 5 MB · dipotong 4:3</span>
+          </label>
+        </div>
 
         <TextArea label="Deskripsi" value={form.description} onChange={(v) => set("description", v)} maxLength={500} rows={3} />
         <Toggle label="Tampil di katalog member" hint="Matikan untuk menyembunyikan tanpa menghapus" checked={form.active} onChange={(v) => set("active", v)} />
@@ -145,7 +189,7 @@ export function RewardEditor({ reward, imageOptions, closeHref }: { reward: Admi
             Hapus
           </AdminButton>
         )}
-        <AdminButton variant="primary" icon="check-bold" onClick={save} disabled={saving}>
+        <AdminButton variant="primary" icon="check-bold" onClick={save} disabled={saving || uploading}>
           {saving ? "Menyimpan…" : isNew ? "Tambah reward" : "Simpan reward"}
         </AdminButton>
       </div>

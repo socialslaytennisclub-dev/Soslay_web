@@ -1,6 +1,8 @@
 "use server";
 
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { discardUploads, uploadPublicImage } from "../../storage";
+import { monthKey } from "../time";
 import { TIER_LABEL } from "@/lib/admin-labels";
 import { segmentMemberIds } from "../repo";
 import type { PointRules, RedemptionStatus, RewardCategory, Tier } from "../types";
@@ -32,6 +34,7 @@ function validateReward(input: RewardInput): string | null {
   if (!TIERS.includes(input.minTier)) return "Tier tidak valid.";
   if (!isWhole(input.pointsCost, 1)) return "Harga poin harus angka bulat mulai 1.";
   if (input.stock !== null && !isWhole(input.stock, 0, 100_000)) return "Stok harus angka bulat ≥ 0 (kosongkan untuk tanpa batas).";
+  if (input.image && !/^(\/images\/|https:\/\/)/.test(input.image)) return "Foto tidak valid — pilih dari daftar atau upload ulang.";
   return null;
 }
 
@@ -59,6 +62,25 @@ export async function saveReward(id: string, input: RewardInput): Promise<Action
   await audit(auth.userId, `${id ? "mengubah" : "menambah"} reward ${row.name}`, "reward", data.id as string);
   refresh();
   return { ...done(id ? "Reward tersimpan." : `${row.name} ditambahkan ke katalog.`), id: data.id as string };
+}
+
+const REWARD_BUCKET = "reward-photos";
+
+/** Upload foto reward ke Storage (bucket publik); URL tersimpan ke reward saat admin menekan Simpan. */
+export async function uploadRewardPhoto(formData: FormData): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const auth = await requireEditor("members");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const result = await uploadPublicImage({ bucket: REWARD_BUCKET, file: formData.get("file"), folder: monthKey(new Date()), maxBytes: 5 * 1024 * 1024 });
+  if (!result.ok) return result;
+  await audit(auth.userId, "reward.photo_upload", "reward_photo", result.path);
+  return { ok: true, url: result.url };
+}
+
+/** Foto reward yang diganti / batal dipakai → hapus dari Storage (yang masih dipakai reward mana pun aman). */
+export async function discardRewardUploads(urls: string[]): Promise<void> {
+  const auth = await requireEditor("members");
+  if ("error" in auth) return;
+  await discardUploads(REWARD_BUCKET, urls, { table: "rewards", columns: ["image"] });
 }
 
 export async function deleteReward(id: string): Promise<ActionResult> {
