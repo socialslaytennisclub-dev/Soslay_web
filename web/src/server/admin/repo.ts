@@ -1,6 +1,8 @@
 import "server-only";
 import { cache } from "react";
 import { findProduct } from "@/content/products";
+import { toMemberKudos } from "@/lib/kudos";
+import { DEMO_MEMBER_KUDOS } from "../kudos-demo";
 import { LEVEL_LABEL } from "@/lib/admin-labels";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -14,6 +16,8 @@ import type {
   MemberForm,
   MemberNote,
   MemberListItem,
+  MemberKudosSummary,
+  MemberReview,
   MemberSpend,
   MemberSpendItem,
   MembersQuery,
@@ -259,6 +263,68 @@ async function loadSpend(d: Dataset, memberId: string): Promise<MemberSpend> {
   return { total: activities.amount + trips.amount + shop.amount, activities, trips, shop, items, incomplete: failed };
 }
 
+/**
+ * Kudos member untuk admin: agregat yang diterima lewat RPC member_kudos (anonim, sama dengan kartu profil member;
+ * admin Members/Activities diizinkan) + jumlah kudos aktif yang ia berikan (RLS "admin read kudos").
+ */
+async function loadMemberKudos(d: Dataset, memberId: string): Promise<MemberKudosSummary> {
+  if (!d.live) return memberId === "m0001" ? { received: DEMO_MEMBER_KUDOS, given: 14 } : { received: toMemberKudos(null), given: 0 };
+  const supabase = await createSupabaseServerClient();
+  const [received, given] = await Promise.all([
+    supabase.rpc("member_kudos", { p_member: memberId }),
+    supabase.from("kudos").select("id", { count: "exact", head: true }).eq("giver_member_id", memberId).is("deleted_at", null),
+  ]);
+  return { received: received.error ? null : toMemberKudos(received.data), given: given.count ?? 0 };
+}
+
+type MemberReviewRow = {
+  session_id: string;
+  rating: number;
+  host_rating: number | null;
+  venue_rating: number | null;
+  format_rating: number | null;
+  highlights: string[] | null;
+  comment: string | null;
+  testimonial: boolean;
+  updated_at: string;
+};
+
+/** Review yang pernah diberikan member, satu per activity, terbaru dulu (RLS "admin read reviews"). */
+async function loadMemberReviews(d: Dataset, memberId: string): Promise<MemberReview[]> {
+  let rows: MemberReviewRow[] = [];
+  if (d.live) {
+    const supabase = await createSupabaseServerClient();
+    const { data } = await supabase
+      .from("session_reviews")
+      .select("session_id, rating, host_rating, venue_rating, format_rating, highlights, comment, testimonial, updated_at")
+      .eq("member_id", memberId)
+      .order("updated_at", { ascending: false })
+      .returns<MemberReviewRow[]>();
+    rows = data ?? [];
+  } else if (memberId === "m0001") {
+    // Contoh mode demo: review di activity terakhir yang dihadiri.
+    const last = d.bookingsOf(memberId).filter((b) => b.status === "attended").map((b) => d.sessionById.get(b.sessionId)).filter(Boolean).sort((a, b) => b!.startsAt.getTime() - a!.startsAt.getTime())[0];
+    if (last) rows = [{ session_id: last.id, rating: 5, host_rating: 5, venue_rating: 4, format_rating: 5, highlights: ["Host ramah", "Rotasi seru"], comment: "Seru banget, ketemu partner baru. Next mau ikut lagi!", testimonial: true, updated_at: new Date(last.startsAt.getTime() + 3 * 3600_000).toISOString() }];
+  }
+  return rows.map((r) => {
+    const s = d.sessionById.get(r.session_id);
+    return {
+      sessionId: r.session_id,
+      sessionTitle: s?.title ?? "Activity",
+      venueName: s?.venueName ?? "",
+      startsAt: s?.startsAt.toISOString() ?? null,
+      rating: r.rating,
+      host: r.host_rating,
+      venue: r.venue_rating,
+      format: r.format_rating,
+      highlights: r.highlights ?? [],
+      comment: r.comment,
+      testimonial: r.testimonial,
+      at: r.updated_at,
+    };
+  });
+}
+
 async function loadNotes(memberId: string): Promise<MemberNote[]> {
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase
@@ -321,7 +387,7 @@ export const getMember = cache(async (id: string): Promise<MemberDetail | null> 
   timeline.sort((a, b) => b.at.localeCompare(a.at));
 
   const due = stats.sessionsAttended + stats.noShows;
-  const [spend, notes] = await Promise.all([
+  const [spend, notes, kudos, reviews] = await Promise.all([
     loadSpend(d, id),
     d.live
       ? loadNotes(id)
@@ -330,6 +396,8 @@ export const getMember = cache(async (id: string): Promise<MemberDetail | null> 
             ? [{ id: "n1", author: "Rara", body: "Suka main pagi, sering bawa teman baru. Kandidat ambassador Bali trip.", at: new Date(d.now.getTime() - 16 * DAY).toISOString() }]
             : [],
         ),
+    loadMemberKudos(d, id),
+    loadMemberReviews(d, id),
   ]);
   return {
     ...list,
@@ -343,6 +411,8 @@ export const getMember = cache(async (id: string): Promise<MemberDetail | null> 
     hoursPlayed: Math.round(stats.hoursPlayed),
     attendanceRate: due ? Math.round((stats.sessionsAttended / due) * 100) : 0,
     spend,
+    kudos,
+    reviews,
     pointsEarned: stats.pointsEarned,
     timeline: timeline.slice(0, 8),
     bookings: memberBookings.slice(0, 8).map(({ booking, session }) => ({

@@ -1,6 +1,6 @@
 import type { OrderStage, ShippingMethod } from "@/lib/checkout";
 import type { MyOrder } from "@/server/shop/types";
-import type { KudosTop } from "@/lib/kudos";
+import type { KudosTop, MemberKudos } from "@/lib/kudos";
 /**
  * Tipe data admin — cermin dari tabel/view di supabase/migrations (profiles, member_stats,
  * sessions + session_fill, bookings, orders, …). UI admin hanya bergantung pada tipe ini,
@@ -69,6 +69,25 @@ export type MemberSpend = {
   incomplete: boolean;
 };
 
+/** Review yang pernah diberikan member di satu activity (tab Review detail member). */
+export type MemberReview = {
+  sessionId: string;
+  sessionTitle: string;
+  venueName: string;
+  startsAt: string | null;
+  rating: number;
+  host: number | null;
+  venue: number | null;
+  format: number | null;
+  highlights: string[];
+  comment: string | null;
+  testimonial: boolean;
+  at: string;
+};
+
+/** Kudos member: yang diterima (agregat anonim, null = gagal dimuat) & jumlah yang ia berikan. */
+export type MemberKudosSummary = { received: MemberKudos | null; given: number };
+
 export type MemberDetail = MemberListItem & {
   phone: string;
   birthDate: string | null;
@@ -80,6 +99,8 @@ export type MemberDetail = MemberListItem & {
   hoursPlayed: number;
   attendanceRate: number;
   spend: MemberSpend;
+  kudos: MemberKudosSummary;
+  reviews: MemberReview[];
   pointsEarned: number;
   timeline: MemberTimelineItem[];
   bookings: MemberBookingRow[];

@@ -2,11 +2,13 @@ import Link from "next/link";
 import { Avatar } from "@/components/ui";
 import { displayPhone, waNumber } from "@/lib/wa-invite";
 import { LEVEL_LABEL, MEMBER_STATUS_LABEL, formatRupiahPlain, formatRupiahShort, formatShortDate } from "@/lib/admin-labels";
-import type { MemberDetail, MemberSpend, MemberSpendItem, MemberTimelineItem } from "@/server/admin/types";
+import { topKudos } from "@/lib/kudos";
+import type { MemberDetail, MemberKudosSummary, MemberReview, MemberSpend, MemberSpendItem, MemberTimelineItem } from "@/server/admin/types";
 import { AdminIcon, type AdminIconName } from "../ui/AdminIcon";
 import { AdminButton, Badge, BookingBadge, Card, desktopOnlyClass, MobileCard, MobileCardList, PaymentBadge, TierBadge } from "../ui/AdminUI";
 import { BookSessionForm } from "./BookSessionForm";
 import { MemberNotes } from "./MemberNotes";
+import reviewStyles from "../activities/SessionReviews.module.css";
 import styles from "./MemberDetail.module.css";
 
 const TIMELINE_ICON: Record<MemberTimelineItem["kind"], AdminIconName> = {
@@ -75,6 +77,105 @@ function SpendCard({ spend }: { spend: MemberSpend }) {
   );
 }
 
+/** Kudos yang diterima member (anonim, sama dengan kartu profil member) + jumlah yang ia berikan. */
+function KudosCard({ kudos }: { kudos: MemberKudosSummary }) {
+  const received = kudos.received;
+  const top = received ? topKudos(received, 5) : [];
+  return (
+    <Card title="Kudos" subtitle="Apresiasi anonim dari teman main setelah activity selesai">
+      {received ? (
+        <>
+          <dl className={styles.kudosStats}>
+            <div>
+              <dt>Diterima</dt>
+              <dd>{received.total.toLocaleString("id-ID")}</dd>
+            </div>
+            <div>
+              <dt>Dari</dt>
+              <dd>{received.uniqueGivers.toLocaleString("id-ID")} orang</dd>
+            </div>
+            <div>
+              <dt>Diberikan</dt>
+              <dd>{kudos.given.toLocaleString("id-ID")}</dd>
+            </div>
+          </dl>
+          <ul className={styles.pills} aria-label="Kudos teratas">
+            {top.length ? (
+              top.map((c) => (
+                <li key={c.key}>
+                  {c.label} · {c.count}
+                </li>
+              ))
+            ) : (
+              <li className={styles.pillEmpty}>Belum ada kudos</li>
+            )}
+          </ul>
+        </>
+      ) : (
+        <p className={styles.emptyNote}>Kudos gagal dimuat. Muat ulang halaman.</p>
+      )}
+    </Card>
+  );
+}
+
+const reviewDate = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
+const stars = (n: number) => "★".repeat(n) + "☆".repeat(5 - n);
+const REVIEW_ASPECTS = [
+  ["Host", (r: MemberReview) => r.host],
+  ["Venue", (r: MemberReview) => r.venue],
+  ["Format", (r: MemberReview) => r.format],
+] as const;
+
+/** Semua review yang pernah diberikan member, satu per activity (terbaru dulu). */
+function ReviewsCard({ reviews }: { reviews: MemberReview[] }) {
+  const avg = reviews.length ? (reviews.reduce((n, r) => n + r.rating, 0) / reviews.length).toLocaleString("id-ID", { maximumFractionDigits: 1 }) : null;
+  return (
+    <Card title="Review yang diberikan" subtitle={reviews.length ? `${reviews.length} review · rata-rata ★ ${avg}` : "Review dibuka setelah activity selesai, sampai 7 hari"}>
+      {reviews.length === 0 ? (
+        <p className={styles.emptyNote}>Member ini belum pernah memberi review.</p>
+      ) : (
+        <ul className={reviewStyles.list}>
+          {reviews.map((r) => (
+            <li key={r.sessionId} className={reviewStyles.item}>
+              <div className={reviewStyles.head}>
+                <Link href={`/admin/activities/${r.sessionId}`} className={reviewStyles.name}>
+                  {r.sessionTitle}
+                </Link>
+                <span className={reviewStyles.stars} aria-label={`${r.rating} dari 5 bintang`}>
+                  {stars(r.rating)}
+                </span>
+                {r.testimonial && <Badge tone="neutral">Boleh jadi testimoni</Badge>}
+                <span className={reviewStyles.date}>{reviewDate.format(new Date(r.at))}</span>
+              </div>
+              <p className={styles.cellMeta}>
+                {[r.venueName, r.startsAt && `activity ${reviewDate.format(new Date(r.startsAt))}`].filter(Boolean).join(" · ")}
+              </p>
+              {REVIEW_ASPECTS.some(([, pick]) => pick(r) !== null) && (
+                <div className={reviewStyles.details}>
+                  {REVIEW_ASPECTS.map(([label, pick]) => {
+                    const v = pick(r);
+                    return v !== null && <span key={label}>{label} {v}/5</span>;
+                  })}
+                </div>
+              )}
+              {r.highlights.length > 0 && (
+                <div className={reviewStyles.tags}>
+                  {r.highlights.map((h) => (
+                    <span key={h} className={reviewStyles.tag}>
+                      {h}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {r.comment && <p className={reviewStyles.comment}>{r.comment}</p>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
 const dateTime = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
 const monthYear = new Intl.DateTimeFormat("id-ID", { month: "long", year: "numeric", timeZone: "Asia/Jakarta" });
 const longDate = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
@@ -84,6 +185,7 @@ export const MEMBER_TABS = [
   { key: "ringkasan", label: "Ringkasan" },
   { key: "aktivitas", label: "Aktivitas" },
   { key: "booking", label: "Booking" },
+  { key: "review", label: "Review" },
   { key: "spent", label: "Total spent" },
   { key: "catatan", label: "Catatan" },
 ] as const;
@@ -179,6 +281,8 @@ export function MemberDetailView({ member, bookable, tab = "ringkasan" }: { memb
 
       {tab === "ringkasan" && (
         <div className={styles.summaryGrid}>
+          <KudosCard kudos={member.kudos} />
+
           <Card title="Tennis profile">
             <dl className={styles.facts}>
               <div>
@@ -331,6 +435,12 @@ export function MemberDetailView({ member, bookable, tab = "ringkasan" }: { memb
               </table>
             </div>
           </Card>
+        </div>
+      )}
+
+      {tab === "review" && (
+        <div className={styles.panel}>
+          <ReviewsCard reviews={member.reviews} />
         </div>
       )}
 
