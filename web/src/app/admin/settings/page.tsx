@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { SettingsForms } from "@/components/admin/settings/SettingsForms";
+import { ShopSettingsForm } from "@/components/admin/settings/ShopSettings";
 import styles from "@/components/admin/settings/Settings.module.css";
 import { AuditLogCard, IntegrationList, IntegrationsCard } from "@/components/admin/settings/SidePanels";
 import { RolesMatrix, TeamTable } from "@/components/admin/settings/TeamAccess";
@@ -8,6 +9,7 @@ import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { cx } from "@/lib/cx";
 import { adminNow } from "@/server/admin/dataset";
 import { getAdminSession } from "@/server/admin/session";
+import { getShopSettings } from "@/server/shop/settings";
 import { ADMIN_MODULES, getSettings, listAuditLog, listIntegrations, listRoles, listStaff } from "@/server/admin/settings-repo";
 import pageStyles from "../page.module.css";
 
@@ -18,6 +20,7 @@ const TABS = [
   { value: "general", label: "Umum" },
   { value: "membership", label: "Membership & poin" },
   { value: "payment", label: "Pembayaran" },
+  { value: "shop", label: "Shop & pengiriman" },
   { value: "notifications", label: "Notifikasi" },
   { value: "integrations", label: "Integrasi" },
   { value: "log", label: "Log aktivitas" },
@@ -28,13 +31,14 @@ export default async function AdminSettingsPage({ searchParams }: PageProps<"/ad
   const raw = (await searchParams).tab;
   const tab = TABS.find((t) => t.value === (Array.isArray(raw) ? raw[0] : raw))?.value ?? "team";
   // Log aktivitas hanya dimuat di tab-nya sendiri (dulu di kolom kanan Tim & akses — terlalu panjang).
-  const [staff, roles, integrations, log, settings, session] = await Promise.all([
+  const [staff, roles, integrations, log, settings, session, shop] = await Promise.all([
     listStaff(),
     listRoles(),
     listIntegrations(),
     tab === "log" ? listAuditLog() : Promise.resolve([]),
     getSettings(),
     getAdminSession(),
+    tab === "shop" ? getShopSettings() : Promise.resolve(null),
   ]);
 
   return (
@@ -79,7 +83,9 @@ export default async function AdminSettingsPage({ searchParams }: PageProps<"/ad
 
         {tab === "log" && <AuditLogCard entries={log} />}
 
-        {tab !== "team" && tab !== "integrations" && tab !== "log" && <SettingsForms key={tab} tab={tab} initial={settings} />}
+        {tab === "shop" && shop && <ShopSettingsForm key={JSON.stringify(shop)} initial={shop} />}
+
+        {tab !== "team" && tab !== "integrations" && tab !== "log" && tab !== "shop" && <SettingsForms key={tab} tab={tab} initial={settings} />}
       </div>
     </>
   );

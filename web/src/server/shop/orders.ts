@@ -1,11 +1,12 @@
 import "server-only";
 import { cache } from "react";
-import { DEFAULT_INSTANT, orderStage, variantLabel, pickupDeadline, type InstantSettings, type ShippingMethod, type ShippingRate } from "@/lib/checkout";
+import { DEFAULT_INSTANT, orderStage, variantLabel, pickupDeadline, type ShippingMethod, type ShippingRate } from "@/lib/checkout";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getMemberSession } from "@/server/member/user";
 import { getShopCatalog } from "@/server/public/products";
 import { getWebsiteSessions } from "@/server/public/sessions";
 import { demoOrders, DEMO_RATES } from "./demo-store";
+import { getShopBank, toInstant } from "./settings";
 import type { CheckoutContext, MyOrder, MyOrderListItem, PickupSession, ProofView, Recipient } from "./types";
 
 /**
@@ -21,6 +22,19 @@ const PICKUP_WINDOW_DAYS = 14;
 const DEFAULT_WEIGHT: Record<string, number> = { apparel: 300, socks: 100, pin: 50, figure: 200, racket: 1000, accessory: 200 };
 
 const emptyRecipient: Recipient = { name: "", phone: "", address: "", city: "", postalCode: "" };
+
+type ProfileShipRow = {
+  full_name: string;
+  phone: string | null;
+  city: string | null;
+  ship_recipient: string | null;
+  ship_phone: string | null;
+  ship_address: string | null;
+  ship_city: string | null;
+  ship_postal_code: string | null;
+  ship_lat: number | null;
+  ship_lng: number | null;
+};
 
 type SessionRow = { id: string; title: string; starts_at: string; ends_at: string; venues: { name: string } | null };
 
@@ -48,6 +62,8 @@ export const getCheckoutContext = cache(async (): Promise<CheckoutContext> => {
       demo: true,
       loggedIn: true,
       recipient: last?.recipient ?? { name: "Arya Putra Dewangga", phone: "0812-3456-7890", address: "Jl. Kemang Raya No. 12, Bangka, Mampang Prapatan", city: "Jakarta Selatan", postalCode: "12730" },
+      pin: last?.pin ?? null,
+      bankShort: (await getShopBank()).short,
       rates: DEMO_RATES,
       instant: DEFAULT_INSTANT,
       pickupSessions: await demoPickupSessions(),
@@ -57,7 +73,7 @@ export const getCheckoutContext = cache(async (): Promise<CheckoutContext> => {
 
   const { supabase, user } = await getMemberSession();
   const now = new Date();
-  const [{ data: rates }, { data: instant }, { data: sessions }, { data: products }, profile, lastOrder, booked] = await Promise.all([
+  const [{ data: rates }, { data: instant }, { data: sessions }, { data: products }, profile, lastOrder, booked, bank] = await Promise.all([
     supabase.from("shipping_rates").select("city, province, per_kg, eta_days").eq("is_active", true).order("city"),
     supabase.from("shipping_instant_settings").select("*").maybeSingle(),
     supabase
@@ -69,35 +85,33 @@ export const getCheckoutContext = cache(async (): Promise<CheckoutContext> => {
       .lt("starts_at", new Date(now.getTime() + PICKUP_WINDOW_DAYS * 86_400_000).toISOString())
       .order("starts_at"),
     supabase.from("products").select("slug, weight_grams").eq("status", "active"),
-    user ? supabase.from("profiles").select("full_name, phone, city").eq("id", user.id).maybeSingle() : Promise.resolve({ data: null }),
+    user
+      ? supabase.from("profiles").select("full_name, phone, city, ship_recipient, ship_phone, ship_address, ship_city, ship_postal_code, ship_lat, ship_lng").eq("id", user.id).maybeSingle()
+      : Promise.resolve({ data: null }),
     user
       ? supabase.from("orders").select("recipient_name, recipient_phone, shipping_address, shipping_city, postal_code").eq("member_id", user.id).in("shipping_method", ["jnt", "instant"]).order("placed_at", { ascending: false }).limit(1).maybeSingle()
       : Promise.resolve({ data: null }),
     user ? supabase.from("bookings").select("session_id").eq("member_id", user.id).neq("status", "cancelled") : Promise.resolve({ data: [] }),
+    getShopBank(),
   ]);
 
   const registered = new Set((booked.data ?? []).map((b) => b.session_id as string));
-  const p = profile.data as { full_name: string; phone: string | null; city: string | null } | null;
+  const p = profile.data as ProfileShipRow | null;
   const o = lastOrder.data as { recipient_name: string; recipient_phone: string; shipping_address: string; shipping_city: string | null; postal_code: string | null } | null;
-  const settings: InstantSettings = instant
-    ? {
-        originAddress: instant.origin_address,
-        originLat: instant.origin_lat,
-        originLng: instant.origin_lng,
-        baseFee: instant.base_fee,
-        baseKm: Number(instant.base_km),
-        perKmFee: instant.per_km_fee,
-        maxKm: Number(instant.max_km),
-        cutoff: String(instant.cutoff_time).slice(0, 5),
-      }
-    : DEFAULT_INSTANT;
+  const settings = toInstant(instant);
+  // Alamat di profil member (diisi di tab Profile) diutamakan; kalau belum ada → pesanan kirim terakhir.
+  const saved = p?.ship_address ? p : null;
 
   return {
     demo: false,
     loggedIn: Boolean(user),
-    recipient: o
-      ? { name: o.recipient_name, phone: o.recipient_phone, address: o.shipping_address, city: o.shipping_city ?? "", postalCode: o.postal_code ?? "" }
-      : { ...emptyRecipient, name: p?.full_name ?? "", phone: p?.phone ?? "", city: p?.city ?? "" },
+    recipient: saved
+      ? { name: saved.ship_recipient || saved.full_name, phone: saved.ship_phone || (saved.phone ? `0${saved.phone}` : ""), address: saved.ship_address ?? "", city: saved.ship_city ?? "", postalCode: saved.ship_postal_code ?? "" }
+      : o
+        ? { name: o.recipient_name, phone: o.recipient_phone, address: o.shipping_address, city: o.shipping_city ?? "", postalCode: o.postal_code ?? "" }
+        : { ...emptyRecipient, name: p?.full_name ?? "", phone: p?.phone ? `0${p.phone}` : "", city: p?.city ?? "" },
+    bankShort: bank.short,
+    pin: saved && saved.ship_lat !== null && saved.ship_lng !== null ? { lat: saved.ship_lat, lng: saved.ship_lng } : null,
     rates: (rates ?? []).map((r): ShippingRate => ({ city: r.city, province: r.province, perKg: r.per_kg, eta: r.eta_days })),
     instant: settings,
     pickupSessions: ((sessions ?? []) as unknown as SessionRow[])

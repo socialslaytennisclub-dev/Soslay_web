@@ -13,6 +13,7 @@ import { loadKudosTop } from "./kudos";
 import { localPhone } from "@/lib/wa-invite";
 import { removePublicImage, uploadPublicImage } from "../storage";
 import { FORMAT, FREQUENCY, GENDER, HAND, toEnum } from "./profile";
+import type { MemberAddress } from "../shop/types";
 
 const AVATAR_BUCKET = "avatars";
 
@@ -275,4 +276,40 @@ export async function getKudosTopForHost(sessionId: string): Promise<Record<stri
     if (t) out[r.id] = t;
   }
   return out;
+}
+
+/** Simpan alamat pengiriman di profil member (dipakai otomatis di checkout Shop). */
+export async function saveMyAddress(a: MemberAddress): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createSupabaseServerClient("member");
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Sesi kamu berakhir — masuk lagi untuk menyimpan." };
+
+  const name = a.name.trim();
+  const phone = a.phone.replace(/[^\d+]/g, "");
+  const address = a.address.trim();
+  const postal = a.postalCode.trim();
+  if (!name) return { ok: false, error: "Isi nama penerima." };
+  if (phone.replace(/\D/g, "").length < 9) return { ok: false, error: "Nomor HP penerima belum lengkap." };
+  if (address.length < 10) return { ok: false, error: "Tulis alamat lengkap (jalan, nomor, kelurahan, kecamatan)." };
+  if (!a.city) return { ok: false, error: "Pilih kota / kabupaten." };
+  if (!/^\d{5}$/.test(postal)) return { ok: false, error: "Kode pos 5 angka." };
+  const pin = a.pin && Math.abs(a.pin.lat) <= 90 && Math.abs(a.pin.lng) <= 180 ? a.pin : null;
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      ship_recipient: name,
+      ship_phone: a.phone.trim(),
+      ship_address: address,
+      ship_city: a.city,
+      ship_postal_code: postal,
+      ship_lat: pin?.lat ?? null,
+      ship_lng: pin?.lng ?? null,
+    })
+    .eq("id", user.id);
+  if (error) return { ok: false, error: "Gagal menyimpan alamat. Coba lagi sebentar lagi." };
+  revalidatePath("/akun", "layout");
+  return { ok: true };
 }

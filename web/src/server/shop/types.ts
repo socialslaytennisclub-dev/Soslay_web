@@ -21,6 +21,10 @@ export type CheckoutContext = {
   demo: boolean;
   loggedIn: boolean;
   recipient: Recipient;
+  /** Titik peta tersimpan di profil (untuk Instant). */
+  pin: { lat: number; lng: number } | null;
+  /** Singkatan bank tujuan transfer (Settings › Shop), mis. "BCA". */
+  bankShort: string;
   rates: ShippingRate[];
   instant: InstantSettings;
   pickupSessions: PickupSession[];
@@ -95,3 +99,6 @@ export type MyOrder = {
 export type MyOrderListItem = Pick<MyOrder, "code" | "placedAt" | "stage" | "method" | "total" | "payDeadline"> & { summary: string; image: string };
 
 export type ShopResult<T = undefined> = ({ ok: true } & (T extends undefined ? object : { data: T })) | { ok: false; error: string };
+
+/** Alamat pengiriman tersimpan di profil member (kolom ship_* di profiles). */
+export type MemberAddress = Recipient & { pin: { lat: number; lng: number } | null };

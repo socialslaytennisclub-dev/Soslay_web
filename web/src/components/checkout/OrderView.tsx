@@ -1,6 +1,6 @@
 import { CircleAlert, CircleCheck, Clock, FileText, Hourglass, Info, PackageCheck, XCircle } from "lucide-react";
 import Link from "next/link";
-import { shopBank, transferHowTo, verificationSla } from "@/content/checkout";
+import { transferHowTo, verificationSla, type ShopBank } from "@/content/checkout";
 import { fmtDate, fmtDateTime, fmtDayDate, fmtTime, MAX_REJECTIONS, rp, SHIPPING_LABEL } from "@/lib/checkout";
 import { cx } from "@/lib/cx";
 import type { MyOrder, PickupSession } from "@/server/shop/types";
@@ -13,7 +13,7 @@ import { ChangePickup, ConfirmReceived, CopyButton, Countdown, ProofForm, Replac
  * Halaman pesanan member: satu URL untuk seluruh perjalanan pesanan (Figma 05 Pembayaran ·
  * 06 Menunggu verifikasi · 06a Upload ulang · 07 Pembayaran diterima) + dikirim / siap diambil / selesai / batal.
  */
-export function OrderView({ order, pickupSessions, memberName }: { order: MyOrder; pickupSessions: PickupSession[]; memberName: string }) {
+export function OrderView({ order, pickupSessions, memberName, bank: shopBank }: { order: MyOrder; pickupSessions: PickupSession[]; memberName: string; bank: ShopBank }) {
   const { stage } = order;
   const pendingProof = order.proofs.find((p) => p.status === "pending");
   const lastRejected = order.proofs.find((p) => p.status === "rejected");
@@ -38,7 +38,7 @@ export function OrderView({ order, pickupSessions, memberName }: { order: MyOrde
   const summaryChips =
     order.paidAt && stage !== "cancelled" ? (
       <>
-        <Chip tone="lime">Lunas · Transfer BCA</Chip>
+        <Chip tone="lime">Lunas · Transfer {shopBank.short}</Chip>
         <StageChip stage={stage} />
       </>
     ) : (
@@ -124,7 +124,7 @@ export function OrderView({ order, pickupSessions, memberName }: { order: MyOrde
                       Cara transfer
                     </p>
                     <ol className={styles.howTo}>
-                      {transferHowTo.map((t) => (
+                      {transferHowTo(shopBank).map((t) => (
                         <li key={t}>{t}</li>
                       ))}
                     </ol>

@@ -1,0 +1,58 @@
+/* Lebar sama dengan kolom form profil (form 979 + panel 313 di desktop). */
+@media (min-width: 1200px) {
+  .card {
+    max-width: calc(100% - 313px - var(--space-20));
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  min-width: 0;
+}
+
+.textarea {
+  width: 100%;
+  min-height: 88px;
+  padding: 12px 16px;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-md, 12px);
+  background: var(--color-white);
+  font-family: var(--font-ui);
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--color-black);
+  resize: vertical;
+}
+
+.textarea:focus {
+  outline: 2px solid var(--color-indigo-600);
+  outline-offset: 1px;
+}
+
+.clear {
+  align-self: flex-start;
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  color: var(--color-indigo-600);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-16);
+}
+
+.buttons {
+  display: flex;
+  gap: var(--space-12);
+  margin-left: auto;
+}

@@ -1,9 +1,10 @@
 "use client";
 
-import { CalendarDays, Crosshair, Info, Landmark, LocateFixed, MapPin, UserRound } from "lucide-react";
+import { CalendarDays, Info, Landmark, MapPin, UserRound } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useSyncExternalStore, useTransition, type ReactNode } from "react";
+import { MapPicker } from "@/components/ui/MapPicker/MapPicker";
 import { cityOptions } from "@/content/member";
 import {
   billableKg,
@@ -32,15 +33,6 @@ const readSelection = () => JSON.stringify(readCheckoutSelection() ?? { source: 
 
 const kgText = (grams: number) => `${(grams / 1000).toLocaleString("id-ID", { maximumFractionDigits: 2 })} kg`;
 
-/** "-6.2, 106.8" atau link Google Maps (…@-6.2,106.8… / ?q=-6.2,106.8) → koordinat. */
-function parseCoords(raw: string): { lat: number; lng: number } | null {
-  const m = raw.match(/(-?\d{1,2}\.\d+)\s*,\s*(-?\d{2,3}\.\d+)/);
-  if (!m) return null;
-  const lat = Number(m[1]);
-  const lng = Number(m[2]);
-  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat, lng } : null;
-}
-
 /**
  * Checkout (Figma 04a J&T · 04b Instant · 04c Free Pickup Mabar; mobile MOB-05).
  * Ongkir di sini hanya pratinjau — angka resmi dihitung ulang server saat "Buat pesanan & bayar".
@@ -55,10 +47,7 @@ export function CheckoutForm({ ctx }: { ctx: CheckoutContext }) {
   const [recipient, setRecipient] = useState<Recipient>(ctx.recipient);
   const complete = Boolean(recipient.name && recipient.phone && recipient.address && recipient.city && recipient.postalCode);
   const [editing, setEditing] = useState(!complete);
-  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(null);
-  const [pinInput, setPinInput] = useState("");
-  const [pinOpen, setPinOpen] = useState(false);
-  const [pinError, setPinError] = useState<string>();
+  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(ctx.pin);
   const [sessionId, setSessionId] = useState(ctx.pickupSessions[0]?.id ?? "");
   const [error, setError] = useState<string>();
   const [pending, start] = useTransition();
@@ -80,23 +69,6 @@ export function CheckoutForm({ ctx }: { ctx: CheckoutContext }) {
     jnt: recipient.city && !rate ? "Pengiriman ke kota ini belum tersedia, hubungi admin." : undefined,
     instant: recipient.city && !inJakarta ? "Khusus alamat di DKI Jakarta." : quote?.tooFar ? `Titik lokasi lebih dari ${ctx.instant.maxKm} km.` : undefined,
     pickup: ctx.pickupSessions.length === 0 ? "Belum ada sesi Mabar 14 hari ke depan." : undefined,
-  };
-
-  const useMyLocation = () => {
-    setPinError(undefined);
-    if (!navigator.geolocation) return setPinError("Browser tidak mendukung lokasi — tempel koordinat dari Google Maps.");
-    navigator.geolocation.getCurrentPosition(
-      (pos) => setPin({ lat: Math.round(pos.coords.latitude * 1e6) / 1e6, lng: Math.round(pos.coords.longitude * 1e6) / 1e6 }),
-      () => setPinError("Lokasi tidak bisa dibaca — izinkan akses lokasi, atau tempel koordinat dari Google Maps."),
-      { enableHighAccuracy: true, timeout: 10000 },
-    );
-  };
-  const applyPin = () => {
-    const c = parseCoords(pinInput);
-    if (!c) return setPinError("Format koordinat tidak dikenali. Contoh: -6.2607, 106.8136 atau link Google Maps.");
-    setPin(c);
-    setPinOpen(false);
-    setPinError(undefined);
   };
 
   const validate = (): string | undefined => {
@@ -225,48 +197,20 @@ export function CheckoutForm({ ctx }: { ctx: CheckoutContext }) {
       </Card>
     );
 
-  const pinControls = (
-    <>
-      <div className={styles.pinRow}>
-        <button type="button" className={styles.pillButton} onClick={useMyLocation}>
-          <LocateFixed size={14} /> Pakai lokasi saya
-        </button>
-        <button type="button" className={styles.pillButton} onClick={() => setPinOpen((v) => !v)}>
-          <MapPin size={14} /> {pin ? "Ubah titik lokasi" : "Tempel dari Google Maps"}
-        </button>
-        <span className={styles.muted}>Pastikan pin tepat di depan rumah/gedung.</span>
-      </div>
-      {pinOpen && (
-        <div className={styles.coordForm}>
-          <input className={styles.input} value={pinInput} onChange={(e) => setPinInput(e.target.value)} placeholder="-6.2607, 106.8136 atau link Google Maps" aria-label="Koordinat titik lokasi" />
-          <button type="button" className={styles.pillButton} onClick={applyPin}>
-            Pakai
-          </button>
-        </div>
-      )}
-      {pinError && <p className={styles.fieldError}>{pinError}</p>}
-    </>
-  );
-
   const instantDetail = (
     <>
-      <div className={styles.map}>
-        {pin ? (
-          <iframe title="Titik lokasi pengiriman" loading="lazy" src={`https://maps.google.com/maps?q=${pin.lat},${pin.lng}&z=14&output=embed`} />
-        ) : (
-          <div className={styles.mapEmpty}>
-            <span className={styles.muted}>
-              <Crosshair size={18} style={{ verticalAlign: "-4px" }} /> Atur titik lokasimu untuk menghitung ongkir dari {ctx.instant.originAddress}.
-            </span>
-          </div>
-        )}
-        {quote && (
-          <span className={styles.mapBadge}>
-            {String(quote.km).replace(".", ",")} km · ±{etaMinutes(quote.km)} menit
-          </span>
-        )}
-      </div>
-      {pinControls}
+      <MapPicker
+        value={pin}
+        onChange={setPin}
+        origin={{ lat: ctx.instant.originLat, lng: ctx.instant.originLng, label: `Pengirim · ${ctx.instant.originAddress}` }}
+        hint="Klik peta atau geser pin ke depan rumah/gedungmu"
+        height={240}
+      />
+      {quote && (
+        <p className={styles.muted}>
+          Jarak ±{String(quote.km).replace(".", ",")} km dari {ctx.instant.originAddress} · ±{etaMinutes(quote.km)} menit
+        </p>
+      )}
       {quote && (
         <div className={styles.breakdown}>
           <KV
@@ -286,7 +230,7 @@ export function CheckoutForm({ ctx }: { ctx: CheckoutContext }) {
       <p className={cx(styles.note, styles.noteAmber)}>
         <Info size={16} />
         <span>
-          Jarak dihitung perkiraan (garis lurus × 1,3) sampai Google Maps terpasang. Dikirim admin via GoSend/GrabExpress setelah pembayaran terverifikasi. Verifikasi sebelum {ctx.instant.cutoff.replace(":", ".")} → tiba hari ini; setelahnya → besok pagi.
+          Jarak dihitung perkiraan (garis lurus × 1,3). Dikirim admin via GoSend/GrabExpress setelah pembayaran terverifikasi. Verifikasi sebelum {ctx.instant.cutoff.replace(":", ".")} → tiba hari ini; setelahnya → besok pagi.
         </span>
       </p>
     </>
@@ -377,7 +321,7 @@ export function CheckoutForm({ ctx }: { ctx: CheckoutContext }) {
                 <Landmark size={20} />
               </span>
               <span className={styles.optionText}>
-                <span className={styles.optionTitle}>Transfer bank — BCA</span>
+                <span className={styles.optionTitle}>Transfer bank — {ctx.bankShort}</span>
                 <span className={styles.optionDesc}>Nomor rekening tampil setelah pesanan dibuat. Upload bukti transfer, lalu admin memverifikasi maks 1×24 jam.</span>
               </span>
             </div>
