@@ -61,7 +61,6 @@ export function ShopSettingsForm({ initial }: { initial: ShopSettings }) {
           <MapPicker
             value={{ lat: s.instant.originLat, lng: s.instant.originLng }}
             onChange={(p) => setS((prev) => ({ ...prev, instant: { ...prev.instant, originLat: p.lat, originLng: p.lng } }))}
-            hint="Klik peta atau geser pin ke lokasi gudang"
             height={300}
           />
         </div>

@@ -26,11 +26,24 @@ const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
 type Place = { display_name: string; lat: string; lon: string };
 
 /**
+ * Koordinat dari teks yang ditempel: "-6.2607, 106.8136" atau link Google Maps
+ * (…!3d-6.26!4d106.81… = titik tempat, …@-6.26,106.81,17z… / ?q=-6.26,106.81 = titik peta).
+ */
+export function parseCoords(raw: string): LatLng | null {
+  const place = raw.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+  const m = place ?? raw.match(/(-?\d{1,2}\.\d+)\s*,\s*(-?\d{1,3}\.\d+)/);
+  if (!m) return null;
+  const lat = Number(m[1]);
+  const lng = Number(m[2]);
+  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180 ? { lat: round6(lat), lng: round6(lng) } : null;
+}
+
+/**
  * Peta pilih titik lokasi: klik peta / geser pin / cari alamat / "Pakai lokasi saya".
  * Leaflet + peta OpenStreetMap — tanpa API key & tanpa biaya. Pencarian alamat memakai
  * Nominatim (OpenStreetMap), dipanggil hanya saat member menekan Cari.
  */
-export function MapPicker({ value, onChange, fallbackCenter = JAKARTA, origin, height = 260, hint = "Klik peta atau geser pin ke lokasimu" }: Props) {
+export function MapPicker({ value, onChange, fallbackCenter = JAKARTA, origin, height = 260, hint = "Klik di peta untuk menaruh pin" }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<LeafletMap | null>(null);
   const marker = useRef<Marker | null>(null);
@@ -132,13 +145,20 @@ export function MapPicker({ value, onChange, fallbackCenter = JAKARTA, origin, h
     const q = query.trim();
     if (q.length < 3) return;
     setError(undefined);
+    setPlaces(null);
+    // Koordinat / link Google Maps yang ditempel → langsung jadi titik.
+    const coords = parseCoords(q);
+    if (coords) return flyTo(coords);
+    if (/goo\.gl|maps\.app/i.test(q))
+      return setError("Link pendek Google Maps tidak bisa dibaca. Di Google Maps, tekan lama titik lokasinya lalu salin angka koordinatnya (mis. -6.2607, 106.8136) dan tempel di sini.");
     setBusy(true);
     try {
       const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=id&accept-language=id&q=${encodeURIComponent(q)}`;
       const res = await fetch(url, { headers: { Accept: "application/json" } });
       const found = res.ok ? ((await res.json()) as Place[]) : [];
       setPlaces(found);
-      if (!found.length) setError("Alamat tidak ditemukan — coba nama jalan / gedung, atau klik titik di peta.");
+      if (!found.length)
+        setError("Tidak ditemukan di peta OpenStreetMap — coba nama jalannya, klik titik di peta, atau tempel koordinat / link dari Google Maps.");
     } catch {
       setError("Pencarian sedang tidak bisa dipakai — klik titik di peta.");
     } finally {
@@ -162,7 +182,7 @@ export function MapPicker({ value, onChange, fallbackCenter = JAKARTA, origin, h
               search();
             }
           }}
-          placeholder="Cari jalan / gedung / kelurahan"
+          placeholder="Cari jalan, atau tempel koordinat / link Google Maps"
           aria-label="Cari alamat di peta"
         />
         <button type="button" className={styles.button} onClick={search} disabled={busy || query.trim().length < 3}>
@@ -196,7 +216,7 @@ export function MapPicker({ value, onChange, fallbackCenter = JAKARTA, origin, h
         </button>
         {value && (
           <span className={styles.coords}>
-            {value.lat.toFixed(6)}, {value.lng.toFixed(6)}
+            {value.lat.toFixed(6)}, {value.lng.toFixed(6)} · geser pin untuk merapikan
           </span>
         )}
       </div>

@@ -221,7 +221,6 @@ export function CheckoutForm({ ctx }: { ctx: CheckoutContext }) {
         value={pin}
         onChange={setPin}
         origin={{ lat: ctx.instant.originLat, lng: ctx.instant.originLng, label: `Pengirim · ${ctx.instant.originAddress}` }}
-        hint="Klik peta atau geser pin ke depan rumah/gedungmu"
         height={240}
       />
       {quote && (
