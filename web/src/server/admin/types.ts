@@ -65,6 +65,8 @@ export type MemberSpend = {
   shop: { amount: number; count: number };
   /** Terbaru dulu. */
   items: MemberSpendItem[];
+  /** Sebagian query gagal (error / izin) → angka bisa kurang dari seharusnya. */
+  incomplete: boolean;
 };
 
 export type MemberDetail = MemberListItem & {
@@ -77,7 +79,6 @@ export type MemberDetail = MemberListItem & {
   playingSince: string;
   hoursPlayed: number;
   attendanceRate: number;
-  totalSpent: number;
   spend: MemberSpend;
   pointsEarned: number;
   timeline: MemberTimelineItem[];

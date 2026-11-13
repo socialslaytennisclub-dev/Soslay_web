@@ -160,14 +160,6 @@
 }
 
 /* ── Kolom ── */
-.columns {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-20);
-  align-items: start;
-  scroll-margin-top: var(--space-20);
-}
-
 .main,
 .side {
   display: flex;
@@ -415,17 +407,6 @@
 
 .noteForm button:disabled {
   color: var(--color-neutral-400);
-}
-
-@media (min-width: 1200px) {
-  .columns {
-    grid-template-columns: minmax(0, 1fr) 360px;
-  }
-}
-
-.anchor {
-  display: block;
-  scroll-margin-top: var(--space-20);
 }
 
 .noteDelete {

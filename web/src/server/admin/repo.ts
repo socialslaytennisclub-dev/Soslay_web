@@ -200,10 +200,13 @@ async function loadSpend(d: Dataset, memberId: string): Promise<MemberSpend> {
   for (const o of d.ordersOf(memberId)) {
     if (o.payment !== "paid" || !o.total) continue;
     const name = o.items[0]?.name ?? "Order shop";
-    items.push({ kind: "shop", title: o.items.length > 1 ? `${name} +${o.items.length - 1} lainnya` : name, detail: `Order #${o.code}`, at: o.placedAt.toISOString(), amount: o.total });
+    // Order tukar poin (channel 'reward'): yang dibayar hanya ongkir, bukan barangnya.
+    const title = o.detail?.channel === "reward" ? `Ongkir tukar poin · ${name}` : o.items.length > 1 ? `${name} +${o.items.length - 1} lainnya` : name;
+    items.push({ kind: "shop", title, detail: `Order #${o.code}`, at: o.placedAt.toISOString(), amount: o.total });
   }
 
   let tripCount = 0;
+  let failed = false;
   if (d.live) {
     const supabase = await createSupabaseServerClient();
     const [participants, bookings, trips] = await Promise.all([
@@ -214,6 +217,7 @@ async function loadSpend(d: Dataset, memberId: string): Promise<MemberSpend> {
         .select("id, trips(title), trip_payments(kind, amount, received_on, voided_at)")
         .eq("member_id", memberId),
     ]);
+    failed = Boolean(participants.error || bookings.error || trips.error);
 
     const perSession = new Map<string, number>();
     const keep = (sessionId: string, amount: number) => perSession.set(sessionId, Math.max(perSession.get(sessionId) ?? 0, amount));
@@ -225,6 +229,8 @@ async function loadSpend(d: Dataset, memberId: string): Promise<MemberSpend> {
     }
     for (const [sessionId, amount] of perSession) {
       const s = d.sessionById.get(sessionId);
+      // Activity dibatalkan → tiket dianggap dikembalikan, tidak dihitung.
+      if (s?.status === "cancelled") continue;
       items.push({
         kind: "activity",
         title: s?.title ?? "Activity",
@@ -250,7 +256,7 @@ async function loadSpend(d: Dataset, memberId: string): Promise<MemberSpend> {
   const activities = { amount: sum("activity"), count: items.filter((i) => i.kind === "activity").length };
   const trips = { amount: sum("trip"), count: tripCount };
   const shop = { amount: sum("shop"), count: items.filter((i) => i.kind === "shop").length };
-  return { total: activities.amount + trips.amount + shop.amount, activities, trips, shop, items };
+  return { total: activities.amount + trips.amount + shop.amount, activities, trips, shop, items, incomplete: failed };
 }
 
 async function loadNotes(memberId: string): Promise<MemberNote[]> {
@@ -268,7 +274,8 @@ async function loadNotes(memberId: string): Promise<MemberNote[]> {
   }));
 }
 
-export async function getMember(id: string): Promise<MemberDetail | null> {
+/** cache(): generateMetadata & halaman memanggilnya di request yang sama — query cukup sekali. */
+export const getMember = cache(async (id: string): Promise<MemberDetail | null> => {
   const d = await getDataset();
   const member = d.memberById.get(id);
   if (!member) return null;
@@ -314,7 +321,16 @@ export async function getMember(id: string): Promise<MemberDetail | null> {
   timeline.sort((a, b) => b.at.localeCompare(a.at));
 
   const due = stats.sessionsAttended + stats.noShows;
-  const spend = await loadSpend(d, id);
+  const [spend, notes] = await Promise.all([
+    loadSpend(d, id),
+    d.live
+      ? loadNotes(id)
+      : Promise.resolve<MemberNote[]>(
+          id === "m0001"
+            ? [{ id: "n1", author: "Rara", body: "Suka main pagi, sering bawa teman baru. Kandidat ambassador Bali trip.", at: new Date(d.now.getTime() - 16 * DAY).toISOString() }]
+            : [],
+        ),
+  ]);
   return {
     ...list,
     phone: member.phone,
@@ -326,7 +342,6 @@ export async function getMember(id: string): Promise<MemberDetail | null> {
     playingSince: member.playingSince,
     hoursPlayed: Math.round(stats.hoursPlayed),
     attendanceRate: due ? Math.round((stats.sessionsAttended / due) * 100) : 0,
-    totalSpent: stats.totalSpent,
     spend,
     pointsEarned: stats.pointsEarned,
     timeline: timeline.slice(0, 8),
@@ -337,13 +352,9 @@ export async function getMember(id: string): Promise<MemberDetail | null> {
       payment: booking.payment,
       status: booking.status,
     })),
-    notes: d.live
-      ? await loadNotes(id)
-      : id === "m0001"
-        ? [{ id: "n1", author: "Rara", body: "Suka main pagi, sering bawa teman baru. Kandidat ambassador Bali trip.", at: new Date(d.now.getTime() - 16 * DAY).toISOString() }]
-        : [],
+    notes,
   };
-}
+});
 
 // ── Overview ────────────────────────────────────────────────────────────────
 const weekStart = jakartaWeekStart;

@@ -69,6 +69,7 @@ function SpendCard({ spend }: { spend: MemberSpend }) {
       ) : (
         <p className={styles.emptyNote}>Belum ada pembayaran lunas.</p>
       )}
+      {spend.incomplete && <p className={styles.emptyNote}>Sebagian data pembayaran gagal dimuat — total bisa kurang dari seharusnya. Muat ulang halaman.</p>}
       {spend.items.length > SPEND_LIMIT && <p className={styles.emptyNote}>+{spend.items.length - SPEND_LIMIT} pembayaran lebih lama tidak ditampilkan.</p>}
     </Card>
   );
