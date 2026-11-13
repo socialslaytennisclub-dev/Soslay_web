@@ -1,15 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AlbumGrid } from "@/components/admin/content/AlbumGrid";
 import { CommunityPosts } from "@/components/admin/content/CommunityPosts";
+import { GalleryManager } from "@/components/admin/content/GalleryManager";
 import { TestimonialManager } from "@/components/admin/content/TestimonialManager";
 import styles from "@/components/admin/content/Content.module.css";
 import { HomepageEditor } from "@/components/admin/content/HomepageEditor";
 import { SitePages } from "@/components/admin/content/SitePages";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
-import { AdminButton } from "@/components/admin/ui/AdminUI";
 import { cx } from "@/lib/cx";
-import { emptyTestimonial, listAlbums, listCommunityPosts, listHomepageSections, listSitePages, listTestimonials } from "@/server/admin/content-repo";
+import { emptyTestimonial, listCommunityPosts, listGallery, listHomepageSections, listSitePages, listTestimonials } from "@/server/admin/content-repo";
 import { memberChoices } from "@/server/admin/repo";
 import pageStyles from "../page.module.css";
 
@@ -25,7 +24,7 @@ export default async function AdminContentPage({ searchParams }: PageProps<"/adm
   const tab: Tab = TABS.find((t) => t === (Array.isArray(raw) ? raw[0] : raw)) ?? "homepage";
   const [sections, gallery, posts, pages, testimonials, members] = await Promise.all([
     listHomepageSections(),
-    listAlbums(),
+    listGallery(),
     listCommunityPosts(),
     listSitePages(),
     listTestimonials(),
@@ -56,29 +55,8 @@ export default async function AdminContentPage({ searchParams }: PageProps<"/adm
     </nav>
   );
 
-  const galleryCard = (limit?: number) => (
-    <section className={styles.card}>
-      <header className={styles.cardHeader}>
-        <div>
-          <h2 className={styles.cardTitle}>Galeri foto sesi</h2>
-          <p className={styles.muted}>
-            {num.format(gallery.totalPhotos)} foto · {gallery.totalAlbums} album · tampil di member dashboard & halaman venue
-          </p>
-        </div>
-        {/* Foto diunggah per sesi (album Google Drive + thumbnail) di kartu "Foto sesi" editor sesi. */}
-        <AdminButton href="/admin/activities?tab=completed" variant="primary" size="sm" icon="upload-simple" title="Pilih sesi yang sudah selesai, lalu isi kartu Foto sesi">
-          Upload foto
-        </AdminButton>
-      </header>
-      <AlbumGrid albums={limit ? gallery.albums.slice(0, limit) : gallery.albums.slice(0, 40)} />
-      {limit ? (
-        <AdminButton href="/admin/konten?tab=gallery" size="sm" className={styles.more} iconAfter="caret-right">
-          Lihat semua album
-        </AdminButton>
-      ) : (
-        gallery.albums.length > 40 && <p className={cx(styles.muted, styles.more)}>Menampilkan 40 album terbaru dari {gallery.albums.length}</p>
-      )}
-    </section>
+  const galleryCard = (preview?: number) => (
+    <GalleryManager initial={gallery.photos} activities={gallery.activities} totalPhotos={gallery.totalPhotos} totalAlbums={gallery.totalAlbums} preview={preview} />
   );
 
   return (

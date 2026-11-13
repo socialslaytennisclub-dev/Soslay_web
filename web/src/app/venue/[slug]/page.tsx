@@ -8,13 +8,13 @@ import { MotionProvider } from "@/components/motion/MotionProvider";
 import { MemberCta } from "@/components/sections/MemberCta/MemberCta";
 import { UpcomingActivities } from "@/components/venue/UpcomingActivities/UpcomingActivities";
 import { VenueGallery } from "@/components/venue/VenueGallery/VenueGallery";
-import { photosForVenue } from "@/content/gallery";
 import { findGuide, guideHref } from "@/content/guides";
 import { cityHref, venueCardInfo, venueCities, venuePage } from "@/content/venues";
 import { formatTanggalISO } from "@/lib/format";
 import { cityInEnglish } from "@/lib/venue-options";
 import { upcomingSessions } from "@/lib/sessions";
 import { getWebsiteSessions } from "@/server/public/sessions";
+import { getVenueGallery } from "@/server/public/gallery";
 import { findWebsiteVenue, getWebsiteVenues } from "@/server/public/venues";
 
 /** Venue aktif di-prerender saat build; venue baru dari admin dirender saat pertama dibuka. */
@@ -46,7 +46,7 @@ export default async function VenueDetailPage({ params }: PageProps<"/venue/[slu
   const upcoming = upcomingSessions(await getWebsiteSessions(), new Date())
     .filter((session) => session.venue.name === venue.name)
     .slice(0, venuePage.detail.upcoming.limit);
-  const photos = photosForVenue(venue.slug);
+  const photos = await getVenueGallery(venue.slug, venue.name);
   const dateLabels = Object.fromEntries(photos.map((photo) => [photo.id, formatTanggalISO(photo.date, venue.city)]));
   const heroImage = venue.heroImage ?? venue.image;
 

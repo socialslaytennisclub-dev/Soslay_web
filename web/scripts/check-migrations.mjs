@@ -2164,3 +2164,47 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(null);
   console.log("✓ penukaran reward member: poin & stok dipotong saat tukar, Produk/Merch J&T/Instant via order ongkir (lunas → disetujui, kirim → selesai, batal → poin & stok kembali), ambil di activity, voucher wajib kode, tolak → poin kembali");
 }
+
+// Galeri foto: foto dikaitkan ke activity (album otomatis tayang), tag hanya peserta activity, caption, tampil di galeri venue.
+{
+  const err = async (sql, params) => db.query(sql, params).then(() => null, (e) => e.message);
+  const admin = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Galeri', 'galeri@soslay.test', 'active' from roles where name = 'Super Admin'`, [admin]);
+  const person = async (name, ig) => {
+    const id = (await one(`insert into auth.users default values returning id`)).id;
+    await db.query(`insert into profiles (id, full_name, email, instagram) values ($1, $2, $3, $4)`, [id, name, `${id}@test.id`, ig]);
+    return id;
+  };
+  const player = await person("Felisya Fernanda", "felisyafernanda");
+  const outsider = await person("Orang Lain", null);
+  const gv = (await one(`insert into venues (slug, name, city) values ('galeri-venue', 'Galeri Venue', 'Jakarta') returning id`)).id;
+  const past = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status)
+    values ('galeri-past', 'Mabar Galeri', 'weekly-mabar', $1, now() - interval '2 days', now() - interval '2 days' + interval '2 hours', 12, 'completed') returning id`, [gv])).id;
+  const future = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status)
+    values ('galeri-future', 'Mabar Nanti', 'weekly-mabar', $1, now() + interval '2 days', now() + interval '2 days 2 hours', 12, 'published') returning id`, [gv])).id;
+  await db.query(`insert into bookings (session_id, member_id, status) values ($1, $2, 'attended')`, [past, player]);
+
+  await as(player);
+  console.assert((await err(`select save_gallery_photo(null, $1, 'https://x/a.jpg', 'Halo', '{}')`, [past]))?.includes("izin"), "member tidak bisa upload galeri");
+  await as(admin);
+  console.assert((await err(`select save_gallery_photo(null, $1, 'https://x/a.jpg', null, '{}')`, [future]))?.includes("sudah berlangsung"), "activity yang belum berlangsung ditolak");
+  console.assert((await err(`select save_gallery_photo(null, $1, 'https://x/a.jpg', null, $2)`, [past, [outsider]]))?.includes("tidak ikut main"), "tag non-peserta ditolak");
+  const photo = (await one(`select save_gallery_photo(null, $1, 'https://x/a.jpg', '  Rally pagi  ', $2) id`, [past, [player]])).id;
+  const second = (await one(`select save_gallery_photo(null, $1, 'https://x/b.jpg', null, '{}') id`, [past])).id;
+  const album = await one(`select count(*)::int n, min(status::text) status, min(cover_photo::text) cover from photo_albums where session_id = $1`, [past]);
+  console.assert(album.n === 1 && album.status === "published" && album.cover === photo, `satu album tayang per activity ${JSON.stringify(album)}`);
+  console.assert((await one(`select caption from photos where id = $1`, [photo])).caption === "Rally pagi", "caption dirapikan");
+  await db.query(`select save_gallery_photo($1, null, null, '', '{}')`, [photo]);
+  const edited = await one(`select caption, (select count(*)::int from photo_tags where photo_id = $1) tags from photos where id = $1`, [photo]);
+  console.assert(edited.caption === null && edited.tags === 0, `edit: caption kosong & tag dilepas ${JSON.stringify(edited)}`);
+  await db.query(`select save_gallery_photo($1, null, null, 'Tos!', $2)`, [photo, [player]]);
+
+  await as(null);
+  await db.exec(`set role anon`);
+  const rows = (await db.query(`select * from venue_gallery('galeri-venue')`)).rows;
+  await db.exec(`reset role`);
+  const tagged = rows.find((r) => r.id === photo);
+  console.assert(rows.length === 2 && rows.some((r) => r.id === second), `galeri venue publik berisi foto activity ${rows.length}`);
+  console.assert(tagged?.caption === "Tos!" && tagged.session_title === "Mabar Galeri" && tagged.members[0].first_name === "Felisya" && tagged.members[0].instagram === "felisyafernanda" && !("email" in tagged.members[0]), `tag publik hanya nama depan & IG ${JSON.stringify(tagged)}`);
+  console.log("✓ galeri foto: per activity (album otomatis tayang), hanya admin konten, activity harus sudah berlangsung, tag hanya peserta, caption, galeri venue publik");
+}

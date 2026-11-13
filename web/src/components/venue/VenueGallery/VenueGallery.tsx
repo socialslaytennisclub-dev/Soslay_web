@@ -19,17 +19,14 @@ export function VenueGallery({ venueName, photos, dateLabels }: VenueGalleryProp
   const lightbox = useLightbox(photos.length);
   const active = lightbox.index !== null ? photos[lightbox.index] : null;
 
+  // Foto tanpa member ter-tag tetap bisa dibuka (tanpa baris nama di lightbox).
+  const tagged = active?.members.at(-1);
   const item: LightboxItem | null = active && {
     src: active.src,
     alt: active.alt,
     dateLabel: dateLabels[active.id],
     caption: active.caption,
-    person: {
-      label: active.members[active.members.length - 1].handle,
-      initial: active.members[active.members.length - 1].initial,
-      tone: active.members[active.members.length - 1].tone,
-      verified: active.members[active.members.length - 1].verified,
-    },
+    person: tagged && { label: tagged.handle, initial: tagged.initial, tone: tagged.tone, verified: tagged.verified },
   };
 
   return (

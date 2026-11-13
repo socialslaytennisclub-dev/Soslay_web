@@ -435,15 +435,24 @@ export type ContentSection = {
   unpublished?: boolean;
 };
 
-export type PhotoAlbum = {
+/** Activity yang sudah berlangsung — pilihan "Activity" saat upload foto galeri, beserta pesertanya (untuk tag). */
+export type GalleryActivity = {
   id: string;
-  sessionId: string;
   title: string;
   venueName: string;
-  date: string;
-  photoCount: number;
-  cover: string;
-  status: "published" | "draft" | "empty";
+  startsAt: string;
+  participants: { id: string; name: string; instagram: string }[];
+};
+
+/** Foto galeri sesi (tabel photos): terkait 1 activity, caption, member ter-tag. */
+export type AdminGalleryPhoto = {
+  id: string;
+  url: string;
+  caption: string;
+  sessionId: string | null;
+  activity: { title: string; venueName: string; date: string };
+  members: { id: string; name: string }[];
+  createdAt: string;
 };
 
 /** Post Instagram, TikTok & Threads di feed homepage (lib/community-posts). */

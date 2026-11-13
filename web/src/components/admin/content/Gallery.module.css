@@ -1,0 +1,130 @@
+/* Konten & Galeri → Galeri foto (GalleryManager). Grid memakai .albums/.album dari Content.module.css. */
+
+.tile {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+
+.cover {
+  aspect-ratio: 4 / 5;
+}
+
+.tileActive .cover {
+  outline: 3px solid var(--color-indigo-600);
+  outline-offset: 2px;
+}
+
+.tagCount {
+  position: absolute;
+  right: var(--space-8);
+  bottom: var(--space-8);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: rgb(10 8 74 / 0.75);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-white);
+}
+
+.caption {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.selectWrap select {
+  width: 100%;
+}
+
+.photoRow {
+  display: flex;
+  align-items: stretch;
+  gap: var(--space-12);
+}
+
+.preview {
+  position: relative;
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 96px;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--color-indigo-100);
+  color: var(--color-indigo-600);
+}
+
+.preview img {
+  object-fit: cover;
+}
+
+.dropzone {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: var(--space-12);
+  border: 1.5px dashed var(--color-indigo-200);
+  border-radius: var(--radius-lg);
+  background: var(--color-indigo-50);
+  text-align: center;
+  color: var(--color-navy-900);
+  cursor: pointer;
+}
+
+.dropzone:focus-within {
+  outline: 2px solid var(--color-indigo-600);
+  outline-offset: 2px;
+}
+
+.busy {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.people {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-8);
+  max-height: 260px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.person {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-full);
+  background: var(--color-white);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-navy-900);
+  cursor: pointer;
+}
+
+.personOn {
+  border-color: var(--color-navy-900);
+  background: var(--color-navy-900);
+  color: var(--color-white);
+}
+
+.handle {
+  font-weight: 400;
+  opacity: 0.7;
+}

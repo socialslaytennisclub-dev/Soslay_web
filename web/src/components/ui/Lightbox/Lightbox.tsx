@@ -11,7 +11,8 @@ export type LightboxItem = {
   src: string;
   alt: string;
   dateLabel: string;
-  person: AvatarStackItem & { verified?: boolean };
+  /** Member ter-tag (kosong → baris nama disembunyikan). */
+  person?: AvatarStackItem & { verified?: boolean };
   caption: string;
 };
 
@@ -45,12 +46,14 @@ export function Lightbox({ dialogRef, item, position, onClose, onNext, onPrev, o
 
             <div className={styles.info}>
               <p className={styles.date}>{item.dateLabel}</p>
-              <p className={styles.person}>
-                <AvatarStack items={[item.person]} />
-                <span className={styles.handle}>{item.person.label}</span>
-                {item.person.verified && <Icon name="seal-check-fill" label="Terverifikasi" className={styles.verified} />}
-              </p>
-              <p className={styles.caption}>{item.caption}</p>
+              {item.person && (
+                <p className={styles.person}>
+                  <AvatarStack items={[item.person]} />
+                  <span className={styles.handle}>{item.person.label}</span>
+                  {item.person.verified && <Icon name="seal-check-fill" label="Terverifikasi" className={styles.verified} />}
+                </p>
+              )}
+              {item.caption && <p className={styles.caption}>{item.caption}</p>}
             </div>
           </article>
 

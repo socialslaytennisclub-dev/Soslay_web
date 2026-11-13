@@ -13,7 +13,7 @@ import path from "node:path";
 import { productDetails, products } from "@/content/products";
 import { venueList } from "@/content/venues";
 import { listVenues } from "@/server/admin/catalog-repo";
-import { listAlbums, listTestimonials, listHomepageSections } from "@/server/admin/content-repo";
+import { listTestimonials, listHomepageSections } from "@/server/admin/content-repo";
 import { activityTypeLabels, bookings, memberCode, members, memberStats, orders, sessionById, sessions } from "@/server/admin/demo-data";
 import { getOrder } from "@/server/admin/orders-repo";
 import { getSession } from "@/server/admin/sessions-repo";
@@ -289,12 +289,7 @@ begin;
     ["author_name", "author_handle", "quote", "avatar_path", "is_published", "sort_order"],
     testimonials.map((t) => [t.name, t.handle || null, t.quote, t.avatar, t.visible, t.sortOrder]),
   );
-  const { albums } = await listAlbums();
-  insert(
-    "photo_albums",
-    ["session_id", "venue_id", "title", "taken_on", "status", "published_at"],
-    albums.map((a) => [uuid(`session:${a.sessionId}`), venueId(a.venueName), a.title, a.date.slice(0, 10), a.status === "published" ? "published" : "draft", a.status === "published" ? a.date : null]),
-  );
+  // Galeri foto tidak di-seed: foto & album dibuat admin lewat Konten & Galeri (save_gallery_photo).
   out.push(`update integrations set status = 'connected', last_sync_at = now() where key in ('kuy', 'reclub', 'payment', 'whatsapp');
 update integrations set status = 'needs_reauth' where key = 'instagram';
 

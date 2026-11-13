@@ -5,8 +5,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getDataset } from "./dataset";
 import { DAY } from "./time";
-import { activityTypeLabels, DEMO_NOW } from "./demo-data";
-import type { AdminTestimonial, CommunityPost, ContentSection, PhotoAlbum, SitePage } from "./types";
+import { DEMO_NOW } from "./demo-data";
+import type { AdminGalleryPhoto, AdminTestimonial, CommunityPost, ContentSection, GalleryActivity, SitePage } from "./types";
 import type { InstagramSectionJson } from "@/lib/community-posts";
 import { postsFromSection, readInstagramSection } from "../community-posts";
 
@@ -166,43 +166,87 @@ function defaultHomepageSections(): ContentSection[] {
   ];
 }
 
-const COVERS = [
-  "/images/home/activity-weekly-mabar.webp",
-  "/images/home/activity-beginner-coaching.webp",
-  "/images/home/community-group.webp",
-  "/images/home/activity-match-day.webp",
-  "/images/home/community-highfive.webp",
-  "/images/home/activity-tennis-escape.webp",
-  ...galleryPhotos.map((p) => p.src),
-];
+/** Activity bisa diberi foto setelah dimulai; pilihan upload dibatasi 120 hari terakhir. */
+const GALLERY_WINDOW_DAYS = 120;
+const PARTICIPANT_STATUSES = new Set(["registered", "attended"]);
 
-/** Album foto per sesi selesai. Sesi < 1 hari belum diupload, < 2 hari masih draft (kurasi). */
-export async function listAlbums(limit?: number): Promise<{ albums: PhotoAlbum[]; totalPhotos: number; totalAlbums: number }> {
-  // Galeri foto sesi mulai berjalan 6 minggu terakhir; sesi lebih lama belum punya album.
-  const { sessions, now } = await getDataset();
-  const since = now.getTime() - 6 * 7 * DAY;
-  const done = sessions.filter((s) => s.status === "completed" && s.startsAt.getTime() >= since).sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
-  const albums = done.map((s, i): PhotoAlbum => {
-    const age = (now.getTime() - s.endsAt.getTime()) / DAY;
-    const seed = Number(s.id.replace(/\D/g, "")) || i;
-    const status = age < 1 ? "empty" : age < 2 ? "draft" : "published";
-    return {
-      id: `album-${s.id}`,
-      sessionId: s.id,
-      title: s.venueName.includes("Altitude") || s.venueName.includes("Bali") ? `${activityTypeLabels[s.typeSlug] ?? s.title} di Bali` : (activityTypeLabels[s.typeSlug] ?? s.title),
+/**
+ * Galeri foto sesi (tabel photos): daftar foto + activity yang bisa diberi foto (dengan pesertanya untuk tag).
+ * Mode demo: foto contoh dari content/gallery, dikaitkan ke activity Common Grounds terakhir.
+ */
+export async function listGallery(): Promise<{ photos: AdminGalleryPhoto[]; activities: GalleryActivity[]; totalPhotos: number; totalAlbums: number }> {
+  const { sessions, bookings, members, now } = await getDataset();
+  const byId = new Map(members.map((m) => [m.id, m]));
+  const since = now.getTime() - GALLERY_WINDOW_DAYS * DAY;
+  const activities: GalleryActivity[] = sessions
+    .filter((s) => (s.status === "published" || s.status === "completed") && s.startsAt.getTime() <= now.getTime() && s.startsAt.getTime() >= since)
+    .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())
+    .map((s) => ({
+      id: s.id,
+      title: s.title,
       venueName: s.venueName,
-      date: s.startsAt.toISOString(),
-      photoCount: status === "empty" ? 0 : 36 + (seed * 37) % 90,
-      cover: COVERS[seed % COVERS.length],
-      status,
+      startsAt: s.startsAt.toISOString(),
+      participants: bookings
+        .filter((b) => b.sessionId === s.id && PARTICIPANT_STATUSES.has(b.status))
+        .flatMap((b) => {
+          const m = byId.get(b.memberId);
+          return m ? [{ id: m.id, name: m.fullName, instagram: m.instagram }] : [];
+        })
+        .sort((a, b) => a.name.localeCompare(b.name, "id")),
+    }));
+
+  if (!isSupabaseConfigured) {
+    const demo = activities.find((a) => a.venueName.startsWith("Common Grounds")) ?? activities[0];
+    const photos = galleryPhotos.map((p, i): AdminGalleryPhoto => ({
+      id: p.id,
+      url: p.src,
+      caption: p.caption,
+      sessionId: demo?.id ?? null,
+      activity: { title: demo?.title ?? "Activity", venueName: demo?.venueName ?? "Common Grounds Menteng", date: demo?.startsAt ?? `${p.date}T00:00:00Z` },
+      // Contoh: tag peserta activity tersebut (demo) supaya bisa dicoba di editor.
+      members: (demo?.participants ?? []).slice(i % 3, (i % 3) + 1 + (i % 2)).map((m) => ({ id: m.id, name: m.name })),
+      createdAt: `${p.date}T12:00:00Z`,
+    }));
+    return { photos, activities, totalPhotos: photos.length, totalAlbums: demo ? 1 : 0 };
+  }
+
+  type Row = {
+    id: string;
+    path: string;
+    caption: string | null;
+    created_at: string;
+    photo_albums: { session_id: string | null; title: string; taken_on: string; venues: { name: string } | null } | null;
+    photo_tags: { member_id: string }[];
+  };
+  const supabase = await createSupabaseServerClient();
+  const [{ data }, { count: albumCount }, { count: photoCount }] = await Promise.all([
+    supabase
+      .from("photos")
+      .select("id, path, caption, created_at, photo_albums(session_id, title, taken_on, venues(name)), photo_tags(member_id)")
+      .order("created_at", { ascending: false })
+      .limit(500),
+    supabase.from("photo_albums").select("id", { count: "exact", head: true }),
+    supabase.from("photos").select("id", { count: "exact", head: true }),
+  ]);
+  const sessionById = new Map(sessions.map((s) => [s.id, s]));
+  const photos = ((data ?? []) as unknown as Row[]).map((r): AdminGalleryPhoto => {
+    const album = r.photo_albums;
+    const session = album?.session_id ? sessionById.get(album.session_id) : undefined;
+    return {
+      id: r.id,
+      url: r.path,
+      caption: r.caption ?? "",
+      sessionId: album?.session_id ?? null,
+      activity: {
+        title: session?.title ?? album?.title ?? "Activity",
+        venueName: session?.venueName ?? album?.venues?.name ?? "",
+        date: session?.startsAt.toISOString() ?? `${album?.taken_on ?? r.created_at.slice(0, 10)}T00:00:00+07:00`,
+      },
+      members: r.photo_tags.map((t) => ({ id: t.member_id, name: byId.get(t.member_id)?.fullName ?? "Member" })),
+      createdAt: r.created_at,
     };
   });
-  const uploaded = albums.filter((a) => a.status !== "empty");
-  return {
-    albums: limit ? albums.slice(0, limit) : albums,
-    totalPhotos: uploaded.reduce((sum, a) => sum + a.photoCount, 0),
-    totalAlbums: uploaded.length,
-  };
+  return { photos, activities, totalPhotos: photoCount ?? photos.length, totalAlbums: albumCount ?? 0 };
 }
 
 /** Post Instagram, TikTok & Threads di feed "See You on the Court!" (tambah / ubah / hapus / tampil). */
