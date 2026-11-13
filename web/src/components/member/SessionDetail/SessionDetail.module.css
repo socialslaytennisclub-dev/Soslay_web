@@ -2873,6 +2873,15 @@ button.link {
   font-size: 13px;
 }
 
+.againLink {
+  align-self: center;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: var(--color-navy-900);
+}
+
 .photoIcon {
   display: grid;
   place-items: center;

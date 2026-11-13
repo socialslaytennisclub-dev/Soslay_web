@@ -30,8 +30,9 @@ export async function getVenueGallery(venueSlug: string, venueName: string): Pro
   if (!isSupabaseConfigured) return photosForVenue(venueSlug);
   const { data, error } = await createSupabasePublicClient().rpc("venue_gallery", { p_venue_slug: venueSlug, p_limit: 60 });
   if (error) {
+    // Mis. migrasi galeri (venue_gallery) belum dijalankan → tetap tampilkan foto bawaan venue, bukan galeri kosong.
     console.error("[gallery] gagal memuat galeri venue:", error.message);
-    return [];
+    return photosForVenue(venueSlug);
   }
   return ((data ?? []) as Row[]).map((r) => {
     const members = r.members.map((m) => {

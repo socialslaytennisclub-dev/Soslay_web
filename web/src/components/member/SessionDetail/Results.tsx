@@ -331,6 +331,9 @@ export function DoneSide({ detail: d, tab }: { detail: MemberSessionDetail; tab:
         <a href={KUYY_PROFILE_URL} target="_blank" rel="noopener noreferrer" className={styles.btnNavy}>
           Booking Session di Kuyy
         </a>
+        <Link href="/activity" className={styles.againLink}>
+          Lihat jadwal sesi di website
+        </Link>
       </section>
     </>
   );

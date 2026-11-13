@@ -1,8 +1,8 @@
 "use client";
 
 import Image from "next/image";
-import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { cx } from "@/lib/cx";
 import { deleteGalleryPhoto, discardGalleryUploads, saveGalleryPhoto, uploadGalleryPhoto } from "@/server/admin/actions/content";
 import type { AdminGalleryPhoto, GalleryActivity } from "@/server/admin/types";
@@ -34,7 +34,6 @@ export function GalleryManager({ initial, activities, totalPhotos, totalAlbums, 
   const [photos, setPhotos] = useState(initial);
   const [editing, setEditing] = useState<AdminGalleryPhoto | "new" | null>(null);
   const [, start] = useTransition();
-  const router = useRouter();
   const shown = preview ? photos.slice(0, preview) : photos;
 
   const remove = (photo: AdminGalleryPhoto) => {
@@ -53,6 +52,25 @@ export function GalleryManager({ initial, activities, totalPhotos, totalAlbums, 
     setPhotos((list) => (isNew ? [photo, ...list] : list.map((p) => (p.id === photo.id ? photo : p))));
     setEditing(null);
   };
+
+  const tileBody = (p: AdminGalleryPhoto) => (
+    <>
+      <span className={cx(styles.albumCover, galleryStyles.cover)}>
+        <Image src={p.url} alt="" fill sizes="(min-width: 1200px) 200px, (min-width: 640px) 33vw, 50vw" />
+        {p.members.length > 0 && (
+          <span className={galleryStyles.tagCount}>
+            <AdminIcon name="users-three" size={12} /> {p.members.length}
+          </span>
+        )}
+      </span>
+      <span className={styles.albumTitle}>{p.activity.title}</span>
+      <span className={styles.muted}>
+        {day.format(new Date(p.activity.date))}
+        {p.activity.venueName ? ` · ${p.activity.venueName}` : ""}
+      </span>
+      {p.caption && <span className={galleryStyles.caption}>{p.caption}</span>}
+    </>
+  );
 
   const list = (
     <section className={styles.card} aria-label="Galeri foto sesi">
@@ -80,26 +98,19 @@ export function GalleryManager({ initial, activities, totalPhotos, totalAlbums, 
         <ul className={styles.albums}>
           {shown.map((p) => (
             <li key={p.id}>
-              <button
-                type="button"
-                className={cx(styles.album, galleryStyles.tile, editing !== "new" && editing?.id === p.id && galleryStyles.tileActive)}
-                onClick={() => (preview ? router.push("/admin/konten?tab=gallery") : setEditing(p))}
-              >
-                <span className={cx(styles.albumCover, galleryStyles.cover)}>
-                  <Image src={p.url} alt="" fill sizes="(min-width: 1200px) 200px, (min-width: 640px) 33vw, 50vw" />
-                  {p.members.length > 0 && (
-                    <span className={galleryStyles.tagCount}>
-                      <AdminIcon name="users-three" size={12} /> {p.members.length}
-                    </span>
-                  )}
-                </span>
-                <span className={styles.albumTitle}>{p.activity.title}</span>
-                <span className={styles.muted}>
-                  {day.format(new Date(p.activity.date))}
-                  {p.activity.venueName ? ` · ${p.activity.venueName}` : ""}
-                </span>
-                {p.caption && <span className={galleryStyles.caption}>{p.caption}</span>}
-              </button>
+              {preview ? (
+                <Link href="/admin/konten?tab=gallery" className={cx(styles.album, galleryStyles.tile)}>
+                  {tileBody(p)}
+                </Link>
+              ) : (
+                <button
+                  type="button"
+                  className={cx(styles.album, galleryStyles.tile, editing !== "new" && editing?.id === p.id && galleryStyles.tileActive)}
+                  onClick={() => setEditing(p)}
+                >
+                  {tileBody(p)}
+                </button>
+              )}
             </li>
           ))}
         </ul>
@@ -160,12 +171,16 @@ function GalleryEditor({ photo, activities, onClose, onSaved, onDelete }: Editor
   const q = query.trim().toLowerCase();
   const visible = q ? participants.filter((p) => `${p.name} ${p.instagram}`.toLowerCase().includes(q)) : participants;
 
-  const close = () => {
-    const leftovers = pendingUploads.current;
-    pendingUploads.current = [];
-    if (leftovers.length) void discardGalleryUploads(leftovers);
-    onClose();
-  };
+  // Editor ditutup / diganti foto lain / pindah tab → upload yang belum disimpan dibuang dari Storage.
+  useEffect(
+    () => () => {
+      const leftovers = pendingUploads.current;
+      pendingUploads.current = [];
+      if (leftovers.length) void discardGalleryUploads(leftovers);
+    },
+    [],
+  );
+  const close = onClose;
 
   const upload = async (file: File | undefined) => {
     if (!file) return;

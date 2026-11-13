@@ -2198,6 +2198,16 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const edited = await one(`select caption, (select count(*)::int from photo_tags where photo_id = $1) tags from photos where id = $1`, [photo]);
   console.assert(edited.caption === null && edited.tags === 0, `edit: caption kosong & tag dilepas ${JSON.stringify(edited)}`);
   await db.query(`select save_gallery_photo($1, null, null, 'Tos!', $2)`, [photo, [player]]);
+  // Booking member ter-tag batal → foto tetap bisa diedit (tag lama tidak dicek ulang)
+  await db.query(`update bookings set status = 'cancelled' where session_id = $1 and member_id = $2`, [past, player]);
+  console.assert((await err(`select save_gallery_photo($1, null, null, 'Tos lagi!', $2)`, [photo, [player]])) === null, "edit caption tetap bisa walau booking member ter-tag batal");
+  await db.query(`select save_gallery_photo($1, null, null, 'Tos!', $2)`, [photo, [player]]);
+  await db.query(`update bookings set status = 'attended' where session_id = $1 and member_id = $2`, [past, player]);
+  // Cover album dihapus → pindah ke foto lain
+  const third = (await one(`select save_gallery_photo(null, $1, 'https://x/c.jpg', null, '{}') id`, [past])).id;
+  await db.query(`update photo_albums set cover_photo = $1 where session_id = $2`, [third, past]);
+  await db.query(`delete from photos where id = $1`, [third]);
+  console.assert((await one(`select cover_photo::text c from photo_albums where session_id = $1`, [past])).c === photo, "hapus foto cover → cover pindah ke foto tertua");
 
   await as(null);
   await db.exec(`set role anon`);
@@ -2206,5 +2216,5 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const tagged = rows.find((r) => r.id === photo);
   console.assert(rows.length === 2 && rows.some((r) => r.id === second), `galeri venue publik berisi foto activity ${rows.length}`);
   console.assert(tagged?.caption === "Tos!" && tagged.session_title === "Mabar Galeri" && tagged.members[0].first_name === "Felisya" && tagged.members[0].instagram === "felisyafernanda" && !("email" in tagged.members[0]), `tag publik hanya nama depan & IG ${JSON.stringify(tagged)}`);
-  console.log("✓ galeri foto: per activity (album otomatis tayang), hanya admin konten, activity harus sudah berlangsung, tag hanya peserta, caption, galeri venue publik");
+  console.log("✓ galeri foto: per activity (album otomatis tayang), hanya admin konten, activity harus sudah berlangsung, tag hanya peserta (tag lama aman saat edit), caption, cover pindah saat dihapus, galeri venue publik");
 }

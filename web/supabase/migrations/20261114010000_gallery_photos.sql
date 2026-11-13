@@ -66,12 +66,26 @@ begin
   end if;
 
   delete from photo_tags where photo_id = v_photo and member_id <> all (coalesce(p_members, '{}'));
+  -- Hanya tag baru yang dicek trigger peserta; tag lama tetap walau booking-nya batal / activity dihapus.
   insert into photo_tags (photo_id, member_id)
-  select v_photo, m from unnest(coalesce(p_members, '{}')) m
-  on conflict do nothing;
+  select distinct v_photo, m from unnest(coalesce(p_members, '{}')) m
+  where not exists (select 1 from photo_tags t where t.photo_id = v_photo and t.member_id = m);
 
   return v_photo;
 end $$;
+
+-- Foto cover album dihapus → cover pindah ke foto tertua yang tersisa (atau kosong).
+create function photos_reset_album_cover() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  update photo_albums
+  set cover_photo = (select p.id from photos p where p.album_id = old.album_id order by p.created_at limit 1)
+  where id = old.album_id and cover_photo = old.id;
+  return old;
+end $$;
+
+create trigger photos_reset_album_cover after delete on photos
+  for each row execute function photos_reset_album_cover();
 
 -- Galeri publik per venue (website): foto album yang tayang + member ter-tag (nama depan & Instagram saja).
 create function venue_gallery(p_venue_slug text, p_limit int default 60)

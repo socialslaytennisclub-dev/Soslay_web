@@ -174,26 +174,38 @@ const PARTICIPANT_STATUSES = new Set(["registered", "attended"]);
  * Galeri foto sesi (tabel photos): daftar foto + activity yang bisa diberi foto (dengan pesertanya untuk tag).
  * Mode demo: foto contoh dari content/gallery, dikaitkan ke activity Common Grounds terakhir.
  */
-export async function listGallery(): Promise<{ photos: AdminGalleryPhoto[]; activities: GalleryActivity[]; totalPhotos: number; totalAlbums: number }> {
+export async function listGallery({ withActivities = true }: { withActivities?: boolean } = {}): Promise<{
+  photos: AdminGalleryPhoto[];
+  activities: GalleryActivity[];
+  totalPhotos: number;
+  totalAlbums: number;
+}> {
   const { sessions, bookings, members, now } = await getDataset();
   const byId = new Map(members.map((m) => [m.id, m]));
   const since = now.getTime() - GALLERY_WINDOW_DAYS * DAY;
-  const activities: GalleryActivity[] = sessions
+  const recent = sessions
     .filter((s) => (s.status === "published" || s.status === "completed") && s.startsAt.getTime() <= now.getTime() && s.startsAt.getTime() >= since)
-    .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime())
-    .map((s) => ({
-      id: s.id,
-      title: s.title,
-      venueName: s.venueName,
-      startsAt: s.startsAt.toISOString(),
-      participants: bookings
-        .filter((b) => b.sessionId === s.id && PARTICIPANT_STATUSES.has(b.status))
-        .flatMap((b) => {
-          const m = byId.get(b.memberId);
-          return m ? [{ id: m.id, name: m.fullName, instagram: m.instagram }] : [];
-        })
-        .sort((a, b) => a.name.localeCompare(b.name, "id")),
-    }));
+    .sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
+  // Peserta per activity: satu kali lewat semua booking (bukan filter per activity).
+  const participantsBySession = new Map<string, GalleryActivity["participants"]>();
+  if (withActivities || !isSupabaseConfigured) {
+    const wanted = new Set(recent.map((s) => s.id));
+    for (const b of bookings) {
+      if (!wanted.has(b.sessionId) || !PARTICIPANT_STATUSES.has(b.status)) continue;
+      const m = byId.get(b.memberId);
+      if (!m) continue;
+      const list = participantsBySession.get(b.sessionId) ?? [];
+      list.push({ id: m.id, name: m.fullName, instagram: m.instagram });
+      participantsBySession.set(b.sessionId, list);
+    }
+  }
+  const activities: GalleryActivity[] = recent.map((s) => ({
+    id: s.id,
+    title: s.title,
+    venueName: s.venueName,
+    startsAt: s.startsAt.toISOString(),
+    participants: (participantsBySession.get(s.id) ?? []).sort((a, b) => a.name.localeCompare(b.name, "id")),
+  }));
 
   if (!isSupabaseConfigured) {
     const demo = activities.find((a) => a.venueName.startsWith("Common Grounds")) ?? activities[0];
@@ -207,7 +219,7 @@ export async function listGallery(): Promise<{ photos: AdminGalleryPhoto[]; acti
       members: (demo?.participants ?? []).slice(i % 3, (i % 3) + 1 + (i % 2)).map((m) => ({ id: m.id, name: m.name })),
       createdAt: `${p.date}T12:00:00Z`,
     }));
-    return { photos, activities, totalPhotos: photos.length, totalAlbums: demo ? 1 : 0 };
+    return { photos, activities: withActivities ? activities : [], totalPhotos: photos.length, totalAlbums: demo ? 1 : 0 };
   }
 
   type Row = {
@@ -225,7 +237,8 @@ export async function listGallery(): Promise<{ photos: AdminGalleryPhoto[]; acti
       .select("id, path, caption, created_at, photo_albums(session_id, title, taken_on, venues(name)), photo_tags(member_id)")
       .order("created_at", { ascending: false })
       .limit(500),
-    supabase.from("photo_albums").select("id", { count: "exact", head: true }),
+    // Hanya album yang punya foto (album kosong dari seed lama tidak dihitung).
+    supabase.from("photo_albums").select("id, photos!inner(id)", { count: "exact", head: true }),
     supabase.from("photos").select("id", { count: "exact", head: true }),
   ]);
   const sessionById = new Map(sessions.map((s) => [s.id, s]));
@@ -246,7 +259,7 @@ export async function listGallery(): Promise<{ photos: AdminGalleryPhoto[]; acti
       createdAt: r.created_at,
     };
   });
-  return { photos, activities, totalPhotos: photoCount ?? photos.length, totalAlbums: albumCount ?? 0 };
+  return { photos, activities: withActivities ? activities : [], totalPhotos: photoCount ?? photos.length, totalAlbums: albumCount ?? 0 };
 }
 
 /** Post Instagram, TikTok & Threads di feed "See You on the Court!" (tambah / ubah / hapus / tampil). */

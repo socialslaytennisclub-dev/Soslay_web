@@ -24,7 +24,8 @@ export default async function AdminContentPage({ searchParams }: PageProps<"/adm
   const tab: Tab = TABS.find((t) => t === (Array.isArray(raw) ? raw[0] : raw)) ?? "homepage";
   const [sections, gallery, posts, pages, testimonials, members] = await Promise.all([
     listHomepageSections(),
-    listGallery(),
+    // Daftar activity + peserta (untuk upload & tag) hanya dibutuhkan di tab Galeri foto.
+    listGallery({ withActivities: tab === "gallery" }),
     listCommunityPosts(),
     listSitePages(),
     listTestimonials(),
