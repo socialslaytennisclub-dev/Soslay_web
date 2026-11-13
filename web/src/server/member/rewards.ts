@@ -60,6 +60,31 @@ export type RewardPage = {
 
 const WINDOW_DAYS = 14;
 
+/** Mode demo: contoh penukaran di tiap status supaya tampilan "Penukaran saya" bisa dicek tanpa Supabase. */
+function demoRedemptions(now: number): MyRedemption[] {
+  const ago = (days: number) => new Date(now - days * 86_400_000).toISOString();
+  const inDays = (days: number) => new Date(now + days * 86_400_000).toISOString();
+  const base = { deliveryMethod: null, activity: null, orderCode: null, voucherCode: null, voucherValidUntil: null, note: null };
+  return [
+    { ...base, code: "RDM-0425", rewardName: "Voucher Shop Rp50.000", category: "voucher", points: 450, status: "approved", createdAt: ago(1), voucherCode: "SLAY-50K-7Q2M", voucherValidUntil: inDays(30).slice(0, 10) },
+    { ...base, code: "RDM-0424", rewardName: "Gratis 1× Weekly MABAR", category: "session", points: 800, status: "pending", createdAt: ago(0.2) },
+    {
+      ...base,
+      code: "RDM-0423",
+      rewardName: "Overgrip Wilson Pro (3 pcs)",
+      category: "product",
+      points: 600,
+      status: "approved",
+      createdAt: ago(2),
+      deliveryMethod: "pickup",
+      activity: { id: "demo", title: "Weekly MABAR", startsAt: inDays(3), endsAt: inDays(3.1), venue: "Common Grounds Menteng" },
+    },
+    { ...base, code: "RDM-0422", rewardName: "Kaos A Piece of Bali", category: "merch", points: 1500, status: "pending", createdAt: ago(0.1), deliveryMethod: "jnt", orderCode: "SOS-2318" },
+    { ...base, code: "RDM-0419", rewardName: "Tote bag Slay Club", category: "merch", points: 900, status: "fulfilled", createdAt: ago(9), deliveryMethod: "instant", orderCode: "SOS-2290" },
+    { ...base, code: "RDM-0417", rewardName: "Seat Tennis Escape Bali", category: "experience", points: 7500, status: "rejected", createdAt: ago(12), note: "Kuota trip sudah penuh" },
+  ];
+}
+
 export const getRewardPage = cache(async (): Promise<RewardPage | null> => {
   if (!isSupabaseConfigured) {
     const now = Date.now();
@@ -81,7 +106,7 @@ export const getRewardPage = cache(async (): Promise<RewardPage | null> => {
         physical: isPhysicalReward(r.category),
         weightGrams: 300,
       })),
-      redemptions: [],
+      redemptions: demoRedemptions(now),
       activities: sessions
         .map((s) => {
           const offset = s.venue.city === "Bali" ? "+08:00" : "+07:00";
