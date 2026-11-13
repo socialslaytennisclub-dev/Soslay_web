@@ -3,6 +3,7 @@ import { featuredProducts, productCardProps, productDetails } from "./products";
 import { venueList } from "./venues";
 import type { PostPlatform } from "@/lib/community-posts";
 import { KUYY_PROFILE_URL } from "@/lib/kuyy";
+import { INSTAGRAM_URL, THREADS_URL } from "./social";
 
 /**
  * Konten homepage (copy, gambar, link) — terpisah dari markup.
@@ -157,20 +158,20 @@ export type SocialPost = {
 export const instagram = {
   title: "See You on the Court!",
   description: "Get a closer look at SOSLAY. From epic rallies to moments off the court, it's all here.",
-  cta: { label: "Follow our Instagram", href: "https://instagram.com/socialslay" },
+  cta: { label: "Follow our Instagram", href: INSTAGRAM_URL },
   posts: [
-    { platform: "instagram", text: ["Tennis gets so much more fun when you can enjoy every rally and every moment."], handle: "@andrea42", image: `${IMG}/ig-andrea.webp`, imagePosition: "30% 40%", href: "https://instagram.com/socialslay" },
-    { platform: "instagram", text: ["“Come to play, but there's always a reason to celebrate together.”"], handle: "@vikayusti", image: `${IMG}/ig-vika.webp`, imagePosition: "50% 15%", href: "https://instagram.com/socialslay" },
+    { platform: "instagram", text: ["Tennis gets so much more fun when you can enjoy every rally and every moment."], handle: "@andrea42", image: `${IMG}/ig-andrea.webp`, imagePosition: "30% 40%", href: INSTAGRAM_URL },
+    { platform: "instagram", text: ["“Come to play, but there's always a reason to celebrate together.”"], handle: "@vikayusti", image: `${IMG}/ig-vika.webp`, imagePosition: "50% 15%", href: INSTAGRAM_URL },
     {
       platform: "threads",
       text: [
-        "What I love about @socialslay is that everything feels effortless. Show up, play, meet new people, and have a good time.",
+        "What I love about @socialslayclub is that everything feels effortless. Show up, play, meet new people, and have a good time.",
         "Every session feels different. Sometimes you come to play, sometimes you go home with a new friend.",
       ],
       handle: "@yudisadewa",
-      href: "https://threads.net/@socialslay",
+      href: THREADS_URL,
     },
-    { platform: "instagram", text: ["What keeps you hooked isn't just the game, it's the people you meet along the way."], handle: "@sintakusuma", image: `${IMG}/ig-sinta.webp`, imagePosition: "50% 25%", href: "https://instagram.com/socialslay" },
-    { platform: "instagram", text: ["Play together, laugh together, repeat next week."], handle: "@lily117", image: `${IMG}/ig-lily.webp`, imagePosition: "50% 70%", href: "https://instagram.com/socialslay" },
+    { platform: "instagram", text: ["What keeps you hooked isn't just the game, it's the people you meet along the way."], handle: "@sintakusuma", image: `${IMG}/ig-sinta.webp`, imagePosition: "50% 25%", href: INSTAGRAM_URL },
+    { platform: "instagram", text: ["Play together, laugh together, repeat next week."], handle: "@lily117", image: `${IMG}/ig-lily.webp`, imagePosition: "50% 70%", href: INSTAGRAM_URL },
   ] satisfies SocialPost[],
 };

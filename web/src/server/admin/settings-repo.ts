@@ -155,8 +155,8 @@ export async function getSettings(): Promise<AppSettings> {
 function demoSettings(): AppSettings {
   return {
     clubName: "Social Slay Tennis Club",
-    contactEmail: "hello@soslay.com",
-    whatsapp: "+62 812 0000 2026",
+    contactEmail: "hello@slayclub.id",
+    whatsapp: "+62 857 1040 9390",
     timezone: "Asia/Jakarta (WIB)",
     monthlySessionTarget: 16,
     rupiahPerPoint: 10_000,

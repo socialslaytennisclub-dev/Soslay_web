@@ -1,11 +1,11 @@
 import "server-only";
 import { cache } from "react";
-import { socialLinks } from "@/content/site";
 import { wibParts } from "@/lib/format";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { bookingMoney, dayLabel, settlementDue, shortDate, todayWib, type BookingMoney, type TripPaymentKind, TRIP_PLACEHOLDER } from "@/lib/trips";
 import { demoTrip, demoTripBookings, demoTripRundown } from "@/server/admin/trip-demo";
 import { getMemberSession } from "./user";
+import { whatsappUrl } from "@/content/social";
 
 /**
  * Trip Tennis Escape milik member (BR-22): banner "Special event · Tennis trip" di My Activities dan halaman
@@ -35,7 +35,7 @@ export type MemberTrip = {
   adminWa: string;
 };
 
-const ADMIN_WA = socialLinks.find((l) => l.label === "WhatsApp")?.href ?? "https://wa.me/62642424792";
+const ADMIN_WA = whatsappUrl();
 
 /** Agenda berikutnya: hari rundown pertama yang belum lewat, dua acara pertamanya. */
 function nextAgenda(rundown: MemberTripRundown[], activities: MemberTripActivity[], today: string): string | null {

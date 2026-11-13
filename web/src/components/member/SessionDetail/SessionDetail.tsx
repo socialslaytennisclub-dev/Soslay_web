@@ -19,6 +19,7 @@ import { DoneSide, HostResults, PhotosTab, ResultsTab, ScoreDiff } from "./Resul
 import { KudosSection } from "./KudosSection";
 import { ReviewTab } from "./ReviewForm";
 import styles from "./SessionDetail.module.css";
+import { whatsappUrl } from "@/content/social";
 
 const TAB_LABEL = {
   hasil: "Hasil",
@@ -48,7 +49,6 @@ export function detailTabs(d: Pick<MemberSessionDetail, "phase" | "canReview" | 
 /** Host yang tidak ikut main (Figma Simplify "Host (bukan peserta)"). */
 const hostOnly = (d: Pick<MemberSessionDetail, "isHost" | "ticket" | "plays">) => d.isHost && !d.ticket && !d.plays;
 
-const PANITIA_WA = "62642424792";
 const BRING = ["Raket tenis", "Sepatu non-marking", "Botol minum", "Handuk & baju ganti", "QR e-ticket"];
 
 const STATUS_CHIP = {
@@ -57,7 +57,7 @@ const STATUS_CHIP = {
   done: "Selesai",
 } as const;
 
-const wa = (text: string) => `https://wa.me/${PANITIA_WA}?text=${encodeURIComponent(text)}`;
+const wa = (text: string) => whatsappUrl(text);
 
 function calendarUrl(d: MemberSessionDetail) {
   const stamp = (iso: string) =>

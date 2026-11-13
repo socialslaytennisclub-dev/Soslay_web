@@ -185,7 +185,7 @@ export async function saveInstagramPost(id: string, input: PostInput): Promise<A
   if ("error" in auth) return fail(auth.error);
   if (!isPostPlatform(input.platform)) return fail("Pilih jenis post.");
   const handle = normalizeHandle(input.handle);
-  if (!handle) return fail("Isi username akun (mis. @socialslay).");
+  if (!handle) return fail("Isi username akun (mis. @socialslayclub).");
   const text = input.text.trim();
   if (!text) return fail("Isi kutipan post.");
   if (text.length > 280) return fail("Kutipan maksimal 280 karakter.");

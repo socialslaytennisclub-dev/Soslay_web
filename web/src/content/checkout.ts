@@ -1,3 +1,4 @@
+import { whatsappUrl } from "./social";
 /**
  * Teks halaman Checkout & Pembayaran (Figma WEB · 03 · Shop, UIF-05 / MOB-05).
  * Rekening tujuan diatur admin di Settings › Shop & pengiriman (app_settings 'shop_bank');
@@ -17,7 +18,7 @@ export const shopBank: ShopBank = {
 /** Bank pengirim di form bukti transfer. */
 export const senderBanks = ["BCA", "Mandiri", "BRI", "BNI", "CIMB Niaga", "Permata", "BSI", "Jago", "SeaBank", "blu by BCA Digital", "Lainnya"];
 
-export const adminWhatsApp = "https://wa.me/62642424792";
+export const adminWhatsApp = whatsappUrl();
 
 export const checkoutSteps = ["Checkout", "Bayar & upload bukti", "Verifikasi admin", "Dikirim / diambil"] as const;
 

@@ -1,6 +1,7 @@
 import type { IconName } from "@/components/ui";
 import { activityTypeHref, activityTypes } from "./activity";
 import { guidePrompt } from "./guides";
+import { CONTACT_EMAIL, INSTAGRAM_URL, THREADS_URL, WHATSAPP_DISPLAY, whatsappUrl } from "./social";
 
 /** Konten global (navbar & footer) — Figma Website v2 (423:2482). */
 
@@ -28,8 +29,8 @@ export const authLinks = {
 
 export const contact = {
   tagline: "We curate the best courts, the best people, and the best moments then hand you a professional photo",
-  phone: { label: "Phone", value: "+62 642424792", href: "tel:+62642424792" },
-  email: { label: "Email", value: "support@soslay.com", href: "mailto:support@soslay.com" },
+  phone: { label: "WhatsApp", value: WHATSAPP_DISPLAY, href: whatsappUrl() },
+  email: { label: "Email", value: CONTACT_EMAIL, href: `mailto:${CONTACT_EMAIL}` },
 };
 
 export const footerColumns: { title: string; links: NavLink[] }[] = [
@@ -55,9 +56,9 @@ export const footerColumns: { title: string; links: NavLink[] }[] = [
 ];
 
 export const socialLinks: { label: string; href: string; icon: IconName }[] = [
-  { label: "Instagram", href: "https://instagram.com/socialslay", icon: "instagram-logo-fill" },
-  { label: "Threads", href: "https://threads.net/@socialslay", icon: "threads-logo-fill" },
-  { label: "WhatsApp", href: "https://wa.me/62642424792", icon: "whatsapp-logo-fill" },
+  { label: "Instagram", href: INSTAGRAM_URL, icon: "instagram-logo-fill" },
+  { label: "Threads", href: THREADS_URL, icon: "threads-logo-fill" },
+  { label: "WhatsApp", href: whatsappUrl(), icon: "whatsapp-logo-fill" },
 ];
 
 export const copyright = "Copyright 2026 Social Slay Tennis Club - All rights reserved";
