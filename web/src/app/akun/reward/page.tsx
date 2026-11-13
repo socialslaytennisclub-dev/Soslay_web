@@ -4,13 +4,13 @@ import { redirect } from "next/navigation";
 import { RewardShop } from "@/components/member/Rewards/RewardShop";
 import styles from "@/components/checkout/Checkout.module.css";
 import { getRewardPage } from "@/server/member/rewards";
-import { getCheckoutContext } from "@/server/shop/orders";
+import { getShipContext } from "@/server/shop/orders";
 
 export const metadata: Metadata = { title: "Tukar Slay Point — SOSLAY" };
 
 /** Tukar Slay Point: katalog reward, pengiriman (Produk / Merch) & kode voucher (Voucher / Sesi / Pengalaman). */
 export default async function RewardPage() {
-  const [page, ctx] = await Promise.all([getRewardPage(), getCheckoutContext()]);
+  const [page, ship] = await Promise.all([getRewardPage(), getShipContext()]);
   if (!page) redirect("/masuk?next=/akun/reward");
   return (
     <div className={styles.page}>
@@ -25,7 +25,7 @@ export default async function RewardPage() {
           </div>
         </div>
       </header>
-      <RewardShop page={page} ship={{ recipient: ctx.recipient, pin: ctx.pin, rates: ctx.rates, instant: ctx.instant }} />
+      <RewardShop page={page} ship={ship} />
     </div>
   );
 }

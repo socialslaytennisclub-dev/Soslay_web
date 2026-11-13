@@ -98,7 +98,7 @@ export function RedemptionPanel({ redemption: r, closeHref }: { redemption: Admi
             </div>
           )}
         </dl>
-        {r.prepaid && r.status !== "rejected" && <p className={ordersStyles.muted}>Poin sudah terpotong saat member menukar — ditolak = poin dikembalikan.</p>}
+        {r.prepaid && r.status !== "rejected" && <p className={ordersStyles.muted}>Poin sudah terpotong — ditolak / dibatalkan = poin dikembalikan.</p>}
         {r.voucherCode && (
           <p className={ordersStyles.notice}>
             Kode voucher: <strong>{r.voucherCode}</strong>

@@ -1,5 +1,6 @@
 "use server";
 
+import { supabaseUrl } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { discardUploads, uploadPublicImage } from "../../storage";
 import { monthKey } from "../time";
@@ -27,6 +28,10 @@ export type RewardInput = {
   active: boolean;
 };
 
+/** Foto website (/images/…) atau upload di Storage project ini — host lain ditolak next/image dan merusak halaman. */
+const STORAGE_PREFIX = supabaseUrl ? `${supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/public/` : null;
+const isAllowedImage = (src: string) => /^\/images\/[\w./-]+$/.test(src) || (STORAGE_PREFIX !== null && src.startsWith(STORAGE_PREFIX) && !src.includes(".."));
+
 function validateReward(input: RewardInput): string | null {
   if (input.name.trim().length < 2 || input.name.trim().length > 80) return "Nama reward 2–80 karakter.";
   if (input.description.length > 500) return "Deskripsi maksimal 500 karakter.";
@@ -34,7 +39,7 @@ function validateReward(input: RewardInput): string | null {
   if (!TIERS.includes(input.minTier)) return "Tier tidak valid.";
   if (!isWhole(input.pointsCost, 1)) return "Harga poin harus angka bulat mulai 1.";
   if (input.stock !== null && !isWhole(input.stock, 0, 100_000)) return "Stok harus angka bulat ≥ 0 (kosongkan untuk tanpa batas).";
-  if (input.image && !/^(\/images\/|https:\/\/)/.test(input.image)) return "Foto tidak valid — pilih dari daftar atau upload ulang.";
+  if (input.image && !isAllowedImage(input.image)) return "Foto tidak valid — pilih dari daftar atau upload ulang.";
   return null;
 }
 

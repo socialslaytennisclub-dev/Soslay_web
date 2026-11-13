@@ -2121,6 +2121,8 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(null);
   await db.query(`update orders set payment_status = 'paid', status = 'processing', paid_at = now() where code = $1`, [r2.order_code]);
   console.assert((await one(`select status from reward_redemptions where code = $1`, [r2.code])).status === "approved", "ongkir lunas → disetujui");
+  const fin = await one(`select c.system_key k, t.amount::int amount from finance_transactions t join finance_categories c on c.id = t.category_id join orders o on t.source_ref = 'ord:' || o.id where o.code = $1 and t.deleted_at is null`, [r2.order_code]);
+  console.assert(fin?.k === "reward_shipping", `ongkir reward tercatat sebagai Ongkir penukaran reward ${JSON.stringify(fin)}`);
   await db.query(`update orders set status = 'shipped', shipped_at = now() where code = $1`, [r2.order_code]);
   console.assert((await one(`select status from reward_redemptions where code = $1`, [r2.code])).status === "fulfilled", "dikirim → selesai");
 
@@ -2150,6 +2152,15 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(member);
   const big = await reward("Trip mahal", "experience", 99999, null);
   console.assert((await err(`select redeem_reward($1)`, [big]))?.includes("belum cukup"), "poin kurang ditolak");
+  // Reward yang dinonaktifkan tetap terbaca oleh member yang pernah menukarnya (riwayat), tidak oleh member lain
+  await as(null);
+  await db.query(`update rewards set is_active = false where id = $1`, [racket]);
+  await db.exec(`grant select on rewards to authenticated`);
+  await as(member);
+  await db.exec(`set role authenticated`);
+  const seen = (await one(`select count(*)::int n from rewards where id = $1`, [racket])).n;
+  await db.exec(`reset role`);
+  console.assert(seen === 1, "reward nonaktif tetap terbaca pemilik penukaran");
   await as(null);
   console.log("✓ penukaran reward member: poin & stok dipotong saat tukar, Produk/Merch J&T/Instant via order ongkir (lunas → disetujui, kirim → selesai, batal → poin & stok kembali), ambil di activity, voucher wajib kode, tolak → poin kembali");
 }

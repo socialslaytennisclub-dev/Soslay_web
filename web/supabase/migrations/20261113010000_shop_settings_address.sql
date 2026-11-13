@@ -73,9 +73,40 @@ alter table profiles
 -- Admin bisa mengganti rekening kapan saja; pesanan yang sudah dibuat tetap menampilkan rekening saat itu.
 alter table orders add column payment_bank jsonb;
 
+-- ── Ongkir J&T / Instant: satu-satunya rumus di database (place_shop_order & redeem_reward) ──
+-- Sama dengan web/src/lib/checkout.ts (pratinjau di browser).
+-- p_ship: {method, city, lat, lng}; hasil: {fee, km, snapshot}. Instant = kota DKI Jakarta (daftar resmi).
+create function shop_shipping_quote(p_ship jsonb, p_weight integer)
+returns jsonb language plpgsql stable security definer set search_path = public as $$
+declare
+  v_rate    shipping_rates;
+  v_instant shipping_instant_settings;
+  v_km      numeric(5, 1);
+  v_kg      integer := greatest(1, ceil(p_weight / 1000.0))::int;
+begin
+  if p_ship->>'method' = 'jnt' then
+    select * into v_rate from shipping_rates where city = p_ship->>'city' and is_active;
+    if not found then raise exception 'Pengiriman ke kota ini belum tersedia, hubungi admin.' using errcode = '22023'; end if;
+    return jsonb_build_object('fee', v_rate.per_kg * v_kg, 'km', null,
+      'snapshot', jsonb_build_object('city', v_rate.city, 'per_kg', v_rate.per_kg, 'weight_grams', p_weight, 'kg', v_kg));
+  end if;
+  if p_ship->>'city' not in ('Kota Jakarta Barat', 'Kota Jakarta Pusat', 'Kota Jakarta Selatan', 'Kota Jakarta Timur', 'Kota Jakarta Utara', 'Kabupaten Kepulauan Seribu') then
+    raise exception 'Instant hanya untuk alamat di DKI Jakarta.' using errcode = '22023';
+  end if;
+  if (p_ship->>'lat') is null or (p_ship->>'lng') is null then raise exception 'Atur titik lokasi di peta dulu.' using errcode = '22023'; end if;
+  select * into v_instant from shipping_instant_settings;
+  v_km := shop_distance_km((p_ship->>'lat')::float8, (p_ship->>'lng')::float8);
+  if v_km > v_instant.max_km then raise exception 'Titik lokasi lebih dari % km — Instant tidak tersedia.', v_instant.max_km using errcode = '22023'; end if;
+  return jsonb_build_object(
+    'fee', ceil((v_instant.base_fee + ceil(greatest(0, v_km - v_instant.base_km))::int * v_instant.per_km_fee) / 1000.0)::int * 1000,
+    'km', v_km,
+    'snapshot', jsonb_build_object('km', v_km, 'base_fee', v_instant.base_fee, 'base_km', v_instant.base_km, 'per_km_fee', v_instant.per_km_fee));
+end $$;
+revoke all on function shop_shipping_quote(jsonb, integer) from public, anon, authenticated;
+
 -- ── place_shop_order: Instant = kota DKI Jakarta (daftar resmi) + rekening di-snapshot ─────────────
--- Salinan dari 20261113000000 dengan dua perubahan: syarat Instant tidak lagi bergantung pada baris
--- ongkir J&T, dan app_settings 'shop_bank' disimpan ke orders.payment_bank (+ payment_method).
+-- Salinan dari 20261113000000 dengan perubahan: ongkir lewat shop_shipping_quote (Instant = kota DKI Jakarta,
+-- tidak bergantung baris ongkir J&T), dan app_settings 'shop_bank' disimpan ke orders.payment_bank (+ payment_method).
 create or replace function place_shop_order(p_items jsonb, p_ship jsonb)
 returns text language plpgsql security definer set search_path = public as $$
 declare
@@ -89,8 +120,7 @@ declare
   v_fee      integer := 0;
   v_km       numeric(5, 1);
   v_session  uuid;
-  v_rate     shipping_rates;
-  v_instant  shipping_instant_settings;
+  v_quote    jsonb;
   v_snapshot jsonb;
   v_code     smallint;
   v_order    orders;
@@ -126,23 +156,11 @@ begin
   if v_method in ('jnt', 'instant') and (coalesce(trim(p_ship->>'address'), '') = '' or coalesce(trim(p_ship->>'city'), '') = '' or coalesce(trim(p_ship->>'postal_code'), '') = '') then
     raise exception 'Lengkapi alamat, kota & kode pos.' using errcode = '22023';
   end if;
-  if v_method = 'jnt' then
-    select * into v_rate from shipping_rates where city = p_ship->>'city' and is_active;
-    if not found then raise exception 'Pengiriman ke kota ini belum tersedia, hubungi admin.' using errcode = '22023'; end if;
-    v_fee := v_rate.per_kg * greatest(1, ceil(v_weight / 1000.0))::int;
-    v_snapshot := jsonb_build_object('city', v_rate.city, 'per_kg', v_rate.per_kg, 'weight_grams', v_weight, 'kg', greatest(1, ceil(v_weight / 1000.0))::int);
-  elsif v_method = 'instant' then
-    select * into v_instant from shipping_instant_settings;
-    -- DKI Jakarta menurut daftar resmi (web/src/content/wilayah.ts), bukan tabel ongkir J&T — kota Jakarta yang
-    -- J&T-nya dinonaktifkan / dihapus admin tetap bisa Instant.
-    if p_ship->>'city' not in ('Kota Jakarta Barat', 'Kota Jakarta Pusat', 'Kota Jakarta Selatan', 'Kota Jakarta Timur', 'Kota Jakarta Utara', 'Kabupaten Kepulauan Seribu') then
-      raise exception 'Instant hanya untuk alamat di DKI Jakarta.' using errcode = '22023';
-    end if;
-    if (p_ship->>'lat') is null or (p_ship->>'lng') is null then raise exception 'Atur titik lokasi di peta dulu.' using errcode = '22023'; end if;
-    v_km := shop_distance_km((p_ship->>'lat')::float8, (p_ship->>'lng')::float8);
-    if v_km > v_instant.max_km then raise exception 'Titik lokasi lebih dari % km — Instant tidak tersedia.', v_instant.max_km using errcode = '22023'; end if;
-    v_fee := ceil((v_instant.base_fee + ceil(greatest(0, v_km - v_instant.base_km))::int * v_instant.per_km_fee) / 1000.0)::int * 1000;
-    v_snapshot := jsonb_build_object('km', v_km, 'base_fee', v_instant.base_fee, 'base_km', v_instant.base_km, 'per_km_fee', v_instant.per_km_fee);
+  if v_method in ('jnt', 'instant') then
+    v_quote := shop_shipping_quote(p_ship, v_weight);
+    v_fee := (v_quote->>'fee')::int;
+    v_km := (v_quote->>'km')::numeric;
+    v_snapshot := v_quote->'snapshot';
   else
     v_session := (p_ship->>'session_id')::uuid;
     if not pickup_session_ok(v_session) then raise exception 'Sesi Mabar untuk pickup tidak tersedia — pilih sesi lain.' using errcode = '22023'; end if;

@@ -30,40 +30,22 @@ alter table reward_redemptions
   add column voucher_valid_until date;
 create index reward_redemptions_order_idx on reward_redemptions (order_id) where order_id is not null;
 
+-- Reward fisik (dikirim / diambil) vs kode voucher — satu aturan untuk semua fungsi
+-- (sama dengan isPhysicalReward di web/src/lib/admin-labels.ts). ::text karena nilai enum 'product' baru.
+create function reward_is_physical(p reward_category) returns boolean language sql immutable as $$
+  select p::text in ('merch', 'product');
+$$;
+
+-- Member boleh membaca reward yang pernah ia tukar walau sudah dinonaktifkan (nama & kategori di riwayat).
+create policy "read redeemed rewards" on rewards for select using (
+  exists (select 1 from reward_redemptions r where r.reward_id = rewards.id and r.member_id = auth.uid())
+);
+
 -- Member tidak lagi menulis langsung ke tabel (harus lewat redeem_reward supaya poin & pengiriman tercatat);
 -- admin tetap bisa mencatat penukaran atas nama member.
 drop policy "request redemption" on reward_redemptions;
 create policy "admin record redemption" on reward_redemptions for insert with check (has_permission('members', 'edit'));
 
--- ── Ongkir J&T / Instant (aturan sama dengan place_shop_order) ─────────────
--- p_ship: {method, city, lat, lng}; hasil: {fee, km, snapshot}. Instant = kota DKI Jakarta (daftar resmi).
-create function shop_shipping_quote(p_ship jsonb, p_weight integer)
-returns jsonb language plpgsql stable security definer set search_path = public as $$
-declare
-  v_rate    shipping_rates;
-  v_instant shipping_instant_settings;
-  v_km      numeric(5, 1);
-  v_kg      integer := greatest(1, ceil(p_weight / 1000.0))::int;
-begin
-  if p_ship->>'method' = 'jnt' then
-    select * into v_rate from shipping_rates where city = p_ship->>'city' and is_active;
-    if not found then raise exception 'Pengiriman ke kota ini belum tersedia, hubungi admin.' using errcode = '22023'; end if;
-    return jsonb_build_object('fee', v_rate.per_kg * v_kg, 'km', null,
-      'snapshot', jsonb_build_object('city', v_rate.city, 'per_kg', v_rate.per_kg, 'weight_grams', p_weight, 'kg', v_kg));
-  end if;
-  if p_ship->>'city' not in ('Kota Jakarta Barat', 'Kota Jakarta Pusat', 'Kota Jakarta Selatan', 'Kota Jakarta Timur', 'Kota Jakarta Utara', 'Kabupaten Kepulauan Seribu') then
-    raise exception 'Instant hanya untuk alamat di DKI Jakarta.' using errcode = '22023';
-  end if;
-  if (p_ship->>'lat') is null or (p_ship->>'lng') is null then raise exception 'Atur titik lokasi di peta dulu.' using errcode = '22023'; end if;
-  select * into v_instant from shipping_instant_settings;
-  v_km := shop_distance_km((p_ship->>'lat')::float8, (p_ship->>'lng')::float8);
-  if v_km > v_instant.max_km then raise exception 'Titik lokasi lebih dari % km — Instant tidak tersedia.', v_instant.max_km using errcode = '22023'; end if;
-  return jsonb_build_object(
-    'fee', ceil((v_instant.base_fee + ceil(greatest(0, v_km - v_instant.base_km))::int * v_instant.per_km_fee) / 1000.0)::int * 1000,
-    'km', v_km,
-    'snapshot', jsonb_build_object('km', v_km, 'base_fee', v_instant.base_fee, 'base_km', v_instant.base_km, 'per_km_fee', v_instant.per_km_fee));
-end $$;
-revoke all on function shop_shipping_quote(jsonb, integer) from public, anon, authenticated;
 
 -- ── Member menukar poin ────────────────────────────────────────────────────
 -- p_ship (Produk / Merch saja): {method: jnt|instant|pickup, name, phone, address, city, postal_code, lat, lng, session_id}.
@@ -100,7 +82,7 @@ begin
     raise exception 'Poin kamu belum cukup (% dari % pts).', v_balance, v_reward.points_cost using errcode = '22023';
   end if;
 
-  v_physical := v_reward.category::text in ('merch', 'product');
+  v_physical := reward_is_physical(v_reward.category);
   if v_physical then
     if p_ship is null or coalesce(p_ship->>'method', '') not in ('jnt', 'instant', 'pickup') then
       raise exception 'Pilih cara pengiriman.' using errcode = '22023';
@@ -188,7 +170,7 @@ begin
   if rd.order_id is not null then select * into o from orders where id = rd.order_id for update; end if;
 
   if rd.status = 'pending' and p_status = 'approved' then
-    if rw.category::text in ('voucher', 'session', 'experience') and coalesce(trim(p_voucher_code), '') = '' then
+    if not reward_is_physical(rw.category) and coalesce(trim(p_voucher_code), '') = '' then
       raise exception 'Isi kode voucher untuk member.';
     end if;
     if o.id is not null and o.payment_status <> 'paid' then
@@ -258,3 +240,23 @@ begin
 end $$;
 create trigger orders_redemption_sync after update of status, payment_status on orders
   for each row when (new.channel = 'reward') execute function orders_sync_redemption();
+
+-- ── Keuangan: ongkir penukaran reward bukan penjualan merchandise ──────────
+insert into finance_categories (name, kind, report_group, journal_account, system_key, is_system, note, sort_order)
+values ('Ongkir penukaran reward', 'income', 'revenue', 'Pendapatan Usaha', 'reward_shipping', false,
+  'Otomatis saat ongkir penukaran Slay Point diverifikasi', 3)
+on conflict (system_key) do nothing;
+
+create or replace function finance_on_order_paid() returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  s finance_settings;
+begin
+  if tg_op = 'UPDATE' and new.payment_status is not distinct from old.payment_status and new.total = old.total then return null; end if;
+  select * into s from finance_settings;
+  if not s.auto_shop then return null; end if;
+  perform finance_sync_auto('shop_order_verified', 'ord:' || new.id,
+    case when new.payment_status = 'paid' then new.total else 0 end,
+    case when new.channel = 'reward' then 'reward_shipping' else 'merch_sales' end, s.default_bank_account_id,
+    case when new.channel = 'reward' then 'Ongkir tukar poin #' else 'Order #' end || new.code, null, coalesce(new.paid_at, now()));
+  return null;
+end $$;

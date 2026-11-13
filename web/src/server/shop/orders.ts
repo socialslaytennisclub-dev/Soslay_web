@@ -53,30 +53,63 @@ async function demoPickupSessions(): Promise<PickupSession[]> {
     .sort((a, b) => Number(b.registered) - Number(a.registered) || a.startsAt.localeCompare(b.startsAt));
 }
 
-export const getCheckoutContext = cache(async (): Promise<CheckoutContext> => {
-  const catalog = await getShopCatalog();
-  const fallbackWeights = Object.fromEntries(catalog.products.map((p) => [p.slug, DEFAULT_WEIGHT[p.category] ?? 300]));
+export type ShipContext = Pick<CheckoutContext, "recipient" | "pin" | "rates" | "instant">;
 
+/**
+ * Data pengiriman saja (alamat tersimpan + titik, ongkir J&T, pengaturan Instant) — dipakai checkout Shop
+ * dan penukaran reward (Tukar Slay Point) tanpa memuat sesi pickup & berat produk.
+ */
+export const getShipContext = cache(async (): Promise<ShipContext> => {
   if (!isSupabaseConfigured) {
     const last = [...demoOrders().values()].filter((o) => o.method !== "pickup").at(-1);
     return {
-      demo: true,
-      loggedIn: true,
       recipient: last?.recipient ?? { name: "Arya Putra Dewangga", phone: "0812-3456-7890", address: "Jl. Kemang Raya No. 12, Bangka, Mampang Prapatan", city: "Kota Jakarta Selatan", postalCode: "12730" },
       pin: last?.pin ?? null,
-      bankShort: (await getShopBank()).short,
       rates: DEMO_RATES,
       instant: DEFAULT_INSTANT,
-      pickupSessions: await demoPickupSessions(),
-      weights: fallbackWeights,
     };
   }
 
   const { supabase, user } = await getMemberSession();
-  const now = new Date();
-  const [{ data: rates }, { data: instant }, { data: sessions }, { data: products }, profile, lastOrder, booked, bank] = await Promise.all([
+  const [{ data: rates }, { data: instant }, profile, lastOrder] = await Promise.all([
     supabase.from("shipping_rates").select("city, province, per_kg, eta_days").eq("is_active", true).order("city"),
     supabase.from("shipping_instant_settings").select("*").maybeSingle(),
+    user
+      ? supabase.from("profiles").select("full_name, phone, city, ship_recipient, ship_phone, ship_address, ship_city, ship_postal_code, ship_lat, ship_lng").eq("id", user.id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    user
+      ? supabase.from("orders").select("recipient_name, recipient_phone, shipping_address, shipping_city, postal_code").eq("member_id", user.id).in("shipping_method", ["jnt", "instant"]).order("placed_at", { ascending: false }).limit(1).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const p = profile.data as ProfileShipRow | null;
+  const o = lastOrder.data as { recipient_name: string; recipient_phone: string; shipping_address: string; shipping_city: string | null; postal_code: string | null } | null;
+  // Alamat di profil member (diisi di tab Profile) diutamakan; kalau belum ada → pesanan kirim terakhir.
+  const saved = p?.ship_address ? p : null;
+
+  return {
+    recipient: saved
+      ? { name: saved.ship_recipient || saved.full_name, phone: saved.ship_phone || (saved.phone ? `0${saved.phone}` : ""), address: saved.ship_address ?? "", city: saved.ship_city ?? "", postalCode: saved.ship_postal_code ?? "" }
+      : o
+        ? { name: o.recipient_name, phone: o.recipient_phone, address: o.shipping_address, city: o.shipping_city ?? "", postalCode: o.postal_code ?? "" }
+        : { ...emptyRecipient, name: p?.full_name ?? "", phone: p?.phone ? `0${p.phone}` : "", city: p?.city ?? "" },
+    pin: saved && saved.ship_lat !== null && saved.ship_lng !== null ? { lat: saved.ship_lat, lng: saved.ship_lng } : null,
+    rates: (rates ?? []).map((r): ShippingRate => ({ city: r.city, province: r.province, perKg: r.per_kg, eta: r.eta_days })),
+    instant: toInstant(instant),
+  };
+});
+
+export const getCheckoutContext = cache(async (): Promise<CheckoutContext> => {
+  const [catalog, ship, bank] = await Promise.all([getShopCatalog(), getShipContext(), getShopBank()]);
+  const fallbackWeights = Object.fromEntries(catalog.products.map((p) => [p.slug, DEFAULT_WEIGHT[p.category] ?? 300]));
+
+  if (!isSupabaseConfigured) {
+    return { demo: true, loggedIn: true, ...ship, bankShort: bank.short, pickupSessions: await demoPickupSessions(), weights: fallbackWeights };
+  }
+
+  const { supabase, user } = await getMemberSession();
+  const now = new Date();
+  const [{ data: sessions }, { data: products }, booked] = await Promise.all([
     supabase
       .from("sessions")
       .select("id, title, starts_at, ends_at, venues(name)")
@@ -86,35 +119,15 @@ export const getCheckoutContext = cache(async (): Promise<CheckoutContext> => {
       .lt("starts_at", new Date(now.getTime() + PICKUP_WINDOW_DAYS * 86_400_000).toISOString())
       .order("starts_at"),
     supabase.from("products").select("slug, weight_grams").eq("status", "active"),
-    user
-      ? supabase.from("profiles").select("full_name, phone, city, ship_recipient, ship_phone, ship_address, ship_city, ship_postal_code, ship_lat, ship_lng").eq("id", user.id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    user
-      ? supabase.from("orders").select("recipient_name, recipient_phone, shipping_address, shipping_city, postal_code").eq("member_id", user.id).in("shipping_method", ["jnt", "instant"]).order("placed_at", { ascending: false }).limit(1).maybeSingle()
-      : Promise.resolve({ data: null }),
     user ? supabase.from("bookings").select("session_id").eq("member_id", user.id).neq("status", "cancelled") : Promise.resolve({ data: [] }),
-    getShopBank(),
   ]);
-
   const registered = new Set((booked.data ?? []).map((b) => b.session_id as string));
-  const p = profile.data as ProfileShipRow | null;
-  const o = lastOrder.data as { recipient_name: string; recipient_phone: string; shipping_address: string; shipping_city: string | null; postal_code: string | null } | null;
-  const settings = toInstant(instant);
-  // Alamat di profil member (diisi di tab Profile) diutamakan; kalau belum ada → pesanan kirim terakhir.
-  const saved = p?.ship_address ? p : null;
 
   return {
     demo: false,
     loggedIn: Boolean(user),
-    recipient: saved
-      ? { name: saved.ship_recipient || saved.full_name, phone: saved.ship_phone || (saved.phone ? `0${saved.phone}` : ""), address: saved.ship_address ?? "", city: saved.ship_city ?? "", postalCode: saved.ship_postal_code ?? "" }
-      : o
-        ? { name: o.recipient_name, phone: o.recipient_phone, address: o.shipping_address, city: o.shipping_city ?? "", postalCode: o.postal_code ?? "" }
-        : { ...emptyRecipient, name: p?.full_name ?? "", phone: p?.phone ? `0${p.phone}` : "", city: p?.city ?? "" },
+    ...ship,
     bankShort: bank.short,
-    pin: saved && saved.ship_lat !== null && saved.ship_lng !== null ? { lat: saved.ship_lat, lng: saved.ship_lng } : null,
-    rates: (rates ?? []).map((r): ShippingRate => ({ city: r.city, province: r.province, perKg: r.per_kg, eta: r.eta_days })),
-    instant: settings,
     pickupSessions: ((sessions ?? []) as unknown as SessionRow[])
       .map((s) => ({ id: s.id, title: s.title, startsAt: s.starts_at, endsAt: s.ends_at, venue: s.venues?.name ?? "", registered: registered.has(s.id), deadline: pickupDeadline(s.starts_at) }))
       .filter((s) => new Date(s.deadline) > now)

@@ -118,8 +118,8 @@ export async function resolveMapsLink(input: string): Promise<ResolvedLink> {
   if (overLimit(id)) return { ok: false, name: null, error: "Terlalu banyak link dicoba — tunggu beberapa menit." };
 
   const result = await resolve(key);
-  // Gagal karena jaringan tidak di-cache supaya bisa dicoba lagi.
-  if (result.ok || !/tidak bisa dibuka/.test(result.error)) {
+  // Hanya hasil yang berhasil di-cache: gagal bisa karena Google sedang membatasi / jaringan → boleh dicoba lagi.
+  if (result.ok) {
     if (memo.cache.size >= CACHE_MAX) memo.cache.delete(memo.cache.keys().next().value!);
     memo.cache.set(key, { at: Date.now(), result });
   }

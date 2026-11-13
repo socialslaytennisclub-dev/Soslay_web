@@ -29,7 +29,7 @@ const STATUS: Record<RedemptionStatus, { label: string; tone: string }> = {
   pending: { label: "Menunggu", tone: styles.toneAmber },
   approved: { label: "Disetujui", tone: styles.toneIndigo },
   fulfilled: { label: "Selesai", tone: styles.toneGreen },
-  rejected: { label: "Ditolak · poin kembali", tone: styles.toneNeutral },
+  rejected: { label: "Ditolak", tone: styles.toneNeutral },
 };
 
 const pts = (n: number) => `${formatAngka(n)} pts`;
