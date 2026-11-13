@@ -279,7 +279,7 @@ export function VenueEditor({ initial, imageOptions, initialNotice }: { initial:
           </FormCard>
           <FormCard title="Foto" subtitle="Pilih foto yang sudah ada di website, atau upload foto sendiri">
             {imageSelect("Foto cover", "coverPath")}
-            {imageSelect("Foto hero (detail venue)", "heroPath")}
+            {imageSelect("Foto hero (detail venue)", "heroPath", "Banner lebar di halaman detail venue. Kosong = memakai foto cover (crop kartu), jadi sebaiknya diisi.")}
             {v.coverPath && (
               <div className={styles.preview}>
                 <Image src={v.coverPath} alt="" fill sizes="300px" />

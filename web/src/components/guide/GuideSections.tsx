@@ -160,6 +160,7 @@ export function PhotoReferenceSection({ guide }: SectionProps) {
 /** 04 — Court vibe (Figma 151:251): panel terakota, palet venue, foto suasana. */
 export function CourtVibeSection({ guide }: SectionProps) {
   const { courtVibe, theme } = guide;
+  const trio = courtVibe.side.length === 3;
   return (
     <section id="court-vibe" className={styles.courtSection} aria-labelledby="court-title">
       <Container>
@@ -184,9 +185,15 @@ export function CourtVibeSection({ guide }: SectionProps) {
             </div>
             <div className={styles.courtPhotos}>
               <Photo photo={courtVibe.feature} className={styles.courtFeature} sizes="(min-width: 1200px) 380px, 100vw" />
-              <div className={cx(styles.courtSide, courtVibe.side.length === 3 && styles.courtSideTrio)}>
-                {courtVibe.side.map((photo) => (
-                  <Photo key={photo.src} photo={photo} className={styles.courtSmall} sizes="(min-width: 1200px) 380px, 50vw" />
+              <div className={cx(styles.courtSide, trio && styles.courtSideTrio)}>
+                {courtVibe.side.map((photo, index) => (
+                  <Photo
+                    key={photo.src}
+                    photo={photo}
+                    className={styles.courtSmall}
+                    // Trio: 2 foto setengah kolom + foto ke-3 selebar kolom (penuh di mobile).
+                    sizes={!trio ? "(min-width: 1200px) 380px, 50vw" : index === 2 ? "(min-width: 1200px) 380px, 100vw" : "(min-width: 1200px) 190px, 50vw"}
+                  />
                 ))}
               </div>
             </div>

@@ -562,13 +562,19 @@
 }
 
 /* 3 foto (Figma 2377:240): 2 foto berdampingan + 1 foto lebar di bawahnya. */
-.courtSideTrio > :nth-child(-n + 2) {
-  aspect-ratio: 3 / 4;
-}
-
 .courtSideTrio > :nth-child(3) {
   grid-column: 1 / -1;
-  aspect-ratio: 3 / 2;
+}
+
+/* Rasio foto hanya di bawah desktop — di desktop tinggi tetap 260px (lihat media ≥ 1200px). */
+@media (max-width: 1199.98px) {
+  .courtSideTrio > :nth-child(-n + 2) {
+    aspect-ratio: 3 / 4;
+  }
+
+  .courtSideTrio > :nth-child(3) {
+    aspect-ratio: 3 / 2;
+  }
 }
 
 .courtStrip {

@@ -38,7 +38,8 @@ export const getWebsiteVenues = cache(async (): Promise<WebsiteVenue[]> => {
     .order("name");
   if (error || !data) {
     console.error("[venues] gagal memuat dari Supabase:", error?.message);
-    return fallback;
+    // Foto hero hanya dari master — saat master tak terbaca, detail venue memakai foto cover.
+    return fallback.map((v) => ({ ...v, heroImage: undefined }));
   }
 
   return (data as Row[])

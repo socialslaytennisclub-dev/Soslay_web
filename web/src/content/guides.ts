@@ -41,8 +41,8 @@ export type ParticipantGuide = {
     palette: { name: string; hex: string; dark?: boolean }[];
     note: string;
     feature: GuidePhoto;
-    /** 2 foto (bertumpuk) atau 3 foto (2 berdampingan + 1 lebar di bawahnya). */
-    side: GuidePhoto[];
+    /** 2 foto (bertumpuk) atau 3 foto (2 berdampingan + 1 lebar di bawahnya) — jumlah lain ditolak TypeScript. */
+    side: [GuidePhoto, GuidePhoto] | [GuidePhoto, GuidePhoto, GuidePhoto];
     /** Baris foto di bawah panel — boleh kosong. */
     strip: GuidePhoto[];
   };
