@@ -26,7 +26,7 @@ export const DEFAULT_INSTANT: InstantSettings = {
   originLat: -6.2607,
   originLng: 106.8136,
   baseFee: 15000,
-  baseKm: 5,
+  baseKm: 3,
   perKmFee: 3000,
   maxKm: 25,
   cutoff: "15:00",

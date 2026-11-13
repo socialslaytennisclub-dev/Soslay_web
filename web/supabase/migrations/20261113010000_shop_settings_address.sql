@@ -50,6 +50,10 @@ from (values
 where r.city = m.old_city
   and not exists (select 1 from shipping_rates x where x.city = m.new_city);
 
+-- Ongkir Instant: tarif dasar mencakup 3 km pertama (sebelumnya 5 km). Tetap bisa diubah admin.
+alter table shipping_instant_settings alter column base_km set default 3;
+update shipping_instant_settings set base_km = 3, updated_at = now() where base_km = 5;
+
 alter table shipping_instant_settings
   add constraint shipping_instant_settings_numbers check (base_fee >= 0 and base_km >= 0 and per_km_fee >= 0 and max_km > 0),
   add constraint shipping_instant_settings_origin check (origin_lat between -90 and 90 and origin_lng between -180 and 180);

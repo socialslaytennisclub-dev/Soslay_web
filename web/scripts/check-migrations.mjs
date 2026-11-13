@@ -1990,11 +1990,11 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await stock()) === 4, "stok dikunci saat pesanan dibuat");
   console.assert((await err(`select place_shop_order($1, $2)`, [item(1), JSON.stringify({ ...JSON.parse(jnt), city: "Kota Medan" })]))?.includes("belum tersedia"), "kota di luar master J&T ditolak");
   console.assert((await err(`select place_shop_order($1, $2)`, [item(9), jnt]))?.includes("Stok"), "stok tidak cukup ditolak");
-  // 2) Instant: ±8,4 km → Rp27.000; Depok → ditolak; > 25 km → ditolak
+  // 2) Instant (3 km pertama): ±8,4 km → Rp33.000; Depok → ditolak; > 25 km → ditolak
   const near = { method: "instant", name: "Arya", phone: "0812", address: "Jl. X", city: "Kota Jakarta Pusat", postal_code: "10310", lat: -6.2088, lng: 106.8456 };
   const c2 = (await one(`select place_shop_order($1, $2) c`, [item(), JSON.stringify(near)])).c;
   const o2 = await one(`select shipping_fee, distance_km from orders where code = $1`, [c2]);
-  const expectFee = 15000 + Math.ceil(Math.max(0, Number(o2.distance_km) - 5)) * 3000;
+  const expectFee = Math.ceil((15000 + Math.ceil(Math.max(0, Number(o2.distance_km) - 3)) * 3000) / 1000) * 1000;
   console.assert(o2.shipping_fee === expectFee && Number(o2.distance_km) > 5, `ongkir Instant ${JSON.stringify(o2)}`);
   console.assert((await err(`select place_shop_order($1, $2)`, [item(), JSON.stringify({ ...near, city: "Kota Depok" })]))?.includes("DKI"), "Instant Depok ditolak");
   console.assert((await err(`select place_shop_order($1, $2)`, [item(), JSON.stringify({ ...near, lat: -6.05, lng: 106.6 })]))?.includes("25 km"), "Instant > 25 km ditolak");
