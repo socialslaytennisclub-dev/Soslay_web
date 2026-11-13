@@ -20,7 +20,7 @@ export function Footer() {
                 <div key={item.label} className={styles.contactRow}>
                   <dt>{item.label}</dt>
                   <dd>
-                    <a href={item.href} {...(item.href.startsWith("https://") ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
+                    <a href={item.href} {...(item.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}>
                       {item.value}
                     </a>
                   </dd>

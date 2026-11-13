@@ -29,8 +29,8 @@ export const authLinks = {
 
 export const contact = {
   tagline: "We curate the best courts, the best people, and the best moments then hand you a professional photo",
-  phone: { label: "WhatsApp", value: WHATSAPP_DISPLAY, href: whatsappUrl() },
-  email: { label: "Email", value: CONTACT_EMAIL, href: `mailto:${CONTACT_EMAIL}` },
+  phone: { label: "WhatsApp", value: WHATSAPP_DISPLAY, href: whatsappUrl(), external: true },
+  email: { label: "Email", value: CONTACT_EMAIL, href: `mailto:${CONTACT_EMAIL}`, external: false },
 };
 
 export const footerColumns: { title: string; links: NavLink[] }[] = [

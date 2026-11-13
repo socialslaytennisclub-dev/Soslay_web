@@ -35,7 +35,6 @@ export type MemberTrip = {
   adminWa: string;
 };
 
-const ADMIN_WA = whatsappUrl();
 
 /** Agenda berikutnya: hari rundown pertama yang belum lewat, dua acara pertamanya. */
 function nextAgenda(rundown: MemberTripRundown[], activities: MemberTripActivity[], today: string): string | null {
@@ -74,7 +73,7 @@ function demoTrips(): MemberTrip[] {
       activities,
       rundown,
       next: nextAgenda(rundown, activities, today),
-      adminWa: ADMIN_WA,
+      adminWa: whatsappUrl(),
     },
   ];
 }
@@ -136,7 +135,7 @@ export const getMyTrips = cache(async (): Promise<MemberTrip[]> => {
       activities,
       rundown: items,
       next: nextAgenda(items, activities, today),
-      adminWa: ADMIN_WA,
+      adminWa: whatsappUrl(),
     };
   });
 });

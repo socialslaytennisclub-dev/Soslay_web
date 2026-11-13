@@ -36,14 +36,25 @@ export function GalleryManager({ initial, activities, totalPhotos, totalAlbums, 
   const [editing, setEditing] = useState<AdminGalleryPhoto | "new" | null>(null);
   const [, start] = useTransition();
   const [venue, setVenue] = useState<string | null>(null);
-  // Tab venue: dikelompokkan dari venue activity tiap foto, terbanyak dulu.
-  const venues = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const p of photos) counts.set(venueOf(p), (counts.get(venueOf(p)) ?? 0) + 1);
-    return [...counts].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "id"));
-  }, [photos]);
-  const active = venue && venues.some(([name]) => name === venue) ? venue : null;
-  const shown = preview ? photos.slice(0, preview) : active ? photos.filter((p) => venueOf(p) === active) : photos;
+  // Tab venue: foto dikelompokkan per venue activity-nya (sekali jalan), terbanyak dulu. Tidak dipakai di preview.
+  const { groups, tabs } = useMemo(() => {
+    const groups = new Map<string, AdminGalleryPhoto[]>();
+    if (preview) return { groups, tabs: [] };
+    for (const p of photos) {
+      const v = venueOf(p);
+      const list = groups.get(v);
+      if (list) list.push(p);
+      else groups.set(v, [p]);
+    }
+    const byVenue = [...groups].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], "id"));
+    return {
+      groups,
+      tabs: [{ value: null, label: "Semua venue", count: photos.length }, ...byVenue.map(([name, list]) => ({ value: name, label: name, count: list.length }))],
+    };
+  }, [photos, preview]);
+  // Venue yang fotonya habis dihapus → kembali ke "Semua venue".
+  const active = venue && groups.has(venue) ? venue : null;
+  const shown = preview ? photos.slice(0, preview) : active ? (groups.get(active) ?? []) : photos;
 
   const remove = (photo: AdminGalleryPhoto) => {
     if (!window.confirm("Hapus foto ini dari galeri venue? Tindakan ini tidak bisa dibatalkan.")) return;
@@ -101,18 +112,18 @@ export function GalleryManager({ initial, activities, totalPhotos, totalAlbums, 
         )}
       </header>
 
-      {!preview && venues.length > 0 && (
+      {tabs.length > 0 && (
         <div className={styles.filterPills} role="tablist" aria-label="Venue">
-          {[[null, "Semua venue", photos.length] as const, ...venues.map(([name, count]) => [name, name, count] as const)].map(([value, label, count]) => (
+          {tabs.map((t) => (
             <button
-              key={label}
+              key={t.value ?? "all"}
               type="button"
               role="tab"
-              aria-selected={active === value}
-              className={cx(styles.pill, active === value && styles.pillOn)}
-              onClick={() => setVenue(value)}
+              aria-selected={active === t.value}
+              className={cx(styles.pill, active === t.value && styles.pillOn)}
+              onClick={() => setVenue(t.value)}
             >
-              {label} <span className={galleryStyles.pillCount}>{num.format(count)}</span>
+              {t.label} <span className={galleryStyles.handle}>{num.format(t.count)}</span>
             </button>
           ))}
         </div>

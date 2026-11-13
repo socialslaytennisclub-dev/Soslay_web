@@ -6,7 +6,6 @@ import { ProductPurchase } from "../ProductPurchase/ProductPurchase";
 import styles from "./ProductDetailSection.module.css";
 import { whatsappUrl } from "@/content/social";
 
-const whatsappHref = whatsappUrl();
 
 type ProductDetailSectionProps = {
   product: Product;
@@ -87,7 +86,7 @@ export function ProductDetailSection({ product, detail }: ProductDetailSectionPr
                 ) : (
                   <p className={styles.empty}>
                     {productPage.accordion.materialEmpty.text}{" "}
-                    <a href={whatsappHref} target="_blank" rel="noopener noreferrer" className={styles.emptyLink}>
+                    <a href={whatsappUrl()} target="_blank" rel="noopener noreferrer" className={styles.emptyLink}>
                       {productPage.accordion.materialEmpty.cta}
                     </a>
                   </p>

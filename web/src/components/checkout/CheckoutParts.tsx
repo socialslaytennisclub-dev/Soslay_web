@@ -2,7 +2,8 @@ import { Check, ChevronRight, MessageCircle, Truck, X, Zap, Volleyball, type Luc
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { adminWhatsApp, checkoutSteps } from "@/content/checkout";
+import { checkoutSteps } from "@/content/checkout";
+import { whatsappUrl } from "@/content/social";
 import { fmtDayDate, fmtTime, rp, SHIPPING_LABEL, STAGE, type OrderStage, type ShippingMethod, type StageTone } from "@/lib/checkout";
 import { cx } from "@/lib/cx";
 import type { MyOrder } from "@/server/shop/types";
@@ -188,9 +189,8 @@ export function OrderSummaryCard({ order, chips }: { order: MyOrder; chips: Reac
 }
 
 export function HelpLink({ code }: { code: string }) {
-  const text = encodeURIComponent(`Halo admin Soslay, saya ada kendala transfer untuk pesanan #${code}.`);
   return (
-    <a href={`${adminWhatsApp}?text=${text}`} target="_blank" rel="noreferrer" className={styles.helpLink}>
+    <a href={whatsappUrl(`Halo admin Soslay, saya ada kendala transfer untuk pesanan #${code}.`)} target="_blank" rel="noreferrer" className={styles.helpLink}>
       <MessageCircle size={18} />
       <span>Ada kendala transfer? Chat admin via WhatsApp</span>
       <ChevronRight size={16} />
