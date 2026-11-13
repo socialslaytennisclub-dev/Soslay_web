@@ -9,7 +9,7 @@ import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } fro
 /** Slay Point & Reward: katalog, penukaran, aturan, tier, bonus massal. Izin = modul Members (CRM). */
 
 const refresh = () => refreshPaths("/admin/points", ["/admin/members", "layout"]);
-const CATEGORIES: RewardCategory[] = ["merch", "session", "voucher", "experience"];
+const CATEGORIES: RewardCategory[] = ["merch", "product", "session", "voucher", "experience"];
 const TIERS: Tier[] = ["basic", "silver", "gold", "platinum"];
 const isWhole = (n: number, min = 0, max = 1_000_000) => Number.isInteger(n) && n >= min && n <= max;
 
@@ -98,12 +98,24 @@ const STATUS_MESSAGE: Record<Exclude<RedemptionStatus, "pending">, string> = {
   rejected: "ditolak",
 };
 
-export async function processRedemption(code: string, status: Exclude<RedemptionStatus, "pending">, note: string): Promise<ActionResult> {
+export async function processRedemption(
+  code: string,
+  status: Exclude<RedemptionStatus, "pending">,
+  note: string,
+  voucher?: { code: string; validUntil: string },
+): Promise<ActionResult> {
   const auth = await requireEditor("members");
   if ("error" in auth) return fail(auth.error);
   if (status === "rejected" && !note.trim()) return fail("Tulis alasan penolakan — dikirim ke member.");
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.rpc("set_redemption_status", { p_code: code, p_status: status, p_note: note.trim() || null });
+  const validUntil = voucher?.validUntil && /^\d{4}-\d{2}-\d{2}$/.test(voucher.validUntil) ? voucher.validUntil : null;
+  const { error } = await supabase.rpc("set_redemption_status", {
+    p_code: code,
+    p_status: status,
+    p_note: note.trim() || null,
+    p_voucher_code: voucher?.code.trim() || null,
+    p_valid_until: validUntil,
+  });
   if (error) return fail(error.message);
   await audit(auth.userId, `${{ approved: "menyetujui", fulfilled: "menyelesaikan", rejected: "menolak" }[status]} penukaran #${code}`, "redemption", code);
   refresh();

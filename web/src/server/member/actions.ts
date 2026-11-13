@@ -314,3 +314,42 @@ export async function saveMyAddress(a: MemberAddress): Promise<{ ok: true } | { 
   revalidatePath("/akun", "layout");
   return { ok: true };
 }
+
+export type RedeemShip = {
+  method: "jnt" | "instant" | "pickup";
+  name: string;
+  phone: string;
+  address?: string;
+  city?: string;
+  postalCode?: string;
+  lat?: number;
+  lng?: number;
+  sessionId?: string;
+};
+
+/**
+ * Tukar Slay Point (RPC redeem_reward): poin & stok dipotong langsung. Produk / Merch butuh pengiriman —
+ * J&T / Instant membuat order ongkir (member lanjut bayar di halaman pesanan), ambil di activity tanpa ongkir.
+ */
+export async function redeemReward(rewardId: string, ship: RedeemShip | null): Promise<{ ok: true; code: string; orderCode: string | null } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured) return { ok: false, error: "Mode demo: sambungkan Supabase untuk menukar poin." };
+  const supabase = await createSupabaseServerClient("member");
+  const { data, error } = await supabase.rpc("redeem_reward", {
+    p_reward: rewardId,
+    p_ship: ship && {
+      method: ship.method,
+      name: ship.name,
+      phone: ship.phone,
+      address: ship.address ?? null,
+      city: ship.city ?? null,
+      postal_code: ship.postalCode ?? null,
+      lat: ship.method === "instant" ? (ship.lat ?? null) : null,
+      lng: ship.method === "instant" ? (ship.lng ?? null) : null,
+      session_id: ship.method === "pickup" ? (ship.sessionId ?? null) : null,
+    },
+  });
+  if (error) return { ok: false, error: error.code === "42501" ? "Sesi kamu berakhir — masuk lagi untuk menukar poin." : error.message };
+  const result = data as { code: string; order_code: string | null };
+  revalidatePath("/akun", "layout");
+  return { ok: true, code: result.code, orderCode: result.order_code };
+}

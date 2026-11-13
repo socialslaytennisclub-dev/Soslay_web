@@ -196,7 +196,7 @@ export async function getOrder(code: string): Promise<OrderDetail | null> {
   if (o.detail) {
     return {
       ...base,
-      channel: o.detail.channel === "kuy" ? "Kuy" : "Website",
+      channel: o.detail.channel === "kuy" ? "Kuy" : o.detail.channel === "reward" ? "Tukar poin" : "Website",
       paymentMethod: o.detail.paymentMethod ?? "—",
       subtotal: o.detail.subtotal,
       shippingCost: o.detail.shippingFee,

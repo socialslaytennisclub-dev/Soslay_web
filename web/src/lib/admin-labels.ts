@@ -65,7 +65,10 @@ export function formatShortDate(iso: string | null): string {
 }
 
 // ── Slay Point & Reward ─────────────────────────────────────────────────────
-export const REWARD_CATEGORY_LABEL: Record<RewardCategory, string> = { merch: "Merch", session: "Sesi", voucher: "Voucher", experience: "Pengalaman" };
+export const REWARD_CATEGORY_LABEL: Record<RewardCategory, string> = { merch: "Merch", product: "Produk", session: "Sesi", voucher: "Voucher", experience: "Pengalaman" };
+
+/** Reward fisik → dikirim (J&T / Instant, ongkir ditransfer member) atau diambil di activity; selain itu → kode voucher. */
+export const isPhysicalReward = (c: RewardCategory) => c === "merch" || c === "product";
 
 export const REDEMPTION_STATUS_LABEL: Record<RedemptionStatus, string> = { pending: "Menunggu", approved: "Disetujui", fulfilled: "Selesai", rejected: "Ditolak" };
 

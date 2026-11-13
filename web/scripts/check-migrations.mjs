@@ -1998,6 +1998,17 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert(o2.shipping_fee === expectFee && Number(o2.distance_km) > 5, `ongkir Instant ${JSON.stringify(o2)}`);
   console.assert((await err(`select place_shop_order($1, $2)`, [item(), JSON.stringify({ ...near, city: "Kota Depok" })]))?.includes("DKI"), "Instant Depok ditolak");
   console.assert((await err(`select place_shop_order($1, $2)`, [item(), JSON.stringify({ ...near, lat: -6.05, lng: 106.6 })]))?.includes("25 km"), "Instant > 25 km ditolak");
+  // Rekening di-snapshot per pesanan; Instant tidak bergantung pada baris ongkir J&T; simpan pengaturan hanya admin Settings.
+  const bank2 = await one(`select payment_method, payment_bank->>'accountNo' acc from orders where code = $1`, [c2]);
+  console.assert(bank2.payment_method === "Transfer BCA" && bank2.acc === "123 456 7890", `rekening di-snapshot ${JSON.stringify(bank2)}`);
+  await as(null);
+  await db.query(`update shipping_rates set is_active = false where city = 'Kota Jakarta Pusat'`);
+  await as(buyer);
+  console.assert(typeof (await one(`select place_shop_order($1, $2) c`, [item(), JSON.stringify(near)])).c === "string", "Instant tetap bisa walau J&T kota Jakarta nonaktif");
+  console.assert((await err(`select save_shop_settings('{}'::jsonb, '{}'::jsonb, '[]'::jsonb)`))?.includes("izin"), "member tidak bisa mengubah pengaturan shop");
+  await as(null);
+  await db.query(`update shipping_rates set is_active = true where city = 'Kota Jakarta Pusat'`);
+  await as(buyer);
   // 3) Pickup: ongkir 0, hanya Mabar 14 hari ke depan
   await as(null);
   const mk = async (slug, days) => (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status)
@@ -2064,4 +2075,81 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert(net4 === 0, `poin dicabut saat batal ${net4}`);
   await as(null);
   console.log("✓ shop checkout: ongkir J&T/Instant/Pickup dari server, stok dikunci, kode unik, setujui (mutasi wajib, Keuangan, +poin), tolak +24 jam & ke-3 batal, batal otomatis, J&T selesai 7 hari, poin dicabut");
+}
+
+// Penukaran Slay Point oleh member: poin & stok dipotong saat menukar; Produk/Merch dikirim (order ongkir) atau
+// diambil di activity; Voucher/Sesi/Pengalaman disetujui admin dengan kode voucher; batal → poin & stok kembali.
+{
+  const member = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Rina Reward', 'rina.reward@test.id')`, [member]);
+  const crm = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Rara CRM', 'rara.crm@soslay.test', 'active' from roles where name = 'Super Admin'`, [crm]);
+  await db.query(`insert into points_ledger (member_id, delta, reason, note) values ($1, 3000, 'bonus', 'saldo uji')`, [member]);
+  const balance = async () => (await one(`select coalesce(sum(delta), 0)::int b from points_ledger where member_id = $1`, [member])).b;
+  const reward = async (name, category, cost, stock) =>
+    (await one(`insert into rewards (name, category, points_cost, stock) values ($1, $2::reward_category, $3, $4) returning id`, [name, category, cost, stock])).id;
+  const racket = await reward("Raket partner", "product", 1000, 2);
+  const voucher = await reward("Voucher Shop", "voucher", 300, null);
+  const shipJnt = { method: "jnt", name: "Rina", phone: "0812", address: "Jl. Uji 1", city: "Kota Jakarta Selatan", postal_code: "12730" };
+  const err = async (sql, params) => db.query(sql, params).then(() => null, (e) => e.message);
+  const startBalance = await balance();
+
+  await as(member);
+  await db.exec(`grant select, insert on reward_redemptions to authenticated`);
+  await db.exec(`set role authenticated`);
+  console.assert((await err(`insert into reward_redemptions (member_id, reward_id, points) values ($1, $2, 1)`, [member, voucher])) !== null, "member tidak bisa insert penukaran langsung");
+  await db.exec(`reset role`);
+  console.assert((await err(`select redeem_reward($1)`, [racket]))?.includes("pengiriman"), "Produk wajib pilih pengiriman");
+  // 1) Produk via J&T → order ongkir (channel reward), poin & stok langsung terpotong
+  const r1 = (await one(`select redeem_reward($1, $2) r`, [racket, JSON.stringify(shipJnt)])).r;
+  const ord = await one(`select channel, subtotal, shipping_fee, total, unique_code, status from orders where code = $1`, [r1.order_code]);
+  console.assert(ord.channel === "reward" && ord.subtotal === 0 && ord.shipping_fee === 18000 && ord.total === 18000 + ord.unique_code, `order ongkir reward ${JSON.stringify(ord)}`);
+  console.assert((await balance()) === startBalance - 1000, "poin dipotong saat menukar");
+  console.assert((await one(`select stock from rewards where id = $1`, [racket])).stock === 1, "stok dipotong saat menukar");
+  // Ongkir tidak dibayar sampai batas → order batal → penukaran ditolak, poin & stok kembali
+  await as(null);
+  await db.query(`update orders set pay_deadline = now() - interval '1 minute' where code = $1`, [r1.order_code]);
+  await db.query(`select expire_shop_orders()`);
+  const rd1 = await one(`select status from reward_redemptions where code = $1`, [r1.code]);
+  console.assert(rd1.status === "rejected" && (await balance()) === startBalance && (await one(`select stock from rewards where id = $1`, [racket])).stock === 2, `batal ongkir → poin & stok kembali ${JSON.stringify(rd1)}`);
+
+  // 2) Produk via J&T dibayar → disetujui otomatis; dikirim → selesai
+  await as(member);
+  const r2 = (await one(`select redeem_reward($1, $2) r`, [racket, JSON.stringify(shipJnt)])).r;
+  await as(crm);
+  console.assert((await err(`select set_redemption_status($1, 'approved')`, [r2.code]))?.includes("Ongkir"), "admin tidak bisa setujui sebelum ongkir dibayar");
+  await as(null);
+  await db.query(`update orders set payment_status = 'paid', status = 'processing', paid_at = now() where code = $1`, [r2.order_code]);
+  console.assert((await one(`select status from reward_redemptions where code = $1`, [r2.code])).status === "approved", "ongkir lunas → disetujui");
+  await db.query(`update orders set status = 'shipped', shipped_at = now() where code = $1`, [r2.order_code]);
+  console.assert((await one(`select status from reward_redemptions where code = $1`, [r2.code])).status === "fulfilled", "dikirim → selesai");
+
+  // 3) Produk ambil di activity (bukan hanya Mabar), tanpa ongkir
+  const act = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status)
+    values ('reward-pick', 'Social Match', 'social', $1, now() + interval '3 days', now() + interval '3 days 3 hours', 12, 'published') returning id`, [venue])).id;
+  await as(member);
+  const r3 = (await one(`select redeem_reward($1, $2) r`, [racket, JSON.stringify({ method: "pickup", name: "Rina", phone: "0812", session_id: act })])).r;
+  console.assert(r3.order_code === null, "ambil di activity tanpa order ongkir");
+  console.assert((await err(`select redeem_reward($1, $2)`, [racket, JSON.stringify({ method: "pickup", name: "Rina", phone: "0812", session_id: act })]))?.includes("Stok"), "stok habis ditolak");
+
+  // 4) Voucher: tanpa pengiriman, admin wajib isi kode voucher saat menyetujui; tolak → poin kembali
+  const r4 = (await one(`select redeem_reward($1) r`, [voucher])).r;
+  console.assert((await err(`select set_redemption_status($1, 'approved')`, [r4.code]))?.includes("izin"), "member tidak bisa menyetujui");
+  await as(crm);
+  console.assert((await err(`select set_redemption_status($1, 'approved')`, [r4.code]))?.includes("kode voucher"), "setujui voucher tanpa kode ditolak");
+  await db.query(`select set_redemption_status($1, 'approved', null, 'SLAY-50K-001', '2026-12-31')`, [r4.code]);
+  const v4 = await one(`select status, voucher_code, voucher_valid_until::text until from reward_redemptions where code = $1`, [r4.code]);
+  console.assert(v4.status === "approved" && v4.voucher_code === "SLAY-50K-001" && v4.until === "2026-12-31", `kode voucher tersimpan ${JSON.stringify(v4)}`);
+  const before = await balance();
+  await as(member);
+  const r5 = (await one(`select redeem_reward($1) r`, [voucher])).r;
+  await as(crm);
+  await db.query(`select set_redemption_status($1, 'rejected', 'Uji tolak')`, [r5.code]);
+  console.assert((await balance()) === before, "voucher ditolak → poin kembali");
+  // Saldo kurang ditolak
+  await as(member);
+  const big = await reward("Trip mahal", "experience", 99999, null);
+  console.assert((await err(`select redeem_reward($1)`, [big]))?.includes("belum cukup"), "poin kurang ditolak");
+  await as(null);
+  console.log("✓ penukaran reward member: poin & stok dipotong saat tukar, Produk/Merch J&T/Instant via order ongkir (lunas → disetujui, kirim → selesai, batal → poin & stok kembali), ambil di activity, voucher wajib kode, tolak → poin kembali");
 }

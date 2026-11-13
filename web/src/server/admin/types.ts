@@ -378,7 +378,7 @@ export type OrderListItem = {
 export type OrderDetail = OrderListItem & {
   /** Detail checkout website (bukti transfer, sesi pickup, …); null untuk order lama / Kuy. */
   shop: MyOrder | null;
-  channel: "Website" | "Kuy";
+  channel: "Website" | "Kuy" | "Tukar poin";
   paymentMethod: string;
   customerTier: Tier;
   customerPhone: string;
@@ -622,7 +622,7 @@ export type MemberForm = {
 
 // ── Slay Point & Reward ─────────────────────────────────────────────────────
 
-export type RewardCategory = "merch" | "session" | "voucher" | "experience";
+export type RewardCategory = "merch" | "product" | "session" | "voucher" | "experience";
 export type RedemptionStatus = "pending" | "approved" | "fulfilled" | "rejected";
 export type PointsReason = "attendance" | "purchase" | "redeem" | "adjustment" | "bonus";
 
@@ -650,8 +650,20 @@ export type AdminRedemption = {
   memberBalance: number;
   rewardName: string;
   rewardImage: string | null;
+  rewardCategory: RewardCategory;
   points: number;
+  /** Poin sudah dipotong saat member menukar (penukaran baru); false = dipotong saat disetujui (dicatat admin). */
+  prepaid: boolean;
   status: RedemptionStatus;
+  /** Produk / Merch: cara pengiriman, penerima, activity pengambilan, order ongkir. */
+  delivery: {
+    method: "jnt" | "instant" | "pickup";
+    recipient: { name: string; phone: string; address: string | null; city: string | null; postalCode: string | null } | null;
+    activity: { title: string; startsAt: string; venue: string } | null;
+    order: { code: string; status: string; paid: boolean } | null;
+  } | null;
+  voucherCode: string | null;
+  voucherValidUntil: string | null;
   note: string;
   createdAt: string; // ISO
   handledAt: string | null;

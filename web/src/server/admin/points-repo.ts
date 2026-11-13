@@ -50,20 +50,26 @@ const DEFAULT_BENEFITS: Record<Tier, string[]> = {
 };
 
 // ── Demo ────────────────────────────────────────────────────────────────────
-type RewardRow = {
+export type RewardRow = {
   id: string; name: string; description: string | null; category: RewardCategory; image: string | null;
   points_cost: number; stock: number | null; min_tier: Tier; is_active: boolean;
 };
 type RedemptionRow = {
   code: string; member_id: string; reward_id: string; points: number; status: RedemptionStatus; note: string | null;
   created_at: string; handled_at: string | null; staff_members: { full_name: string } | null;
+  ledger_id?: number | null; delivery_method?: "jnt" | "instant" | "pickup" | null;
+  recipient?: { name: string; phone: string; address: string | null; city: string | null; postal_code: string | null } | null;
+  voucher_code?: string | null; voucher_valid_until?: string | null;
+  orders?: { code: string; status: string; payment_status: string } | null;
+  sessions?: { title: string; starts_at: string; venues: { name: string } | null } | null;
 };
 
-const DEMO_REWARDS: RewardRow[] = [
+export const DEMO_REWARDS: RewardRow[] = [
   { id: "r1", name: "Kaos A Piece of Bali", description: "Kaos katun Soslay edisi Bali, semua ukuran.", category: "merch", image: "/images/home/product-a-piece-of-bali.webp", points_cost: 1500, stock: 24, min_tier: "basic", is_active: true },
   { id: "r2", name: "Gratis 1× Weekly MABAR", description: "Voucher satu sesi Weekly MABAR di venue mana saja.", category: "session", image: "/images/home/hero.webp", points_cost: 800, stock: null, min_tier: "basic", is_active: true },
   { id: "r3", name: "Voucher Shop Rp50.000", description: "Potongan belanja Shop, berlaku 30 hari.", category: "voucher", image: null, points_cost: 450, stock: null, min_tier: "basic", is_active: true },
   { id: "r4", name: "Private coaching 60 menit", description: "Sesi privat dengan coach Soslay, jadwal menyesuaikan.", category: "session", image: "/images/home/venue-raffles.webp", points_cost: 3000, stock: 6, min_tier: "silver", is_active: true },
+  { id: "r7", name: "Overgrip Wilson Pro (3 pcs)", description: "Grip raket dari partner Soslay.", category: "product", image: null, points_cost: 600, stock: 10, min_tier: "basic", is_active: true },
   { id: "r5", name: "Tote bag Slay Club", description: "Tote kanvas tebal untuk raket & perlengkapan.", category: "merch", image: null, points_cost: 900, stock: 3, min_tier: "basic", is_active: true },
   { id: "r6", name: "Seat Tennis Escape Bali", description: "Potongan Rp1.000.000 untuk trip Tennis Escape berikutnya.", category: "experience", image: "/images/home/venue-kula-mani.webp", points_cost: 7500, stock: 2, min_tier: "gold", is_active: true },
 ];
@@ -131,7 +137,8 @@ const loadRewards = cache(async (): Promise<RewardRow[]> => {
 const loadRedemptions = cache(async (): Promise<RedemptionRow[]> => {
   if (!isSupabaseConfigured) return demoRedemptions(await getDataset());
   const supabase = await createSupabaseServerClient();
-  const columns = "code, member_id, reward_id, points, status, note, created_at, handled_at, staff_members(full_name)";
+  const columns =
+    "code, member_id, reward_id, points, status, note, created_at, handled_at, staff_members(full_name), ledger_id, delivery_method, recipient, voucher_code, voucher_valid_until, orders(code, status, payment_status), sessions(title, starts_at, venues(name))";
   // Semua yang masih menunggu (antrean tidak boleh terpotong) + 500 riwayat terbaru.
   const [pending, recent] = await Promise.all([
     supabase.from("reward_redemptions").select(columns).eq("status", "pending").order("created_at", { ascending: false }),
@@ -207,8 +214,20 @@ export async function listRedemptions(): Promise<AdminRedemption[]> {
       memberBalance: d.stats(r.member_id).pointsBalance,
       rewardName: reward?.name ?? "Reward dihapus",
       rewardImage: reward?.image ?? null,
+      rewardCategory: reward?.category ?? "voucher",
       points: r.points,
+      prepaid: r.ledger_id != null,
       status: r.status,
+      delivery: r.delivery_method
+        ? {
+            method: r.delivery_method,
+            recipient: r.recipient ? { name: r.recipient.name, phone: r.recipient.phone, address: r.recipient.address, city: r.recipient.city, postalCode: r.recipient.postal_code } : null,
+            activity: r.sessions ? { title: r.sessions.title, startsAt: r.sessions.starts_at, venue: r.sessions.venues?.name ?? "" } : null,
+            order: r.orders ? { code: r.orders.code, status: r.orders.status, paid: r.orders.payment_status === "paid" } : null,
+          }
+        : null,
+      voucherCode: r.voucher_code ?? null,
+      voucherValidUntil: r.voucher_valid_until ?? null,
       note: r.note ?? "",
       createdAt: r.created_at,
       handledAt: r.handled_at,
