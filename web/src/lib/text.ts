@@ -11,7 +11,7 @@ export const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 /** Nama tim ganda dari nama depan: ["Arya Putra", "Ratna Sari"] → "Arya + Ratna". */
 export const teamName = (team: string[]) => team.map(firstName).join(" + ");
 
-/** Link booking (Kuyy): "kuy.id/soslay/x" → "https://kuy.id/soslay/x"; kosong → ""; null kalau bukan URL http(s). */
+/** Link booking (Kuyy): "kuyy.id/x" → "https://kuyy.id/x"; kosong → ""; null kalau bukan URL http(s). */
 export function normalizeBookingUrl(raw: string): string | null {
   const value = raw.trim();
   if (!value) return "";

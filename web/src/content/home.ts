@@ -2,6 +2,7 @@ import type { IconName } from "@/components/ui";
 import { featuredProducts, productCardProps, productDetails } from "./products";
 import { venueList } from "./venues";
 import type { PostPlatform } from "@/lib/community-posts";
+import { KUYY_PROFILE_URL } from "@/lib/kuyy";
 
 /**
  * Konten homepage (copy, gambar, link) — terpisah dari markup.
@@ -10,7 +11,6 @@ import type { PostPlatform } from "@/lib/community-posts";
  */
 
 const IMG = "/images/home";
-const KUY_BOOKING_URL = "https://kuy.id/soslay";
 
 export const hero = {
   title: "SOSLAY",
@@ -37,7 +37,7 @@ export const activities = {
   title: "More Than Just a Match!",
   description:
     "From casual hit-arounds to match day, there's always a way to play, meet new people, and enjoy tennis with the community.",
-  cta: { label: "Book a Session on Kuyy", href: KUY_BOOKING_URL },
+  cta: { label: "Book a Session on Kuyy", href: KUYY_PROFILE_URL },
   ctaCaption: "Good courts. Good people. Good times.",
   items: [
     {

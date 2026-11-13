@@ -141,7 +141,7 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
   const startsAt = wibAt(input.date, input.start);
   const endsAt = wibAt(input.date, input.end);
   const bookingUrl = normalizeBookingUrl(input.kuyUrl);
-  if (bookingUrl === null) return { ok: false, error: "Link booking Kuy tidak valid — contoh: https://kuy.id/soslay/nama-event" };
+  if (bookingUrl === null) return { ok: false, error: "Link booking Kuy tidak valid — contoh: https://kuyy.id/…" };
 
   if (input.id) {
     const [{ count }, { data: stored }] = await Promise.all([

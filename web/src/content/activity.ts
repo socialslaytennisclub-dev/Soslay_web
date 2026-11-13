@@ -1,6 +1,7 @@
 import { LEVEL_LABEL } from "@/lib/levels";
 import { ACTIVITY_PATHS } from "./activity-paths";
 import { CITY_TIMEZONE, type City } from "@/lib/format";
+import { KUYY_PROFILE_URL } from "@/lib/kuyy";
 
 /**
  * Data sesi aktivitas (dummy, struktur mengikuti PRD §6.5 / tabel `activities`). Tanggalnya hanya
@@ -56,7 +57,6 @@ export function levelLabel(levels: TennisLevel[] = []): string {
   return first === last ? first : `${first}–${last}`;
 }
 
-const KUY = "https://kuy.id/soslay";
 const VENUE_IMG = "/images/home";
 
 export const sessions: Session[] = [
@@ -74,7 +74,7 @@ export const sessions: Session[] = [
     end: "11:00",
     image: "/images/activity/featured-altitude.webp",
     imagePosition: "40% 55%",
-    bookingUrl: `${KUY}/mabar-di-bali`,
+    bookingUrl: KUYY_PROFILE_URL,
     featured: true,
   },
   {
@@ -87,7 +87,7 @@ export const sessions: Session[] = [
     end: "11:00",
     image: `${VENUE_IMG}/venue-ayana.webp`,
     imagePosition: "50% 45%",
-    bookingUrl: `${KUY}/weekly-mabar-ayana`,
+    bookingUrl: KUYY_PROFILE_URL,
   },
   {
     slug: "match-day-maison",
@@ -98,7 +98,7 @@ export const sessions: Session[] = [
     start: "08:00",
     end: "12:00",
     image: `${VENUE_IMG}/venue-maison.webp`,
-    bookingUrl: `${KUY}/match-day-maison`,
+    bookingUrl: KUYY_PROFILE_URL,
   },
   {
     slug: "beginner-coaching-raffles",
@@ -109,7 +109,7 @@ export const sessions: Session[] = [
     start: "16:00",
     end: "18:00",
     image: `${VENUE_IMG}/venue-raffles.webp`,
-    bookingUrl: `${KUY}/beginner-coaching-raffles`,
+    bookingUrl: KUYY_PROFILE_URL,
   },
   {
     slug: "mabar-session-common-grounds",
@@ -120,7 +120,7 @@ export const sessions: Session[] = [
     start: "07:00",
     end: "11:00",
     image: `${VENUE_IMG}/venue-common-grounds.webp`,
-    bookingUrl: `${KUY}/mabar-common-grounds`,
+    bookingUrl: KUYY_PROFILE_URL,
   },
   {
     slug: "weekly-mabar-ayana-3-jam",
@@ -132,7 +132,7 @@ export const sessions: Session[] = [
     end: "10:00",
     image: `${VENUE_IMG}/venue-ayana.webp`,
     imagePosition: "50% 45%",
-    bookingUrl: `${KUY}/weekly-mabar-ayana`,
+    bookingUrl: KUYY_PROFILE_URL,
   },
   {
     slug: "sunset-rally-kula-mani",
@@ -143,7 +143,7 @@ export const sessions: Session[] = [
     start: "16:00",
     end: "19:00",
     image: `${VENUE_IMG}/venue-kula-mani.webp`,
-    bookingUrl: `${KUY}/sunset-rally-kula-mani`,
+    bookingUrl: KUYY_PROFILE_URL,
   },
   {
     slug: "tennis-brunch-swan-paradise",
@@ -154,7 +154,7 @@ export const sessions: Session[] = [
     start: "07:00",
     end: "11:00",
     image: `${VENUE_IMG}/venue-swan-paradise.webp`,
-    bookingUrl: `${KUY}/tennis-brunch-swan-paradise`,
+    bookingUrl: KUYY_PROFILE_URL,
   },
 ];
 
