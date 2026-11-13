@@ -1962,3 +1962,106 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.exec(`reset app.kudos_no_delay`);
   console.log("✓ kudos: beri / ganti / batal (+1 / tetap / −1), 1 per penerima, 403 / 404 / 422 / 409, host hanya Sikap, anonim, hapus admin + log, batal check-in, 3 teratas, jendela 3 minggu, kartu peserta, profil per ringkasan harian");
 }
+
+// Shop checkout & bayar transfer (aturan bisnis Shop draft v1 §11): harga/ongkir dari server, stok dikunci,
+// kode unik tidak bentrok, bukti → verifikasi (setujui: Keuangan A-2 + poin; tolak: batas +24 jam, ke-3 batal),
+// lewat batas tanpa bukti → batal & stok kembali, J&T dikirim > 7 hari → selesai.
+{
+  const user = async (name) => {
+    const id = (await one(`insert into auth.users default values returning id`)).id;
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, name, `${id}@shop.test`]);
+    return id;
+  };
+  const buyer = await user("Arya Shop");
+  const shopAdmin = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Rara Shop', 'rara.shop@soslay.test', 'active' from roles where name = 'Super Admin'`, [shopAdmin]);
+  const prod = (await one(`insert into products (slug, sku, name, category, price, status, weight_grams) values ('a-piece-of-bali', 'SOS-T-BALI', 'A Piece of Bali', 'apparel', 220000, 'active', 300) returning id`)).id;
+  const varXXL = (await one(`insert into product_variants (product_id, sku, options, stock) values ($1, 'SOS-T-BALI-XXL', '{"size":"XXL"}', 5) returning id`, [prod])).id;
+  const stock = async () => (await one(`select stock from product_variants where id = $1`, [varXXL])).stock;
+  const item = (qty = 1) => JSON.stringify([{ slug: "a-piece-of-bali", options: { fit: "Relaxed Fit", size: "XXL" }, quantity: qty }]);
+  const jnt = JSON.stringify({ method: "jnt", name: "Arya", phone: "081234567890", address: "Jl. Kemang Raya No. 12", city: "Jakarta Selatan", postal_code: "12730" });
+  const err = async (sql, params) => db.query(sql, params).then(() => null, (e) => e.message);
+
+  await as(buyer);
+  // 1) J&T Jakarta Selatan, 0,3 kg → 1 kg → Rp18.000; total = 220.000 + 18.000 + kode unik
+  const c1 = (await one(`select place_shop_order($1, $2) c`, [item(), jnt])).c;
+  const o1 = await one(`select * from orders where code = $1`, [c1]);
+  console.assert(o1.shipping_fee === 18000 && o1.subtotal === 220000 && o1.total === 238000 + o1.unique_code && o1.unique_code >= 1, `ongkir J&T ${JSON.stringify(o1)}`);
+  console.assert((await stock()) === 4, "stok dikunci saat pesanan dibuat");
+  console.assert((await err(`select place_shop_order($1, $2)`, [item(1), JSON.stringify({ ...JSON.parse(jnt), city: "Medan" })]))?.includes("belum tersedia"), "kota di luar master J&T ditolak");
+  console.assert((await err(`select place_shop_order($1, $2)`, [item(9), jnt]))?.includes("Stok"), "stok tidak cukup ditolak");
+  // 2) Instant: ±8,4 km → Rp27.000; Depok → ditolak; > 25 km → ditolak
+  const near = { method: "instant", name: "Arya", phone: "0812", address: "Jl. X", city: "Jakarta Pusat", postal_code: "10310", lat: -6.2088, lng: 106.8456 };
+  const c2 = (await one(`select place_shop_order($1, $2) c`, [item(), JSON.stringify(near)])).c;
+  const o2 = await one(`select shipping_fee, distance_km from orders where code = $1`, [c2]);
+  const expectFee = 15000 + Math.ceil(Math.max(0, Number(o2.distance_km) - 5)) * 3000;
+  console.assert(o2.shipping_fee === expectFee && Number(o2.distance_km) > 5, `ongkir Instant ${JSON.stringify(o2)}`);
+  console.assert((await err(`select place_shop_order($1, $2)`, [item(), JSON.stringify({ ...near, city: "Depok" })]))?.includes("DKI"), "Instant Depok ditolak");
+  console.assert((await err(`select place_shop_order($1, $2)`, [item(), JSON.stringify({ ...near, lat: -6.05, lng: 106.6 })]))?.includes("25 km"), "Instant > 25 km ditolak");
+  // 3) Pickup: ongkir 0, hanya Mabar 14 hari ke depan
+  await as(null);
+  const mk = async (slug, days) => (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status)
+    values ($1, 'Mabar', 'weekly-mabar', $2, now() + make_interval(days => $3), now() + make_interval(days => $3) + interval '3 hours', 12, 'published') returning id`, [slug, venue, days])).id;
+  const soon = await mk("shop-pick-5", 5);
+  const far = await mk("shop-pick-20", 20);
+  await as(buyer);
+  const c3 = (await one(`select place_shop_order($1, $2) c`, [item(), JSON.stringify({ method: "pickup", name: "Arya", phone: "0812", session_id: soon })])).c;
+  console.assert((await one(`select shipping_fee from orders where code = $1`, [c3])).shipping_fee === 0, "pickup gratis");
+  console.assert((await err(`select place_shop_order($1, $2)`, [item(), JSON.stringify({ method: "pickup", name: "Arya", phone: "0812", session_id: far })]))?.includes("pilih sesi lain"), "sesi > 14 hari ditolak");
+  // 10) kode unik order aktif tidak pernah sama
+  const codes = (await db.query(`select unique_code from orders where status = 'pending' and payment_status = 'pending'`)).rows.map((r) => r.unique_code);
+  console.assert(new Set(codes).size === codes.length, `kode unik bentrok ${codes}`);
+
+  // Bukti → setujui: wajib centang mutasi; Keuangan A-2 = total transfer; +22 poin
+  const proof = (amount) => JSON.stringify({ path: "x/y.jpg", name: "bukti.jpg", size: 1000, sender_name: "Arya", sender_bank: "BCA", amount, transfer_date: "2026-11-13" });
+  await db.query(`select submit_payment_proof($1, $2)`, [c1, proof(o1.total)]);
+  await db.query(`select submit_payment_proof($1, $2)`, [c1, proof(o1.total)]); // Ganti bukti
+  console.assert((await one(`select count(*) filter (where p.status = 'pending')::int pe, count(*) filter (where p.status = 'replaced')::int r from order_payment_proofs p join orders o on o.id = p.order_id where o.code = $1`, [c1])).r === 1, "bukti lama ditandai replaced");
+  console.assert((await err(`select review_payment_proof($1, true, true)`, [c1]))?.includes("izin"), "member tidak bisa memverifikasi");
+  await db.query(`update finance_settings set go_live_date = '2020-01-01' where true`); // uji: sudah go-live
+  await as(shopAdmin);
+  console.assert((await err(`select review_payment_proof($1, true, false)`, [c1]))?.includes("mutasi"), "setujui tanpa centang mutasi ditolak");
+  await db.query(`select review_payment_proof($1, true, true)`, [c1]);
+  const paid = await one(`select status, payment_status, points_awarded, id from orders where code = $1`, [c1]);
+  const fin = Number((await one(`select coalesce(sum(amount), 0) s from finance_transactions where source = 'shop_order_verified' and source_ref = $1 and deleted_at is null`, ["ord:" + paid.id])).s);
+  console.assert(paid.status === "processing" && paid.payment_status === "paid" && paid.points_awarded === 22 && fin === o1.total, `setujui ${JSON.stringify(paid)} keuangan ${fin}`);
+  console.assert(Number((await one(`select coalesce(sum(delta), 0) d from points_ledger where order_id = $1`, [paid.id])).d) === 22, "+22 Slay Point");
+
+  // Tolak → batas +24 jam; tolak ke-3 → batal, stok kembali
+  await as(buyer);
+  const before = await stock();
+  for (let i = 1; i <= 3; i++) {
+    await as(buyer);
+    await db.query(`select submit_payment_proof($1, $2)`, [c3, proof(1)]);
+    await as(shopAdmin);
+    console.assert((await err(`select review_payment_proof($1, false, false, 'Lainnya', '')`, [c3]))?.includes("pesan"), "Lainnya wajib pesan");
+    const r = (await one(`select review_payment_proof($1, false, false, 'Bukti tidak terbaca / terpotong', 'Terpotong') r`, [c3])).r;
+    if (i < 3) {
+      const d = await one(`select pay_deadline > now() + interval '23 hours' ok, status from orders where code = $1`, [c3]);
+      console.assert(r.result === "rejected" && d.ok && d.status === "pending", `tolak ke-${i} ${JSON.stringify(r)}`);
+    } else console.assert(r.result === "cancelled", `tolak ke-3 batal ${JSON.stringify(r)}`);
+  }
+  console.assert((await stock()) === before + 1, "tolak ke-3 → stok kembali");
+
+  // Lewat batas tanpa bukti → batal otomatis, stok kembali; yang menunggu verifikasi tidak ikut
+  await as(null);
+  await db.query(`update orders set pay_deadline = now() - interval '1 minute' where code = $1`, [c2]);
+  const s0 = await stock();
+  await db.query(`select expire_shop_orders()`);
+  console.assert((await one(`select status from orders where code = $1`, [c2])).status === "cancelled" && (await stock()) === s0 + 1, "batal otomatis 24 jam");
+
+  // Admin batal sesudah lunas → poin dicabut; J&T dikirim > 7 hari → selesai
+  await db.query(`update orders set status = 'shipped', shipped_at = now() - interval '8 days' where code = $1`, [c1]);
+  await db.query(`select expire_shop_orders()`);
+  console.assert((await one(`select status from orders where code = $1`, [c1])).status === "completed", "J&T selesai otomatis 7 hari");
+  await as(buyer);
+  const c4 = (await one(`select place_shop_order($1, $2) c`, [item(), jnt])).c;
+  await db.query(`select submit_payment_proof($1, $2)`, [c4, proof(1)]);
+  await as(shopAdmin);
+  await db.query(`select review_payment_proof($1, true, true)`, [c4]);
+  await db.query(`update orders set status = 'cancelled', cancelled_at = now(), cancel_reason = 'Uji' where code = $1`, [c4]);
+  const net4 = Number((await one(`select coalesce(sum(delta), 0) d from points_ledger where order_id = (select id from orders where code = $1)`, [c4])).d);
+  console.assert(net4 === 0, `poin dicabut saat batal ${net4}`);
+  await as(null);
+  console.log("✓ shop checkout: ongkir J&T/Instant/Pickup dari server, stok dikunci, kode unik, setujui (mutasi wajib, Keuangan, +poin), tolak +24 jam & ke-3 batal, batal otomatis, J&T selesai 7 hari, poin dicabut");
+}

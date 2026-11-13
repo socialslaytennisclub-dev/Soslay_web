@@ -2,8 +2,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
+import { STAGE } from "@/lib/checkout";
 import type { OrderListItem } from "@/server/admin/types";
-import { desktopOnlyClass, MobileCard, MobileCardList, OrderStatusBadge, PaymentBadge } from "../ui/AdminUI";
+import { Badge, desktopOnlyClass, MobileCard, MobileCardList, OrderStatusBadge, PaymentBadge } from "../ui/AdminUI";
 import styles from "./Orders.module.css";
 
 const when = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
@@ -21,6 +22,25 @@ function Customer({ o }: { o: OrderListItem }) {
   );
 }
 
+/** Status order checkout website: "Bukti masuk" / "Lewat 12 jam" saat menunggu verifikasi, selain itu status gabungan. */
+function Status({ o }: { o: OrderListItem }) {
+  if (!o.method) return <OrderStatusBadge status={o.status} />;
+  if (o.stage === "awaiting_verification") {
+    const late = o.proofLate;
+    return (
+      <Badge tone={late ? "pink" : "indigo"} dot>
+        {late ? "Lewat 12 jam" : "Bukti masuk"}
+      </Badge>
+    );
+  }
+  const tone = { amber: "neutral", indigo: "indigo", red: "pink", lime: "lime", green: "lime", neutral: "neutral" } as const;
+  return (
+    <Badge tone={tone[STAGE[o.stage].tone]} dot>
+      {STAGE[o.stage].label}
+    </Badge>
+  );
+}
+
 /** Daftar order (Figma 25:5560). `hrefFor` membuka panel detail lewat ?order=. */
 export function OrdersTable({ items, selected, auto, hrefFor }: { items: OrderListItem[]; selected?: string; auto?: boolean; hrefFor: (code: string) => string }) {
   if (items.length === 0) return <p className={styles.empty}>Tidak ada order untuk filter ini.</p>;
@@ -35,7 +55,7 @@ export function OrdersTable({ items, selected, auto, hrefFor }: { items: OrderLi
               href={hrefFor(o.code)}
               selected={!auto && o.code === selected}
               title={<Customer o={o} />}
-              aside={<OrderStatusBadge status={o.status} />}
+              aside={<Status o={o} />}
               meta={[
                 { label: "Order", value: <span className={styles.code}>#{o.code}</span> },
                 { label: "Total", value: <span className={styles.strong}>{formatRupiahPlain(o.total)}</span> },
@@ -74,7 +94,7 @@ export function OrdersTable({ items, selected, auto, hrefFor }: { items: OrderLi
                   <PaymentBadge status={o.payment} />
                 </td>
                 <td>
-                  <OrderStatusBadge status={o.status} />
+                  <Status o={o} />
                 </td>
               </tr>
             ))}

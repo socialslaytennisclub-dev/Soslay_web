@@ -1,4 +1,5 @@
 import "server-only";
+import type { ShippingMethod } from "@/lib/checkout";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cache } from "react";
 import { products as catalog } from "@/content/products";
@@ -46,6 +47,8 @@ export type DataOrder = demo.DemoOrder & {
     courier: string | null;
     trackingNumber: string | null;
   };
+  /** Order checkout website (bayar transfer): opsi kirim, bukti menunggu, jumlah tolak. */
+  shop?: { method: ShippingMethod; hasPendingProof: boolean; proofAt: string | null; rejections: number };
 };
 export type MemberStats = demo.DemoMemberStats;
 
@@ -209,6 +212,7 @@ type OrderRowDb = {
   code: string; member_id: string | null; status: OrderStatus; payment_status: PaymentStatus; payment_method: string | null; channel: string;
   subtotal: number; shipping_fee: number; discount: number; total: number; shipping_address: string; courier: string | null; tracking_number: string | null;
   placed_at: string; order_items: { product_name: string; options: { label?: string } & Record<string, string>; unit_price: number; quantity: number }[];
+  shipping_method: ShippingMethod | null; proof_rejections: number; order_payment_proofs: { status: string; uploaded_at: string }[];
 };
 
 async function loadLive(): Promise<Dataset> {
@@ -227,7 +231,7 @@ async function loadLive(): Promise<Dataset> {
     fetchAll<OrderRowDb>(
       client,
       "orders",
-      "code, member_id, status, payment_status, payment_method, channel, subtotal, shipping_fee, discount, total, shipping_address, courier, tracking_number, placed_at, order_items(product_name, options, unit_price, quantity)",
+      "code, member_id, status, payment_status, payment_method, channel, subtotal, shipping_fee, discount, total, shipping_address, courier, tracking_number, placed_at, shipping_method, proof_rejections, order_items(product_name, options, unit_price, quantity), order_payment_proofs(status, uploaded_at)",
       "placed_at",
     ),
     fetchFillCounts(client),
@@ -336,6 +340,14 @@ async function loadLive(): Promise<Dataset> {
         courier: o.courier,
         trackingNumber: o.tracking_number,
       },
+      shop: o.shipping_method
+        ? {
+            method: o.shipping_method,
+            hasPendingProof: o.order_payment_proofs.some((p) => p.status === "pending"),
+            proofAt: o.order_payment_proofs.find((p) => p.status === "pending")?.uploaded_at ?? null,
+            rejections: o.proof_rejections,
+          }
+        : undefined,
     }))
     .sort((a, b) => b.placedAt.getTime() - a.placedAt.getTime());
 

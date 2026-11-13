@@ -1,3 +1,5 @@
+import type { OrderStage, ShippingMethod } from "@/lib/checkout";
+import type { MyOrder } from "@/server/shop/types";
 import type { KudosTop } from "@/lib/kudos";
 /**
  * Tipe data admin — cermin dari tabel/view di supabase/migrations (profiles, member_stats,
@@ -349,7 +351,8 @@ export type KuyImportPreview = { fileName: string; fileSize: number; eventTitle:
 
 // ── Orders ──────────────────────────────────────────────────────────────────
 
-export type OrdersTab = "all" | "to_process" | "shipped" | "completed" | "cancelled";
+/** Tab Orders (aturan Shop §1): Semua · Verifikasi · Perlu dikirim · Dikirim · Selesai (+ Menunggu bayar & Dibatalkan). */
+export type OrdersTab = "all" | "verify" | "to_process" | "shipped" | "completed" | "awaiting" | "cancelled";
 
 export type OrdersQuery = { tab?: OrdersTab; q?: string; payment?: PaymentStatus; month?: string; order?: string };
 
@@ -363,9 +366,18 @@ export type OrderListItem = {
   payment: PaymentStatus;
   status: OrderStatus;
   placedAt: string;
+  /** Status gabungan (Menunggu bayar / verifikasi / upload ulang / dikemas / …). */
+  stage: OrderStage;
+  method: ShippingMethod | null;
+  /** Bukti yang menunggu verifikasi diunggah pada… (chip "Lewat 12 jam"). */
+  proofAt: string | null;
+  /** Bukti menunggu verifikasi lebih dari 12 jam (SLA, chip "Lewat 12 jam"). */
+  proofLate: boolean;
 };
 
 export type OrderDetail = OrderListItem & {
+  /** Detail checkout website (bukti transfer, sesi pickup, …); null untuk order lama / Kuy. */
+  shop: MyOrder | null;
   channel: "Website" | "Kuy";
   paymentMethod: string;
   customerTier: Tier;
@@ -386,6 +398,10 @@ export type OrdersResult = {
   counts: Record<OrdersTab, number>;
   months: { value: string; label: string }[];
   kpis: {
+    toVerify: number;
+    verifyLate: number;
+    awaiting: number;
+    toShipByMethod: string;
     toProcess: number;
     overdue: number;
     inTransit: number;

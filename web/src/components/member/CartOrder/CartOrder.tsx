@@ -2,12 +2,13 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, Checkbox, Icon, QuantityStepper } from "@/components/ui";
 import { orderPage } from "@/content/member";
 import { describeVariant, findProduct, LOW_STOCK, productHref } from "@/content/products";
 import { useCart } from "@/hooks/useCart";
-import { cartItemKey, type CartItem } from "@/lib/cart";
+import { cartItemKey, writeCheckoutSelection, type CartItem } from "@/lib/cart";
 import { formatRupiah } from "@/lib/format";
 import styles from "./CartOrder.module.css";
 import { blurProps } from "@/lib/image";
@@ -17,6 +18,7 @@ import { blurProps } from "@/lib/image";
  * Item baru otomatis terpilih; yang di-uncheck disimpan di `excluded`.
  */
 export function CartOrder() {
+  const router = useRouter();
   const { items, count, hydrated, setQuantity, remove } = useCart();
   const [excluded, setExcluded] = useState<Set<string>>(() => new Set());
 
@@ -112,15 +114,18 @@ export function CartOrder() {
             <strong>+{points} pts</strong> {orderPage.pointsCopy}
           </p>
         )}
-        {selected.length > 0 ? (
-          <Button href={orderPage.checkout.href} variant="primary" className={styles.checkout}>
-            {orderPage.checkout.label}
-          </Button>
-        ) : (
-          <Button variant="primary" className={styles.checkout} disabled>
-            {orderPage.checkout.label}
-          </Button>
-        )}
+        {/* Item yang dicentang dibawa ke Checkout (sessionStorage), sisanya tetap di keranjang. */}
+        <Button
+          variant="primary"
+          className={styles.checkout}
+          disabled={selected.length === 0}
+          onClick={() => {
+            writeCheckoutSelection({ source: "cart", items: selected });
+            router.push(orderPage.checkout.href);
+          }}
+        >
+          {orderPage.checkout.label}
+        </Button>
         <Link href={orderPage.continueShopping.href} className={styles.continue}>
           {orderPage.continueShopping.label}
         </Link>

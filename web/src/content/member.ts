@@ -252,7 +252,7 @@ export const orderPage = {
   pointsCopy: "Slay Point dari pesanan ini",
   /** PRD: 1 Slay Point per Rp10.000 belanja. */
   rupiahPerPoint: 10000,
-  checkout: { label: "Checkout", href: "/checkout" },
+  checkout: { label: "Checkout", href: "/akun/checkout" },
   continueShopping: { label: "Lanjut belanja", href: "/shop" },
   empty: {
     title: "Keranjang kamu masih kosong",

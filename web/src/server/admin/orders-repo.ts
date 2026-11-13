@@ -1,6 +1,11 @@
 import "server-only";
 import { products } from "@/content/products";
-import { getDataset, type DataOrder, type Dataset } from "./dataset";
+import { orderStage, SHIPPING_LABEL } from "@/lib/checkout";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { demoOrders } from "@/server/shop/demo-store";
+import { demoView, ORDER_COLUMNS, toMyOrder, type OrderRow } from "@/server/shop/orders";
+import { getDataset, invalidateDataset, type DataOrder, type Dataset } from "./dataset";
 import { DAY, monthKey, pctDelta, WIB } from "./time";
 import type { OrderDetail, OrderListItem, OrdersQuery, OrdersResult, OrdersTab } from "./types";
 
@@ -35,12 +40,49 @@ const seedOf = (code: string) => Number(code.replace(/\D/g, "")) || 0;
 const monthLabel = (key: string, style: "short" | "long" = "short") =>
   new Intl.DateTimeFormat("id-ID", { month: style, year: style === "long" ? "numeric" : undefined, timeZone: "UTC" }).format(new Date(`${key}-01T00:00:00Z`));
 
+const stageOf = (o: DataOrder) =>
+  orderStage({ status: o.status, payment: o.payment, hasPendingProof: o.shop?.hasPendingProof ?? false, rejections: o.shop?.rejections ?? 0, method: o.shop?.method ?? null });
+
 function inTab(o: DataOrder, tab: OrdersTab) {
-  if (tab === "to_process") return o.status === "processing" || (o.status === "pending" && o.payment === "paid");
-  if (tab === "shipped") return o.status === "shipped";
-  if (tab === "completed") return o.status === "completed";
-  if (tab === "cancelled") return o.status === "cancelled";
+  const stage = stageOf(o);
+  if (tab === "verify") return stage === "awaiting_verification";
+  if (tab === "awaiting") return stage === "awaiting_payment" || stage === "reupload";
+  if (tab === "to_process") return stage === "processing";
+  if (tab === "shipped") return stage === "shipped" || stage === "ready_pickup";
+  if (tab === "completed") return stage === "completed";
+  if (tab === "cancelled") return stage === "cancelled";
   return true;
+}
+
+/**
+ * Semua order: dataset (Supabase / demo) + pesanan checkout mode demo (memori server dev, lihat
+ * server/shop/demo-store) supaya alur verifikasi bisa dicoba tanpa Supabase.
+ */
+async function loadOrders(): Promise<{ d: Dataset; orders: DataOrder[] }> {
+  if (isSupabaseConfigured) {
+    // Batal otomatis (24 jam tanpa bukti) & J&T selesai 7 hari — sebelum daftar dibaca.
+    const { data: changed } = await (await createSupabaseServerClient()).rpc("expire_shop_orders");
+    if (Number(changed) > 0) invalidateDataset();
+    const d = await getDataset();
+    return { d, orders: d.orders };
+  }
+  const d = await getDataset();
+  const buyer = d.members[0]?.id ?? "";
+  const local: DataOrder[] = [...demoOrders().values()].map((o) => {
+    const v = demoView(o);
+    return {
+      code: o.code,
+      memberId: buyer,
+      items: v.items.map((i) => ({ productSlug: products.find((p) => p.name === i.name)?.slug ?? "", name: i.name, variant: i.variant, price: i.price, quantity: i.quantity })),
+      total: v.subtotal,
+      payment: o.payment as DataOrder["payment"],
+      status: o.status as DataOrder["status"],
+      placedAt: new Date(o.placedAt),
+      detail: { paymentMethod: "Transfer BCA", channel: "website", subtotal: v.subtotal, shippingFee: v.shippingFee, discount: 0, grandTotal: v.total, address: v.recipient.address, courier: v.courier, trackingNumber: v.trackingNumber },
+      shop: { method: o.method, hasPendingProof: o.proofs.some((p) => p.status === "pending"), proofAt: o.proofs.find((p) => p.status === "pending")?.uploadedAt ?? null, rejections: o.rejections },
+    };
+  });
+  return { d, orders: [...local.sort((a, b) => b.placedAt.getTime() - a.placedAt.getTime()), ...d.orders] };
 }
 
 function toItem(d: Dataset, o: DataOrder): OrderListItem {
@@ -50,9 +92,14 @@ function toItem(d: Dataset, o: DataOrder): OrderListItem {
     code: o.code,
     memberId: o.memberId,
     customer: d.memberById.get(o.memberId)?.fullName ?? "—",
+    stage: stageOf(o),
+    method: o.shop?.method ?? null,
+    proofAt: o.shop?.proofAt ?? null,
+    proofLate: Boolean(o.shop?.proofAt && d.now.getTime() - new Date(o.shop.proofAt).getTime() > 12 * 3600_000),
     image: productBySlug.get(first.productSlug)?.image ?? "",
-    summary: `${first.name}${first.variant ? ` · ${first.variant}` : ""}${first.quantity > 1 ? ` ×${first.quantity}` : ""}${extra > 0 ? ` +${extra} produk` : ""}`,
-    total: o.total,
+    summary: `${first.name}${first.variant ? ` · ${first.variant}` : ""}${first.quantity > 1 ? ` ×${first.quantity}` : ""}${extra > 0 ? ` +${extra} produk` : ""}${o.shop ? ` · ${SHIPPING_LABEL[o.shop.method].summary}` : ""}`,
+    // Order checkout website: total transfer (subtotal + ongkir + kode unik), sama dengan yang dicocokkan admin.
+    total: o.shop ? (o.detail?.grandTotal ?? o.total) : o.total,
     payment: o.payment,
     status: o.status,
     placedAt: o.placedAt.toISOString(),
@@ -60,8 +107,8 @@ function toItem(d: Dataset, o: DataOrder): OrderListItem {
 }
 
 export async function listOrders(query: OrdersQuery): Promise<OrdersResult> {
-  const d = await getDataset();
-  const { orders, memberById, now } = d;
+  const { d, orders } = await loadOrders();
+  const { memberById, now } = d;
   const tab = query.tab ?? "all";
   const q = query.q?.trim().toLowerCase().replace(/^#/, "");
   const items = orders
@@ -72,7 +119,7 @@ export async function listOrders(query: OrdersQuery): Promise<OrdersResult> {
     .slice(0, 80)
     .map((o) => toItem(d, o));
 
-  const tabs: OrdersTab[] = ["all", "to_process", "shipped", "completed", "cancelled"];
+  const tabs: OrdersTab[] = ["all", "verify", "to_process", "shipped", "completed", "awaiting", "cancelled"];
   const counts = Object.fromEntries(tabs.map((t) => [t, orders.filter((o) => inTab(o, t)).length])) as Record<OrdersTab, number>;
 
   const thisMonth = monthKey(now);
@@ -93,6 +140,12 @@ export async function listOrders(query: OrdersQuery): Promise<OrdersResult> {
     counts,
     months: [...new Set(orders.map((o) => monthKey(o.placedAt)))].sort().reverse().map((value) => ({ value, label: monthLabel(value, "long") })),
     kpis: {
+      toVerify: counts.verify,
+      verifyLate: orders.filter((o) => o.shop?.proofAt && now.getTime() - new Date(o.shop.proofAt).getTime() > 12 * 3600_000).length,
+      awaiting: counts.awaiting,
+      toShipByMethod: (["jnt", "instant", "pickup"] as const)
+        .map((m) => `${SHIPPING_LABEL[m].summary.replace(" Reguler", "").replace(" Mabar", "")} ${orders.filter((o) => inTab(o, "to_process") && o.shop?.method === m).length}`)
+        .join(" · "),
       toProcess: counts.to_process,
       overdue: orders.filter((o) => inTab(o, "to_process") && now.getTime() - o.placedAt.getTime() > DAY).length,
       inTransit: counts.shipped,
@@ -105,14 +158,41 @@ export async function listOrders(query: OrdersQuery): Promise<OrdersResult> {
   };
 }
 
+/** Detail checkout website (bukti, sesi pickup, …) untuk panel admin. */
+async function shopDetail(code: string) {
+  if (!isSupabaseConfigured) {
+    const o = demoOrders().get(code);
+    return o ? demoView(o) : null;
+  }
+  const { data } = await (await createSupabaseServerClient()).from("orders").select(ORDER_COLUMNS).eq("code", code).not("shipping_method", "is", null).maybeSingle();
+  return data ? toMyOrder(data as unknown as OrderRow) : null;
+}
+
 export async function getOrder(code: string): Promise<OrderDetail | null> {
-  const d = await getDataset();
-  const o = d.orders.find((x) => x.code === code);
+  const { d, orders } = await loadOrders();
+  const o = orders.find((x) => x.code === code);
   if (!o) return null;
+  const shop = o.shop ? await shopDetail(code) : null;
   const member = d.memberById.get(o.memberId);
   const previousOrders = d.ordersOf(o.memberId).filter((x) => x.placedAt < o.placedAt).length;
   const items = o.items.map((i) => ({ name: i.name, variant: i.variant, image: productBySlug.get(i.productSlug)?.image ?? "", price: i.price, quantity: i.quantity }));
-  const base = { ...toItem(d, o), customerTier: d.stats(o.memberId).tier, customerPhone: member?.phone ?? "", previousOrders, items };
+  const base = { ...toItem(d, o), shop, customerTier: d.stats(o.memberId).tier, customerPhone: member?.phone ?? "", previousOrders, items };
+  // Order checkout website: angka & alamat dari pesanan itu sendiri (snapshot saat checkout).
+  if (shop) {
+    return {
+      ...base,
+      channel: "Website",
+      customerPhone: shop.recipient.phone || base.customerPhone,
+      paymentMethod: "Transfer BCA",
+      subtotal: shop.subtotal,
+      shippingCost: shop.shippingFee,
+      pointsDiscount: 0,
+      grandTotal: shop.total,
+      address: [shop.recipient.address, shop.recipient.city, shop.recipient.postalCode].filter(Boolean).join(", "),
+      courier: shop.courier ?? "",
+      trackingNumber: shop.trackingNumber,
+    };
+  }
   if (o.detail) {
     return {
       ...base,
