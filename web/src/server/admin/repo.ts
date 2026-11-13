@@ -14,6 +14,8 @@ import type {
   MemberForm,
   MemberNote,
   MemberListItem,
+  MemberSpend,
+  MemberSpendItem,
   MembersQuery,
   MembersResult,
   MemberTimelineItem,
@@ -183,6 +185,74 @@ export const listSegments = cache(async (): Promise<Segment[]> => {
   return defs.map((segment) => ({ ...segment, count: applyFilters(everyone, segment.query, d.now).length }));
 });
 
+const spendDate = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
+
+/**
+ * Uang yang sudah dibayar member (untuk kartu "Total spent"):
+ *  · Activity — per activity satu angka: peserta impor Kuyy / tambahan admin yang lunas (nominal di daftar
+ *    peserta) atau booking website yang lunas. Keduanya disamakan trigger, jadi diambil yang terbesar, bukan dijumlah.
+ *  · Trip — DP / cicilan / pelunasan paket trip yang tidak dibatalkan (voided).
+ *  · Shop — order lunas (sama dengan member_stats.total_spent).
+ * Tidak bergantung pada go-live Keuangan: activity lama yang diimpor tetap terhitung di sini.
+ */
+async function loadSpend(d: Dataset, memberId: string): Promise<MemberSpend> {
+  const items: MemberSpendItem[] = [];
+  for (const o of d.ordersOf(memberId)) {
+    if (o.payment !== "paid" || !o.total) continue;
+    const name = o.items[0]?.name ?? "Order shop";
+    items.push({ kind: "shop", title: o.items.length > 1 ? `${name} +${o.items.length - 1} lainnya` : name, detail: `Order #${o.code}`, at: o.placedAt.toISOString(), amount: o.total });
+  }
+
+  let tripCount = 0;
+  if (d.live) {
+    const supabase = await createSupabaseServerClient();
+    const [participants, bookings, trips] = await Promise.all([
+      supabase.from("session_participants").select("session_id, amount, payment_status, source, is_kuy_import").eq("member_id", memberId),
+      supabase.from("bookings").select("session_id, amount, payment_status, status").eq("member_id", memberId),
+      supabase
+        .from("trip_bookings")
+        .select("id, trips(title), trip_payments(kind, amount, received_on, voided_at)")
+        .eq("member_id", memberId),
+    ]);
+
+    const perSession = new Map<string, number>();
+    const keep = (sessionId: string, amount: number) => perSession.set(sessionId, Math.max(perSession.get(sessionId) ?? 0, amount));
+    for (const p of participants.data ?? []) {
+      if (p.payment_status === "paid" && (p.is_kuy_import || p.source === "admin") && p.amount > 0) keep(p.session_id as string, p.amount as number);
+    }
+    for (const b of bookings.data ?? []) {
+      if (b.payment_status === "paid" && b.status !== "cancelled" && b.amount > 0) keep(b.session_id as string, b.amount as number);
+    }
+    for (const [sessionId, amount] of perSession) {
+      const s = d.sessionById.get(sessionId);
+      items.push({
+        kind: "activity",
+        title: s?.title ?? "Activity",
+        detail: s ? `${s.venueName} · ${spendDate.format(s.startsAt)}` : "Activity",
+        at: (s?.startsAt ?? new Date(0)).toISOString(),
+        amount,
+      });
+    }
+
+    const KIND: Record<string, string> = { dp: "DP", installment: "Cicilan", settlement: "Pelunasan" };
+    for (const tb of trips.data ?? []) {
+      const title = (tb.trips as unknown as { title: string } | null)?.title ?? "Trip";
+      const pays = ((tb.trip_payments ?? []) as { kind: string; amount: number; received_on: string; voided_at: string | null }[]).filter((p) => !p.voided_at);
+      if (pays.length) tripCount++;
+      for (const p of pays) {
+        items.push({ kind: "trip", title, detail: `${KIND[p.kind] ?? "Pembayaran"} · ${spendDate.format(new Date(`${p.received_on}T12:00:00+07:00`))}`, at: new Date(`${p.received_on}T12:00:00+07:00`).toISOString(), amount: p.amount });
+      }
+    }
+  }
+
+  items.sort((a, b) => b.at.localeCompare(a.at));
+  const sum = (kind: MemberSpendItem["kind"]) => items.filter((i) => i.kind === kind).reduce((n, i) => n + i.amount, 0);
+  const activities = { amount: sum("activity"), count: items.filter((i) => i.kind === "activity").length };
+  const trips = { amount: sum("trip"), count: tripCount };
+  const shop = { amount: sum("shop"), count: items.filter((i) => i.kind === "shop").length };
+  return { total: activities.amount + trips.amount + shop.amount, activities, trips, shop, items };
+}
+
 async function loadNotes(memberId: string): Promise<MemberNote[]> {
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase
@@ -244,6 +314,7 @@ export async function getMember(id: string): Promise<MemberDetail | null> {
   timeline.sort((a, b) => b.at.localeCompare(a.at));
 
   const due = stats.sessionsAttended + stats.noShows;
+  const spend = await loadSpend(d, id);
   return {
     ...list,
     phone: member.phone,
@@ -256,6 +327,7 @@ export async function getMember(id: string): Promise<MemberDetail | null> {
     hoursPlayed: Math.round(stats.hoursPlayed),
     attendanceRate: due ? Math.round((stats.sessionsAttended / due) * 100) : 0,
     totalSpent: stats.totalSpent,
+    spend,
     pointsEarned: stats.pointsEarned,
     timeline: timeline.slice(0, 8),
     bookings: memberBookings.slice(0, 8).map(({ booking, session }) => ({

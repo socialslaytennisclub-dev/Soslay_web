@@ -54,6 +54,19 @@ export type MemberBookingRow = {
 
 export type MemberNote = { id: string; author: string; body: string; at: string };
 
+/** Satu pengeluaran member: tiket activity, pembayaran trip, atau order shop yang lunas. */
+export type MemberSpendItem = { kind: "activity" | "trip" | "shop"; title: string; detail: string; at: string; amount: number };
+
+/** Total uang yang sudah dibayar member, dipisah per jenis. */
+export type MemberSpend = {
+  total: number;
+  activities: { amount: number; count: number };
+  trips: { amount: number; count: number };
+  shop: { amount: number; count: number };
+  /** Terbaru dulu. */
+  items: MemberSpendItem[];
+};
+
 export type MemberDetail = MemberListItem & {
   phone: string;
   birthDate: string | null;
@@ -65,6 +78,7 @@ export type MemberDetail = MemberListItem & {
   hoursPlayed: number;
   attendanceRate: number;
   totalSpent: number;
+  spend: MemberSpend;
   pointsEarned: number;
   timeline: MemberTimelineItem[];
   bookings: MemberBookingRow[];

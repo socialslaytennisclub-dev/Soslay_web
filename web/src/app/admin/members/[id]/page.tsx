@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { MemberDetailView } from "@/components/admin/members/MemberDetailView";
+import { MEMBER_TABS, MemberDetailView, type MemberTab } from "@/components/admin/members/MemberDetailView";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { bookableSessions, getMember } from "@/server/admin/repo";
 import pageStyles from "../../page.module.css";
@@ -11,7 +11,9 @@ export async function generateMetadata({ params }: PageProps<"/admin/members/[id
 }
 
 /** Admin / 03 Member Detail (Figma 25:4301). */
-export default async function AdminMemberPage({ params }: PageProps<"/admin/members/[id]">) {
+export default async function AdminMemberPage({ params, searchParams }: PageProps<"/admin/members/[id]">) {
+  const requested = (await searchParams).tab;
+  const tab: MemberTab = MEMBER_TABS.find((t) => t.key === requested)?.key ?? "ringkasan";
   const member = await getMember((await params).id);
   if (!member) notFound();
   const bookable = await bookableSessions(member.id);
@@ -20,7 +22,7 @@ export default async function AdminMemberPage({ params }: PageProps<"/admin/memb
     <>
       <AdminTopbar breadcrumb={`CRM / Members / ${member.fullName}`} title="Detail member" />
       <div className={pageStyles.content}>
-        <MemberDetailView member={member} bookable={bookable} />
+        <MemberDetailView member={member} bookable={bookable} tab={tab} />
       </div>
     </>
   );
