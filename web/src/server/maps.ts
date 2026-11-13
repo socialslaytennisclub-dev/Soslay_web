@@ -59,8 +59,9 @@ async function lookupPlace(name: string): Promise<{ lat: number; lng: number } |
     });
     if (!res.ok) return null;
     const text = (await res.text()).slice(0, 300_000);
-    // Hasil tunggal memuat [null,null,<lat>,<lng>] untuk titik tempat; hasil kosong / daftar banyak tidak.
-    const m = text.match(/\[null,null,(-?\d{1,2}\.\d{4,}),(-?\d{1,3}\.\d{4,})\]/);
+    // Titik tempat: [null,null,<lat>,<lng>],"0x…:0x…","<nama tempat>" (kode fitur tempat Google).
+    // Titik kota / wilayah ([…],"Jakarta, Daerah Khusus…") tidak punya kode itu → ditolak.
+    const m = text.match(/\[null,null,(-?\d{1,2}\.\d{4,}),(-?\d{1,3}\.\d{4,})\],"0x[0-9a-f]+:0x[0-9a-f]+","[^"]+"/);
     if (!m) return null;
     const lat = Number(m[1]);
     const lng = Number(m[2]);
