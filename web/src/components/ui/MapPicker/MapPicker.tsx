@@ -2,8 +2,9 @@
 
 import "leaflet/dist/leaflet.css";
 import type { LatLngExpression, Map as LeafletMap, Marker } from "leaflet";
-import { LocateFixed, Search } from "lucide-react";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { CircleCheck, Link2, LocateFixed, Monitor, Smartphone } from "lucide-react";
+import { useEffect, useId, useRef, useState, type CSSProperties } from "react";
+import { resolveMapsLink } from "@/server/maps";
 import styles from "./MapPicker.module.css";
 
 export type LatLng = { lat: number; lng: number };
@@ -23,8 +24,6 @@ type Props = {
 const JAKARTA: LatLng = { lat: -6.2088, lng: 106.8456 };
 const round6 = (n: number) => Math.round(n * 1e6) / 1e6;
 
-type Place = { display_name: string; lat: string; lon: string };
-
 /**
  * Koordinat dari teks yang ditempel: "-6.2607, 106.8136" atau link Google Maps
  * (…!3d-6.26!4d106.81… = titik tempat, …@-6.26,106.81,17z… / ?q=-6.26,106.81 = titik peta).
@@ -39,11 +38,11 @@ export function parseCoords(raw: string): LatLng | null {
 }
 
 /**
- * Peta pilih titik lokasi: klik peta / geser pin / cari alamat / "Pakai lokasi saya".
- * Leaflet + peta OpenStreetMap — tanpa API key & tanpa biaya. Pencarian alamat memakai
- * Nominatim (OpenStreetMap), dipanggil hanya saat member menekan Cari.
+ * Titik lokasi dari link Google Maps: member menempel link share Google Maps → server mengubahnya jadi
+ * koordinat (src/server/maps.ts) → pin tampil di peta untuk dicek & dirapikan (geser / klik peta /
+ * "Pakai lokasi saya"). Peta: Leaflet + OpenStreetMap — tanpa API key.
  */
-export function MapPicker({ value, onChange, fallbackCenter = JAKARTA, origin, height = 260, hint = "Klik di peta untuk menaruh pin" }: Props) {
+export function MapPicker({ value, onChange, fallbackCenter = JAKARTA, origin, height = 260, hint = "Tempel link Google Maps di atas, atau klik peta" }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const map = useRef<LeafletMap | null>(null);
   const marker = useRef<Marker | null>(null);
@@ -51,9 +50,10 @@ export function MapPicker({ value, onChange, fallbackCenter = JAKARTA, origin, h
   const onChangeRef = useRef(onChange);
   const [ready, setReady] = useState(false);
   const [query, setQuery] = useState("");
-  const [places, setPlaces] = useState<Place[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [note, setNote] = useState<string>();
+  const inputId = useId();
 
   useEffect(() => {
     onChangeRef.current = onChange;
@@ -141,26 +141,30 @@ export function MapPicker({ value, onChange, fallbackCenter = JAKARTA, origin, h
     );
   };
 
-  const search = async () => {
-    const q = query.trim();
-    if (q.length < 3) return;
+  const applyLink = async (raw: string) => {
+    const text = raw.trim();
     setError(undefined);
-    setPlaces(null);
-    // Koordinat / link Google Maps yang ditempel → langsung jadi titik.
-    const coords = parseCoords(q);
-    if (coords) return flyTo(coords);
-    if (/goo\.gl|maps\.app/i.test(q))
-      return setError("Link pendek Google Maps tidak bisa dibaca. Di Google Maps, tekan lama titik lokasinya lalu salin angka koordinatnya (mis. -6.2607, 106.8136) dan tempel di sini.");
+    setNote(undefined);
+    if (!text) return;
+    // Koordinat yang ditempel langsung ("-6.19, 106.78") juga diterima.
+    const coords = /^https?:\/\//i.test(text) ? null : parseCoords(text);
+    if (coords) {
+      flyTo(coords);
+      setNote("Titik lokasi diambil dari koordinat. Pastikan pin sudah tepat.");
+      return;
+    }
+    if (!/^https?:\/\//i.test(text)) return setError("Tempel link dari Google Maps (diawali https://).");
     setBusy(true);
     try {
-      const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&countrycodes=id&accept-language=id&q=${encodeURIComponent(q)}`;
-      const res = await fetch(url, { headers: { Accept: "application/json" } });
-      const found = res.ok ? ((await res.json()) as Place[]) : [];
-      setPlaces(found);
-      if (!found.length)
-        setError("Tidak ditemukan di peta OpenStreetMap — coba nama jalannya, klik titik di peta, atau tempel koordinat / link dari Google Maps.");
+      const link = await resolveMapsLink(text);
+      if (link.ok) {
+        flyTo({ lat: link.lat, lng: link.lng });
+        setNote(`Titik lokasi ditemukan${link.name ? `: ${link.name}` : ""}. Cek pin di peta — geser kalau kurang pas.`);
+      } else {
+        setError(`${link.error} Coba salin ulang link dari Google Maps, atau klik titiknya langsung di peta.`);
+      }
     } catch {
-      setError("Pencarian sedang tidak bisa dipakai — klik titik di peta.");
+      setError("Link belum bisa dibaca sekarang — coba lagi, atau klik titiknya langsung di peta.");
     } finally {
       setBusy(false);
     }
@@ -168,44 +172,86 @@ export function MapPicker({ value, onChange, fallbackCenter = JAKARTA, origin, h
 
   return (
     <div className={styles.wrap}>
-      <div className={styles.search}>
-        <input
-          className={styles.searchInput}
-          value={query}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setPlaces(null);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              search();
-            }
-          }}
-          placeholder="Cari jalan, atau tempel koordinat / link Google Maps"
-          aria-label="Cari alamat di peta"
-        />
-        <button type="button" className={styles.button} onClick={search} disabled={busy || query.trim().length < 3}>
-          <Search size={14} /> Cari
-        </button>
-        {places && places.length > 0 && (
-          <ul className={styles.results}>
-            {places.map((p) => (
-              <li key={`${p.lat},${p.lon}`}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    flyTo({ lat: round6(Number(p.lat)), lng: round6(Number(p.lon)) });
-                    setPlaces(null);
-                  }}
-                >
-                  {p.display_name}
-                </button>
-              </li>
-            ))}
-          </ul>
+      <div className={styles.linkBox}>
+        <label htmlFor={inputId} className={styles.linkLabel}>
+          <Link2 size={16} aria-hidden /> Link Google Maps
+        </label>
+        <div className={styles.search}>
+          <input
+            id={inputId}
+            type="url"
+            inputMode="url"
+            className={styles.searchInput}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onPaste={(e) => {
+              // Langsung diproses saat ditempel.
+              const text = e.clipboardData.getData("text");
+              if (text.trim()) {
+                e.preventDefault();
+                setQuery(text.trim());
+                applyLink(text);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                applyLink(query);
+              }
+            }}
+            placeholder="Tempel link di sini, mis. https://maps.app.goo.gl/…"
+            aria-describedby={`${inputId}-steps`}
+          />
+          <button type="button" className={styles.button} onClick={() => applyLink(query)} disabled={busy || !query.trim()}>
+            {busy ? "Membaca…" : "Pakai link"}
+          </button>
+        </div>
+        {note && !error && (
+          <p className={styles.success}>
+            <CircleCheck size={16} aria-hidden /> {note}
+          </p>
         )}
+        {error && <p className={styles.error}>{error}</p>}
+        <details className={styles.howTo} id={`${inputId}-steps`} open={!value}>
+          <summary>Cara mendapatkan link Google Maps</summary>
+          <div className={styles.howToCols}>
+            <div>
+              <p className={styles.howToTitle}>
+                <Smartphone size={15} aria-hidden /> Dari HP (aplikasi Google Maps)
+              </p>
+              <ol>
+                <li>Buka aplikasi <strong>Google Maps</strong>.</li>
+                <li>
+                  Cari nama tempat / alamatmu, <em>atau</em> tekan lama di titik lokasimu sampai muncul pin merah.
+                </li>
+                <li>
+                  Ketuk tombol <strong>Bagikan</strong> (Share).
+                </li>
+                <li>
+                  Pilih <strong>Salin link</strong> (Copy link).
+                </li>
+                <li>Kembali ke halaman ini, tempel di kolom di atas.</li>
+              </ol>
+            </div>
+            <div>
+              <p className={styles.howToTitle}>
+                <Monitor size={15} aria-hidden /> Dari laptop / komputer
+              </p>
+              <ol>
+                <li>
+                  Buka <strong>maps.google.com</strong>.
+                </li>
+                <li>Cari nama tempat / alamatmu, atau klik titik lokasinya di peta.</li>
+                <li>
+                  Klik <strong>Bagikan</strong> → <strong>Salin link</strong>, atau salin alamat dari address bar browser.
+                </li>
+                <li>Tempel di kolom di atas.</li>
+              </ol>
+            </div>
+          </div>
+        </details>
       </div>
+
       <div className={styles.map} style={{ "--map-height": `${height}px` } as CSSProperties}>
         <div ref={box} style={{ width: "100%", height: "100%" }} />
         {!value && <span className={styles.hint}>{hint}</span>}
@@ -220,7 +266,6 @@ export function MapPicker({ value, onChange, fallbackCenter = JAKARTA, origin, h
           </span>
         )}
       </div>
-      {error && <p className={styles.error}>{error}</p>}
     </div>
   );
 }
