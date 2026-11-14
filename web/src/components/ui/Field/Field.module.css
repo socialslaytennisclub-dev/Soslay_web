@@ -128,7 +128,12 @@
   font-family: var(--font-display);
   font-weight: var(--weight-semibold);
   color: var(--color-indigo-600);
+  padding: 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.suggestionEmail {
   text-decoration: underline;
   text-underline-offset: 3px;
-  word-break: break-all;
 }

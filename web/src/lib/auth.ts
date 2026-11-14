@@ -3,7 +3,11 @@
 import { checkEmailTypo } from "@/lib/email-typo";
 import { phoneFormatError } from "@/lib/wa-invite";
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/**
+ * Bagian lokal & domain tanpa titik di awal/akhir atau titik ganda ("gmail..com" ditolak Supabase →
+ * dulu lolos ke server dan berakhir "Couldn't create your account").
+ */
+const EMAIL = /^[^\s@.]+(\.[^\s@.]+)*@[^\s@.]+(\.[^\s@.]+)+$/;
 export const isEmail = (value: string) => EMAIL.test(value.trim());
 export const MIN_PASSWORD = 8;
 
@@ -11,6 +15,7 @@ export type FieldErrors<K extends string> = Partial<Record<K, string>>;
 
 export function validateEmail(value: string): string | undefined {
   if (!value.trim()) return "Email is required";
+  if (/\.\./.test(value)) return "Your email has two dots in a row";
   if (!isEmail(value)) return "Please enter a valid email";
 }
 
@@ -26,6 +31,7 @@ export function validateNewEmail(value: string): string | undefined {
 
 /** Versi admin (Indonesia) dari validateNewEmail — form "Tambah member" & "Ganti email login". */
 export function adminEmailError(value: string): string | undefined {
+  if (/\.\./.test(value)) return "Email berisi dua titik berurutan.";
   if (!isEmail(value)) return "Email tidak valid.";
   const { invalidTld, trailingDot } = checkEmailTypo(value);
   if (trailingDot) return "Hapus titik di akhir email.";
