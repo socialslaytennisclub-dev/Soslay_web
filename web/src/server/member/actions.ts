@@ -36,13 +36,15 @@ export async function saveMyProfile(profile: MemberProfile): Promise<SaveProfile
   const first = Object.keys(errors)[0] as keyof MemberProfile | undefined;
   if (first) return { ok: false, error: errors[first] ?? "Periksa kembali isian kamu.", field: first };
 
+  const gender = toEnum(GENDER, genderOptions, profile.gender);
   const { error } = await supabase
     .from("profiles")
     .update({
       full_name: profile.fullName.trim(),
       display_name: profile.displayName.trim() || null,
       birth_date: /^\d{4}-\d{2}-\d{2}$/.test(profile.birthDate) ? profile.birthDate : null,
-      gender: toEnum(GENDER, genderOptions, profile.gender),
+      // Pilihan kini hanya Laki-laki / Perempuan: kosong (mis. "undisclosed" lama) → nilai tersimpan tidak ditimpa null.
+      ...(gender ? { gender } : {}),
       phone: localPhone(profile.phone) || null,
       city: profile.city.trim() || null,
       kuy_id: normalizeKuyId(profile.kuyId) || null,

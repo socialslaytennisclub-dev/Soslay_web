@@ -546,31 +546,38 @@ export async function clearParticipants(sessionId: string): Promise<ActionResult
 }
 
 /**
+ * Ghost member ternyata member terdaftar → diklaim (seperti trigger claim_ghost_member saat daftar) dan
+ * baris tamunya di activity lain ikut ditautkan, kecuali activity yang sudah memuat member itu.
+ * Ghost baru ditandai diklaim setelah baris-barisnya berhasil dipindah — kalau gagal, ghost tetap terbuka
+ * sehingga trigger klaim saat daftar / simpan berikutnya masih bisa menautkannya.
+ * Mengembalikan jumlah activity lain yang ikut pindah.
+ */
+async function claimGhostFor(supabase: Supabase, ghostId: string, memberId: string): Promise<number> {
+  const { data: rows, error: readError } = await supabase.from("session_participants").select("id, session_id").eq("ghost_id", ghostId).is("member_id", null);
+  if (readError) return 0;
+  let ids: string[] = [];
+  if (rows?.length) {
+    const { data: taken, error: takenError } = await supabase.from("session_participants").select("session_id").eq("member_id", memberId).in("session_id", rows.map((r) => r.session_id as string));
+    if (takenError) return 0;
+    const busy = new Set((taken ?? []).map((r) => r.session_id as string));
+    ids = rows.filter((r) => !busy.has(r.session_id as string)).map((r) => r.id as string);
+    if (ids.length) {
+      const { error } = await supabase.from("session_participants").update({ member_id: memberId }).in("id", ids);
+      if (error) return 0;
+      refreshPaths(...new Set(rows.filter((r) => ids.includes(r.id as string)).map((r) => `/admin/activities/${r.session_id}`)));
+    }
+  }
+  await supabase.from("ghost_members").update({ claimed_by: memberId, claimed_at: new Date().toISOString() }).eq("id", ghostId).is("claimed_by", null);
+  return ids.length;
+}
+
+/**
  * Ubah pembayaran peserta hasil impor Kuyy atau tambahan admin: nominal, status & jalur bayar (mis. bayar DP,
  * salah harga di file, atau bayar langsung transfer ke BCA → via Manual: uangnya masuk akun bayar manual,
  * bukan Saldo Kuyy). Peserta yang belum member (tamu) juga bisa diganti nama & nomor HP-nya; data member
  * diubah di profilnya. Boleh kapan saja, juga setelah activity selesai: nominal peserta lunas masuk Keuangan
  * begitu activity selesai, perubahan sesudahnya dicatat sebagai koreksi (trigger finance_on_participant).
  */
-/**
- * Ghost member ternyata member terdaftar → diklaim (seperti trigger claim_ghost_member saat daftar) dan
- * baris tamunya di activity lain ikut ditautkan, kecuali activity yang sudah memuat member itu.
- * Mengembalikan jumlah activity lain yang ikut pindah.
- */
-async function claimGhostFor(supabase: Supabase, ghostId: string, memberId: string): Promise<number> {
-  await supabase.from("ghost_members").update({ claimed_by: memberId, claimed_at: new Date().toISOString() }).eq("id", ghostId).is("claimed_by", null);
-  const { data: rows } = await supabase.from("session_participants").select("id, session_id").eq("ghost_id", ghostId).is("member_id", null);
-  if (!rows?.length) return 0;
-  const { data: taken } = await supabase.from("session_participants").select("session_id").eq("member_id", memberId).in("session_id", rows.map((r) => r.session_id as string));
-  const busy = new Set((taken ?? []).map((r) => r.session_id as string));
-  const ids = rows.filter((r) => !busy.has(r.session_id as string)).map((r) => r.id as string);
-  if (!ids.length) return 0;
-  const { error } = await supabase.from("session_participants").update({ member_id: memberId }).in("id", ids);
-  if (error) return 0;
-  refreshPaths(...new Set(rows.map((r) => `/admin/activities/${r.session_id}`)));
-  return ids.length;
-}
-
 export async function updateParticipantPayment(
   sessionId: string,
   participantId: string,
@@ -605,14 +612,20 @@ export async function updateParticipantPayment(
   // Nomor tamu milik member terdaftar (mis. tamu yang baru daftar sesudah activity, juga bila nomornya sudah
   // tersimpan sebelum ia daftar) → baris ini ditautkan ke akunnya; booking, status hadir & poin mengikuti lewat
   // trigger, sama seperti saat member mendaftar.
-  const member = guest && phone ? await findMemberByPhone(phone) : null;
-  // Nama tidak diubah → tamu ini memang orang yang sama: ghost-nya diklaim & riwayat activity lainnya ikut
-  // pindah. Nama diubah → slotnya dipakai orang lain: hanya baris ini yang ditautkan.
-  const claimGhost = Boolean(member && row.ghost_id && name === row.full_name);
+  let member = guest && phone ? await findMemberByPhone(phone) : null;
   if (member) {
     const { count } = await supabase.from("session_participants").select("id", { count: "exact", head: true }).eq("session_id", sessionId).eq("member_id", member.id);
-    if (count) return { ok: false, error: `${member.fullName} sudah ada di activity ini — hapus salah satu barisnya dulu.` };
+    if (count) {
+      // Admin mengganti nomor ke member yang sudah ikut → baris dobel. Nomor tidak diubah (mis. member
+      // mendaftarkan temannya dengan nomornya sendiri) → tetap tamu, pembayaran tetap bisa disimpan.
+      if (!samePhone(phone, row.phone as string | null)) return { ok: false, error: `${member.fullName} sudah ada di activity ini — hapus salah satu barisnya dulu.` };
+      member = null;
+    }
   }
+  // Nama tidak diubah → tamu ini memang orang yang sama: ghost-nya diklaim & riwayat activity lainnya ikut
+  // pindah. Nama diubah → slotnya dipakai orang lain: hanya baris ini yang ditautkan.
+  const sameName = (a: string, b: string) => a.trim().replace(/\s+/g, " ").toLowerCase() === b.trim().replace(/\s+/g, " ").toLowerCase();
+  const claimGhost = Boolean(member && row.ghost_id && sameName(name, (row.full_name as string | null) ?? ""));
 
   // Data tamu (ghost member) mengikuti perubahan nama / nomor tanpa mengubah riwayat orang lain:
   //  1. nomor baru sudah tercatat sebagai tamu lain (mis. orang pengganti yang sempat ditambahkan admin) → pakai tamu itu;
