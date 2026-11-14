@@ -1,6 +1,7 @@
 import { LEVEL_LABEL } from "@/lib/levels";
 import { shiftDemoDates } from "@/lib/demo-dates";
 import type { City } from "@/lib/format";
+import { KUYY_PROFILE_URL } from "@/lib/kuyy";
 
 /**
  * Data member area (dummy, struktur mengikuti PRD §5). Nanti diganti fetch dari API
@@ -27,7 +28,7 @@ export const member = {
   memberId: "SOS 0067 2507",
   validThru: "07/26",
   cover: "/images/home/hero.webp",
-  bookingUrl: "https://kuy.id/soslay",
+  bookingUrl: KUYY_PROFILE_URL,
 };
 
 /* ── Dashboard · baris 1 ─────────────────────────────────── */
@@ -252,7 +253,7 @@ export const orderPage = {
   pointsCopy: "Slay Point dari pesanan ini",
   /** PRD: 1 Slay Point per Rp10.000 belanja. */
   rupiahPerPoint: 10000,
-  checkout: { label: "Checkout", href: "/checkout" },
+  checkout: { label: "Checkout", href: "/akun/checkout" },
   continueShopping: { label: "Lanjut belanja", href: "/shop" },
   empty: {
     title: "Keranjang kamu masih kosong",

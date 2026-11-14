@@ -193,7 +193,7 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
     recommendedLevels: s.recommendedLevels,
     repeatWeekly: s.repeatWeekly,
     // Link Kuy contoh hanya untuk mode demo; data live menampilkan apa adanya.
-    kuyUrl: d.live ? (s.kuyUrl ?? "") : `https://kuy.id/soslay/${s.title.toLowerCase().replace(/[^a-z]+/g, "-")}-${s.startsAt.getDate()}`,
+    kuyUrl: d.live ? (s.kuyUrl ?? "") : "",
     crew: s.crew ?? [
       { name: CREW_POOL[seed % CREW_POOL.length], role: "Host" },
       ...(s.typeSlug === "beginner-coaching" || s.typeSlug === "weekly-mabar" ? [{ name: "Bima Pratama", role: "Coach" as const }] : []),

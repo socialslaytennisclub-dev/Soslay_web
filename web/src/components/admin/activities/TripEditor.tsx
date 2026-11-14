@@ -446,7 +446,7 @@ export function TripEditor({ initial, venues, types, candidates }: Props) {
                                   <span className={styles.label}>Link booking Kuyy</span>
                                   <span className={styles.affix}>
                                     <AdminIcon name="link-simple" size={16} />
-                                    <input inputMode="url" value={a.kuyUrl} onChange={(e) => patch(a.key, { kuyUrl: e.target.value })} placeholder="kuy.id/soslay/nama-activity" />
+                                    <input inputMode="url" value={a.kuyUrl} onChange={(e) => patch(a.key, { kuyUrl: e.target.value })} placeholder="https://kuyy.id/…" />
                                   </span>
                                 </label>
                               </>

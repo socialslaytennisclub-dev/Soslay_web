@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Chip } from "@/components/ui";
 import type { MemberDashboard } from "@/content/member";
 import { formatAngka } from "@/lib/format";
@@ -27,10 +28,9 @@ export function SlayPointCard({ data }: { data: MemberDashboard["points"] }) {
       />
       <div className={styles.footer}>
         <p className={styles.copy}>{redeemCopy}</p>
-        {/* Katalog penukaran belum ada (PRD: Settings → Membership & poin) */}
-        <button type="button" className={styles.redeem} disabled title="Segera hadir">
+        <Link href="/akun/reward" className={styles.redeem}>
           Tukar
-        </button>
+        </Link>
       </div>
     </SummaryCard>
   );

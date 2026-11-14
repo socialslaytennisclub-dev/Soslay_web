@@ -16,6 +16,7 @@ import { checkInOpensAt } from "./check-in";
 import { demoKudosSection } from "../kudos-demo";
 import { loadSessionKudos } from "./kudos";
 import { getMemberSession } from "./user";
+import { KUYY_PROFILE_URL } from "@/lib/kuyy";
 
 /**
  * Detail sesi untuk peserta (Figma UIF-06 · Activity Detail): info sesi, e-ticket + QR,
@@ -488,7 +489,7 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     capacity: 8,
     levels: ["Beginner", "Intermediate"],
     ticket: { code: bookingCode("9f2a1c00", s.date), qrSvg: await qrSvg(`soslay:booking:demo-${s.slug}`), holder: names[0], type: "Player", status: s.status === "done" ? "attended" : "registered", checkedInAt: null },
-    registration: { sourceLabel: "Dibayar via Kuyy", paid: true, amount: 150_000, orderId: "U1", registeredAt: new Date(new Date(startsAt).getTime() - 14 * 86_400_000).toISOString(), kuyUrl: "https://kuy.id/soslay" },
+    registration: { sourceLabel: "Dibayar via Kuyy", paid: true, amount: 150_000, orderId: "U1", registeredAt: new Date(new Date(startsAt).getTime() - 14 * 86_400_000).toISOString(), kuyUrl: KUYY_PROFILE_URL },
     people: names.map((name, i) => ({ id: String(i), name, level: ["Intermediate", "Advanced", "Beginner"][i % 3], source: i % 2 ? "Kuy" : "Website", me: i === 0, checkedIn: s.status === "done", member: true })),
     matches: [],
     standings: [],

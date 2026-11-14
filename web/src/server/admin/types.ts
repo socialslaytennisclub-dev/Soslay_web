@@ -1,4 +1,6 @@
-import type { KudosTop } from "@/lib/kudos";
+import type { OrderStage, ShippingMethod } from "@/lib/checkout";
+import type { MyOrder } from "@/server/shop/types";
+import type { KudosTop, MemberKudos } from "@/lib/kudos";
 /**
  * Tipe data admin — cermin dari tabel/view di supabase/migrations (profiles, member_stats,
  * sessions + session_fill, bookings, orders, …). UI admin hanya bergantung pada tipe ini,
@@ -52,6 +54,43 @@ export type MemberBookingRow = {
 
 export type MemberNote = { id: string; author: string; body: string; at: string };
 
+/** Satu pengeluaran member: tiket activity, pembayaran trip, atau order shop yang lunas. */
+export type MemberSpendItem = { kind: "activity" | "trip" | "shop"; title: string; detail: string; at: string; amount: number };
+
+/** Total uang yang sudah dibayar member, dipisah per jenis. */
+export type MemberSpend = {
+  total: number;
+  activities: { amount: number; count: number };
+  trips: { amount: number; count: number };
+  shop: { amount: number; count: number };
+  /** Terbaru dulu. */
+  items: MemberSpendItem[];
+  /** Sebagian query gagal (error / izin) → angka bisa kurang dari seharusnya. */
+  incomplete: boolean;
+};
+
+/** Review yang pernah diberikan member di satu activity (tab Review detail member). */
+export type MemberReview = {
+  sessionId: string;
+  sessionTitle: string;
+  venueName: string;
+  startsAt: string | null;
+  rating: number;
+  host: number | null;
+  venue: number | null;
+  format: number | null;
+  highlights: string[];
+  comment: string | null;
+  testimonial: boolean;
+  at: string;
+};
+
+/** Review member untuk tab Review: maks. sekian terbaru dari `total`; failed = gagal dimuat. */
+export type MemberReviewList = { items: MemberReview[]; total: number; failed: boolean };
+
+/** Kudos member: yang diterima (agregat anonim) & jumlah yang ia berikan — null = gagal dimuat. */
+export type MemberKudosSummary = { received: MemberKudos | null; given: number | null };
+
 export type MemberDetail = MemberListItem & {
   phone: string;
   birthDate: string | null;
@@ -62,7 +101,7 @@ export type MemberDetail = MemberListItem & {
   playingSince: string;
   hoursPlayed: number;
   attendanceRate: number;
-  totalSpent: number;
+  spend: MemberSpend;
   pointsEarned: number;
   timeline: MemberTimelineItem[];
   bookings: MemberBookingRow[];
@@ -349,7 +388,8 @@ export type KuyImportPreview = { fileName: string; fileSize: number; eventTitle:
 
 // ── Orders ──────────────────────────────────────────────────────────────────
 
-export type OrdersTab = "all" | "to_process" | "shipped" | "completed" | "cancelled";
+/** Tab Orders (aturan Shop §1): Semua · Verifikasi · Perlu dikirim · Dikirim · Selesai (+ Menunggu bayar & Dibatalkan). */
+export type OrdersTab = "all" | "verify" | "to_process" | "shipped" | "completed" | "awaiting" | "cancelled";
 
 export type OrdersQuery = { tab?: OrdersTab; q?: string; payment?: PaymentStatus; month?: string; order?: string };
 
@@ -363,10 +403,19 @@ export type OrderListItem = {
   payment: PaymentStatus;
   status: OrderStatus;
   placedAt: string;
+  /** Status gabungan (Menunggu bayar / verifikasi / upload ulang / dikemas / …). */
+  stage: OrderStage;
+  method: ShippingMethod | null;
+  /** Bukti yang menunggu verifikasi diunggah pada… (chip "Lewat 12 jam"). */
+  proofAt: string | null;
+  /** Bukti menunggu verifikasi lebih dari 12 jam (SLA, chip "Lewat 12 jam"). */
+  proofLate: boolean;
 };
 
 export type OrderDetail = OrderListItem & {
-  channel: "Website" | "Kuy";
+  /** Detail checkout website (bukti transfer, sesi pickup, …); null untuk order lama / Kuy. */
+  shop: MyOrder | null;
+  channel: "Website" | "Kuy" | "Tukar poin";
   paymentMethod: string;
   customerTier: Tier;
   customerPhone: string;
@@ -386,6 +435,10 @@ export type OrdersResult = {
   counts: Record<OrdersTab, number>;
   months: { value: string; label: string }[];
   kpis: {
+    toVerify: number;
+    verifyLate: number;
+    awaiting: number;
+    toShipByMethod: string;
     toProcess: number;
     overdue: number;
     inTransit: number;
@@ -419,15 +472,24 @@ export type ContentSection = {
   unpublished?: boolean;
 };
 
-export type PhotoAlbum = {
+/** Activity yang sudah berlangsung — pilihan "Activity" saat upload foto galeri, beserta pesertanya (untuk tag). */
+export type GalleryActivity = {
   id: string;
-  sessionId: string;
   title: string;
   venueName: string;
-  date: string;
-  photoCount: number;
-  cover: string;
-  status: "published" | "draft" | "empty";
+  startsAt: string;
+  participants: { id: string; name: string; instagram: string }[];
+};
+
+/** Foto galeri sesi (tabel photos): terkait 1 activity, caption, member ter-tag. */
+export type AdminGalleryPhoto = {
+  id: string;
+  url: string;
+  caption: string;
+  sessionId: string | null;
+  activity: { title: string; venueName: string; date: string };
+  members: { id: string; name: string }[];
+  createdAt: string;
 };
 
 /** Post Instagram, TikTok & Threads di feed homepage (lib/community-posts). */
@@ -575,6 +637,8 @@ export type VenueForm = {
   /** Permukaan lapangan ("Hard Court", …) — kosong untuk venue lama sebelum diisi. */
   surface: string;
   facilities: string[];
+  /** Warna court, mis. "Terracotta-walled" → kartu venue: "Terracotta-walled court". */
+  courtColor: string;
   tagline: string;
   description: string;
   coverPath: string;
@@ -606,7 +670,7 @@ export type MemberForm = {
 
 // ── Slay Point & Reward ─────────────────────────────────────────────────────
 
-export type RewardCategory = "merch" | "session" | "voucher" | "experience";
+export type RewardCategory = "merch" | "product" | "session" | "voucher" | "experience";
 export type RedemptionStatus = "pending" | "approved" | "fulfilled" | "rejected";
 export type PointsReason = "attendance" | "purchase" | "redeem" | "adjustment" | "bonus";
 
@@ -634,8 +698,20 @@ export type AdminRedemption = {
   memberBalance: number;
   rewardName: string;
   rewardImage: string | null;
+  rewardCategory: RewardCategory;
   points: number;
+  /** Poin sudah dipotong saat member menukar (penukaran baru); false = dipotong saat disetujui (dicatat admin). */
+  prepaid: boolean;
   status: RedemptionStatus;
+  /** Produk / Merch: cara pengiriman, penerima, activity pengambilan, order ongkir. */
+  delivery: {
+    method: "jnt" | "instant" | "pickup";
+    recipient: { name: string; phone: string; address: string | null; city: string | null; postalCode: string | null } | null;
+    activity: { title: string; startsAt: string; venue: string } | null;
+    order: { code: string; status: string; paid: boolean } | null;
+  } | null;
+  voucherCode: string | null;
+  voucherValidUntil: string | null;
   note: string;
   createdAt: string; // ISO
   handledAt: string | null;

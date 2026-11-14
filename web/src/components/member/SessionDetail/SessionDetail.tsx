@@ -19,6 +19,7 @@ import { DoneSide, HostResults, PhotosTab, ResultsTab, ScoreDiff } from "./Resul
 import { KudosSection } from "./KudosSection";
 import { ReviewTab } from "./ReviewForm";
 import styles from "./SessionDetail.module.css";
+import { whatsappUrl } from "@/content/social";
 
 const TAB_LABEL = {
   hasil: "Hasil",
@@ -48,7 +49,6 @@ export function detailTabs(d: Pick<MemberSessionDetail, "phase" | "canReview" | 
 /** Host yang tidak ikut main (Figma Simplify "Host (bukan peserta)"). */
 const hostOnly = (d: Pick<MemberSessionDetail, "isHost" | "ticket" | "plays">) => d.isHost && !d.ticket && !d.plays;
 
-const PANITIA_WA = "62642424792";
 const BRING = ["Raket tenis", "Sepatu non-marking", "Botol minum", "Handuk & baju ganti", "QR e-ticket"];
 
 const STATUS_CHIP = {
@@ -57,7 +57,6 @@ const STATUS_CHIP = {
   done: "Selesai",
 } as const;
 
-const wa = (text: string) => `https://wa.me/${PANITIA_WA}?text=${encodeURIComponent(text)}`;
 
 function calendarUrl(d: MemberSessionDetail) {
   const stamp = (iso: string) =>
@@ -163,11 +162,11 @@ export function SessionDetail({ detail: d, tab, endedNotice = null }: { detail: 
                 <ul className={styles.helpList}>
                   <HelpLink href={calendarUrl(d)} icon={<CalendarPlus size={18} />} title="Tambah ke kalender" sub="Google Calendar" />
                   <HelpLink href={routeUrl} icon={<MapIcon size={18} />} title="Buka rute ke venue" sub={`${d.venue.name}, ${d.venue.address}`} />
-                  <HelpLink href={wa(`Halo panitia Soslay, aku mau tanya soal sesi "${d.title}"${d.ticket ? ` (${d.ticket.code})` : ""}.`)} icon={<MessageCircle size={18} />} title="Hubungi panitia" sub="WhatsApp Soslay Club" />
+                  <HelpLink href={whatsappUrl(`Halo panitia Soslay, aku mau tanya soal sesi "${d.title}"${d.ticket ? ` (${d.ticket.code})` : ""}.`)} icon={<MessageCircle size={18} />} title="Hubungi panitia" sub="WhatsApp Soslay Club" />
                 </ul>
                 {d.phase === "upcoming" && d.ticket && (
                   <div className={styles.absent}>
-                    <a href={wa(`Halo panitia Soslay, aku ${d.ticket.holder} (${d.ticket.code}) tidak bisa hadir di sesi "${d.title}".`)} target="_blank" rel="noopener noreferrer">
+                    <a href={whatsappUrl(`Halo panitia Soslay, aku ${d.ticket.holder} (${d.ticket.code}) tidak bisa hadir di sesi "${d.title}".`)} target="_blank" rel="noopener noreferrer">
                       Tidak bisa hadir? Kabari host
                     </a>
                     <p className={styles.small}>Tiket non-refundable. Kabari host supaya acakan pemain bisa disesuaikan sebelum sesi mulai.</p>

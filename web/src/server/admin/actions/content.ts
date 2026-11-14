@@ -3,7 +3,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isPostPlatform, normalizeHandle, POST_PLATFORMS, postLinkError, type InstagramSectionJson, type PostPlatform, type StoredPost } from "@/lib/community-posts";
 import { detectVideoPlatform } from "@/lib/video";
-import { IMAGE_TYPES, isOwnUpload, removeOwnUploads, uploadPublicImage } from "../../storage";
+import { discardUploads, IMAGE_TYPES, isOwnUpload, removeOwnUploads, uploadPublicImage } from "../../storage";
 import { postsFromSection, readInstagramSection } from "../../community-posts";
 import { findMemberById } from "../identity";
 import type { AdminTestimonial, ContentSection } from "../types";
@@ -185,7 +185,7 @@ export async function saveInstagramPost(id: string, input: PostInput): Promise<A
   if ("error" in auth) return fail(auth.error);
   if (!isPostPlatform(input.platform)) return fail("Pilih jenis post.");
   const handle = normalizeHandle(input.handle);
-  if (!handle) return fail("Isi username akun (mis. @socialslay).");
+  if (!handle) return fail("Isi username akun (mis. @socialslayclub).");
   const text = input.text.trim();
   if (!text) return fail("Isi kutipan post.");
   if (text.length > 280) return fail("Kutipan maksimal 280 karakter.");
@@ -362,4 +362,75 @@ export async function uploadPostImage(formData: FormData): Promise<{ ok: true; u
   if (!result.ok) return result;
   await audit(auth.userId, "mengupload foto post", "post_image", result.path);
   return { ok: true, url: result.url };
+}
+
+// ── Galeri foto sesi ─────────────────────────────────────────────────────────
+const GALLERY_BUCKET = "gallery-photos";
+const MAX_GALLERY_PHOTO = 10 * 1024 * 1024;
+
+export type GalleryPhotoInput = { id: string | null; sessionId: string; url: string; caption: string; memberIds: string[] };
+
+/** Halaman venue dari activity foto ini (untuk refresh galeri venue). */
+async function venuePathOfSession(sessionId: string | null): Promise<string | null> {
+  if (!sessionId) return null;
+  const supabase = await createSupabaseServerClient();
+  const { data } = await supabase.from("sessions").select("venues(slug)").eq("id", sessionId).maybeSingle();
+  const slug = (data as { venues: { slug: string } | null } | null)?.venues?.slug;
+  return slug ? `/venue/${slug}` : null;
+}
+
+/** Upload 1 foto galeri ke Storage; foto baru tersimpan ke activity saat admin menekan Simpan. */
+export async function uploadGalleryPhoto(formData: FormData): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const auth = await requireEditor("content");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const result = await uploadPublicImage({ bucket: GALLERY_BUCKET, file: formData.get("file"), folder: new Date().toISOString().slice(0, 7), maxBytes: MAX_GALLERY_PHOTO });
+  if (!result.ok) return result;
+  return { ok: true, url: result.url };
+}
+
+/** Upload batal dipakai (form ditutup) → hapus dari Storage. */
+export async function discardGalleryUploads(urls: string[]): Promise<void> {
+  const auth = await requireEditor("content");
+  if ("error" in auth) return;
+  await discardUploads(GALLERY_BUCKET, urls, { table: "photos", columns: ["path"] });
+}
+
+/** Simpan foto galeri: baru (activity + foto) atau ubah caption & member ter-tag. */
+export async function saveGalleryPhoto(input: GalleryPhotoInput): Promise<ActionResult & { id?: string }> {
+  const auth = await requireEditor("content");
+  if ("error" in auth) return fail(auth.error);
+  const caption = input.caption.trim();
+  if (caption.length > 200) return fail("Caption maksimal 200 karakter.");
+  if (!input.id) {
+    if (!input.sessionId) return fail("Pilih activity foto ini.");
+    if (!isOwnUpload(GALLERY_BUCKET, input.url)) return fail("Upload fotonya dulu.");
+  }
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("save_gallery_photo", {
+    p_photo: input.id,
+    p_session: input.id ? null : input.sessionId,
+    p_path: input.id ? null : input.url,
+    p_caption: caption,
+    p_members: [...new Set(input.memberIds)],
+  });
+  if (error) return fail(`Gagal menyimpan foto: ${error.message}`);
+  const id = data as string;
+  await audit(auth.userId, `${input.id ? "mengubah" : "mengunggah"} foto galeri`, "photo", id);
+  const venuePath = await venuePathOfSession(input.sessionId);
+  refreshPaths("/admin/konten", ...(venuePath ? [venuePath] : []));
+  return { ...done(input.id ? "Foto tersimpan." : "Foto ditambahkan ke galeri venue."), id };
+}
+
+export async function deleteGalleryPhoto(id: string): Promise<ActionResult> {
+  const auth = await requireEditor("content");
+  if ("error" in auth) return fail(auth.error);
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.from("photos").delete().eq("id", id).select("path, photo_albums(session_id)");
+  if (error || !data?.length) return fail(`Gagal menghapus: ${error?.message ?? "foto tidak ditemukan"}`);
+  const row = data[0] as unknown as { path: string; photo_albums: { session_id: string | null } | null };
+  await removeOwnUploads(GALLERY_BUCKET, [row.path]);
+  await audit(auth.userId, "menghapus foto galeri", "photo", id);
+  const venuePath = await venuePathOfSession(row.photo_albums?.session_id ?? null);
+  refreshPaths("/admin/konten", ...(venuePath ? [venuePath] : []));
+  return done("Foto dihapus dari galeri.");
 }

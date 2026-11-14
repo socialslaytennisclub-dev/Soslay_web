@@ -9,6 +9,7 @@ import { initials, teamName } from "@/lib/text";
 import type { MemberSessionDetail } from "@/server/member/session-detail";
 import { perspective, planOf } from "./LiveCards";
 import styles from "./SessionDetail.module.css";
+import { KUYY_PROFILE_URL } from "@/lib/kuyy";
 
 const PHOTO_SLA_MS = 24 * 3_600_000;
 const TOP = 10;
@@ -326,15 +327,13 @@ export function DoneSide({ detail: d, tab }: { detail: MemberSessionDetail; tab:
       <section className={styles.againCard} aria-labelledby="again-title">
         <h2 id="again-title">Main lagi minggu depan?</h2>
         <p>Cek jadwal sesi {d.typeLabel} berikutnya dan amankan slot kamu.</p>
-        {d.registration?.kuyUrl ? (
-          <a href={d.registration.kuyUrl} target="_blank" rel="noopener noreferrer" className={styles.btnNavy}>
-            Booking Session di Kuyy
-          </a>
-        ) : (
-          <Link href="/activity" className={styles.btnNavy}>
-            Lihat jadwal sesi
-          </Link>
-        )}
+        {/* Link event Kuyy sesi ini sudah lewat → ke halaman Social Slay di Kuyy untuk sesi berikutnya. */}
+        <a href={KUYY_PROFILE_URL} target="_blank" rel="noopener noreferrer" className={styles.btnNavy}>
+          Booking Session di Kuyy
+        </a>
+        <Link href="/activity" className={styles.againLink}>
+          Lihat jadwal sesi di website
+        </Link>
       </section>
     </>
   );

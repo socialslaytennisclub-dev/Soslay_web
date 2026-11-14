@@ -85,6 +85,18 @@ export function timezoneForCity(city: string): VenueTimezone | undefined {
 
 export const isKnownCity = (city: string) => timezoneForCity(city) !== undefined;
 
+const COMPASS_EN: Record<string, string> = { Pusat: "Central", Tengah: "Central", Selatan: "South", Utara: "North", Barat: "West", Timur: "East" };
+
+/**
+ * Nama kota untuk website (bahasa Inggris): "Jakarta Pusat" → "Central Jakarta", "Tangerang Selatan" →
+ * "South Tangerang", "Kota Denpasar" → "Denpasar". Kota tanpa arah mata angin tetap seperti aslinya.
+ */
+export function cityInEnglish(city: string): string {
+  const name = city.replace(/^(Kota|Kabupaten)\s+/, "").trim();
+  const m = name.match(/^(.+?)\s+(Pusat|Tengah|Selatan|Utara|Barat|Timur)$/);
+  return m ? `${COMPASS_EN[m[2]]} ${m[1]}` : name;
+}
+
 /** Provinsi yang masuk wilayah website "Jakarta" (Jabodetabek) & "Bali". */
 const REGION_PROVINCES: Record<string, "Jakarta" | "Bali"> = {
   "DKI Jakarta": "Jakarta",

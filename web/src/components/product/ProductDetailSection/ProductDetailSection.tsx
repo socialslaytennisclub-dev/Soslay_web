@@ -2,11 +2,10 @@ import { Accordion, Button, Container, Icon, Text } from "@/components/ui";
 import { productPage, type Product, type ProductDetail } from "@/content/products";
 import { cx } from "@/lib/cx";
 import { ProductGallery } from "../ProductGallery/ProductGallery";
-import { socialLinks } from "@/content/site";
 import { ProductPurchase } from "../ProductPurchase/ProductPurchase";
 import styles from "./ProductDetailSection.module.css";
+import { whatsappUrl } from "@/content/social";
 
-const whatsappHref = socialLinks.find((link) => link.label === "WhatsApp")?.href ?? "https://wa.me/62642424792";
 
 type ProductDetailSectionProps = {
   product: Product;
@@ -87,7 +86,7 @@ export function ProductDetailSection({ product, detail }: ProductDetailSectionPr
                 ) : (
                   <p className={styles.empty}>
                     {productPage.accordion.materialEmpty.text}{" "}
-                    <a href={whatsappHref} target="_blank" rel="noopener noreferrer" className={styles.emptyLink}>
+                    <a href={whatsappUrl()} target="_blank" rel="noopener noreferrer" className={styles.emptyLink}>
                       {productPage.accordion.materialEmpty.cta}
                     </a>
                   </p>

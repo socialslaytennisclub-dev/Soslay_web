@@ -3,9 +3,10 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, Icon, Modal, OptionChips } from "@/components/ui";
-import { authLinks } from "@/content/site";
+import { orderPage } from "@/content/member";
 import { productPage, sizeGuide, type ProductOptionGroup } from "@/content/products";
 import { useCart } from "@/hooks/useCart";
+import { writeCheckoutSelection } from "@/lib/cart";
 import { flyToCart } from "@/lib/fly-to-cart";
 import { useDialog } from "@/hooks/useDialog";
 import styles from "./ProductPurchase.module.css";
@@ -54,8 +55,11 @@ export function ProductPurchase({ product, options, soldOut, showSizeGuide }: Pr
     return true;
   };
 
+  /** Buy Now (Figma 2a): lewati keranjang, langsung Checkout untuk produk ini saja. */
   const buyNow = () => {
-    if (addToBag()) router.push(authLinks.cart.href);
+    if (!validate()) return;
+    writeCheckoutSelection({ source: "buy", items: [{ productSlug: product.slug, name: product.name, price: product.price, image: product.image, options: selection, quantity: 1 }] });
+    router.push(orderPage.checkout.href);
   };
 
   return (

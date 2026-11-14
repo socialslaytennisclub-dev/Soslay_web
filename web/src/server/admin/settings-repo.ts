@@ -3,6 +3,7 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { DEMO_NOW, TIERS } from "./demo-data";
 import type { AdminModule, AppSettings, AuditEntry, Integration, ModuleAccess, RolePermissions, StaffMember } from "./types";
+import { CONTACT_EMAIL, WHATSAPP_DISPLAY } from "@/content/social";
 
 /**
  * Data Settings & Roles (staff_members, roles, role_permissions, integrations, app_settings,
@@ -155,8 +156,8 @@ export async function getSettings(): Promise<AppSettings> {
 function demoSettings(): AppSettings {
   return {
     clubName: "Social Slay Tennis Club",
-    contactEmail: "hello@soslay.com",
-    whatsapp: "+62 812 0000 2026",
+    contactEmail: CONTACT_EMAIL,
+    whatsapp: WHATSAPP_DISPLAY,
     timezone: "Asia/Jakarta (WIB)",
     monthlySessionTarget: 16,
     rupiahPerPoint: 10_000,

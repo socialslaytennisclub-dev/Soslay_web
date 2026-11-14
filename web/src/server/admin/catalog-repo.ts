@@ -45,6 +45,7 @@ const loadVenueForms = cache(async (): Promise<VenueForm[]> => {
       timezone: v.timezone ?? timezoneForCity(LEGACY_CITY[v.city] ?? v.city) ?? "Asia/Jakarta",
       surface: v.surface ?? "",
       facilities: v.facilities ?? [],
+      courtColor: v.court_color ?? "",
       tagline: v.tagline ?? "",
       description: v.description ?? "",
       coverPath: v.cover_path ?? "",
@@ -67,6 +68,7 @@ const loadVenueForms = cache(async (): Promise<VenueForm[]> => {
     timezone: timezoneForCity(LEGACY_CITY[v.city] ?? v.city) ?? "Asia/Jakarta",
     surface: "Hard Court",
     facilities: [],
+    courtColor: v.courtColor ?? "",
     tagline: v.tagline,
     description: v.description,
     coverPath: v.image,
@@ -121,7 +123,7 @@ export async function getVenueForm(slug: string): Promise<VenueForm | null> {
 }
 
 export function emptyVenueForm(): VenueForm {
-  return { id: null, slug: "", name: "", city: "", area: "", type: "Outdoor", address: "", mapsUrl: "", landmark: "", timezone: "Asia/Jakarta", surface: "", facilities: [], tagline: "", description: "", coverPath: "", heroPath: "", courts: ["Court 1"], active: false, homepage: false };
+  return { id: null, slug: "", name: "", city: "", area: "", type: "Outdoor", address: "", mapsUrl: "", landmark: "", timezone: "Asia/Jakarta", surface: "", facilities: [], courtColor: "", tagline: "", description: "", coverPath: "", heroPath: "", courts: ["Court 1"], active: false, homepage: false };
 }
 
 /** Foto yang sudah ada di website — pilihan cover sampai upload (Supabase Storage) tersedia. */

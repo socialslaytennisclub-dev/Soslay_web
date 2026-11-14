@@ -148,7 +148,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
     if (!(Number(price) >= 0) || price === "") e.price = "Isi harga (0 untuk gratis).";
     if (!(Number(capacity) > 0)) e.capacity = "Kapasitas minimal 1.";
     if (mode === "edit" && Number(capacity) < session.booked) e.capacity = `Sudah ada ${session.booked} peserta terdaftar.`;
-    if (kuyUrl.trim() && !/^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i.test(kuyUrl.trim())) e.kuy = "Link tidak valid — contoh: https://kuy.id/soslay/nama-event";
+    if (kuyUrl.trim() && !/^(https?:\/\/)?[\w-]+(\.[\w-]+)+(\/\S*)?$/i.test(kuyUrl.trim())) e.kuy = "Link tidak valid — contoh: https://kuyy.id/…";
     if (play.matchFormat !== "none") {
       if (!(Number(play.courtCount) >= 1 && Number(play.courtCount) <= 12)) e.play = "Jumlah court 1–12.";
       else if (!(Number(play.roundCount) >= 1 && Number(play.roundCount) <= 40)) e.play = "Jumlah ronde 1–40.";
@@ -741,7 +741,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
               </label>
               <span className={cx(styles.affix, err("kuy") && styles.invalid)}>
                 <AdminIcon name="link-simple" size={16} />
-                <input id="kuy-url" inputMode="url" value={kuyUrl} onChange={(e) => setKuyUrl(e.target.value)} placeholder="https://kuy.id/soslay/nama-event" />
+                <input id="kuy-url" inputMode="url" value={kuyUrl} onChange={(e) => setKuyUrl(e.target.value)} placeholder="https://kuyy.id/…" />
                 {kuyUrl.trim() && (
                   <>
                     <button type="button" className={styles.iconButton} onClick={copyKuy} aria-label="Salin link">
@@ -756,7 +756,7 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
               {err("kuy") ? (
                 <span className={styles.error}>{err("kuy")}</span>
               ) : (
-                <span className={styles.muted}>Tombol &quot;Booking&quot; di website membuka link ini. Kosong = halaman Soslay di Kuyy (kuy.id/soslay).</span>
+                <span className={styles.muted}>Tombol &quot;Booking&quot; di website membuka link ini. Kosong = halaman Social Slay di Kuyy (kuyy.id/users/socialslay).</span>
               )}
             </div>
           </FormCard>

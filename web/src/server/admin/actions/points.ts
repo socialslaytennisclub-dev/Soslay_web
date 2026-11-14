@@ -1,6 +1,9 @@
 "use server";
 
+import { supabaseUrl } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { discardUploads, uploadPublicImage } from "../../storage";
+import { monthKey } from "../time";
 import { TIER_LABEL } from "@/lib/admin-labels";
 import { segmentMemberIds } from "../repo";
 import type { PointRules, RedemptionStatus, RewardCategory, Tier } from "../types";
@@ -9,7 +12,7 @@ import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } fro
 /** Slay Point & Reward: katalog, penukaran, aturan, tier, bonus massal. Izin = modul Members (CRM). */
 
 const refresh = () => refreshPaths("/admin/points", ["/admin/members", "layout"]);
-const CATEGORIES: RewardCategory[] = ["merch", "session", "voucher", "experience"];
+const CATEGORIES: RewardCategory[] = ["merch", "product", "session", "voucher", "experience"];
 const TIERS: Tier[] = ["basic", "silver", "gold", "platinum"];
 const isWhole = (n: number, min = 0, max = 1_000_000) => Number.isInteger(n) && n >= min && n <= max;
 
@@ -25,6 +28,10 @@ export type RewardInput = {
   active: boolean;
 };
 
+/** Foto website (/images/…) atau upload di Storage project ini — host lain ditolak next/image dan merusak halaman. */
+const STORAGE_PREFIX = supabaseUrl ? `${supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/public/` : null;
+const isAllowedImage = (src: string) => /^\/images\/[\w./-]+$/.test(src) || (STORAGE_PREFIX !== null && src.startsWith(STORAGE_PREFIX) && !src.includes(".."));
+
 function validateReward(input: RewardInput): string | null {
   if (input.name.trim().length < 2 || input.name.trim().length > 80) return "Nama reward 2–80 karakter.";
   if (input.description.length > 500) return "Deskripsi maksimal 500 karakter.";
@@ -32,6 +39,7 @@ function validateReward(input: RewardInput): string | null {
   if (!TIERS.includes(input.minTier)) return "Tier tidak valid.";
   if (!isWhole(input.pointsCost, 1)) return "Harga poin harus angka bulat mulai 1.";
   if (input.stock !== null && !isWhole(input.stock, 0, 100_000)) return "Stok harus angka bulat ≥ 0 (kosongkan untuk tanpa batas).";
+  if (input.image && !isAllowedImage(input.image)) return "Foto tidak valid — pilih dari daftar atau upload ulang.";
   return null;
 }
 
@@ -59,6 +67,25 @@ export async function saveReward(id: string, input: RewardInput): Promise<Action
   await audit(auth.userId, `${id ? "mengubah" : "menambah"} reward ${row.name}`, "reward", data.id as string);
   refresh();
   return { ...done(id ? "Reward tersimpan." : `${row.name} ditambahkan ke katalog.`), id: data.id as string };
+}
+
+const REWARD_BUCKET = "reward-photos";
+
+/** Upload foto reward ke Storage (bucket publik); URL tersimpan ke reward saat admin menekan Simpan. */
+export async function uploadRewardPhoto(formData: FormData): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const auth = await requireEditor("members");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const result = await uploadPublicImage({ bucket: REWARD_BUCKET, file: formData.get("file"), folder: monthKey(new Date()), maxBytes: 5 * 1024 * 1024 });
+  if (!result.ok) return result;
+  await audit(auth.userId, "reward.photo_upload", "reward_photo", result.path);
+  return { ok: true, url: result.url };
+}
+
+/** Foto reward yang diganti / batal dipakai → hapus dari Storage (yang masih dipakai reward mana pun aman). */
+export async function discardRewardUploads(urls: string[]): Promise<void> {
+  const auth = await requireEditor("members");
+  if ("error" in auth) return;
+  await discardUploads(REWARD_BUCKET, urls, { table: "rewards", columns: ["image"] });
 }
 
 export async function deleteReward(id: string): Promise<ActionResult> {
@@ -98,12 +125,24 @@ const STATUS_MESSAGE: Record<Exclude<RedemptionStatus, "pending">, string> = {
   rejected: "ditolak",
 };
 
-export async function processRedemption(code: string, status: Exclude<RedemptionStatus, "pending">, note: string): Promise<ActionResult> {
+export async function processRedemption(
+  code: string,
+  status: Exclude<RedemptionStatus, "pending">,
+  note: string,
+  voucher?: { code: string; validUntil: string },
+): Promise<ActionResult> {
   const auth = await requireEditor("members");
   if ("error" in auth) return fail(auth.error);
   if (status === "rejected" && !note.trim()) return fail("Tulis alasan penolakan — dikirim ke member.");
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase.rpc("set_redemption_status", { p_code: code, p_status: status, p_note: note.trim() || null });
+  const validUntil = voucher?.validUntil && /^\d{4}-\d{2}-\d{2}$/.test(voucher.validUntil) ? voucher.validUntil : null;
+  const { error } = await supabase.rpc("set_redemption_status", {
+    p_code: code,
+    p_status: status,
+    p_note: note.trim() || null,
+    p_voucher_code: voucher?.code.trim() || null,
+    p_valid_until: validUntil,
+  });
   if (error) return fail(error.message);
   await audit(auth.userId, `${{ approved: "menyetujui", fulfilled: "menyelesaikan", rejected: "menolak" }[status]} penukaran #${code}`, "redemption", code);
   refresh();

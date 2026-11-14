@@ -13,6 +13,8 @@ import { loadKudosTop } from "./kudos";
 import { localPhone } from "@/lib/wa-invite";
 import { removePublicImage, uploadPublicImage } from "../storage";
 import { FORMAT, FREQUENCY, GENDER, HAND, toEnum } from "./profile";
+import type { MemberAddress } from "../shop/types";
+import { provinceOf } from "@/content/wilayah";
 
 const AVATAR_BUCKET = "avatars";
 
@@ -275,4 +277,79 @@ export async function getKudosTopForHost(sessionId: string): Promise<Record<stri
     if (t) out[r.id] = t;
   }
   return out;
+}
+
+/** Simpan alamat pengiriman di profil member (dipakai otomatis di checkout Shop). */
+export async function saveMyAddress(a: MemberAddress): Promise<{ ok: true } | { ok: false; error: string }> {
+  const supabase = await createSupabaseServerClient("member");
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { ok: false, error: "Sesi kamu berakhir — masuk lagi untuk menyimpan." };
+
+  const name = a.name.trim();
+  const phone = a.phone.replace(/[^\d+]/g, "");
+  const address = a.address.trim();
+  const postal = a.postalCode.trim();
+  if (!name) return { ok: false, error: "Isi nama penerima." };
+  if (phone.replace(/\D/g, "").length < 9) return { ok: false, error: "Nomor HP penerima belum lengkap." };
+  if (address.length < 10) return { ok: false, error: "Tulis alamat lengkap (jalan, nomor, kelurahan, kecamatan)." };
+  if (!provinceOf(a.city)) return { ok: false, error: "Pilih provinsi lalu kabupaten / kota." };
+  if (!/^\d{5}$/.test(postal)) return { ok: false, error: "Kode pos 5 angka." };
+  const pin = a.pin && Math.abs(a.pin.lat) <= 90 && Math.abs(a.pin.lng) <= 180 ? a.pin : null;
+
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      ship_recipient: name,
+      ship_phone: a.phone.trim(),
+      ship_address: address,
+      ship_city: a.city,
+      ship_postal_code: postal,
+      ship_lat: pin?.lat ?? null,
+      ship_lng: pin?.lng ?? null,
+    })
+    .eq("id", user.id);
+  if (error) return { ok: false, error: "Gagal menyimpan alamat. Coba lagi sebentar lagi." };
+  revalidatePath("/akun", "layout");
+  return { ok: true };
+}
+
+export type RedeemShip = {
+  method: "jnt" | "instant" | "pickup";
+  name: string;
+  phone: string;
+  address?: string;
+  city?: string;
+  postalCode?: string;
+  lat?: number;
+  lng?: number;
+  sessionId?: string;
+};
+
+/**
+ * Tukar Slay Point (RPC redeem_reward): poin & stok dipotong langsung. Produk / Merch butuh pengiriman —
+ * J&T / Instant membuat order ongkir (member lanjut bayar di halaman pesanan), ambil di activity tanpa ongkir.
+ */
+export async function redeemReward(rewardId: string, ship: RedeemShip | null): Promise<{ ok: true; code: string; orderCode: string | null } | { ok: false; error: string }> {
+  if (!isSupabaseConfigured) return { ok: false, error: "Mode demo: sambungkan Supabase untuk menukar poin." };
+  const supabase = await createSupabaseServerClient("member");
+  const { data, error } = await supabase.rpc("redeem_reward", {
+    p_reward: rewardId,
+    p_ship: ship && {
+      method: ship.method,
+      name: ship.name,
+      phone: ship.phone,
+      address: ship.address ?? null,
+      city: ship.city ?? null,
+      postal_code: ship.postalCode ?? null,
+      lat: ship.method === "instant" ? (ship.lat ?? null) : null,
+      lng: ship.method === "instant" ? (ship.lng ?? null) : null,
+      session_id: ship.method === "pickup" ? (ship.sessionId ?? null) : null,
+    },
+  });
+  if (error) return { ok: false, error: error.code === "42501" ? "Sesi kamu berakhir — masuk lagi untuk menukar poin." : error.message };
+  const result = data as { code: string; order_code: string | null };
+  revalidatePath("/akun", "layout");
+  return { ok: true, code: result.code, orderCode: result.order_code };
 }

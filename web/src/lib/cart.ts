@@ -75,3 +75,38 @@ export function removeFromCart(keys: string[]): CartItem[] {
 export function cartCount(items: CartItem[]): number {
   return items.reduce((total, item) => total + item.quantity, 0);
 }
+
+/* ── Pilihan checkout ───────────────────────────────────────────────────────
+ * Item yang dibawa ke /akun/checkout: dari Keranjang (item dicentang) atau Buy Now (satu item, tanpa
+ * masuk keranjang). Disimpan di sessionStorage — hanya untuk tab ini.
+ */
+
+const CHECKOUT_KEY = "soslay-checkout";
+
+export type CheckoutSelection = { source: "cart" | "buy"; items: CartItem[] };
+
+export function writeCheckoutSelection(selection: CheckoutSelection) {
+  try {
+    window.sessionStorage.setItem(CHECKOUT_KEY, JSON.stringify(selection));
+  } catch {
+    // sessionStorage diblokir → checkout memakai seluruh isi keranjang
+  }
+}
+
+export function readCheckoutSelection(): CheckoutSelection | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(CHECKOUT_KEY);
+    return raw ? (JSON.parse(raw) as CheckoutSelection) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearCheckoutSelection() {
+  try {
+    window.sessionStorage.removeItem(CHECKOUT_KEY);
+  } catch {
+    // abaikan
+  }
+}

@@ -138,12 +138,13 @@ export async function countSegmentsLive(queries: MembersQuery[]): Promise<number
   return Promise.all(queries.map((q) => count(client, q, now)));
 }
 
-/** Badge sidebar: jumlah member + order yang perlu diproses, tanpa memuat dataset admin. */
+/** Badge sidebar: jumlah member + order yang perlu diproses (perlu dikirim + bukti transfer menunggu verifikasi), tanpa memuat dataset admin. */
 export async function sidebarCountsLive() {
   const client = await createSupabaseServerClient();
-  const [members, orders] = await Promise.all([
+  const [members, orders, proofs] = await Promise.all([
     client.from("profiles").select("id", { count: "exact", head: true }),
     client.from("orders").select("code", { count: "exact", head: true }).or("status.eq.processing,and(status.eq.pending,payment_status.eq.paid)"),
+    client.from("order_payment_proofs").select("id", { count: "exact", head: true }).eq("status", "pending"),
   ]);
-  return { members: members.count ?? 0, ordersToProcess: orders.count ?? 0 };
+  return { members: members.count ?? 0, ordersToProcess: (orders.count ?? 0) + (proofs.count ?? 0) };
 }

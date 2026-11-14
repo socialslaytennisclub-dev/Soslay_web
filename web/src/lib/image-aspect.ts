@@ -13,6 +13,8 @@ export const IMAGE_ASPECT = {
   sessionCover: 4 / 3,
   /** Thumbnail foto sesi. */
   sessionPhoto: 16 / 9,
+  /** Foto reward Slay Point (kartu katalog member & editor admin). */
+  reward: 4 / 3,
   /** Foto profil member (tampil bulat). */
   avatar: 1,
 } as const;

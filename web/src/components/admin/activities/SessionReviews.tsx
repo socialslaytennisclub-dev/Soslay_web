@@ -4,7 +4,7 @@ import { Badge } from "../ui/AdminUI";
 import styles from "./SessionReviews.module.css";
 
 const at = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
-const stars = (n: number) => "★".repeat(n) + "☆".repeat(5 - n);
+export const stars = (n: number) => "★".repeat(n) + "☆".repeat(5 - n);
 
 /** Rata-rata satu kolom rating (yang diisi saja) → "4,3" atau null. */
 function average(reviews: SessionReview[], pick: (r: SessionReview) => number | null): string | null {
@@ -13,10 +13,13 @@ function average(reviews: SessionReview[], pick: (r: SessionReview) => number | 
   return (values.reduce((a, b) => a + b, 0) / values.length).toLocaleString("id-ID", { maximumFractionDigits: 1 });
 }
 
-const ASPECTS = [
-  ["Host", (r: SessionReview) => r.host],
-  ["Venue", (r: SessionReview) => r.venue],
-  ["Format", (r: SessionReview) => r.format],
+type Aspects = Pick<SessionReview, "host" | "venue" | "format">;
+
+/** Aspek rating review (dipakai juga tab Review detail member). */
+export const ASPECTS = [
+  ["Host", (r: Aspects) => r.host],
+  ["Venue", (r: Aspects) => r.venue],
+  ["Format", (r: Aspects) => r.format],
 ] as const;
 
 /** Admin / Edit sesi — review dari peserta & host (tab Review member), dengan rata-rata rating. */

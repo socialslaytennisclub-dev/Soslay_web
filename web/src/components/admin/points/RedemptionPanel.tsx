@@ -3,7 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { formatPoints, TIER_LABEL } from "@/lib/admin-labels";
+import { formatPoints, isPhysicalReward, REWARD_CATEGORY_LABEL, TIER_LABEL } from "@/lib/admin-labels";
+import { SHIPPING_LABEL } from "@/lib/checkout";
 import { cx } from "@/lib/cx";
 import { createRedemption, processRedemption } from "@/server/admin/actions/points";
 import type { AdminRedemption, AdminReward, MemberChoice, RedemptionStatus } from "@/server/admin/types";
@@ -35,13 +36,22 @@ function PanelHead({ title, subtitle, closeHref }: { title: string; subtitle?: s
 /** Detail penukaran + Setujui / Tolak / Selesai (Figma 317:37 kanan). */
 export function RedemptionPanel({ redemption: r, closeHref }: { redemption: AdminRedemption; closeHref: string }) {
   const [note, setNote] = useState("");
+  const [voucher, setVoucher] = useState({ code: "", validUntil: "" });
   const [saving, start] = useTransition();
-  const short = r.status === "pending" && r.memberBalance < r.points;
+  // Penukaran baru sudah memotong poin saat member menukar → saldo tidak dicek lagi.
+  const short = r.status === "pending" && !r.prepaid && r.memberBalance < r.points;
+  const needsCode = r.status === "pending" && !isPhysicalReward(r.rewardCategory);
+  const order = r.delivery?.order ?? null;
+  const awaitingShipping = r.status === "pending" && order !== null && !order.paid;
 
   const run = (status: Exclude<RedemptionStatus, "pending">, confirmText?: string) => {
     if (confirmText && !window.confirm(confirmText)) return;
+    if (status === "approved" && needsCode && !voucher.code.trim()) {
+      toast.error("Isi kode voucher untuk member.");
+      return;
+    }
     start(async () => {
-      const result = await processRedemption(r.code, status, note);
+      const result = await processRedemption(r.code, status, note, status === "approved" && needsCode ? voucher : undefined);
       toast.result(result);
       if (result.ok) setNote("");
     });
@@ -72,6 +82,7 @@ export function RedemptionPanel({ redemption: r, closeHref }: { redemption: Admi
           <RewardThumb image={r.rewardImage} />
           <span className={ordersStyles.customerText}>
             <span className={ordersStyles.strong}>{r.rewardName}</span>
+            <span className={ordersStyles.muted}>{REWARD_CATEGORY_LABEL[r.rewardCategory]}</span>
           </span>
           <span className={styles.ptsPill}>{formatPoints(r.points)}</span>
         </div>
@@ -80,13 +91,20 @@ export function RedemptionPanel({ redemption: r, closeHref }: { redemption: Admi
             <dt>Saldo member sekarang</dt>
             <dd className={cx(short && styles.minus)}>{formatPoints(r.memberBalance)}</dd>
           </div>
-          {r.status === "pending" && (
+          {r.status === "pending" && !r.prepaid && (
             <div className={ordersStyles.grandTotal}>
               <dt>Saldo setelah disetujui</dt>
               <dd>{formatPoints(r.memberBalance - r.points)}</dd>
             </div>
           )}
         </dl>
+        {r.prepaid && r.status !== "rejected" && <p className={ordersStyles.muted}>Poin sudah terpotong — ditolak / dibatalkan = poin dikembalikan.</p>}
+        {r.voucherCode && (
+          <p className={ordersStyles.notice}>
+            Kode voucher: <strong>{r.voucherCode}</strong>
+            {r.voucherValidUntil && ` · berlaku s/d ${r.voucherValidUntil}`}
+          </p>
+        )}
         {short && <p className={ordersStyles.notice}>Saldo member belum cukup — penukaran tidak bisa disetujui.</p>}
         {r.note && <p className={ordersStyles.notice}>Catatan: {r.note}</p>}
         {r.handledBy && r.handledAt && (
@@ -96,8 +114,52 @@ export function RedemptionPanel({ redemption: r, closeHref }: { redemption: Admi
         )}
       </section>
 
+      {r.delivery && (
+        <section className={ordersStyles.section}>
+          <h3 className={ordersStyles.sectionTitle}>Pengiriman · {r.delivery.method === "pickup" ? "Ambil di activity" : SHIPPING_LABEL[r.delivery.method].short}</h3>
+          {r.delivery.recipient && (
+            <p className={ordersStyles.muted}>
+              {r.delivery.recipient.name} · {r.delivery.recipient.phone}
+              {r.delivery.recipient.address && (
+                <>
+                  <br />
+                  {[r.delivery.recipient.address, r.delivery.recipient.city, r.delivery.recipient.postalCode].filter(Boolean).join(", ")}
+                </>
+              )}
+            </p>
+          )}
+          {r.delivery.activity && (
+            <p className={ordersStyles.muted}>
+              {r.delivery.activity.title} · {when.format(new Date(r.delivery.activity.startsAt))} · {r.delivery.activity.venue}
+            </p>
+          )}
+          {order && (
+            <p className={ordersStyles.muted}>
+              Ongkir:{" "}
+              <Link href={`/admin/orders?order=${order.code}`} className={ordersStyles.strongLink}>
+                #{order.code}
+              </Link>{" "}
+              · {order.paid ? "lunas — kirim & isi resi di Orders" : order.status === "cancelled" ? "batal" : "menunggu member transfer"}
+            </p>
+          )}
+          {awaitingShipping && <p className={ordersStyles.notice}>Disetujui otomatis setelah ongkir terverifikasi di menu Orders; status Selesai saat order dikirim.</p>}
+        </section>
+      )}
+
       {(r.status === "pending" || r.status === "approved") && (
         <section className={ordersStyles.section}>
+          {needsCode && (
+            <div className={styles.form}>
+              <label className={settingsStyles.field}>
+                <span className={settingsStyles.label}>Kode voucher untuk member</span>
+                <input className={settingsStyles.input} value={voucher.code} maxLength={80} onChange={(e) => setVoucher((v) => ({ ...v, code: e.target.value }))} placeholder="mis. SLAY-MABAR-0123" />
+              </label>
+              <label className={settingsStyles.field}>
+                <span className={settingsStyles.label}>Berlaku sampai (opsional)</span>
+                <input type="date" className={settingsStyles.input} value={voucher.validUntil} onChange={(e) => setVoucher((v) => ({ ...v, validUntil: e.target.value }))} />
+              </label>
+            </div>
+          )}
           <label className={settingsStyles.field}>
             <span className={settingsStyles.label}>{r.status === "pending" ? "Catatan / alasan tolak" : "Catatan"}</span>
             <input className={settingsStyles.input} value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="Opsional saat menyetujui" />
@@ -108,13 +170,13 @@ export function RedemptionPanel({ redemption: r, closeHref }: { redemption: Admi
                 <AdminButton icon="x" onClick={() => run("rejected")} disabled={saving}>
                   Tolak
                 </AdminButton>
-                <AdminButton variant="primary" icon="check-bold" onClick={() => run("approved")} disabled={saving || short}>
+                <AdminButton variant="primary" icon="check-bold" onClick={() => run("approved")} disabled={saving || short || awaitingShipping}>
                   {saving ? "Memproses…" : "Setujui"}
                 </AdminButton>
               </>
             ) : (
               <>
-                <AdminButton icon="x" onClick={() => run("rejected", `Batalkan #${r.code}? ${formatPoints(r.points)} dikembalikan ke member.`)} disabled={saving}>
+                <AdminButton icon="x" onClick={() => run("rejected", `Batalkan #${r.code}? ${formatPoints(r.points)} dikembalikan ke member.`)} disabled={saving || (order?.paid ?? false)}>
                   Batalkan
                 </AdminButton>
                 <AdminButton variant="primary" icon="check-circle" onClick={() => run("fulfilled")} disabled={saving}>

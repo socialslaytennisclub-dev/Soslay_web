@@ -5,13 +5,13 @@ import { shiftDemoDates } from "@/lib/demo-dates";
 import { CITY_TIMEZONE, cityOf, type City } from "@/lib/format";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabasePublicClient } from "@/lib/supabase/public";
+import { KUYY_PROFILE_URL } from "@/lib/kuyy";
 
 /**
  * Sesi untuk website (Activity, Venue detail). Dengan Supabase: sesi yang dibuat/diubah di
  * admin (RLS hanya mengembalikan sesi publik yang sudah tayang). Tanpa Supabase: konten statis.
  */
 
-const KUY_DEFAULT = "https://kuy.id/soslay";
 /** Sesi lama tidak perlu dimuat: website hanya menampilkan beberapa sesi terakhir. */
 const PAST_WINDOW_DAYS = 120; // = jendela venue tersembunyi di migrasi 20261101020000_hidden_venue_scope.sql
 
@@ -102,7 +102,7 @@ export const getWebsiteSessions = cache(async (): Promise<Session[]> => {
         start: start.time,
         end: end.time,
         image: s.cover_path || s.venues.cover_path || "/images/home/activity-weekly-mabar.webp",
-        bookingUrl: s.kuy_booking_url || KUY_DEFAULT,
+        bookingUrl: s.kuy_booking_url || KUYY_PROFILE_URL,
         featured: s.is_featured || s.show_on_homepage,
         price: s.price,
         capacity: s.capacity,

@@ -70,14 +70,21 @@ export function staggerChildren(scope: HTMLElement) {
   byAnim(scope, "stagger").forEach((el) => {
     const fromRight = el.dataset.animFrom === "right";
     gsap.set(el, { autoAlpha: 1 });
-    gsap.from(el.children, {
-      autoAlpha: 0,
-      x: fromRight ? 120 : 0,
-      y: fromRight ? 0 : 32,
-      duration: 0.8,
-      stagger: 0.06,
-      scrollTrigger: { trigger: el, start: IN_VIEW },
-    });
+    // fromTo (bukan from): kalau animasi dibuat ulang / terpotong di tengah, tujuan tetap posisi 0 — item
+    // grid tidak tertinggal tergeser (kartu tidak sejajar). Transform dibersihkan setelah selesai.
+    gsap.fromTo(
+      el.children,
+      { autoAlpha: 0, x: fromRight ? 120 : 0, y: fromRight ? 0 : 32 },
+      {
+        autoAlpha: 1,
+        x: 0,
+        y: 0,
+        duration: 0.8,
+        stagger: 0.06,
+        clearProps: "transform",
+        scrollTrigger: { trigger: el, start: IN_VIEW },
+      },
+    );
   });
 }
 

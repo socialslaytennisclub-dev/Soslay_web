@@ -16,11 +16,14 @@ import pageStyles from "../page.module.css";
 
 export const metadata: Metadata = { title: "Orders" };
 
+/** Aturan Shop §1: Semua · Verifikasi · Perlu dikirim · Dikirim · Selesai (+ Menunggu bayar & Dibatalkan). */
 const TABS: { value: OrdersTab; label: string }[] = [
   { value: "all", label: "Semua" },
-  { value: "to_process", label: "Perlu diproses" },
+  { value: "verify", label: "Verifikasi" },
+  { value: "to_process", label: "Perlu dikirim" },
   { value: "shipped", label: "Dikirim" },
   { value: "completed", label: "Selesai" },
+  { value: "awaiting", label: "Menunggu bayar" },
   { value: "cancelled", label: "Dibatalkan" },
 ];
 
@@ -56,9 +59,9 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
       <AdminTopbar breadcrumb="CMS / Shop / Orders" title="Orders" />
       <div className={pageStyles.content}>
         <div className={overviewStyles.kpis}>
-          <Kpi icon="package" label="Perlu diproses" value={String(kpis.toProcess)} note={kpis.overdue ? `${kpis.overdue} lewat 24 jam` : "Semua di bawah 24 jam"} />
-          <Kpi icon="truck" label="Dalam pengiriman" value={String(kpis.inTransit)} note="JNE, SiCepat, J&T" />
-          <Kpi icon="check-circle" label={`Selesai · ${kpis.monthLabel}`} value={String(kpis.completedThisMonth)} note="Order diterima customer" />
+          <Kpi icon="package" label="Perlu verifikasi" value={String(kpis.toVerify)} note={kpis.verifyLate ? `${kpis.verifyLate} menunggu > 12 jam` : "Semua di bawah 12 jam"} />
+          <Kpi icon="truck" label="Perlu dikirim" value={String(kpis.toProcess)} note={kpis.toShipByMethod} />
+          <Kpi icon="check-circle" label="Menunggu bayar" value={String(kpis.awaiting)} note="Batal otomatis setelah 24 jam" />
           <Kpi icon="coins" label={`Pendapatan · ${kpis.monthLabel}`} value={formatRupiahShort(kpis.revenueThisMonth)} delta={kpis.revenueDelta} note={`vs periode sama ${kpis.prevMonthLabel}`} />
         </div>
 

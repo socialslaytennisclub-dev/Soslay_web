@@ -13,7 +13,9 @@ import { Footer } from "@/components/layout/Footer/Footer";
 import { Navbar } from "@/components/layout/Navbar/Navbar";
 import { MotionProvider } from "@/components/motion/MotionProvider";
 import { findGuide, participantGuides } from "@/content/guides";
-import { cityHref, findVenue, venueCities, venueHref } from "@/content/venues";
+import { cityHref, venueCardInfo, venueCities, venueHref } from "@/content/venues";
+import { cityInEnglish } from "@/lib/venue-options";
+import { findWebsiteVenue } from "@/server/public/venues";
 
 /** Hanya venue yang punya panduan yang di-prerender; slug lain → 404. */
 export function generateStaticParams() {
@@ -24,10 +26,10 @@ export const dynamicParams = false;
 
 export async function generateMetadata({ params }: PageProps<"/venue/[slug]/guide">): Promise<Metadata> {
   const { slug } = await params;
-  const guide = findGuide(slug);
-  if (!guide) return {};
+  const [guide, venue] = [findGuide(slug), await findWebsiteVenue(slug)];
+  if (!guide || !venue) return {};
   return {
-    title: `Participant Guide — ${guide.venueName} — SOSLAY`,
+    title: `Participant Guide — ${venue.name} — SOSLAY`,
     description: guide.intro,
   };
 }
@@ -36,7 +38,7 @@ export async function generateMetadata({ params }: PageProps<"/venue/[slug]/guid
 export default async function ParticipantGuidePage({ params }: PageProps<"/venue/[slug]/guide">) {
   const { slug } = await params;
   const guide = findGuide(slug);
-  const venue = findVenue(slug);
+  const venue = await findWebsiteVenue(slug);
   if (!guide || !venue) notFound();
 
   return (
@@ -48,14 +50,14 @@ export default async function ParticipantGuidePage({ params }: PageProps<"/venue
             breadcrumb={[
               { label: "Venue", href: "/venue" },
               { label: venue.area ?? venue.city, href: `${cityHref(venueCities.find((c) => c.city === venue.city)?.slug)}#daftar-venue` },
-              { label: guide.venueName, href: venueHref(venue) },
+              { label: venue.name, href: venueHref(venue) },
               { label: "Participant Guideline" },
             ]}
             eyebrow="Participant Guideline"
-            title={guide.venueName}
+            title={venue.name}
             intro={guide.intro}
             photo={guide.hero}
-            card={{ name: guide.venueName, facts: guide.facts, note: guide.note, ink: guide.theme.ink }}
+            card={{ name: venue.name, ...venueCardInfo(venue, cityInEnglish), ink: guide.theme.ink }}
           />
           <OutfitSection guide={guide} />
           <BringSection guide={guide} />
