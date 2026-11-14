@@ -83,6 +83,14 @@ try {
 }
 console.assert(blocked, "member bisa mengubah tier sendiri!");
 await db.query(`update profiles set display_name = 'Arya' where id = $1`, [member]); // boleh
+// Email profil tidak boleh diubah member langsung (dipakai mengklaim ghost) — hanya lewat server / admin.
+let emailBlocked = false;
+try {
+  await db.query(`update profiles set email = 'ghost.orang.lain@mail.com' where id = $1`, [member]);
+} catch {
+  emailBlocked = true;
+}
+console.assert(emailBlocked, "member bisa mengubah email profil sendiri (bisa klaim ghost orang lain)!");
 await as(null);
 
 const order = await one(`insert into orders (member_id, subtotal, total, recipient_name, recipient_phone, shipping_address)
