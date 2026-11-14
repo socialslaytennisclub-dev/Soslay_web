@@ -15,9 +15,15 @@ export const MIN_PASSWORD = 8;
 
 export type FieldErrors<K extends string> = Partial<Record<K, string>>;
 
+/** Pesan email — member (Inggris) & admin (Indonesia); validateEmail memakai pesan Inggris yang sama. */
+const EMAIL_MESSAGES = {
+  en: { required: "Email is required", format: "Please enter a valid email", doubleDot: "Your email has two dots in a row", trailingDot: "Remove the dot at the end of your email", tld: (t: string) => `".${t}" isn't a valid email domain` },
+  id: { required: "Isi email.", format: "Email tidak valid.", doubleDot: "Email berisi dua titik berurutan.", trailingDot: "Hapus titik di akhir email.", tld: (t: string) => `".${t}" bukan domain email yang valid.` },
+};
+
 export function validateEmail(value: string): string | undefined {
-  if (!value.trim()) return "Email is required";
-  if (!isEmail(value)) return "Please enter a valid email";
+  if (!value.trim()) return EMAIL_MESSAGES.en.required;
+  if (!isEmail(value)) return EMAIL_MESSAGES.en.format;
 }
 
 type NewEmailIssue = "required" | "format" | "doubleDot" | "trailingDot" | { tld: string };
@@ -38,15 +44,10 @@ function newEmailIssue(value: string): NewEmailIssue | undefined {
   if (invalidTld) return { tld: invalidTld };
 }
 
-const NEW_EMAIL_MESSAGES = {
-  en: { required: "Email is required", format: "Please enter a valid email", doubleDot: "Your email has two dots in a row", trailingDot: "Remove the dot at the end of your email", tld: (t: string) => `".${t}" isn't a valid email domain` },
-  id: { required: "Isi email.", format: "Email tidak valid.", doubleDot: "Email berisi dua titik berurutan.", trailingDot: "Hapus titik di akhir email.", tld: (t: string) => `".${t}" bukan domain email yang valid.` },
-};
-
-function newEmailError(value: string, lang: keyof typeof NEW_EMAIL_MESSAGES) {
+function newEmailError(value: string, lang: keyof typeof EMAIL_MESSAGES) {
   const issue = newEmailIssue(value);
   if (!issue) return undefined;
-  const messages = NEW_EMAIL_MESSAGES[lang];
+  const messages = EMAIL_MESSAGES[lang];
   return typeof issue === "string" ? messages[issue] : messages.tld(issue.tld);
 }
 
