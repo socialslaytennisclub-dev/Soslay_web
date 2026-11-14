@@ -276,7 +276,7 @@ export const cityOptions = [
   "Bali",
 ];
 
-export const genderOptions = ["Laki-laki", "Perempuan", "Tidak ingin menyebutkan"];
+export const genderOptions = ["Laki-laki", "Perempuan"];
 
 export const playingDurationOptions = ["Kurang dari 6 bulan", "6–12 bulan", "1–3 tahun", "3–5 tahun", "Lebih dari 5 tahun"];
 

@@ -545,6 +545,62 @@ export async function clearParticipants(sessionId: string): Promise<ActionResult
   return { ok: true, message: `${removed?.length ?? 0} peserta & absensi dihapus · line-up ikut dikosongkan. Silakan impor data baru.` };
 }
 
+/** Nama dalam format pembanding: spasi dirapikan (nama impor Kuyy sering berspasi dobel / di ujung). */
+const normName = (value: string | null) => (value ?? "").trim().replace(/\s+/g, " ");
+
+/**
+ * Ghost member ternyata member terdaftar → diklaim (seperti trigger claim_ghost_member saat daftar) dan
+ * baris tamunya di activity lain ikut ditautkan, kecuali activity yang sudah memuat member itu.
+ * Dijalankan SEBELUM baris yang diedit disimpan: ghost diklaim dulu (tidak bisa diambil pendaftar lain di
+ * tengah jalan); ada yang gagal → semuanya dikembalikan & simpan dibatalkan. `undo` dipakai bila simpan
+ * baris utamanya gagal.
+ */
+async function claimGhostFor(
+  supabase: Supabase,
+  ghostId: string,
+  memberId: string,
+  exceptId: string,
+): Promise<{ error: string } | { sessions: string[]; undo: () => Promise<unknown> }> {
+  const { data: claimed, error: claimError } = await supabase
+    .from("ghost_members")
+    .update({ claimed_by: memberId, claimed_at: new Date().toISOString() })
+    .eq("id", ghostId)
+    .is("claimed_by", null)
+    .select("id");
+  if (claimError) return { error: claimError.message };
+  if (!claimed?.length) return { error: "tamu ini baru saja ditautkan ke member lain — muat ulang halaman" };
+  let ids: string[] = [];
+  const undo = () =>
+    Promise.all([
+      ids.length ? supabase.from("session_participants").update({ member_id: null }).in("id", ids) : null,
+      supabase.from("ghost_members").update({ claimed_by: null, claimed_at: null }).eq("id", ghostId).eq("claimed_by", memberId),
+    ]);
+  const fail = async (message: string) => {
+    await undo();
+    return { error: message };
+  };
+
+  const { data: rows, error: readError } = await supabase.from("session_participants").select("id, session_id").eq("ghost_id", ghostId).is("member_id", null).neq("id", exceptId);
+  if (readError) return fail(readError.message);
+  if (!rows?.length) return { sessions: [], undo };
+  const { data: taken, error: takenError } = await supabase.from("session_participants").select("session_id").eq("member_id", memberId).in("session_id", rows.map((r) => r.session_id as string));
+  if (takenError) return fail(takenError.message);
+  const busy = new Set((taken ?? []).map((r) => r.session_id as string));
+  const moving = rows.filter((r) => !busy.has(r.session_id as string));
+  if (moving.length) {
+    const { error } = await supabase.from("session_participants").update({ member_id: memberId }).in("id", moving.map((r) => r.id as string));
+    if (error) return fail(error.message);
+    ids = moving.map((r) => r.id as string);
+  }
+  return { sessions: [...new Set(moving.map((r) => r.session_id as string))], undo };
+}
+
+/** Ghost yang tidak dipakai baris mana pun lagi (dan belum diklaim) dihapus — tidak menyangkut ke pendaftar lain. */
+async function dropUnusedGhost(supabase: Supabase, ghostId: string) {
+  const { count, error } = await supabase.from("session_participants").select("id", { count: "exact", head: true }).eq("ghost_id", ghostId);
+  if (!error && !count) await supabase.from("ghost_members").delete().eq("id", ghostId).is("claimed_by", null);
+}
+
 /**
  * Ubah pembayaran peserta hasil impor Kuyy atau tambahan admin: nominal, status & jalur bayar (mis. bayar DP,
  * salah harga di file, atau bayar langsung transfer ke BCA → via Manual: uangnya masuk akun bayar manual,
@@ -552,11 +608,15 @@ export async function clearParticipants(sessionId: string): Promise<ActionResult
  * diubah di profilnya. Boleh kapan saja, juga setelah activity selesai: nominal peserta lunas masuk Keuangan
  * begitu activity selesai, perubahan sesudahnya dicatat sebagai koreksi (trigger finance_on_participant).
  */
+/** Nomor HP tamu milik member → admin diminta konfirmasi dulu sebelum baris ditautkan ke akunnya. */
+export type ConfirmLinkResult = { ok: false; error: string; confirmLink: { memberId: string; name: string; memberCode: string } };
+
 export async function updateParticipantPayment(
   sessionId: string,
   participantId: string,
-  input: { amount: number; payment: "paid" | "pending"; via: "kuy" | "manual"; name?: string; phone?: string },
-): Promise<ActionResult> {
+  // linkMember: jawaban admin atas konfirmasi "tautkan ke member?" — id member (ya) / false (tetap tamu).
+  input: { amount: number; payment: "paid" | "pending"; via: "kuy" | "manual"; name?: string; phone?: string; linkMember?: string | false },
+): Promise<ActionResult | ConfirmLinkResult> {
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
   const { amount, payment, via } = input;
@@ -575,20 +635,43 @@ export async function updateParticipantPayment(
 
   // Nama & nomor HP hanya untuk tamu (belum member) — data member mengikuti profilnya.
   const guest = !row.member_id && input.name !== undefined;
-  const name = input.name?.trim() ?? "";
+  const name = normName(input.name ?? "");
   if (guest && !name) return { ok: false, error: "Isi nama peserta." };
   const phoneError = guest ? changedPhoneError(input.phone ?? "", row.phone as string | null) : null;
   if (phoneError) return { ok: false, error: phoneError };
   const phone = guest && input.phone?.trim() ? localPhone(input.phone) : null;
   // Nomor yang sama dengan format lain (0812… / 812…) bukan perubahan.
-  const detailsChanged = guest && (name !== row.full_name || !samePhone(phone, row.phone as string | null));
+  const detailsChanged = guest && (name !== normName(row.full_name as string | null) || !samePhone(phone, row.phone as string | null));
+
+  // Nomor tamu milik member terdaftar (mis. tamu yang baru daftar sesudah activity, juga bila nomornya sudah
+  // tersimpan sebelum ia daftar) → baris ini ditautkan ke akunnya setelah admin mengonfirmasi; booking, status
+  // hadir & poin mengikuti lewat trigger, sama seperti saat member mendaftar. Nomor dipakai >1 profil → tidak
+  // ditautkan (tidak jelas siapa).
+  let member = guest && phone && input.linkMember !== false ? await findMemberByPhone(phone, { unique: true }) : null;
+  if (member) {
+    const { count } = await supabase.from("session_participants").select("id", { count: "exact", head: true }).eq("session_id", sessionId).eq("member_id", member.id);
+    if (count) {
+      // Admin mengganti nomor ke member yang sudah ikut → baris dobel. Nomor tidak diubah (mis. member
+      // mendaftarkan temannya dengan nomornya sendiri) → tetap tamu, pembayaran tetap bisa disimpan.
+      if (!samePhone(phone, row.phone as string | null)) return { ok: false, error: `${member.fullName} sudah ada di activity ini — hapus salah satu barisnya dulu.` };
+      member = null;
+    }
+  }
+  if (member && input.linkMember !== member.id) {
+    return { ok: false, error: "Konfirmasi penautan ke member dulu.", confirmLink: { memberId: member.id, name: member.fullName, memberCode: member.memberCode } };
+  }
+  // Nama tidak diubah (beda huruf besar/kecil tetap sama) → tamu ini memang orang yang sama: ghost-nya diklaim &
+  // riwayat activity lainnya ikut pindah. Nama diubah → slotnya dipakai orang lain: hanya baris ini yang ditautkan.
+  const claimGhost = Boolean(member && row.ghost_id && name.toLowerCase() === normName(row.full_name as string | null).toLowerCase());
+  const link = member && claimGhost ? await claimGhostFor(supabase, row.ghost_id as string, member.id, participantId) : null;
+  if (link && "error" in link) return { ok: false, error: `Gagal menautkan riwayat tamu: ${link.error}` };
 
   // Data tamu (ghost member) mengikuti perubahan nama / nomor tanpa mengubah riwayat orang lain:
   //  1. nomor baru sudah tercatat sebagai tamu lain (mis. orang pengganti yang sempat ditambahkan admin) → pakai tamu itu;
   //  2. tamu ini hanya ada di activity ini → datanya dibetulkan (mis. salah ketik);
   //  3. pernah ikut activity lain → slotnya digantikan orang lain: dipisah jadi tamu baru.
   let ghost: { kind: "reuse" | "new"; id: string } | { kind: "fix" } | null = null;
-  if (detailsChanged && row.ghost_id) {
+  if (detailsChanged && row.ghost_id && !member) {
     const [{ data: known }, { count: elsewhere }] = await Promise.all([
       phone ? supabase.from("ghost_members").select("id").eq("phone", phone).is("claimed_by", null).neq("id", row.ghost_id).limit(1).maybeSingle() : Promise.resolve({ data: null }),
       supabase.from("session_participants").select("id", { count: "exact", head: true }).eq("ghost_id", row.ghost_id).neq("id", participantId),
@@ -615,23 +698,34 @@ export async function updateParticipantPayment(
       payment_status: payment,
       payment_channel: via,
       amount_edited_at: now,
-      ...(detailsChanged ? { full_name: name, phone, details_edited_at: now, ...(ghost && "id" in ghost ? { ghost_id: ghost.id } : {}) } : {}),
+      ...(member
+        ? { member_id: member.id, full_name: member.fullName, phone, email: member.email || null, details_edited_at: now, ...(claimGhost ? {} : { ghost_id: null }) }
+        : detailsChanged
+          ? { full_name: name, phone, details_edited_at: now, ...(ghost && "id" in ghost ? { ghost_id: ghost.id } : {}) }
+          : {}),
     })
     .eq("id", participantId)
     .eq("session_id", sessionId);
   if (error) {
     // Tamu baru yang dibuat untuk perubahan ini tidak jadi dipakai.
     if (ghost?.kind === "new") await supabase.from("ghost_members").delete().eq("id", ghost.id);
+    // Riwayat tamu yang sudah dipindah & klaim ghost-nya dikembalikan.
+    if (link) await link.undo();
     return { ok: false, error: `Gagal menyimpan: ${error.message}` };
   }
-  const who = guest ? name : (row.full_name as string);
+  const who = member ? member.fullName : guest ? name : (row.full_name as string);
   const status = `${PAYMENT_LABEL[payment].toLowerCase()} · via ${PAYMENT_CHANNEL_LABEL[via]}`;
+  const moved = link?.sessions ?? [];
   await Promise.all([
     ghost?.kind === "fix" ? supabase.from("ghost_members").update({ full_name: name, phone }).eq("id", row.ghost_id).is("claimed_by", null) : null,
+    // Ditautkan sebagai orang lain (nama diubah) → ghost lama yang tak terpakai lagi tidak dibiarkan menggantung.
+    member && !claimGhost && row.ghost_id ? dropUnusedGhost(supabase, row.ghost_id as string) : null,
+    member ? audit(auth.userId, `menautkan tamu ${row.full_name} ke member ${member.fullName} (nomor HP)`, "session", sessionId) : null,
     audit(auth.userId, `mengubah pembayaran ${who}: ${formatRupiahPlain(amount)} · ${status}`, "session", sessionId),
   ]);
-  refreshPaths(`/admin/activities/${sessionId}`);
-  return { ok: true, message: `Pembayaran ${who} disimpan · ${formatRupiahPlain(amount)} · ${status}.` };
+  refreshPaths(`/admin/activities/${sessionId}`, ...(member ? [`/admin/members/${member.id}`] : []), ...moved.map((id) => `/admin/activities/${id}`));
+  const linked = member ? ` · ${row.full_name} ditautkan ke member ${member.fullName} (${member.memberCode})${moved.length ? `, ${moved.length} activity lain ikut pindah` : ""}` : "";
+  return { ok: true, message: `Pembayaran ${who} disimpan · ${formatRupiahPlain(amount)} · ${status}${linked}.` };
 }
 
 // ── Tambah peserta manual (admin) ──────────────────────────────────────────

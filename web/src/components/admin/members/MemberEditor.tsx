@@ -33,7 +33,6 @@ const HANDS = [
 const GENDERS = [
   ["female", "Perempuan"],
   ["male", "Laki-laki"],
-  ["undisclosed", "Tidak disebutkan"],
 ];
 
 /** Edit data member + penyesuaian Slay Point manual. */

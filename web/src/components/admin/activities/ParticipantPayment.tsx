@@ -63,7 +63,15 @@ function PaymentDrawer({ sessionId, finished, ref }: { sessionId: string; finish
   const save = () =>
     target &&
     start(async () => {
-      const r = await updateParticipantPayment(sessionId, target.id, { amount: Number(amount || 0), payment, via, ...(guest ? { name, phone } : {}) });
+      const input = { amount: Number(amount || 0), payment, via, ...(guest ? { name, phone } : {}) };
+      let r = await updateParticipantPayment(sessionId, target.id, input);
+      // Nomor tamu milik member terdaftar → admin memastikan dulu orangnya sama (salah ketik nomor bisa
+      // menautkan tamu ke member lain). Tidak → tetap tamu, pembayaran tetap disimpan.
+      if (!r.ok && "confirmLink" in r) {
+        const { memberId, name: memberName, memberCode } = r.confirmLink;
+        const yes = window.confirm(`Nomor ini milik member ${memberName} (${memberCode}).\n\nTautkan peserta ini ke akunnya? Booking, kehadiran & poin ikut ke member itu.\nPilih Cancel untuk tetap menyimpan sebagai tamu.`);
+        r = await updateParticipantPayment(sessionId, target.id, { ...input, linkMember: yes ? memberId : false });
+      }
       toast.result(r);
       if (r.ok) {
         dialog.close();
@@ -107,7 +115,11 @@ function PaymentDrawer({ sessionId, finished, ref }: { sessionId: string; finish
             <label className={styles.field}>
               <span className={styles.label}>Nomor HP (WhatsApp)</span>
               <input className={styles.input} inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="08…" aria-label="Nomor HP peserta" />
-              {phoneError && <span className={styles.error}>{phoneError}</span>}
+              {phoneError ? (
+                <span className={styles.error}>{phoneError}</span>
+              ) : (
+                <span className={styles.muted}>Nomor milik member terdaftar → kamu diminta konfirmasi untuk menautkan peserta ini ke akunnya.</span>
+              )}
             </label>
           </>
         )}

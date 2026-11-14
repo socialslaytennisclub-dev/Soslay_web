@@ -1,7 +1,7 @@
 "use server";
 
 import { AFTER_AUTH } from "@/content/auth";
-import { adminEmailError, isKuyId, KUY_ID_FORMAT_ERROR, normalizeKuyId } from "@/lib/auth";
+import { adminEmailError, GENDERS, isKuyId, KUY_ID_FORMAT_ERROR, normalizeKuyId } from "@/lib/auth";
 import { isSessionFinished } from "@/lib/session-lock";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -13,7 +13,8 @@ import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } fro
 /** CRM: ubah data member, catatan internal, penyesuaian poin, booking oleh admin, segmen. */
 
 const ENUMS = {
-  gender: ["male", "female", "undisclosed"],
+  // Pilihan baru hanya GENDERS; "undisclosed" lama tetap diterima supaya simpan editor tidak menghapusnya.
+  gender: [...GENDERS, "undisclosed"],
   level: ["beginner", "beginner_intermediate", "intermediate", "intermediate_advanced", "advanced"],
   frequency: ["rarely", "monthly", "weekly", "twice_weekly", "often"],
   format: ["singles", "doubles", "both"],
