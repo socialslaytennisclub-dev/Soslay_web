@@ -711,6 +711,11 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await one(`select claimed_by from ghost_members where id = $1`, [typoGhost])).claimed_by === null, "ghost tidak boleh diklaim email salah ketik");
   // Ghost pasangan (nomor HP sama dengan Joe, dibuat setelah Joe daftar) TIDAK boleh ikut terklaim saat email diperbaiki.
   const partnerGhost = (await one(`insert into ghost_members (full_name, email, phone) values ('Pasangan Joe', 'pasangan@mail.com', '81200000177') returning id`)).id;
+  // profiles.email diubah TANPA email login (auth.users) ikut berubah → tidak boleh mengklaim apa pun.
+  await db.query(`update profiles set email = 'pasangan@mail.com' where id = $1`, [joe.id]);
+  console.assert((await one(`select claimed_by from ghost_members where id = $1`, [partnerGhost])).claimed_by === null, "ghost diklaim lewat profiles.email yang bukan email login");
+  // Alur sah: email login diganti dulu (Supabase Auth), lalu profil disamakan.
+  await db.query(`update auth.users set email = 'joe.typo@gmail.com' where id = $1`, [joe.id]);
   await db.query(`update profiles set email = 'joe.typo@gmail.com' where id = $1`, [joe.id]);
   const fixed = await one(`select claimed_by from ghost_members where id = $1`, [typoGhost]);
   const partner = await one(`select claimed_by from ghost_members where id = $1`, [partnerGhost]);
