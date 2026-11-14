@@ -795,6 +795,8 @@ export type TripBooking = {
   id: string;
   memberId: string | null;
   memberCode: string;
+  /** Kuy ID dari profil member ("" = tamu / belum diisi). */
+  kuyId: string;
   name: string;
   phone: string;
   email: string;

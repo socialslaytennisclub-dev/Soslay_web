@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, useTransition } from "react";
 import { formatRupiahPlain } from "@/lib/admin-labels";
@@ -244,7 +245,23 @@ export function TripPayments({ tripId, tripTitle, activities, quota, due, minDp,
                       <span className={styles.person}>
                         <MemberAvatar name={b.name} size={32} />
                         <span>
-                          <strong>{b.name}</strong>
+                          {b.memberId ? (
+                            <Link href={`/admin/members/${b.memberId}`} className={styles.personName}>
+                              {b.name}
+                            </Link>
+                          ) : (
+                            <strong>{b.name}</strong>
+                          )}
+                          {/* Sama seperti peserta activity: member terverifikasi (ID Soslay ✓ · Kuy ID) / ghost member. */}
+                          {b.memberId ? (
+                            <small className={styles.identity}>
+                              {b.memberCode || "Member Soslay"}
+                              <AdminIcon name="verified" size={14} label="Member Soslay terverifikasi" className={styles.verified} />
+                              {b.kuyId && ` · Kuy @${b.kuyId}`}
+                            </small>
+                          ) : (
+                            <small className={styles.identity}>Ghost member</small>
+                          )}
                           <small>{trail(b)}</small>
                         </span>
                       </span>
