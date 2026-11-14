@@ -5,6 +5,7 @@
 
 const IMG = "/images/guide/common-grounds";
 const RANA = "/images/guide/rana-grounds";
+const VALE = "/images/guide/vale-racquet";
 
 export type GuidePhoto = { src: string; alt: string; position?: string };
 
@@ -234,6 +235,99 @@ export const participantGuides: ParticipantGuide[] = [
         { title: "Come photo-ready", body: "Head-to-toe white or ivory. Skip greens and teals." },
         { title: "Grass-court ready", body: "Synthetic grass — wear comfy tennis shoes with good grip." },
         { title: "Hydrate early", body: "It gets warm under the roof. Bring a full bottle." },
+        { title: "Respect the venue", body: "It's a shared space — keep the lounge tidy and the vibe friendly." },
+        { title: "Meet someone new", body: "Come for the tennis, stay for the people. Have fun!" },
+      ],
+    },
+  },
+  /** Figma 2388:2 "Participant Guide — Vale Racquet". */
+  {
+    venueSlug: "vale-racquet",
+    intro: "Everything you need to know before you step on court — what to wear, what to bring, and what the venue feels like.",
+    hero: { src: `${VALE}/hero.webp`, alt: "Soslay members jumping with their rackets on the sage court inside the Vale Racquet hall", position: "50% 50%" },
+    theme: { panel: "#4e7a5e", ink: "#4e7a5e" },
+    outfit: {
+      title: "What should I wear?",
+      body: "Warm wood walls and a deep sage court — so go dark or crisp. Black and navy pop against the walls, white shines on the court, and pink adds energy. Skip beige and greens.",
+      palette: [
+        { name: "Jet Black", role: "Contrast", hex: "#161616" },
+        { name: "Optic White", role: "Your base", hex: "#ffffff" },
+        { name: "Navy", role: "Classic dark", hex: "#1f2a55" },
+        { name: "Hot Pink", role: "Pop", hex: "#f0508c" },
+      ],
+      avoid: [
+        { name: "Beige", hex: "#d2b48c" },
+        { name: "Cream", hex: "#efe6d6" },
+        { name: "Sage", hex: "#8fae94" },
+        { name: "Forest", hex: "#3e6b50" },
+      ],
+      avoidNote:
+        "Beige and cream melt into the warm walls, greens into the court — you'll disappear in photos. Love neutrals? Go crisp white, not cream — beige and tan blend straight into the wood-toned walls.",
+      looks: [
+        { title: "Modest black set", caption: "Black long top, black pants, white sneakers", photo: { src: `${VALE}/outfit-black.webp`, alt: "Member wearing a modest black long top and black pants" } },
+        { title: "Navy + white skirt", caption: "Navy polo, white pleated skirt", photo: { src: `${VALE}/outfit-navy.webp`, alt: "Member wearing a navy polo and white pleated skirt", position: "89% 50%" } },
+        { title: "Printed whites", caption: "White printed tee & shorts set", photo: { src: `${VALE}/outfit-printed.webp`, alt: "Member wearing a white printed tee and shorts set" } },
+        { title: "Soft whites + pink", caption: "White modest set, pink racket pop", photo: { src: `${VALE}/outfit-pink.webp`, alt: "Member in a white modest set holding a pink racket" } },
+      ],
+    },
+    bring: {
+      title: "What should I bring?",
+      body: "Bring the essentials — we'll take care of the rest. It's an indoor hall, so no sun to worry about — and there's a calm lounge to cool down in after.",
+      items: [
+        { name: "Racket", note: "Bring a spare if you have one" },
+        { name: "Tennis shoes", note: "Non-marking soles" },
+        { name: "White socks", note: "Keeps the look clean" },
+        { name: "Water bottle", note: "Indoor courts still get warm" },
+        { name: "Small towel", note: "For between games" },
+        { name: "Hair tie / headband", note: "Keeps you cool mid-rally" },
+        { name: "Wristband", note: "Keeps sweat off your grip" },
+        { name: "Something pink", note: "Your photo pop", optional: true },
+        { name: "Spare tee", note: "For hanging out after", optional: true },
+      ],
+    },
+    photoReference: {
+      title: ["The mood we're", "shooting for."],
+      body: "This isn't a shot list of specific photos — it's the kind of photography and visual mood we go for at Social Slay sessions: real moments, warm soft light, colour against sage.",
+      columns: [
+        [
+          { label: "In action", photo: { src: `${VALE}/ref-in-action.webp`, alt: "A member hitting a backhand under the hall's arched roof", position: "50% 51%" } },
+          { label: "The little details", photo: { src: `${VALE}/ref-details.webp`, alt: "Two tennis balls by the net on the sage court", position: "50% 50%" } },
+        ],
+        [
+          { label: "With your people", photo: { src: `${VALE}/ref-people.webp`, alt: "Members high-fiving over the net", position: "50% 51%" } },
+          { label: "Portrait", photo: { src: `${VALE}/ref-portrait.webp`, alt: "Member smiling behind a pink racket and a tennis ball", position: "50% 93%" } },
+        ],
+        [
+          { label: "Blur in motion", photo: { src: `${VALE}/ref-motion.webp`, alt: "Motion-blurred player chasing a ball in front of the wood-toned wall", position: "50% 73%" } },
+          { label: "Candid moments", photo: { src: `${VALE}/ref-candid.webp`, alt: "Two members laughing on court in front of the lounge", position: "50% 60%" } },
+        ],
+      ],
+    },
+    courtVibe: {
+      title: "A glimpse of where you'll be playing.",
+      body: "A big indoor hall with warm wood-toned walls, white steel trusses and a deep sage court — plus a calm cream lounge with plants for after the session. Soft, warm light all day.",
+      palette: [
+        { name: "Wood wall", hex: "#d9a877" },
+        { name: "Sage court", hex: "#3f6a50", dark: true },
+        { name: "White truss", hex: "#f4f1ea" },
+        { name: "Cream lounge", hex: "#eadcc4" },
+        { name: "White lines", hex: "#ffffff" },
+      ],
+      note: "warm light, cool lounge ↗",
+      feature: { src: `${VALE}/court-main.webp`, alt: "Benches down the middle of the indoor hall between the sage courts", position: "50% 0%" },
+      side: [
+        { src: `${VALE}/court-side-1.webp`, alt: "Cream lounge with sofas and plants next to the courts" },
+        { src: `${VALE}/court-side-2.webp`, alt: "White steel trusses and the wood-toned wall under the roof" },
+        { src: `${VALE}/court-wide.webp`, alt: "A player on the sage court in front of the wood-toned wall" },
+      ],
+      strip: [],
+    },
+    tips: {
+      title: "Before you come.",
+      items: [
+        { title: "Come photo-ready", body: "Black, white or navy — plus a pink pop. Skip beige and greens." },
+        { title: "Rain or shine", body: "It's indoor — the session runs whatever the weather." },
+        { title: "Hydrate early", body: "Indoor courts still get warm. Bring a full bottle." },
         { title: "Respect the venue", body: "It's a shared space — keep the lounge tidy and the vibe friendly." },
         { title: "Meet someone new", body: "Come for the tennis, stay for the people. Have fun!" },
       ],
