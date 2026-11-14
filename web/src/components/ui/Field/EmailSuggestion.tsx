@@ -16,7 +16,10 @@ export function EmailSuggestion({ email, onAccept, prompt = "Did you mean", clas
       {prompt}{" "}
       {/* "?" di dalam tombol: <button> selalu inline-block, jadi teks di luarnya turun ke baris sendiri saat email panjang. */}
       <button type="button" className={styles.suggestionButton} onClick={() => onAccept(suggestion)}>
-        <span className={styles.suggestionEmail}>{suggestion}</span>?
+        <span className={styles.suggestionEmail}>{suggestion}</span>
+        <span className={styles.suggestionMark} aria-hidden>
+          ?
+        </span>
       </button>
     </p>
   );

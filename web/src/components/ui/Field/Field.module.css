@@ -137,3 +137,10 @@
   text-decoration: underline;
   text-underline-offset: 3px;
 }
+
+/* "?" ikut di dalam tombol (agar tidak turun sendiri) tapi tampil seperti teks biasa & tidak dibaca screen reader. */
+.suggestionMark {
+  font-family: var(--font-body);
+  font-weight: normal;
+  color: var(--color-navy-950);
+}

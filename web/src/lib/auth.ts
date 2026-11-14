@@ -3,40 +3,58 @@
 import { checkEmailTypo } from "@/lib/email-typo";
 import { phoneFormatError } from "@/lib/wa-invite";
 
-/**
- * Bagian lokal & domain tanpa titik di awal/akhir atau titik ganda ("gmail..com" ditolak Supabase →
- * dulu lolos ke server dan berakhir "Couldn't create your account").
- */
-const EMAIL = /^[^\s@.]+(\.[^\s@.]+)*@[^\s@.]+(\.[^\s@.]+)+$/;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/** Format longgar — login & data lama (email yang sudah tersimpan tidak ikut ditolak aturan baru). */
 export const isEmail = (value: string) => EMAIL.test(value.trim());
+/**
+ * Format ketat untuk email BARU: bagian lokal & domain tanpa titik di awal/akhir atau titik ganda
+ * ("gmail..com" ditolak Supabase → dulu lolos ke server dan berakhir "Couldn't create your account").
+ */
+const STRICT_EMAIL = /^[^\s@.]+(\.[^\s@.]+)*@[^\s@.]+(\.[^\s@.]+)+$/;
 export const MIN_PASSWORD = 8;
 
 export type FieldErrors<K extends string> = Partial<Record<K, string>>;
 
 export function validateEmail(value: string): string | undefined {
   if (!value.trim()) return "Email is required";
-  if (/\.\./.test(value)) return "Your email has two dots in a row";
   if (!isEmail(value)) return "Please enter a valid email";
 }
 
-/** Email BARU (daftar / ganti email): selain format, domain yang pasti salah (".con") ditolak. */
-export function validateNewEmail(value: string): string | undefined {
-  const formatError = validateEmail(value);
-  if (formatError) return formatError;
-  // Saran "Did you mean …?" tampil terpisah di bawah field (EmailSuggestion) → pesan ini tidak mengulangnya.
-  const { invalidTld, trailingDot } = checkEmailTypo(value);
-  if (trailingDot) return "Remove the dot at the end of your email";
-  if (invalidTld) return `".${invalidTld}" isn't a valid email domain`;
+type NewEmailIssue = "required" | "format" | "doubleDot" | "trailingDot" | { tld: string };
+
+/**
+ * Masalah pada email BARU (daftar / ganti email), dalam urutan yang paling membantu: titik ganda & titik di
+ * akhir punya pesan sendiri sebelum format umum; domain yang pasti salah (".con") ditolak. Saran "Did you
+ * mean …?" tampil terpisah di bawah field (EmailSuggestion) → pesan tidak mengulangnya.
+ */
+function newEmailIssue(value: string): NewEmailIssue | undefined {
+  const email = value.trim();
+  if (!email) return "required";
+  if (!isEmail(email)) return "format";
+  if (email.includes("..")) return "doubleDot";
+  const { invalidTld, trailingDot } = checkEmailTypo(email);
+  if (trailingDot) return "trailingDot";
+  if (!STRICT_EMAIL.test(email)) return "format";
+  if (invalidTld) return { tld: invalidTld };
 }
 
-/** Versi admin (Indonesia) dari validateNewEmail — form "Tambah member" & "Ganti email login". */
-export function adminEmailError(value: string): string | undefined {
-  if (/\.\./.test(value)) return "Email berisi dua titik berurutan.";
-  if (!isEmail(value)) return "Email tidak valid.";
-  const { invalidTld, trailingDot } = checkEmailTypo(value);
-  if (trailingDot) return "Hapus titik di akhir email.";
-  if (invalidTld) return `".${invalidTld}" bukan domain email yang valid.`;
+const NEW_EMAIL_MESSAGES = {
+  en: { required: "Email is required", format: "Please enter a valid email", doubleDot: "Your email has two dots in a row", trailingDot: "Remove the dot at the end of your email", tld: (t: string) => `".${t}" isn't a valid email domain` },
+  id: { required: "Email tidak valid.", format: "Email tidak valid.", doubleDot: "Email berisi dua titik berurutan.", trailingDot: "Hapus titik di akhir email.", tld: (t: string) => `".${t}" bukan domain email yang valid.` },
+};
+
+function newEmailError(value: string, lang: keyof typeof NEW_EMAIL_MESSAGES) {
+  const issue = newEmailIssue(value);
+  if (!issue) return undefined;
+  const messages = NEW_EMAIL_MESSAGES[lang];
+  return typeof issue === "string" ? messages[issue] : messages.tld(issue.tld);
 }
+
+/** Email BARU untuk member (Inggris). */
+export const validateNewEmail = (value: string) => newEmailError(value, "en");
+
+/** Versi admin (Indonesia) — form "Tambah member" & "Ganti email login". */
+export const adminEmailError = (value: string) => newEmailError(value, "id");
 
 export function validatePassword(value: string, isNew = false): string | undefined {
   if (!value) return "Password is required";
