@@ -85,8 +85,11 @@ export type MemberReview = {
   at: string;
 };
 
-/** Kudos member: yang diterima (agregat anonim, null = gagal dimuat) & jumlah yang ia berikan. */
-export type MemberKudosSummary = { received: MemberKudos | null; given: number };
+/** Review member untuk tab Review: maks. sekian terbaru dari `total`; failed = gagal dimuat. */
+export type MemberReviewList = { items: MemberReview[]; total: number; failed: boolean };
+
+/** Kudos member: yang diterima (agregat anonim) & jumlah yang ia berikan — null = gagal dimuat. */
+export type MemberKudosSummary = { received: MemberKudos | null; given: number | null };
 
 export type MemberDetail = MemberListItem & {
   phone: string;
@@ -99,8 +102,6 @@ export type MemberDetail = MemberListItem & {
   hoursPlayed: number;
   attendanceRate: number;
   spend: MemberSpend;
-  kudos: MemberKudosSummary;
-  reviews: MemberReview[];
   pointsEarned: number;
   timeline: MemberTimelineItem[];
   bookings: MemberBookingRow[];

@@ -17,7 +17,7 @@ import type {
   MemberNote,
   MemberListItem,
   MemberKudosSummary,
-  MemberReview,
+  MemberReviewList,
   MemberSpend,
   MemberSpendItem,
   MembersQuery,
@@ -274,7 +274,12 @@ async function loadMemberKudos(d: Dataset, memberId: string): Promise<MemberKudo
     supabase.rpc("member_kudos", { p_member: memberId }),
     supabase.from("kudos").select("id", { count: "exact", head: true }).eq("giver_member_id", memberId).is("deleted_at", null),
   ]);
-  return { received: received.error ? null : toMemberKudos(received.data), given: given.count ?? 0 };
+  return { received: received.error ? null : toMemberKudos(received.data), given: given.error ? null : (given.count ?? 0) };
+}
+
+/** Kudos member untuk tab Ringkasan detail member (dimuat hanya di tab itu). */
+export async function getMemberKudos(memberId: string): Promise<MemberKudosSummary> {
+  return loadMemberKudos(await getDataset(), memberId);
 }
 
 type MemberReviewRow = {
@@ -289,24 +294,36 @@ type MemberReviewRow = {
   updated_at: string;
 };
 
-/** Review yang pernah diberikan member, satu per activity, terbaru dulu (RLS "admin read reviews"). */
-async function loadMemberReviews(d: Dataset, memberId: string): Promise<MemberReview[]> {
+/** Batas review yang ditampilkan di tab Review detail member. */
+const REVIEW_LIMIT = 50;
+
+/**
+ * Review yang pernah diberikan member, satu per activity, terbaru dulu (maks. REVIEW_LIMIT; RLS admin
+ * Activities / Members). Dimuat hanya di tab Review.
+ */
+export async function getMemberReviews(memberId: string): Promise<MemberReviewList> {
+  const d = await getDataset();
   let rows: MemberReviewRow[] = [];
+  let total = 0;
   if (d.live) {
     const supabase = await createSupabaseServerClient();
-    const { data } = await supabase
+    const { data, count, error } = await supabase
       .from("session_reviews")
-      .select("session_id, rating, host_rating, venue_rating, format_rating, highlights, comment, testimonial, updated_at")
+      .select("session_id, rating, host_rating, venue_rating, format_rating, highlights, comment, testimonial, updated_at", { count: "exact" })
       .eq("member_id", memberId)
       .order("updated_at", { ascending: false })
+      .limit(REVIEW_LIMIT)
       .returns<MemberReviewRow[]>();
+    if (error) return { items: [], total: 0, failed: true };
     rows = data ?? [];
+    total = count ?? rows.length;
   } else if (memberId === "m0001") {
     // Contoh mode demo: review di activity terakhir yang dihadiri.
     const last = d.bookingsOf(memberId).filter((b) => b.status === "attended").map((b) => d.sessionById.get(b.sessionId)).filter(Boolean).sort((a, b) => b!.startsAt.getTime() - a!.startsAt.getTime())[0];
     if (last) rows = [{ session_id: last.id, rating: 5, host_rating: 5, venue_rating: 4, format_rating: 5, highlights: ["Host ramah", "Rotasi seru"], comment: "Seru banget, ketemu partner baru. Next mau ikut lagi!", testimonial: true, updated_at: new Date(last.startsAt.getTime() + 3 * 3600_000).toISOString() }];
+    total = rows.length;
   }
-  return rows.map((r) => {
+  const items = rows.map((r) => {
     const s = d.sessionById.get(r.session_id);
     return {
       sessionId: r.session_id,
@@ -323,6 +340,7 @@ async function loadMemberReviews(d: Dataset, memberId: string): Promise<MemberRe
       at: r.updated_at,
     };
   });
+  return { items, total, failed: false };
 }
 
 async function loadNotes(memberId: string): Promise<MemberNote[]> {
@@ -387,7 +405,7 @@ export const getMember = cache(async (id: string): Promise<MemberDetail | null> 
   timeline.sort((a, b) => b.at.localeCompare(a.at));
 
   const due = stats.sessionsAttended + stats.noShows;
-  const [spend, notes, kudos, reviews] = await Promise.all([
+  const [spend, notes] = await Promise.all([
     loadSpend(d, id),
     d.live
       ? loadNotes(id)
@@ -396,8 +414,6 @@ export const getMember = cache(async (id: string): Promise<MemberDetail | null> 
             ? [{ id: "n1", author: "Rara", body: "Suka main pagi, sering bawa teman baru. Kandidat ambassador Bali trip.", at: new Date(d.now.getTime() - 16 * DAY).toISOString() }]
             : [],
         ),
-    loadMemberKudos(d, id),
-    loadMemberReviews(d, id),
   ]);
   return {
     ...list,
@@ -411,8 +427,6 @@ export const getMember = cache(async (id: string): Promise<MemberDetail | null> 
     hoursPlayed: Math.round(stats.hoursPlayed),
     attendanceRate: due ? Math.round((stats.sessionsAttended / due) * 100) : 0,
     spend,
-    kudos,
-    reviews,
     pointsEarned: stats.pointsEarned,
     timeline: timeline.slice(0, 8),
     bookings: memberBookings.slice(0, 8).map(({ booking, session }) => ({

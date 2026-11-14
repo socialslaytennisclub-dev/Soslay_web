@@ -3,11 +3,12 @@ import { Avatar } from "@/components/ui";
 import { displayPhone, waNumber } from "@/lib/wa-invite";
 import { LEVEL_LABEL, MEMBER_STATUS_LABEL, formatRupiahPlain, formatRupiahShort, formatShortDate } from "@/lib/admin-labels";
 import { topKudos } from "@/lib/kudos";
-import type { MemberDetail, MemberKudosSummary, MemberReview, MemberSpend, MemberSpendItem, MemberTimelineItem } from "@/server/admin/types";
+import type { MemberDetail, MemberKudosSummary, MemberReviewList, MemberSpend, MemberSpendItem, MemberTimelineItem } from "@/server/admin/types";
 import { AdminIcon, type AdminIconName } from "../ui/AdminIcon";
 import { AdminButton, Badge, BookingBadge, Card, desktopOnlyClass, MobileCard, MobileCardList, PaymentBadge, TierBadge } from "../ui/AdminUI";
 import { BookSessionForm } from "./BookSessionForm";
 import { MemberNotes } from "./MemberNotes";
+import { ASPECTS, stars } from "../activities/SessionReviews";
 import reviewStyles from "../activities/SessionReviews.module.css";
 import styles from "./MemberDetail.module.css";
 
@@ -96,7 +97,7 @@ function KudosCard({ kudos }: { kudos: MemberKudosSummary }) {
             </div>
             <div>
               <dt>Diberikan</dt>
-              <dd>{kudos.given.toLocaleString("id-ID")}</dd>
+              <dd>{kudos.given === null ? "—" : kudos.given.toLocaleString("id-ID")}</dd>
             </div>
           </dl>
           <ul className={styles.pills} aria-label="Kudos teratas">
@@ -110,6 +111,7 @@ function KudosCard({ kudos }: { kudos: MemberKudosSummary }) {
               <li className={styles.pillEmpty}>Belum ada kudos</li>
             )}
           </ul>
+          {kudos.given === null && <p className={styles.emptyNote}>Jumlah kudos yang diberikan gagal dimuat. Muat ulang halaman.</p>}
         </>
       ) : (
         <p className={styles.emptyNote}>Kudos gagal dimuat. Muat ulang halaman.</p>
@@ -118,20 +120,20 @@ function KudosCard({ kudos }: { kudos: MemberKudosSummary }) {
   );
 }
 
-const reviewDate = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
-const stars = (n: number) => "★".repeat(n) + "☆".repeat(5 - n);
-const REVIEW_ASPECTS = [
-  ["Host", (r: MemberReview) => r.host],
-  ["Venue", (r: MemberReview) => r.venue],
-  ["Format", (r: MemberReview) => r.format],
-] as const;
-
 /** Semua review yang pernah diberikan member, satu per activity (terbaru dulu). */
-function ReviewsCard({ reviews }: { reviews: MemberReview[] }) {
+function ReviewsCard({ list }: { list: MemberReviewList }) {
+  const reviews = list.items;
   const avg = reviews.length ? (reviews.reduce((n, r) => n + r.rating, 0) / reviews.length).toLocaleString("id-ID", { maximumFractionDigits: 1 }) : null;
+  const subtitle = reviews.length
+    ? reviews.length < list.total
+      ? `${list.total} review · ${reviews.length} terbaru · rata-rata ★ ${avg}`
+      : `${list.total} review · rata-rata ★ ${avg}`
+    : "Review dibuka setelah activity selesai, sampai 7 hari";
   return (
-    <Card title="Review yang diberikan" subtitle={reviews.length ? `${reviews.length} review · rata-rata ★ ${avg}` : "Review dibuka setelah activity selesai, sampai 7 hari"}>
-      {reviews.length === 0 ? (
+    <Card title="Review yang diberikan" subtitle={subtitle}>
+      {list.failed ? (
+        <p className={styles.emptyNote}>Review gagal dimuat. Muat ulang halaman.</p>
+      ) : reviews.length === 0 ? (
         <p className={styles.emptyNote}>Member ini belum pernah memberi review.</p>
       ) : (
         <ul className={reviewStyles.list}>
@@ -145,14 +147,14 @@ function ReviewsCard({ reviews }: { reviews: MemberReview[] }) {
                   {stars(r.rating)}
                 </span>
                 {r.testimonial && <Badge tone="neutral">Boleh jadi testimoni</Badge>}
-                <span className={reviewStyles.date}>{reviewDate.format(new Date(r.at))}</span>
+                <span className={reviewStyles.date}>{longDate.format(new Date(r.at))}</span>
               </div>
               <p className={styles.cellMeta}>
-                {[r.venueName, r.startsAt && `activity ${reviewDate.format(new Date(r.startsAt))}`].filter(Boolean).join(" · ")}
+                {[r.venueName, r.startsAt && `activity ${longDate.format(new Date(r.startsAt))}`].filter(Boolean).join(" · ")}
               </p>
-              {REVIEW_ASPECTS.some(([, pick]) => pick(r) !== null) && (
+              {ASPECTS.some(([, pick]) => pick(r) !== null) && (
                 <div className={reviewStyles.details}>
-                  {REVIEW_ASPECTS.map(([label, pick]) => {
+                  {ASPECTS.map(([label, pick]) => {
                     const v = pick(r);
                     return v !== null && <span key={label}>{label} {v}/5</span>;
                   })}
@@ -172,6 +174,7 @@ function ReviewsCard({ reviews }: { reviews: MemberReview[] }) {
           ))}
         </ul>
       )}
+      {reviews.length < list.total && <p className={styles.emptyNote}>+{list.total - reviews.length} review lebih lama tidak ditampilkan.</p>}
     </Card>
   );
 }
@@ -191,7 +194,21 @@ export const MEMBER_TABS = [
 ] as const;
 export type MemberTab = (typeof MEMBER_TABS)[number]["key"];
 
-export function MemberDetailView({ member, bookable, tab = "ringkasan" }: { member: MemberDetail; bookable: { id: string; label: string }[]; tab?: MemberTab }) {
+export function MemberDetailView({
+  member,
+  bookable,
+  tab = "ringkasan",
+  kudos = null,
+  reviews = null,
+}: {
+  member: MemberDetail;
+  bookable: { id: string; label: string }[];
+  tab?: MemberTab;
+  /** Hanya dimuat untuk tab Ringkasan. */
+  kudos?: MemberKudosSummary | null;
+  /** Hanya dimuat untuk tab Review. */
+  reviews?: MemberReviewList | null;
+}) {
   const stats: { label: string; value: string }[] = [
     { label: "Sesi diikuti", value: String(member.sessionsAttended) },
     { label: "Jam bermain", value: `${member.hoursPlayed}j` },
@@ -281,7 +298,7 @@ export function MemberDetailView({ member, bookable, tab = "ringkasan" }: { memb
 
       {tab === "ringkasan" && (
         <div className={styles.summaryGrid}>
-          <KudosCard kudos={member.kudos} />
+          {kudos && <KudosCard kudos={kudos} />}
 
           <Card title="Tennis profile">
             <dl className={styles.facts}>
@@ -440,7 +457,7 @@ export function MemberDetailView({ member, bookable, tab = "ringkasan" }: { memb
 
       {tab === "review" && (
         <div className={styles.panel}>
-          <ReviewsCard reviews={member.reviews} />
+          {reviews && <ReviewsCard list={reviews} />}
         </div>
       )}
 
