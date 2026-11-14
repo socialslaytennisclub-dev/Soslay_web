@@ -6,7 +6,7 @@ import { provinceOf } from "@/content/wilayah";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getShopCatalog } from "@/server/public/products";
-import { uploadPrivateFile } from "@/server/storage";
+import { removePrivateFile, uploadPrivateFile } from "@/server/storage";
 import { demoOrders, demoProofFiles, nextDemoCode } from "./demo-store";
 import { getCheckoutContext, PROOF_BUCKET } from "./orders";
 import { getShopBank } from "./settings";
@@ -170,7 +170,11 @@ export async function submitProof(code: string, form: FormData): Promise<ShopRes
     p_code: code,
     p_proof: { ...fields, path: upload.path, name: file.name, mime: file.type, size: file.size },
   });
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    // Bukti tidak tercatat (mis. pesanan sudah batal / diverifikasi) → jangan tinggalkan screenshot transfer di Storage.
+    await removePrivateFile(PROOF_BUCKET, upload.path);
+    return { ok: false, error: error.message };
+  }
   refresh(code);
   return { ok: true };
 }

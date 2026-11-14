@@ -130,6 +130,11 @@ export async function removeOwnUploads(bucket: string, urls: string[]) {
   if (paths.length) await createSupabaseAdminClient()?.storage.from(bucket).remove(paths);
 }
 
+/** Hapus satu file di bucket privat (path, bukan URL) — mis. bukti yang gagal dicatat. Diam-diam bila gagal. */
+export async function removePrivateFile(bucket: string, path: string) {
+  await createSupabaseAdminClient()?.storage.from(bucket).remove([path]);
+}
+
 /** Hapus file lama (URL publik bucket ini); diam-diam diabaikan bila gagal / bukan file bucket. */
 export async function removePublicImage(bucket: string, url: string | null | undefined) {
   const prefix = publicBucketPrefix(bucket);

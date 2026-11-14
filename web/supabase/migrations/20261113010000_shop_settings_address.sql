@@ -105,8 +105,10 @@ end $$;
 revoke all on function shop_shipping_quote(jsonb, integer) from public, anon, authenticated;
 
 -- ── place_shop_order: Instant = kota DKI Jakarta (daftar resmi) + rekening di-snapshot ─────────────
--- Salinan dari 20261113000000 dengan perubahan: ongkir lewat shop_shipping_quote (Instant = kota DKI Jakarta,
--- tidak bergantung baris ongkir J&T), dan app_settings 'shop_bank' disimpan ke orders.payment_bank (+ payment_method).
+-- p_items: [{"slug", "options": {...}, "quantity"}] — harga, stok & ongkir dihitung di sini, bukan dari browser.
+-- p_ship: {"method", "name", "phone", "address", "city", "postal_code", "lat", "lng", "session_id"}.
+-- Ongkir lewat shop_shipping_quote (Instant = kota DKI Jakarta); rekening app_settings 'shop_bank' disimpan ke
+-- orders.payment_bank (+ payment_method).
 create or replace function place_shop_order(p_items jsonb, p_ship jsonb)
 returns text language plpgsql security definer set search_path = public as $$
 declare
@@ -183,7 +185,8 @@ begin
     case when v_method = 'instant' then (p_ship->>'lat')::float8 end, case when v_method = 'instant' then (p_ship->>'lng')::float8 end,
     v_km, v_weight, v_snapshot, v_session,
     case v_method when 'jnt' then 'J&T Express Reguler' when 'instant' then 'Instant' else 'Pickup Mabar' end,
-    now() + interval '24 hours', v_bank)
+    -- Pickup: batas bayar H-1 sesi pukul 21.00 WIB bila lebih awal dari 24 jam (sama dengan pickup_session_ok).
+    case when v_method = 'pickup' then least(now() + interval '24 hours', pickup_pay_deadline(v_session)) else now() + interval '24 hours' end, v_bank)
   returning * into v_order;
 
   insert into order_items (order_id, variant_id, product_name, options, unit_price, quantity)

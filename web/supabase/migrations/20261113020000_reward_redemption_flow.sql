@@ -198,10 +198,13 @@ begin
       values (rd.member_id, rd.points, 'adjustment', 'Pengembalian poin #' || rd.code, auth.uid());
       update rewards set stock = stock + 1 where id = rw.id and stock is not null;
     end if;
-    -- Ongkir yang belum dibayar ikut dibatalkan (trigger order melihat penukaran sudah ditolak → tidak dobel).
+    -- Order ongkir yang belum dikirim ikut dibatalkan — juga yang sudah lunas (processing), supaya reward yang
+    -- ditolak tidak tetap dikirim. Ongkir lunas → refund manual (seperti batal order di menu Orders).
+    -- Trigger order melihat penukaran sudah ditolak → poin tidak dikembalikan dua kali.
     update reward_redemptions set status = 'rejected' where id = rd.id;
-    if o.id is not null and o.status = 'pending' then
-      update orders set status = 'cancelled', payment_status = 'failed', cancelled_at = now(), cancel_reason = 'Penukaran reward dibatalkan admin'
+    if o.id is not null and o.status in ('pending', 'processing') then
+      update orders set status = 'cancelled', cancelled_at = now(), cancel_reason = 'Penukaran reward dibatalkan admin',
+        payment_status = case when o.payment_status = 'pending' then 'failed'::payment_status else o.payment_status end
       where id = o.id;
     end if;
   elsif not (rd.status = 'approved' and p_status = 'fulfilled') then

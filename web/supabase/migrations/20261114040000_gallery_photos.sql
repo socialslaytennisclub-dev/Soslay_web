@@ -88,12 +88,13 @@ create trigger photos_reset_album_cover after delete on photos
   for each row execute function photos_reset_album_cover();
 
 -- Galeri publik per venue (website): foto album yang tayang + member ter-tag (nama depan & Instagram saja).
+-- Id member TIDAK dikirim ke publik: warna avatar memakai `tone` (0–2) yang diturunkan dari id di sini.
 create function venue_gallery(p_venue_slug text, p_limit int default 60)
 returns table (id uuid, path text, caption text, taken_on date, session_title text, members jsonb)
 language sql stable security definer set search_path = public as $$
   select p.id, p.path, p.caption, a.taken_on, coalesce(s.title, a.title),
     coalesce((
-      select jsonb_agg(jsonb_build_object('id', pr.id, 'first_name', split_part(btrim(pr.full_name), ' ', 1), 'instagram', pr.instagram) order by pr.full_name)
+      select jsonb_agg(jsonb_build_object('tone', abs(hashtext(pr.id::text)) % 3, 'first_name', split_part(btrim(pr.full_name), ' ', 1), 'instagram', pr.instagram) order by pr.full_name)
       from photo_tags t join profiles pr on pr.id = t.member_id
       where t.photo_id = p.id
     ), '[]'::jsonb)

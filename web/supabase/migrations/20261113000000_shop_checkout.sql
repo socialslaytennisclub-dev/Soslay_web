@@ -158,106 +158,8 @@ returns boolean language sql stable set search_path = public as $$
 $$;
 
 -- ── Buat pesanan ───────────────────────────────────────────────────────────
--- p_items: [{"slug", "options": {...}, "quantity"}] — harga, stok & ongkir dihitung di sini, bukan dari browser.
--- p_ship: {"method", "name", "phone", "address", "city", "postal_code", "lat", "lng", "session_id"}.
-create function place_shop_order(p_items jsonb, p_ship jsonb)
-returns text language plpgsql security definer set search_path = public as $$
-declare
-  v_member   uuid := auth.uid();
-  v_method   shipping_method := (p_ship->>'method')::shipping_method;
-  v_item     jsonb;
-  v_variant  record;
-  v_qty      integer;
-  v_subtotal integer := 0;
-  v_weight   integer := 0;
-  v_fee      integer := 0;
-  v_km       numeric(5, 1);
-  v_session  uuid;
-  v_rate     shipping_rates;
-  v_instant  shipping_instant_settings;
-  v_snapshot jsonb;
-  v_code     smallint;
-  v_order    orders;
-  v_lines    jsonb := '[]';
-begin
-  if v_member is null then raise exception 'Masuk dulu untuk checkout.' using errcode = '42501'; end if;
-  if jsonb_typeof(p_items) is distinct from 'array' or jsonb_array_length(p_items) = 0 then raise exception 'Belum ada produk dipilih.' using errcode = '22023'; end if;
-  if coalesce(trim(p_ship->>'name'), '') = '' or coalesce(trim(p_ship->>'phone'), '') = '' then
-    raise exception 'Isi nama & nomor HP penerima.' using errcode = '22023';
-  end if;
-
-  for v_item in select * from jsonb_array_elements(p_items) loop
-    v_qty := (v_item->>'quantity')::int;
-    if v_qty is null or v_qty < 1 or v_qty > 99 then raise exception 'Jumlah produk tidak valid.' using errcode = '22023'; end if;
-    -- Varian paling spesifik yang opsinya termuat di pilihan member (atribut tetap seperti fit ikut terkirim).
-    select v.id, v.stock, coalesce(v.price, p.price) price, p.name, coalesce(v.weight_grams, p.weight_grams) weight into v_variant
-    from product_variants v join products p on p.id = v.product_id
-    where p.slug = v_item->>'slug' and p.status = 'active' and v.options <@ coalesce(v_item->'options', '{}')
-    order by (select count(*) from jsonb_object_keys(v.options)) desc
-    limit 1
-    for update of v;
-    if not found then raise exception 'Produk "%" tidak tersedia lagi.', v_item->>'slug' using errcode = 'P0002'; end if;
-    if v_variant.stock < v_qty then
-      raise exception 'Stok % tinggal %.', v_variant.name, v_variant.stock using errcode = 'P0001', hint = 'out_of_stock';
-    end if;
-    update product_variants set stock = stock - v_qty where id = v_variant.id;
-    v_subtotal := v_subtotal + v_variant.price * v_qty;
-    v_weight := v_weight + v_variant.weight * v_qty;
-    v_lines := v_lines || jsonb_build_object('variant_id', v_variant.id, 'name', v_variant.name, 'options', coalesce(v_item->'options', '{}'), 'price', v_variant.price, 'qty', v_qty);
-  end loop;
-
-  if v_method in ('jnt', 'instant') and (coalesce(trim(p_ship->>'address'), '') = '' or coalesce(trim(p_ship->>'city'), '') = '' or coalesce(trim(p_ship->>'postal_code'), '') = '') then
-    raise exception 'Lengkapi alamat, kota & kode pos.' using errcode = '22023';
-  end if;
-  if v_method = 'jnt' then
-    select * into v_rate from shipping_rates where city = p_ship->>'city' and is_active;
-    if not found then raise exception 'Pengiriman ke kota ini belum tersedia, hubungi admin.' using errcode = '22023'; end if;
-    v_fee := v_rate.per_kg * greatest(1, ceil(v_weight / 1000.0))::int;
-    v_snapshot := jsonb_build_object('city', v_rate.city, 'per_kg', v_rate.per_kg, 'weight_grams', v_weight, 'kg', greatest(1, ceil(v_weight / 1000.0))::int);
-  elsif v_method = 'instant' then
-    select * into v_instant from shipping_instant_settings;
-    if (select province from shipping_rates where city = p_ship->>'city') is distinct from 'DKI Jakarta' then
-      raise exception 'Instant hanya untuk alamat di DKI Jakarta.' using errcode = '22023';
-    end if;
-    if (p_ship->>'lat') is null or (p_ship->>'lng') is null then raise exception 'Atur titik lokasi di peta dulu.' using errcode = '22023'; end if;
-    v_km := shop_distance_km((p_ship->>'lat')::float8, (p_ship->>'lng')::float8);
-    if v_km > v_instant.max_km then raise exception 'Titik lokasi lebih dari % km — Instant tidak tersedia.', v_instant.max_km using errcode = '22023'; end if;
-    v_fee := ceil((v_instant.base_fee + ceil(greatest(0, v_km - v_instant.base_km))::int * v_instant.per_km_fee) / 1000.0)::int * 1000;
-    v_snapshot := jsonb_build_object('km', v_km, 'base_fee', v_instant.base_fee, 'base_km', v_instant.base_km, 'per_km_fee', v_instant.per_km_fee);
-  else
-    v_session := (p_ship->>'session_id')::uuid;
-    if not pickup_session_ok(v_session) then raise exception 'Sesi Mabar untuk pickup tidak tersedia — pilih sesi lain.' using errcode = '22023'; end if;
-  end if;
-
-  -- Kode unik 1–999 yang tidak dipakai order lain yang masih menunggu bayar / verifikasi.
-  perform pg_advisory_xact_lock(hashtext('shop_unique_code'));
-  select c into v_code from generate_series(1, 999) c
-  where c not in (select unique_code from orders where status = 'pending' and payment_status = 'pending')
-  order by random() limit 1;
-  if v_code is null then raise exception 'Terlalu banyak pesanan menunggu pembayaran — coba lagi sebentar.' using errcode = '55000'; end if;
-
-  insert into orders (member_id, channel, subtotal, shipping_fee, total, unique_code, payment_method,
-    recipient_name, recipient_phone, shipping_address, shipping_method, shipping_city, postal_code, shipping_lat, shipping_lng,
-    distance_km, weight_grams, shipping_snapshot, pickup_session_id, courier, pay_deadline)
-  values (v_member, 'website', v_subtotal, v_fee, v_subtotal + v_fee + v_code, v_code, 'Transfer BCA',
-    left(trim(p_ship->>'name'), 80), left(trim(p_ship->>'phone'), 20),
-    case when v_method = 'pickup' then 'Pickup di Mabar Session' else left(trim(p_ship->>'address'), 300) end,
-    v_method, nullif(p_ship->>'city', ''), nullif(trim(p_ship->>'postal_code'), ''),
-    case when v_method = 'instant' then (p_ship->>'lat')::float8 end, case when v_method = 'instant' then (p_ship->>'lng')::float8 end,
-    v_km, v_weight, v_snapshot, v_session,
-    case v_method when 'jnt' then 'J&T Express Reguler' when 'instant' then 'Instant' else 'Pickup Mabar' end,
-    now() + interval '24 hours')
-  returning * into v_order;
-
-  insert into order_items (order_id, variant_id, product_name, options, unit_price, quantity)
-  select v_order.id, (l->>'variant_id')::uuid, l->>'name', l->'options', (l->>'price')::int, (l->>'qty')::int
-  from jsonb_array_elements(v_lines) l;
-
-  delete from cart_items where member_id = v_member;
-  return v_order.code;
-end $$;
-revoke all on function place_shop_order(jsonb, jsonb) from public, anon;
-grant execute on function place_shop_order(jsonb, jsonb) to authenticated;
+-- place_shop_order(p_items, p_ship) didefinisikan di 20261113010000_shop_settings_address.sql (butuh
+-- shop_shipping_quote & rekening Settings dari migration itu).
 
 -- ── Bukti transfer (member) ────────────────────────────────────────────────
 -- File sudah diunggah server ke bucket privat; di sini dicatat. Bukti 'pending' sebelumnya → 'replaced'.
@@ -275,6 +177,11 @@ begin
   if coalesce(trim(p_proof->>'sender_name'), '') = '' or coalesce(trim(p_proof->>'sender_bank'), '') = ''
      or coalesce((p_proof->>'amount')::int, 0) <= 0 or (p_proof->>'transfer_date') is null then
     raise exception 'Lengkapi nama pengirim, bank, jumlah & tanggal transfer.' using errcode = '22023';
+  end if;
+  -- File harus di folder milik member sendiri (server mengunggah ke "<auth.uid()>/<uuid>.<ext>") — RPC ini bisa
+  -- dipanggil langsung, jadi jangan percaya path dari luar (mis. bukti milik member lain).
+  if coalesce(p_proof->>'path', '') !~ ('^' || auth.uid()::text || '/[0-9a-f-]{36}\.(jpg|png|pdf)$') then
+    raise exception 'File bukti tidak valid — upload ulang.' using errcode = '22023';
   end if;
   update order_payment_proofs set status = 'replaced' where order_id = o.id and status = 'pending';
   insert into order_payment_proofs (order_id, file_path, file_name, mime, file_size, sender_name, sender_bank, amount, transfer_date, note)

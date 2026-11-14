@@ -14,17 +14,12 @@ type Row = {
   caption: string | null;
   taken_on: string;
   session_title: string;
-  members: { id: string; first_name: string; instagram: string | null }[];
+  /** `tone` 0–2 = warna avatar tetap per member (dihitung di database; id member tidak dikirim ke publik). */
+  members: { tone: number; first_name: string; instagram: string | null }[];
 };
 
 const TONES: AvatarTone[] = ["lime", "pink", "indigo"];
 
-/** Warna avatar tetap per member (dari id), jadi sama di semua foto. */
-function toneOf(id: string): AvatarTone {
-  let hash = 0;
-  for (const ch of id) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
-  return TONES[hash % TONES.length];
-}
 
 export async function getVenueGallery(venueSlug: string, venueName: string): Promise<GalleryPhoto[]> {
   if (!isSupabaseConfigured) return photosForVenue(venueSlug);
@@ -37,7 +32,7 @@ export async function getVenueGallery(venueSlug: string, venueName: string): Pro
   return ((data ?? []) as Row[]).map((r) => {
     const members = r.members.map((m) => {
       const handle = m.instagram ? `@${m.instagram.replace(/^@/, "")}` : m.first_name;
-      return { handle, initial: (m.first_name || handle.replace(/^@/, "")).charAt(0).toUpperCase(), tone: toneOf(m.id) };
+      return { handle, initial: (m.first_name || handle.replace(/^@/, "")).charAt(0).toUpperCase(), tone: TONES[m.tone % TONES.length] ?? TONES[0] };
     });
     return {
       id: r.id,

@@ -2046,13 +2046,31 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(buyer);
   const c3 = (await one(`select place_shop_order($1, $2) c`, [item(), JSON.stringify({ method: "pickup", name: "Arya", phone: "0812", session_id: soon })])).c;
   console.assert((await one(`select shipping_fee from orders where code = $1`, [c3])).shipping_fee === 0, "pickup gratis");
+  // Batas bayar pickup tidak melewati H-1 21.00 WIB sesinya (sesi ~30 jam lagi: batas itu sering < 24 jam).
+  await as(null);
+  const tomorrow = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status)
+    values ('shop-pick-30h', 'Mabar', 'weekly-mabar', $1, now() + interval '30 hours', now() + interval '33 hours', 12, 'published') returning id`, [venue])).id;
+  const okTomorrow = (await one(`select pickup_session_ok($1) ok`, [tomorrow])).ok;
+  if (okTomorrow) {
+    await as(buyer);
+    const cT = (await one(`select place_shop_order($1, $2) c`, [item(), JSON.stringify({ method: "pickup", name: "Arya", phone: "0812", session_id: tomorrow })])).c;
+    const dl = await one(`select pay_deadline <= pickup_pay_deadline(pickup_session_id) ok from orders where code = $1`, [cT]);
+    console.assert(dl.ok, "batas bayar pickup melewati H-1 21.00 sesi");
+    await as(null);
+    await db.query(`update orders set status = 'cancelled', payment_status = 'failed' where code = $1`, [cT]); // stok kembali untuk uji berikutnya
+  }
+  await as(buyer);
   console.assert((await err(`select place_shop_order($1, $2)`, [item(), JSON.stringify({ method: "pickup", name: "Arya", phone: "0812", session_id: far })]))?.includes("pilih sesi lain"), "sesi > 14 hari ditolak");
   // 10) kode unik order aktif tidak pernah sama
   const codes = (await db.query(`select unique_code from orders where status = 'pending' and payment_status = 'pending'`)).rows.map((r) => r.unique_code);
   console.assert(new Set(codes).size === codes.length, `kode unik bentrok ${codes}`);
 
   // Bukti → setujui: wajib centang mutasi; Keuangan A-2 = total transfer; +22 poin
-  const proof = (amount) => JSON.stringify({ path: "x/y.jpg", name: "bukti.jpg", size: 1000, sender_name: "Arya", sender_bank: "BCA", amount, transfer_date: "2026-11-13" });
+  const proof = (amount, file = `${buyer}/${crypto.randomUUID()}.jpg`) =>
+    JSON.stringify({ path: file, name: "bukti.jpg", size: 1000, sender_name: "Arya", sender_bank: "BCA", amount, transfer_date: "2026-11-13" });
+  // Path file harus di folder member sendiri — bukti milik member lain / path karangan ditolak.
+  console.assert((await err(`select submit_payment_proof($1, $2)`, [c1, proof(o1.total, `${shopAdmin}/${crypto.randomUUID()}.jpg`)]))?.includes("tidak valid"), "bukti di folder member lain diterima");
+  console.assert((await err(`select submit_payment_proof($1, $2)`, [c1, proof(o1.total, "x/y.jpg")]))?.includes("tidak valid"), "path bukti karangan diterima");
   await db.query(`select submit_payment_proof($1, $2)`, [c1, proof(o1.total)]);
   await db.query(`select submit_payment_proof($1, $2)`, [c1, proof(o1.total)]); // Ganti bukti
   console.assert((await one(`select count(*) filter (where p.status = 'pending')::int pe, count(*) filter (where p.status = 'replaced')::int r from order_payment_proofs p join orders o on o.id = p.order_id where o.code = $1`, [c1])).r === 1, "bukti lama ditandai replaced");
@@ -2176,6 +2194,19 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(crm);
   await db.query(`select set_redemption_status($1, 'rejected', 'Uji tolak')`, [r5.code]);
   console.assert((await balance()) === before, "voucher ditolak → poin kembali");
+  // Merch yang sudah disetujui (ongkir lunas, order "diproses") lalu ditolak → order ikut batal, tidak bisa dikirim.
+  const tote = await reward("Tote uji tolak", "merch", 100, 1);
+  await as(member);
+  const r6 = (await one(`select redeem_reward($1, $2) r`, [tote, JSON.stringify(shipJnt)])).r;
+  await as(null);
+  await db.query(`update orders set payment_status = 'paid', status = 'processing', paid_at = now() where code = $1`, [r6.order_code]);
+  const beforeReject = await balance();
+  await as(crm);
+  await db.query(`select set_redemption_status($1, 'rejected', 'Stok rusak')`, [r6.code]);
+  const o6 = await one(`select status::text, payment_status::text pay from orders where code = $1`, [r6.order_code]);
+  console.assert(o6.status === "cancelled" && o6.pay === "paid", `order ongkir lunas ikut batal (refund manual) ${JSON.stringify(o6)}`);
+  console.assert((await balance()) === beforeReject + 100, "tolak setelah disetujui → poin kembali sekali");
+  await as(null);
   // Saldo kurang ditolak
   await as(member);
   const big = await reward("Trip mahal", "experience", 99999, null);
@@ -2243,6 +2274,6 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.exec(`reset role`);
   const tagged = rows.find((r) => r.id === photo);
   console.assert(rows.length === 2 && rows.some((r) => r.id === second), `galeri venue publik berisi foto activity ${rows.length}`);
-  console.assert(tagged?.caption === "Tos!" && tagged.session_title === "Mabar Galeri" && tagged.members[0].first_name === "Felisya" && tagged.members[0].instagram === "felisyafernanda" && !("email" in tagged.members[0]), `tag publik hanya nama depan & IG ${JSON.stringify(tagged)}`);
+  console.assert(tagged?.caption === "Tos!" && tagged.session_title === "Mabar Galeri" && tagged.members[0].first_name === "Felisya" && tagged.members[0].instagram === "felisyafernanda" && !("email" in tagged.members[0]) && !("id" in tagged.members[0]) && [0, 1, 2].includes(tagged.members[0].tone), `tag publik hanya nama depan & IG ${JSON.stringify(tagged)}`);
   console.log("✓ galeri foto: per activity (album otomatis tayang), hanya admin konten, activity harus sudah berlangsung, tag hanya peserta (tag lama aman saat edit), caption, cover pindah saat dihapus, galeri venue publik");
 }
