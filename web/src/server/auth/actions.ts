@@ -89,6 +89,8 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
 
   if (error) {
     if (error.code === "user_already_exists" || error.code === "email_exists") return { fieldErrors: { email: "This email is already registered — sign in instead" } };
+    // Supabase menolak format yang lolos validasi kita → tunjukkan di field email, bukan error umum.
+    if (error.code === "email_address_invalid" || (error.code === "validation_failed" && /email/i.test(error.message))) return { fieldErrors: { email: "Please check your email address" } };
     if (error.code === "weak_password") return { fieldErrors: { password: "Password is too weak — try a longer one" } };
     if (error.code === "over_email_send_rate_limit") return { error: "Too many sign-ups right now. Please try again in a few minutes." };
     // Trigger profil gagal (biasanya Kuy ID baru saja dipakai orang lain di antara cek & daftar).
