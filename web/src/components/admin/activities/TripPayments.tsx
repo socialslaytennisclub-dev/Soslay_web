@@ -172,7 +172,13 @@ export function TripPayments({ tripId, tripTitle, activities, quota, due, minDp,
   const canAdd = usingMember ? Boolean(picked && !picked.alreadyIn) : guest.name.trim() !== "";
   const addBooking = () =>
     start(async () => {
-      const r = await addTripBooking(tripId, picked ? { memberId: picked.id } : { name: guest.name, phone: guest.phone });
+      const input = picked ? { memberId: picked.id } : { name: guest.name, phone: guest.phone };
+      let r = await addTripBooking(tripId, input);
+      if (!r.ok && "confirmLink" in r) {
+        const { memberId, name: memberName, memberCode } = r.confirmLink;
+        const yes = window.confirm(`Nomor ini milik member ${memberName} (${memberCode}).\n\nDaftarkan paket ini atas akunnya? Semua activity trip, kehadiran & poin ikut ke member itu.\nPilih Cancel untuk tetap menyimpan sebagai tamu.`);
+        r = await addTripBooking(tripId, { ...input, linkMember: yes ? memberId : false });
+      }
       toast.result(r);
       if (r.ok) {
         resetAdd();
