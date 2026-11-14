@@ -1,5 +1,6 @@
 /** Validasi form Masuk/Daftar (client). Kunci = nama field, nilai = pesan error. */
 
+import { checkEmailTypo } from "@/lib/email-typo";
 import { phoneFormatError } from "@/lib/wa-invite";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -11,6 +12,24 @@ export type FieldErrors<K extends string> = Partial<Record<K, string>>;
 export function validateEmail(value: string): string | undefined {
   if (!value.trim()) return "Email is required";
   if (!isEmail(value)) return "Please enter a valid email";
+}
+
+/** Email BARU (daftar / ganti email): selain format, domain yang pasti salah (".con") ditolak. */
+export function validateNewEmail(value: string): string | undefined {
+  const formatError = validateEmail(value);
+  if (formatError) return formatError;
+  // Saran "Did you mean …?" tampil terpisah di bawah field (EmailSuggestion) → pesan ini tidak mengulangnya.
+  const { invalidTld, trailingDot } = checkEmailTypo(value);
+  if (trailingDot) return "Remove the dot at the end of your email";
+  if (invalidTld) return `".${invalidTld}" isn't a valid email domain`;
+}
+
+/** Versi admin (Indonesia) dari validateNewEmail — form "Tambah member" & "Ganti email login". */
+export function adminEmailError(value: string): string | undefined {
+  if (!isEmail(value)) return "Email tidak valid.";
+  const { invalidTld, trailingDot } = checkEmailTypo(value);
+  if (trailingDot) return "Hapus titik di akhir email.";
+  if (invalidTld) return `".${invalidTld}" bukan domain email yang valid.`;
 }
 
 export function validatePassword(value: string, isNew = false): string | undefined {
