@@ -107,7 +107,11 @@ function PaymentDrawer({ sessionId, finished, ref }: { sessionId: string; finish
             <label className={styles.field}>
               <span className={styles.label}>Nomor HP (WhatsApp)</span>
               <input className={styles.input} inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="08…" aria-label="Nomor HP peserta" />
-              {phoneError && <span className={styles.error}>{phoneError}</span>}
+              {phoneError ? (
+                <span className={styles.error}>{phoneError}</span>
+              ) : (
+                <span className={styles.muted}>Nomor milik member terdaftar → peserta ini otomatis ditautkan ke akunnya.</span>
+              )}
             </label>
           </>
         )}
