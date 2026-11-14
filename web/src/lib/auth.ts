@@ -40,7 +40,7 @@ function newEmailIssue(value: string): NewEmailIssue | undefined {
 
 const NEW_EMAIL_MESSAGES = {
   en: { required: "Email is required", format: "Please enter a valid email", doubleDot: "Your email has two dots in a row", trailingDot: "Remove the dot at the end of your email", tld: (t: string) => `".${t}" isn't a valid email domain` },
-  id: { required: "Email tidak valid.", format: "Email tidak valid.", doubleDot: "Email berisi dua titik berurutan.", trailingDot: "Hapus titik di akhir email.", tld: (t: string) => `".${t}" bukan domain email yang valid.` },
+  id: { required: "Isi email.", format: "Email tidak valid.", doubleDot: "Email berisi dua titik berurutan.", trailingDot: "Hapus titik di akhir email.", tld: (t: string) => `".${t}" bukan domain email yang valid.` },
 };
 
 function newEmailError(value: string, lang: keyof typeof NEW_EMAIL_MESSAGES) {
