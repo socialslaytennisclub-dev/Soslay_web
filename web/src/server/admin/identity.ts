@@ -97,16 +97,20 @@ export async function searchMembers(raw: string, limit = 6): Promise<MemberIdent
   return [...(exact ? [exact] : []), ...byName].slice(0, limit);
 }
 
-/** Nomor HP di profil tersimpan dengan/tanpa 0 / 62 di depan → cocokkan ketiganya. */
-export async function findMemberByPhone(local: string): Promise<MemberIdentity | null> {
+/**
+ * Nomor HP di profil tersimpan dengan/tanpa 0 / 62 di depan → cocokkan ketiganya.
+ * `unique`: nomor yang dipakai lebih dari satu profil → null (dipakai untuk penautan otomatis).
+ */
+export async function findMemberByPhone(local: string, { unique = false } = {}): Promise<MemberIdentity | null> {
   const db = await readClient();
   const { data } = await db
     .from("profiles")
     .select(PROFILE_FIELDS)
     .in("phone", [local, `0${local}`, `62${local}`])
-    .limit(1)
-    .maybeSingle<ProfileRow>();
-  return data ? toIdentity(data, "nomor HP") : null;
+    .limit(2)
+    .returns<ProfileRow[]>();
+  if (!data?.length || (unique && data.length > 1)) return null;
+  return toIdentity(data[0], "nomor HP");
 }
 
 /** Data profil Soslay untuk banyak member sekaligus (nama, ID Soslay, Kuy ID). */

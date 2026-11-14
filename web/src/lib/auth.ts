@@ -83,9 +83,12 @@ export function validateBirthDate(value: string, latest = todayIso()): string | 
   if (value > latest) return "Date of birth can't be in the future";
 }
 
-/** Gender wajib dipilih saat daftar: hanya "male" / "female". */
+/** Pilihan gender untuk data baru (nilai "undisclosed" lama di database tetap diterima saat diedit admin). */
+export const GENDERS = ["male", "female"] as const;
+
+/** Gender wajib dipilih saat daftar. */
 export function validateGender(value: string): string | undefined {
-  if (value !== "male" && value !== "female") return "Please select your gender";
+  if (!(GENDERS as readonly string[]).includes(value)) return "Please select your gender";
 }
 
 export type PasswordStrength = { level: 1 | 2 | 3 | 4; label: string; hint?: string };
