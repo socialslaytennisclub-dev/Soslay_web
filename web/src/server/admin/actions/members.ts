@@ -1,6 +1,7 @@
 "use server";
 
-import { isEmail, isKuyId, KUY_ID_FORMAT_ERROR, normalizeKuyId } from "@/lib/auth";
+import { AFTER_AUTH } from "@/content/auth";
+import { adminEmailError, isKuyId, KUY_ID_FORMAT_ERROR, normalizeKuyId } from "@/lib/auth";
 import { isSessionFinished } from "@/lib/session-lock";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -43,7 +44,8 @@ export async function addMember(input: NewMemberInput): Promise<AddMemberResult>
   const kuyId = normalizeKuyId(input.kuyId);
   const phone = localPhone(input.phone);
   if (!fullName) return fail("Isi nama lengkap member.");
-  if (!isEmail(email)) return fail("Email tidak valid.");
+  const emailError = adminEmailError(email);
+  if (emailError) return fail(emailError);
   const phoneError = phoneFormatError(input.phone);
   if (phoneError) return fail(phoneError);
   if (kuyId && !isKuyId(kuyId)) return fail(KUY_ID_FORMAT_ERROR);
@@ -260,4 +262,80 @@ export async function deleteSegment(id: string): Promise<ActionResult> {
   if (error) return fail(`Gagal menghapus segmen: ${error.message}`);
   refreshPaths("/admin/members");
   return done("Segmen dihapus.");
+}
+
+/**
+ * Ganti email login (Supabase Auth) member + samakan profiles.email — untuk email salah ketik saat daftar.
+ * Akun belum terkonfirmasi → email diganti lalu link konfirmasi (atau undangan, bila akunnya dibuat lewat
+ * "Tambah member") dikirim ulang ke email baru. Akun sudah terkonfirmasi → email diganti, tetap terkonfirmasi.
+ * Email sama dengan sekarang + belum terkonfirmasi = hanya kirim ulang konfirmasi.
+ */
+export async function changeMemberLoginEmail(memberId: string, newEmail: string): Promise<ActionResult> {
+  const auth = await requireEditor("members");
+  if ("error" in auth) return fail(auth.error);
+  const email = newEmail.trim().toLowerCase();
+  const emailError = adminEmailError(email);
+  if (emailError) return fail(emailError);
+  const admin = createSupabaseAdminClient();
+  if (!admin) return fail("Ganti email login belum aktif: SUPABASE_SERVICE_ROLE_KEY belum dipasang di server.");
+
+  // Hanya akun MEMBER: akun tim (staff_members) tidak boleh diganti lewat izin Members — kalau boleh,
+  // staf Members bisa mengalihkan email Super Admin lalu "lupa password" → ambil alih akun.
+  const [{ data: found, error: getError }, { data: profile }, { data: staff, error: staffError }] = await Promise.all([
+    admin.auth.admin.getUserById(memberId),
+    admin.from("profiles").select("full_name, email").eq("id", memberId).maybeSingle(),
+    admin.from("staff_members").select("user_id").eq("user_id", memberId).limit(1).maybeSingle(),
+  ]);
+  const user = found?.user;
+  if (getError || !user || !profile) return fail("Akun login member ini tidak ditemukan (mungkin calon member yang belum daftar).");
+  if (staffError) return fail(`Gagal memeriksa akun: ${staffError.message}`);
+  if (staff) return fail("Akun ini juga akun tim Soslay — email login akun tim hanya bisa diganti Super Admin di Supabase.");
+  const name = profile.full_name as string;
+  const oldEmail = user.email ?? "";
+  const confirmed = !!user.email_confirmed_at;
+  const same = oldEmail.toLowerCase() === email;
+  // Login sudah benar tapi profil belum (mis. sisa kegagalan sebelumnya) → samakan profil saja.
+  if (same && String(profile.email ?? "").toLowerCase() !== email) {
+    const { error } = await admin.from("profiles").update({ email }).eq("id", memberId);
+    if (error) return fail(`Gagal menyamakan email profil: ${error.message}`);
+    await audit(auth.userId, `menyamakan email profil member ${name} dengan email login (${email})`, "member", memberId);
+    refreshMember(memberId);
+    if (confirmed) return done(`Email profil ${name} disamakan dengan email login ${email}.`);
+  } else if (same && confirmed) {
+    return fail("Email login sudah sama dan sudah terkonfirmasi — tidak ada yang diubah.");
+  }
+
+  if (!same) {
+    const { data: taken } = await admin.from("profiles").select("full_name").eq("email", email).neq("id", memberId).maybeSingle();
+    if (taken) return fail(`Email ${email} sudah dipakai member lain (${taken.full_name}).`);
+    const { error } = await admin.auth.admin.updateUserById(memberId, { email, ...(confirmed ? { email_confirm: true } : {}) });
+    if (error) return fail(error.code === "email_exists" || /already/i.test(error.message) ? `Email ${email} sudah punya akun Soslay.` : `Gagal mengganti email login: ${error.message}`);
+    const { error: profileError } = await admin.from("profiles").update({ email }).eq("id", memberId);
+    if (profileError) {
+      // Kembalikan email Auth supaya login & profil tidak berbeda diam-diam.
+      const { error: rollbackError } = await admin.auth.admin.updateUserById(memberId, { email: oldEmail, ...(confirmed ? { email_confirm: true } : {}) });
+      if (rollbackError) {
+        console.error(`[changeMemberLoginEmail] email Auth ${memberId} gagal dikembalikan ke ${oldEmail}: ${rollbackError.message}`);
+        await audit(auth.userId, `mengganti email login member ${name}: ${oldEmail} → ${email} (email profil belum disamakan)`, "member", memberId);
+        return fail(`Email login SUDAH diganti ke ${email}, tapi email profil gagal disamakan (${profileError.message}). Coba simpan lagi dengan email yang sama.`);
+      }
+      return fail(`Gagal menyamakan email profil (${profileError.message}) — email login tidak diubah.`);
+    }
+    await audit(auth.userId, `mengganti email login member ${name}: ${oldEmail} → ${email}`, "member", memberId);
+    refreshMember(memberId);
+  }
+  if (confirmed) return done(`Email login ${name} diganti ke ${email}. Akun tetap terkonfirmasi — dia bisa langsung masuk dengan email baru.`);
+
+  // Belum terkonfirmasi → kirim ulang. Akun dari "Tambah member" (invited_at) butuh link undangan (buat password).
+  const origin = await requestOrigin();
+  const { error: sendError } = user.invited_at
+    ? await admin.auth.admin.inviteUserByEmail(email, { redirectTo: `${origin}/auth/undangan` })
+    : await admin.auth.resend({ type: "signup", email, options: { emailRedirectTo: `${origin}/auth/confirm?next=${encodeURIComponent(AFTER_AUTH)}` } });
+  if (same) {
+    if (sendError) return fail(`Email konfirmasi gagal terkirim: ${sendError.message}. Coba lagi beberapa menit lagi.`);
+    await audit(auth.userId, `mengirim ulang konfirmasi email login member ${name} (${email})`, "member", memberId);
+    return done(`Link konfirmasi dikirim ulang ke ${email}.`);
+  }
+  if (sendError) return done(`Email login ${name} diganti ke ${email}, tapi email konfirmasi gagal terkirim (${sendError.message}). Coba "kirim ulang" lagi beberapa menit lagi.`);
+  return done(`Email login ${name} diganti ke ${email} dan link konfirmasi dikirim ulang.`);
 }

@@ -1,10 +1,11 @@
 "use client";
 
 import { useRef, useState, useTransition, type FormEvent } from "react";
-import { Button, Checkbox, DateField, TextField } from "@/components/ui";
+import { Button, Checkbox, DateField, EmailSuggestion, TextField } from "@/components/ui";
 import { registerPage } from "@/content/auth";
-import { compact, MIN_PASSWORD, required, todayIso, validateBirthDate, validateEmail, validateKuyId, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
+import { compact, MIN_PASSWORD, required, todayIso, validateBirthDate, validateKuyId, validateNewEmail, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
 import { signUp } from "@/server/auth/actions";
+import { ConfirmEmailNotice } from "./ConfirmEmailNotice";
 import { PasswordField } from "./PasswordField";
 import styles from "./AuthForms.module.css";
 
@@ -39,7 +40,7 @@ export function RegisterForm() {
       kuyId: validateKuyId(values.kuyId),
       birthDate: validateBirthDate(values.birthDate),
       phone: validatePhone(values.phone),
-      email: validateEmail(values.email),
+      email: validateNewEmail(values.email),
       password: validatePassword(values.password, true),
       consent: consent ? undefined : "Please agree to continue",
     });
@@ -59,14 +60,7 @@ export function RegisterForm() {
     });
   }
 
-  if (confirmEmail) {
-    return (
-      <div className={styles.confirm} role="status">
-        <p className={styles.confirmTitle}>{registerPage.confirm.title}</p>
-        <p>{registerPage.confirm.text(confirmEmail)}</p>
-      </div>
-    );
-  }
+  if (confirmEmail) return <ConfirmEmailNotice email={confirmEmail} onChanged={setConfirmEmail} />;
 
   return (
     <form ref={formRef} className={styles.form} onSubmit={submit} noValidate>
@@ -109,16 +103,19 @@ export function RegisterForm() {
             error={errors.phone}
             onChange={(event) => update("phone", event.target.value)}
           />
-          <TextField
-            label="Email"
-            required
-            type="email"
-            autoComplete="email"
-            placeholder="you@email.com"
-            value={values.email}
-            error={errors.email}
-            onChange={(event) => update("email", event.target.value)}
-          />
+          <div className={styles.fieldWrap}>
+            <TextField
+              label="Email"
+              required
+              type="email"
+              autoComplete="email"
+              placeholder="you@email.com"
+              value={values.email}
+              error={errors.email}
+              onChange={(event) => update("email", event.target.value)}
+            />
+            <EmailSuggestion email={values.email} onAccept={(email) => update("email", email)} />
+          </div>
           <PasswordField
             label="Password"
             required

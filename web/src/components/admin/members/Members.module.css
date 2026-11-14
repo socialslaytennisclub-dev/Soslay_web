@@ -603,3 +603,19 @@ button.saveSegment:disabled {
 .panel > .pendingHint {
   padding: var(--space-12) var(--space-20);
 }
+
+/* Ganti email login (detail member) */
+.loginEmailNow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-8);
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.loginEmailHelp {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-neutral-600, #555);
+}

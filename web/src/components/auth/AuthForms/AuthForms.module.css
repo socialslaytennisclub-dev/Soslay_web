@@ -167,3 +167,39 @@
   font-weight: var(--weight-bold);
   font-size: 18px;
 }
+
+/* Field + catatan di bawahnya (saran salah ketik email) dalam satu sel grid */
+.fieldWrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Layar "Check your email": ganti email / kirim ulang */
+.confirmNotice {
+  font-weight: var(--weight-semibold);
+}
+
+.confirmActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-12) var(--space-24, 24px);
+  margin-top: var(--space-8);
+}
+
+.confirmActions button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.changeEmail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  margin-top: var(--space-8);
+}
+
+.confirmNotice:empty {
+  display: none;
+}
