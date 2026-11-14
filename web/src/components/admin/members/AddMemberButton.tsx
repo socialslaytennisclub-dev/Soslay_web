@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useId, useState, useTransition, type FormEvent } from "react";
-import { SelectField, TextField } from "@/components/ui";
+import { EmailSuggestion, SelectField, TextField } from "@/components/ui";
 import { cityOptions } from "@/content/member";
 import { useDialog } from "@/hooks/useDialog";
 import { LEVEL_LABEL } from "@/lib/admin-labels";
@@ -80,7 +80,10 @@ export function AddMemberButton() {
       >
         <form id={formId} className={styles.addForm} onSubmit={submit} noValidate>
           <TextField label="Nama lengkap" required value={form.fullName} onChange={(e) => set("fullName", e.target.value)} autoComplete="off" />
-          <TextField label="Email" required type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="nama@email.com" autoComplete="off" />
+          <div>
+            <TextField label="Email" required type="email" value={form.email} onChange={(e) => set("email", e.target.value)} placeholder="nama@email.com" autoComplete="off" />
+            <EmailSuggestion email={form.email} prompt="Maksudnya" onAccept={(email) => set("email", email)} />
+          </div>
           <div className={styles.addGrid}>
             <TextField label="No. WhatsApp" prefix="+62" type="tel" inputMode="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="812 3456 7890" onBlur={() => setPhoneTouched(true)} error={phoneTouched ? phoneError : undefined} />
             <TextField label="Kuy ID" value={form.kuyId} onChange={(e) => set("kuyId", e.target.value)} placeholder="username Kuy" onBlur={() => setKuyTouched(true)} error={kuyTouched ? kuyError : undefined} />

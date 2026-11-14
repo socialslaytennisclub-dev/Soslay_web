@@ -138,7 +138,11 @@ if (!demo) {
   const memberPath = firstHref(members, "/admin/members/");
   if (!memberPath) failures.push("/admin/members → tidak ada link detail member");
   if (memberPath) {
-    await check(memberPath, { includes: ["Catatan internal"] });
+    await check(memberPath, { includes: ["Tennis profile"] });
+    // Detail member per tab (?tab=) — catatan internal & review punya tab sendiri.
+    await check(`${memberPath}?tab=catatan`, { includes: ["Catatan internal"] });
+    await check(`${memberPath}?tab=aktivitas`, { includes: ["Riwayat aktivitas"] });
+    await check(`${memberPath}?tab=review`, { includes: ["Review yang diberikan"] });
     await check(`${memberPath}/edit`, { includes: ["Slay Point"] });
   }
   const sessions = await check("/admin/activities?tab=upcoming");

@@ -27,6 +27,14 @@ export const registerPage = {
   confirm: {
     title: "Check your email ✉️",
     text: (email: string) => `We sent a verification link to ${email}. Open it to activate your account, then you can sign in.`,
+    change: "Wrong email? Change it",
+    resend: "Resend email",
+    changeSubmit: "Save & resend link",
+    sameEmail: "This is the same email — enter the correct one",
+    passwordRequired: "Enter the password you used to sign up",
+    changed: "Email updated — we sent a new verification link.",
+    changedNotSent: "Email updated, but the link couldn't be sent yet. Wait a minute, then tap “Resend email”.",
+    resent: "Verification link sent again.",
   },
 };
 

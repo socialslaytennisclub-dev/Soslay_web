@@ -6,7 +6,9 @@ import { topKudos } from "@/lib/kudos";
 import type { MemberDetail, MemberKudosSummary, MemberReviewList, MemberSpend, MemberSpendItem, MemberTimelineItem } from "@/server/admin/types";
 import { AdminIcon, type AdminIconName } from "../ui/AdminIcon";
 import { AdminButton, Badge, BookingBadge, Card, desktopOnlyClass, MobileCard, MobileCardList, PaymentBadge, TierBadge } from "../ui/AdminUI";
+import type { LoginEmailStatus } from "@/server/admin/login-email";
 import { BookSessionForm } from "./BookSessionForm";
+import { ChangeLoginEmailButton } from "./ChangeLoginEmailButton";
 import { MemberNotes } from "./MemberNotes";
 import { ASPECTS, stars } from "../activities/SessionReviews";
 import reviewStyles from "../activities/SessionReviews.module.css";
@@ -200,6 +202,7 @@ export function MemberDetailView({
   tab = "ringkasan",
   kudos = null,
   reviews = null,
+  loginEmail,
 }: {
   member: MemberDetail;
   bookable: { id: string; label: string }[];
@@ -208,6 +211,8 @@ export function MemberDetailView({
   kudos?: MemberKudosSummary | null;
   /** Hanya dimuat untuk tab Review. */
   reviews?: MemberReviewList | null;
+  /** Diisi hanya untuk staf dengan izin members edit → tombol "Ganti email login". `undefined` = tombol disembunyikan. */
+  loginEmail?: { status: LoginEmailStatus };
 }) {
   const stats: { label: string; value: string }[] = [
     { label: "Sesi diikuti", value: String(member.sessionsAttended) },
@@ -236,6 +241,7 @@ export function MemberDetailView({
           <AdminButton href={`mailto:${member.email}`} icon="envelope-simple">
             Email
           </AdminButton>
+          {loginEmail && <ChangeLoginEmailButton memberId={member.id} profileEmail={member.email} status={loginEmail.status} />}
           <AdminButton variant="primary" icon="pencil-simple" href={`/admin/members/${member.id}/edit`}>
             Edit member
           </AdminButton>

@@ -83,6 +83,14 @@ try {
 }
 console.assert(blocked, "member bisa mengubah tier sendiri!");
 await db.query(`update profiles set display_name = 'Arya' where id = $1`, [member]); // boleh
+// Email profil tidak boleh diubah member langsung (dipakai mengklaim ghost) — hanya lewat server / admin.
+let emailBlocked = false;
+try {
+  await db.query(`update profiles set email = 'ghost.orang.lain@mail.com' where id = $1`, [member]);
+} catch {
+  emailBlocked = true;
+}
+console.assert(emailBlocked, "member bisa mengubah email profil sendiri (bisa klaim ghost orang lain)!");
 await as(null);
 
 const order = await one(`insert into orders (member_id, subtotal, total, recipient_name, recipient_phone, shipping_address)
@@ -695,6 +703,26 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert(bookings.rows.map((r) => r.status).join() === "attended,registered", `booking ghost ${JSON.stringify(bookings.rows)}`);
   console.assert(pts >= 50, `poin kehadiran ghost ${pts}`);
   console.log(`✓ ghost member: 2 aktivitas dikenali via Kuy ID, daftar → riwayat pindah + poin hadir (${pts} pts)`);
+
+  // Email salah ketik saat daftar (gmail.con) lalu diperbaiki → ghost dengan email yang benar ikut diklaim.
+  const typoGhost = (await one(`insert into ghost_members (full_name, email) values ('Joe Typo', 'joe.typo@gmail.com') returning id`)).id;
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, ghost_id) values ($1, 'Joe Typo', 'T1', $2)`, [s1, typoGhost]);
+  const joe = await one(`insert into auth.users (email, raw_user_meta_data) values ('joe.typo@gmail.con', $1) returning id`, [{ signup: "member", full_name: "Joe Typo", phone: "81200000177" }]);
+  console.assert((await one(`select claimed_by from ghost_members where id = $1`, [typoGhost])).claimed_by === null, "ghost tidak boleh diklaim email salah ketik");
+  // Ghost pasangan (nomor HP sama dengan Joe, dibuat setelah Joe daftar) TIDAK boleh ikut terklaim saat email diperbaiki.
+  const partnerGhost = (await one(`insert into ghost_members (full_name, email, phone) values ('Pasangan Joe', 'pasangan@mail.com', '81200000177') returning id`)).id;
+  // profiles.email diubah TANPA email login (auth.users) ikut berubah → tidak boleh mengklaim apa pun.
+  await db.query(`update profiles set email = 'pasangan@mail.com' where id = $1`, [joe.id]);
+  console.assert((await one(`select claimed_by from ghost_members where id = $1`, [partnerGhost])).claimed_by === null, "ghost diklaim lewat profiles.email yang bukan email login");
+  // Alur sah: email login diganti dulu (Supabase Auth), lalu profil disamakan.
+  await db.query(`update auth.users set email = 'joe.typo@gmail.com' where id = $1`, [joe.id]);
+  await db.query(`update profiles set email = 'joe.typo@gmail.com' where id = $1`, [joe.id]);
+  const fixed = await one(`select claimed_by from ghost_members where id = $1`, [typoGhost]);
+  const partner = await one(`select claimed_by from ghost_members where id = $1`, [partnerGhost]);
+  const joeLinked = await one(`select count(*)::int n from session_participants where ghost_id = $1 and member_id = $2`, [typoGhost, joe.id]);
+  console.assert(fixed.claimed_by === joe.id && joeLinked.n === 1, `ghost tidak diklaim setelah email diperbaiki ${JSON.stringify({ fixed, joeLinked })}`);
+  console.assert(partner.claimed_by === null, "ghost dengan nomor HP sama ikut terklaim saat email diperbaiki");
+  console.log("✓ email profil diperbaiki (gmail.con → gmail.com) → ghost dengan email benar ikut diklaim, ghost se-nomor HP tidak");
 }
 
 // Keuangan (ADM-18): pencatatan otomatis dari Activities & Orders + RLS Pencatat keuangan.

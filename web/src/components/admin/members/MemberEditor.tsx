@@ -103,7 +103,7 @@ export function MemberEditor({ initial }: { initial: MemberForm }) {
 
       <div className={styles.grid}>
         <div className={styles.main}>
-          <FormCard title="Akun & kontak" subtitle={`Email login: ${m.email} (diubah member sendiri)`}>
+          <FormCard title="Akun & kontak" subtitle={`Email login: ${m.email} — ganti lewat tombol "Ganti email login" di halaman detail member`}>
             <div className={styles.cols2}>
               {text("Nama lengkap *", "fullName")}
               {text("No. WhatsApp", "phone", { placeholder: "81234567890" })}

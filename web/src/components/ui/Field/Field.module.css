@@ -114,3 +114,21 @@
 .iconButton:focus-visible {
   color: var(--color-indigo-600);
 }
+
+/* Saran salah ketik email ("Did you mean …?") di bawah field */
+.suggestion {
+  margin-top: var(--space-8);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-navy-950);
+}
+
+.suggestionButton {
+  font-family: var(--font-display);
+  font-weight: var(--weight-semibold);
+  color: var(--color-indigo-600);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  word-break: break-all;
+}

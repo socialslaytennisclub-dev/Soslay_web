@@ -8,6 +8,7 @@ export { Chip, type ChipTone } from "./Chip/Chip";
 export { ChoiceChips } from "./ChoiceChips/ChoiceChips";
 export { Container } from "./Container/Container";
 export { DateField, SelectField, TextField } from "./Field/Field";
+export { EmailSuggestion } from "./Field/EmailSuggestion";
 export { FilterChips, type FilterChip } from "./FilterChips/FilterChips";
 export { Icon, type IconName } from "./Icon/Icon";
 export { Lightbox, type LightboxItem } from "./Lightbox/Lightbox";
