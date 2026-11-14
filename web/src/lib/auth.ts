@@ -83,7 +83,12 @@ export function validateBirthDate(value: string, latest = todayIso()): string | 
   if (value > latest) return "Date of birth can't be in the future";
 }
 
-export type PasswordStrength = { level: 1 | 2 | 3 | 4; label: string; hint?: string };
+/** Gender wajib dipilih saat daftar: hanya "male" / "female". */
+export function validateGender(value: string): string | undefined {
+  if (value !== "male" && value !== "female") return "Please select your gender";
+}
+
+export type PasswordStrength ={ level: 1 | 2 | 3 | 4; label: string; hint?: string };
 
 /**
  * Perkiraan kekuatan password untuk bar indikator (bukan validasi): di bawah minimum → "Too short";

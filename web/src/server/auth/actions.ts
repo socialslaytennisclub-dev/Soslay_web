@@ -3,7 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ADMIN_LOGIN, AFTER_AUTH, registerPage, RESET_PASSWORD } from "@/content/auth";
-import { compact, normalizeKuyId, required, todayIso, validateBirthDate, validateEmail, validateKuyId, validateNewEmail, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
+import { compact, normalizeKuyId, required, todayIso, validateBirthDate, validateGender, validateEmail, validateKuyId, validateNewEmail, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { isSupabaseConfigured, supabaseAnonKey, supabaseUrl } from "@/lib/supabase/env";
@@ -34,6 +34,8 @@ export async function signIn(email: string, password: string, next?: string): Pr
 
 export type SignUpInput = {
   fullName: string;
+  /** "male" | "female" */
+  gender: string;
   displayName: string;
   kuyId: string;
   birthDate: string;
@@ -56,6 +58,7 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
   const values = Object.fromEntries(Object.entries(input).map(([k, v]) => [k, k === "password" ? String(v ?? "") : String(v ?? "").trim()])) as SignUpInput;
   const fieldErrors = compact<SignUpField>({
     fullName: required(values.fullName, "Full name"),
+    gender: validateGender(values.gender),
     kuyId: validateKuyId(values.kuyId),
     phone: validatePhone(values.phone),
     email: validateNewEmail(values.email),
@@ -83,6 +86,7 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
         // Format pembanding yang sama dengan form lain → klaim ghost member lewat nomor HP cocok.
         phone: localPhone(values.phone),
         birth_date: values.birthDate,
+        gender: values.gender,
       },
     },
   });

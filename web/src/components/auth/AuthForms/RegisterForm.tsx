@@ -1,21 +1,29 @@
 "use client";
 
 import { useRef, useState, useTransition, type FormEvent } from "react";
-import { Button, Checkbox, DateField, EmailSuggestion, TextField } from "@/components/ui";
+import { Button, Checkbox, DateField, EmailSuggestion, SelectField, TextField } from "@/components/ui";
 import { registerPage } from "@/content/auth";
-import { compact, MIN_PASSWORD, required, todayIso, validateBirthDate, validateKuyId, validateNewEmail, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
+import { compact, MIN_PASSWORD, required, todayIso, validateBirthDate, validateGender, validateKuyId, validateNewEmail, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
 import { signUp } from "@/server/auth/actions";
 import { ConfirmEmailNotice } from "./ConfirmEmailNotice";
 import { PasswordField } from "./PasswordField";
 import styles from "./AuthForms.module.css";
 
-type Field = "fullName" | "displayName" | "kuyId" | "birthDate" | "phone" | "email" | "password" | "consent";
+type Field = "fullName" | "gender" | "displayName" | "kuyId" | "birthDate" | "phone" | "email" | "password" | "consent";
 type Values = Record<Exclude<Field, "consent">, string>;
 
-const initialValues: Values = { fullName: "", displayName: "", kuyId: "", birthDate: "", phone: "", email: "", password: "" };
+const initialValues: Values = { fullName: "", gender: "", displayName: "", kuyId: "", birthDate: "", phone: "", email: "", password: "" };
+
+/** Pilihan gender di form daftar (label) → nilai kolom profiles.gender. */
+const GENDERS = [
+  ["Male", "male"],
+  ["Female", "female"],
+] as const;
+const genderLabel = (value: string) => GENDERS.find(([, v]) => v === value)?.[0] ?? "";
+const genderValue = (label: string) => GENDERS.find(([l]) => l === label)?.[1] ?? "";
 
 /**
- * Figma 25:1854 — form daftar: Nama Lengkap · Display Name + Kuy ID · Tanggal lahir + Phone ·
+ * Figma 25:1854 — form daftar: Nama Lengkap + Gender · Display Name + Kuy ID · Tanggal lahir + Phone ·
  * Email + Password · persetujuan · tombol arrow → server action `signUp` (Supabase Auth + profil member).
  */
 export function RegisterForm() {
@@ -37,6 +45,7 @@ export function RegisterForm() {
     event.preventDefault();
     const next = compact<Field>({
       fullName: required(values.fullName, "Full name"),
+      gender: validateGender(values.gender),
       kuyId: validateKuyId(values.kuyId),
       birthDate: validateBirthDate(values.birthDate),
       phone: validatePhone(values.phone),
@@ -65,15 +74,26 @@ export function RegisterForm() {
   return (
     <form ref={formRef} className={styles.form} onSubmit={submit} noValidate>
       <div className={styles.fields}>
-        <TextField
-          label="Full Name"
-          required
-          autoComplete="name"
-          placeholder="Enter your full name"
-          value={values.fullName}
-          error={errors.fullName}
-          onChange={(event) => update("fullName", event.target.value)}
-        />
+        <div className={styles.grid}>
+          <TextField
+            label="Full Name"
+            required
+            autoComplete="name"
+            placeholder="Enter your full name"
+            value={values.fullName}
+            error={errors.fullName}
+            onChange={(event) => update("fullName", event.target.value)}
+          />
+          <SelectField
+            label="Gender"
+            required
+            options={GENDERS.map(([label]) => label)}
+            placeholder="Select your gender"
+            value={genderLabel(values.gender)}
+            error={errors.gender}
+            onChange={(label) => update("gender", genderValue(label))}
+          />
+        </div>
         <div className={styles.grid}>
           <TextField
             label="Display Name"
