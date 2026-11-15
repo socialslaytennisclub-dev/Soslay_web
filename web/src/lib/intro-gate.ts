@@ -17,7 +17,7 @@ export function whenIntroGateOpen(start: () => void): () => void {
   return () => window.removeEventListener(OPEN_EVENT, start);
 }
 
-/** Buka gerbang (scroll aktif lagi, intro diputar). Aman dipanggil berkali-kali. */
+/** Buka gerbang (scroll aktif lagi, intro diputar). Aman dipanggil berkali-kali. Disalin di SPLASH_SCRIPT (pengaman). */
 export function openIntroGate() {
   if (!isClosed()) return;
   document.documentElement.removeAttribute("data-splash");

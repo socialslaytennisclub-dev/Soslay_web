@@ -94,14 +94,8 @@ export function SplashScreen() {
 
       // Titik pendaratan diukur setelah font judul siap (maks. 800 ms, supaya tidak menunggu font lain).
       const [word] = el.querySelectorAll("[data-word]");
-      // Font gagal diunduh (sinyal HP putus sebentar) → fonts.load ditolak "NetworkError". Dulu penolakan itu
-      // membuat build() tidak pernah jalan → layar tertahan navy polos. Sekarang tetap lanjut dengan font cadangan,
-      // dan bila build() sendiri gagal, splash ditutup supaya homepage tetap tampil.
-      const fontReady = (async () => {
-        try {
-          await document.fonts.load(`800 1em ${getComputedStyle(word).fontFamily}`);
-        } catch {}
-      })();
+      // Font gagal diunduh (sinyal putus) → lanjut dengan font cadangan; build() gagal → splash ditutup.
+      const fontReady = document.fonts.load(`800 1em ${getComputedStyle(word).fontFamily}`).catch(() => {});
       Promise.race([fontReady, new Promise((resolve) => setTimeout(resolve, 800))])
         .then(() => {
           if (!cancelled) build();

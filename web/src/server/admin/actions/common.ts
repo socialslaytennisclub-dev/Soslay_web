@@ -57,10 +57,17 @@ export type RefreshPath = string | [string, "page" | "layout"];
 
 /**
  * Halaman website statis (ISR) yang menampilkan jadwal sesi — wajib di-revalidate setiap kali sesi
- * berubah, termasuk lewat trip (status activity ikut status trip), dan setiap kali daftar peserta berubah
- * (sisa slot "x slots left" di card activity).
+ * berubah, termasuk lewat trip (status activity ikut status trip).
  */
 export const PUBLIC_SESSION_PATHS: RefreshPath[] = ["/", "/activity", ["/activity/[type]", "page"], ["/venue/[slug]", "page"]];
+
+/** Satu-satunya halaman website yang menampilkan sisa slot ("x slots left", Upcoming Activities di detail venue). */
+export const SLOTS_PATH: RefreshPath = ["/venue/[slug]", "page"];
+
+/** Daftar peserta / booking sesi berubah → admin sesi + sisa slot di website. */
+export function refreshRoster(sessionId: string, ...extra: RefreshPath[]) {
+  refreshPaths(SLOTS_PATH, `/admin/activities/${sessionId}`, ...extra);
+}
 
 /** Segarkan admin (sidebar, daftar) + halaman website yang terdampak. */
 export function refreshPaths(...paths: RefreshPath[]) {

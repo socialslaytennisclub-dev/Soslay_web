@@ -6,11 +6,9 @@ import { OPEN_EVENT } from "@/lib/intro-gate";
  * Pasang <html data-splash> sebelum paint setiap kali homepage ("/") dibuka / di-refresh langsung,
  * kecuali reduced motion. Navigasi di dalam situs tidak menjalankan skrip ini lagi.
  *
- * Pengaman: overlay navy hanya dilepas oleh SplashScreen (React + GSAP). Bila komponen itu telat / gagal
- * berjalan (JS halaman error / tidak termuat), layar tertahan navy polos. Maka bila setelah SPLASH_FAILSAFE_MS
- * komponen belum mengambil alih (belum ada [data-splash-root][data-active], dipasang saat efeknya mulai),
- * skrip ini melepas data-splash sendiri → homepage tampil. Komponen yang telat mount lalu melihat data-splash
- * sudah hilang dan tidak memutar splash. Ditulis ES5 (tanpa arrow function) supaya aman di browser lama.
+ * Pengaman: bila SplashScreen belum mengambil alih ([data-splash-root][data-active]) setelah SPLASH_FAILSAFE_MS
+ * (JS gagal / tidak termuat), skrip membuka gerbang sendiri — salinan openIntroGate (skrip inline tidak bisa
+ * import). Ditulis ES5 supaya aman di browser lama.
  */
 const SPLASH_FAILSAFE_MS = 4500;
 
