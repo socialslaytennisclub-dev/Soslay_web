@@ -57,7 +57,8 @@ export type RefreshPath = string | [string, "page" | "layout"];
 
 /**
  * Halaman website statis (ISR) yang menampilkan jadwal sesi — wajib di-revalidate setiap kali sesi
- * berubah, termasuk lewat trip (status activity ikut status trip).
+ * berubah, termasuk lewat trip (status activity ikut status trip), dan setiap kali daftar peserta berubah
+ * (sisa slot "x slots left" di card activity).
  */
 export const PUBLIC_SESSION_PATHS: RefreshPath[] = ["/", "/activity", ["/activity/[type]", "page"], ["/venue/[slug]", "page"]];
 

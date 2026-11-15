@@ -11,7 +11,7 @@ import { ownContacts, parseKuyExport, type KuyRow } from "../kuy-import";
 import { findMemberById, findMemberByIdentifier, findMemberByPhone, type MemberIdentity } from "../identity";
 import { getAdminSession } from "../session";
 import type { KuyImportPreview, KuyImportPreviewRow, SessionMatch } from "../types";
-import { audit, confirmLinkResult, refreshPaths, requireEditor, type ActionResult, type ConfirmLinkResult } from "./common";
+import { audit, confirmLinkResult, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, type ActionResult, type ConfirmLinkResult } from "./common";
 
 /**
  * Aksi permainan sesi (admin): impor peserta dari export XLSX Kuyy dan simpan line-up.
@@ -276,7 +276,7 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
 
   const matched = rows.filter((r) => members.get(r.regNo)).length;
   await audit(auth.userId, `mengimpor ${rows.length} peserta Kuyy`, "session", sessionId);
-  refreshPaths(`/admin/activities/${sessionId}`);
+  refreshPaths(...PUBLIC_SESSION_PATHS, `/admin/activities/${sessionId}`);
   const parts = [`${rows.length} peserta diimpor`, `${matched} cocok dengan member Soslay`];
   if (linked) parts.push(`${linked} Kuy ID disambungkan ke ID Soslay`);
   if (guests.length) parts.push(`${guests.length} belum member dicatat sebagai ghost member — undang daftar lewat tombol WA`);
@@ -504,7 +504,7 @@ export async function removeParticipants(sessionId: string, participants: { id: 
   }
 
   await audit(auth.userId, `menghapus ${names.length} peserta dari sesi`, "session", sessionId);
-  refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
+  refreshPaths(...PUBLIC_SESSION_PATHS, `/admin/activities/${sessionId}`, "/admin/activities");
   return { ok: true, message: names.length === 1 && names[0] !== "member" ? `${names[0]} dihapus dari peserta sesi.` : `${names.length} peserta dihapus dari sesi.` };
 }
 
@@ -541,7 +541,7 @@ export async function clearParticipants(sessionId: string): Promise<ActionResult
   }
 
   await audit(auth.userId, `mengosongkan ${removed?.length ?? 0} peserta sesi`, "session", sessionId);
-  refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
+  refreshPaths(...PUBLIC_SESSION_PATHS, `/admin/activities/${sessionId}`, "/admin/activities");
   return { ok: true, message: `${removed?.length ?? 0} peserta & absensi dihapus · line-up ikut dikosongkan. Silakan impor data baru.` };
 }
 
@@ -721,7 +721,7 @@ export async function updateParticipantPayment(
     member ? audit(auth.userId, `menautkan tamu ${row.full_name} ke member ${member.fullName} (nomor HP)`, "session", sessionId) : null,
     audit(auth.userId, `mengubah pembayaran ${who}: ${formatRupiahPlain(amount)} · ${status}`, "session", sessionId),
   ]);
-  refreshPaths(`/admin/activities/${sessionId}`, ...(member ? [`/admin/members/${member.id}`] : []), ...moved.map((id) => `/admin/activities/${id}`));
+  refreshPaths(...PUBLIC_SESSION_PATHS, `/admin/activities/${sessionId}`, ...(member ? [`/admin/members/${member.id}`] : []), ...moved.map((id) => `/admin/activities/${id}`));
   const linked = member ? ` · ${row.full_name} ditautkan ke member ${member.fullName} (${member.memberCode})${moved.length ? `, ${moved.length} activity lain ikut pindah` : ""}` : "";
   return { ok: true, message: `Pembayaran ${who} disimpan · ${formatRupiahPlain(amount)} · ${status}${linked}.` };
 }
@@ -854,7 +854,7 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
     });
     if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
     await audit(auth.userId, `menambah peserta ${member.fullName} (manual)`, "session", sessionId);
-    refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
+    refreshPaths(...PUBLIC_SESSION_PATHS, `/admin/activities/${sessionId}`, "/admin/activities");
     return { ok: true, message: `${member.fullName} (${member.memberCode}) ditambahkan ke peserta · ${paidByBooking ? "sudah bayar lewat booking" : pendingNote}${lateNote}.` };
   };
 
@@ -893,6 +893,6 @@ export async function addParticipantManual(sessionId: string, input: ManualParti
   });
   if (error) return { ok: false, error: `Gagal menambah peserta: ${error.message}` };
   await audit(auth.userId, `menambah peserta ${fullName} (manual, ghost)`, "session", sessionId);
-  refreshPaths(`/admin/activities/${sessionId}`, "/admin/activities");
+  refreshPaths(...PUBLIC_SESSION_PATHS, `/admin/activities/${sessionId}`, "/admin/activities");
   return { ok: true, message: `${fullName} ditambahkan sebagai ghost member · ${pendingNote}${known ? " (sudah pernah ikut aktivitas sebelumnya)" : ""}${lateNote}.` };
 }
