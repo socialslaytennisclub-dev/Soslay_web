@@ -3,7 +3,7 @@
  * terpasang dan animasi intro (mis. heroIntro) menunggu. Overlay membuka gerbang saat terangkat.
  * Animasi tidak perlu tahu overlay apa yang menahannya.
  */
-const OPEN_EVENT = "soslay:intro-gate-open";
+export const OPEN_EVENT = "soslay:intro-gate-open";
 
 const isClosed = () => document.documentElement.hasAttribute("data-splash");
 

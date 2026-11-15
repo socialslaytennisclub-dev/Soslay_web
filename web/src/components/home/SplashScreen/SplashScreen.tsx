@@ -39,12 +39,17 @@ export function SplashScreen() {
         setDone(true);
         return;
       }
-      // Overlay tetap tampil sampai timeline selesai, walau <html data-splash> sudah dilepas.
-      el.dataset.active = "";
       let tl: gsap.core.Timeline | undefined;
       let cancelled = false;
 
       const build = contextSafe!(() => {
+        // Pengaman SPLASH_SCRIPT sudah melepas splash (JS telat) → homepage sudah tampil, jangan tutup lagi.
+        if (!document.documentElement.hasAttribute("data-splash")) {
+          setDone(true);
+          return;
+        }
+        // Overlay tetap tampil sampai timeline selesai, walau <html data-splash> sudah dilepas.
+        el.dataset.active = "";
         const q = gsap.utils.selector(el);
         const [ball] = q("[data-ball]");
         const [sprite] = q("[data-sprite]");
@@ -93,12 +98,23 @@ export function SplashScreen() {
 
       // Titik pendaratan diukur setelah font judul siap (maks. 800 ms, supaya tidak menunggu font lain).
       const [word] = el.querySelectorAll("[data-word]");
-      Promise.race([
-        document.fonts.load(`800 1em ${getComputedStyle(word).fontFamily}`),
-        new Promise((resolve) => setTimeout(resolve, 800)),
-      ]).then(() => {
-        if (!cancelled) build();
-      });
+      // Font gagal diunduh (sinyal HP putus sebentar) → fonts.load ditolak "NetworkError". Dulu penolakan itu
+      // membuat build() tidak pernah jalan → layar tertahan navy polos. Sekarang tetap lanjut dengan font cadangan,
+      // dan bila build() sendiri gagal, splash ditutup supaya homepage tetap tampil.
+      const fontReady = (async () => {
+        try {
+          await document.fonts.load(`800 1em ${getComputedStyle(word).fontFamily}`);
+        } catch {}
+      })();
+      Promise.race([fontReady, new Promise((resolve) => setTimeout(resolve, 800))])
+        .then(() => {
+          if (!cancelled) build();
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setDone(true);
+          openIntroGate();
+        });
 
       const skip = contextSafe!(() => {
         if (tl && tl.progress() < 0.75) tl.progress(0.75);
@@ -118,7 +134,7 @@ export function SplashScreen() {
   if (done) return null;
 
   return (
-    <div ref={root} className={styles.splash} aria-hidden="true">
+    <div ref={root} className={styles.splash} aria-hidden="true" data-splash-root>
       <div className={styles.stage}>
         <span className={styles.word} data-word>
           {CHARS.map((char, i) => (
