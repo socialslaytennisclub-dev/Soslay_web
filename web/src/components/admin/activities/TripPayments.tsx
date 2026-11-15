@@ -11,6 +11,7 @@ import { PAY_STATUS_LABEL, PAYMENT_KIND_LABEL, PLAN_LABEL, reminderText, shortDa
 import { addTripBooking, cancelTripBooking, recordTripPayment, searchTripMembers, voidTripPayment, type TripMemberOption } from "@/server/admin/actions/trips";
 import type { TripBooking } from "@/server/admin/types";
 import { FinanceModal } from "../finance/FinanceModal";
+import { withMemberLinkConfirm } from "./confirm-member-link";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge, MemberAvatar, PickerInput, type BadgeTone } from "../ui/AdminUI";
 import { useConfirm } from "../ui/ConfirmDialog";
@@ -174,12 +175,10 @@ export function TripPayments({ tripId, tripTitle, activities, quota, due, minDp,
   const addBooking = () =>
     start(async () => {
       const input = picked ? { memberId: picked.id } : { name: guest.name, phone: guest.phone };
-      let r = await addTripBooking(tripId, input);
-      if (!r.ok && "confirmLink" in r) {
-        const { memberId, name: memberName, memberCode } = r.confirmLink;
-        const yes = window.confirm(`Nomor ini milik member ${memberName} (${memberCode}).\n\nDaftarkan paket ini atas akunnya? Semua activity trip, kehadiran & poin ikut ke member itu.\nPilih Cancel untuk tetap menyimpan sebagai tamu.`);
-        r = await addTripBooking(tripId, { ...input, linkMember: yes ? memberId : false });
-      }
+      const r = await withMemberLinkConfirm(
+        (linkMember) => addTripBooking(tripId, { ...input, linkMember }),
+        "Daftarkan paket ini atas akunnya? Semua activity trip, kehadiran & poin ikut ke member itu.",
+      );
       toast.result(r);
       if (r.ok) {
         resetAdd();

@@ -26,19 +26,13 @@ begin
   update trip_bookings b set member_id = new.id, full_name = new.full_name
   from picked where b.id = picked.id;
 
-  -- Activity trip yang sudah ia ikuti lewat jalur lain (mis. tamu activity yang barusan diklaim) tidak ikut
-  -- ditautkan trip_add_bundle_participants → buang baris tamu paket yang tersisa agar tidak dobel.
-  delete from session_participants p
-  using trip_bookings b
-  where b.member_id = new.id and b.cancelled_at is null
-    and p.kuy_reg_no = 'T-' || b.id and p.member_id is null
-    and exists (select 1 from session_participants o where o.session_id = p.session_id and o.member_id = new.id);
-
   return new;
 end $$;
 
--- Dinamai setelah profiles_claim_ghost (trigger berurutan abjad) → tamu activity sudah diklaim lebih dulu.
-create trigger profiles_claim_trip_bookings after insert on profiles
+-- Dinamai agar jalan SEBELUM profiles_claim_ghost (trigger berurutan abjad): profil baru belum punya baris
+-- peserta lain, jadi semua baris paket ikut tertaut. Lalu claim_ghost_member menautkan baris tamu activity →
+-- session_participants_replace_trip_row melepas baris paket yang dobel dan memindahkan check-in-nya.
+create trigger profiles_claim_bundle_bookings after insert on profiles
   for each row execute function claim_trip_bookings_for_profile();
 
 revoke all on function claim_trip_bookings_for_profile() from public, anon, authenticated;
@@ -66,9 +60,17 @@ update trip_bookings b set member_id = picked.profile_id, full_name = p.full_nam
 from picked join profiles p on p.id = picked.profile_id
 where b.id = picked.booking_id;
 
--- Baris tamu paket yang tertinggal di activity yang sudah diikuti member itu lewat jalur lain → buang (anti dobel).
-delete from session_participants p
-using trip_bookings b
-where b.member_id is not null and b.cancelled_at is null
-  and p.kuy_reg_no = 'T-' || b.id and p.member_id is null
-  and exists (select 1 from session_participants o where o.session_id = p.session_id and o.member_id = b.member_id);
+-- Baris tamu paket yang tertinggal di activity yang sudah diikuti member itu lewat jalur lain → buang (anti dobel),
+-- check-in-nya pindah ke baris member itu (seperti session_participants_replace_trip_row) → kehadiran & poin tetap.
+with gone as (
+  delete from session_participants p
+  using trip_bookings b
+  where b.member_id is not null and b.cancelled_at is null
+    and p.kuy_reg_no = 'T-' || b.id and p.member_id is null
+    and exists (select 1 from session_participants o where o.session_id = p.session_id and o.member_id = b.member_id)
+  returning p.session_id, b.member_id, p.checked_in_at, p.checked_in_by
+)
+update session_participants o set checked_in_at = g.checked_in_at, checked_in_by = g.checked_in_by
+from gone g
+where o.session_id = g.session_id and o.member_id = g.member_id
+  and o.checked_in_at is null and g.checked_in_at is not null;
