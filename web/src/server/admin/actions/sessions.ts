@@ -144,12 +144,14 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
   if (bookingUrl === null) return { ok: false, error: "Link booking Kuy tidak valid — contoh: https://kuyy.id/…" };
 
   if (input.id) {
-    const [{ count }, { data: stored }] = await Promise.all([
-      supabase.from("bookings").select("id", { count: "exact", head: true }).eq("session_id", input.id).in("status", ["registered", "attended", "no_show"]),
+    const [{ data: fill }, { data: stored }] = await Promise.all([
+      // Keterisian yang sama dengan admin & website: daftar peserta (impor Kuyy, ghost, paket trip) + booking aktif.
+      supabase.rpc("session_fill_counts", { p_sessions: [input.id] }).maybeSingle<{ filled: number }>(),
       supabase.from("sessions").select("photo_cover_path, photo_count").eq("id", input.id).maybeSingle(),
     ]);
     // Kapasitas tidak boleh di bawah jumlah peserta yang sudah terdaftar.
-    if ((count ?? 0) > input.capacity) return { ok: false, error: `Sudah ada ${count} peserta terdaftar — kapasitas minimal ${count}.` };
+    const count = fill?.filled ?? 0;
+    if (count > input.capacity) return { ok: false, error: `Sudah ada ${count} peserta terdaftar — kapasitas minimal ${count}.` };
     // Foto sesi = album Drive + thumbnail: thumbnail / jumlah foto baru tanpa link album ditolak (member butuh
     // link-nya). Hanya saat foto diubah — sesi lama yang sudah begitu tetap bisa disimpan.
     const photosChanged = input.photos.coverPath !== (stored?.photo_cover_path ?? null) || input.photos.count !== (stored?.photo_count ?? null);

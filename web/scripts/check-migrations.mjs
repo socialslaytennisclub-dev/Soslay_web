@@ -905,10 +905,24 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
     await db.exec(`reset role`);
     return row?.filled ?? null;
   };
-  await db.exec(`grant execute on function session_fill_counts() to authenticated`);
+  await db.exec(`grant execute on function session_fill_counts(uuid[], uuid) to authenticated`);
   console.assert((await fillAs(fsa)) === 4, `keterisian Super Admin ${await fillAs(fsa)} (harus 4: 2 ghost + 1 member Kuyy + 1 booking website)`);
   console.assert((await fillAs(rec)) === 4, "keterisian Pencatat keuangan beda dengan Super Admin");
   console.assert((await fillAs(webMember)) === null, "non-staf bisa membaca keterisian sesi");
+  // Website (anon): sisa slot = kapasitas − keterisian yang sama dengan admin; fungsi hitung internal tertutup.
+  await db.exec(`set role anon`);
+  const slot = await one(`select slots_left from public_session_slots() where session_id = $1`, [fillSid]);
+  const baseBlocked = await db.query(`select * from session_fill_base(array[]::uuid[])`).then(() => false, () => true);
+  await db.exec(`reset role`);
+  console.assert(slot?.slots_left === 6, `sisa slot website ${slot?.slots_left} (harus 6: kapasitas 10 − terisi 4)`);
+  console.assert(baseBlocked, "anon bisa memanggil session_fill_base langsung");
+  // Booking admin: hanya sesi yang diminta, kursi member itu sendiri tidak dihitung.
+  await db.exec(`set role authenticated`);
+  await as(fsa);
+  const others = await db.query(`select filled from session_fill_counts(array[$1]::uuid[], $2)`, [fillSid, webMember]);
+  await as(null);
+  await db.exec(`reset role`);
+  console.assert(others.rows.length === 1 && others.rows[0].filled === 3, `terisi selain member ${JSON.stringify(others.rows)} (harus 1 baris, 3)`);
   console.log("✓ keuangan: import Kuyy, Tandai Lunas & order shop tercatat otomatis (+ koreksi), go-live dihormati, RLS Pencatat keuangan");
 }
 

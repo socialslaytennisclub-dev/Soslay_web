@@ -10,7 +10,7 @@ import { uploadPrivateFile } from "@/server/storage";
 import { FINANCE_PROOF_BUCKET } from "../finance-repo";
 import { findMemberById, findMemberByPhone, searchMembers, type MemberIdentity } from "../identity";
 import { getTrip } from "../trips-repo";
-import { audit, confirmLinkResult, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, type ActionResult, type ConfirmLinkResult } from "./common";
+import { audit, confirmLinkResult, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, SLOTS_PATH, type ActionResult, type ConfirmLinkResult } from "./common";
 
 /**
  * Aksi Tennis Escape = Trip (BR-22): simpan trip (info, activity, rundown, paket), arsip / duplikat,
@@ -116,7 +116,7 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
     venueNames.length ? supabase.from("venues").select("id, name").in("name", venueNames) : Promise.resolve({ data: [] as { id: string; name: string }[] }),
     existingIds.length ? supabase.from("sessions").select("id, title, trip_id").in("id", existingIds) : Promise.resolve({ data: [] as { id: string; title: string; trip_id: string | null }[] }),
     input.id ? supabase.from("trip_bookings").select("member_id").eq("trip_id", input.id).is("cancelled_at", null) : Promise.resolve({ data: [] as { member_id: string | null }[] }),
-    existingIds.length ? supabase.rpc("session_fill_counts").in("session_id", existingIds) : Promise.resolve({ data: [] }),
+    existingIds.length ? supabase.rpc("session_fill_counts", { p_sessions: existingIds }) : Promise.resolve({ data: [] }),
     // Pembeli paket yang sudah ada di sesi lewat jalur lain (mis. impor Kuyy) tidak dihitung dua kali.
     existingIds.length ? supabase.from("session_participants").select("session_id, member_id").in("session_id", existingIds).neq("source", "trip").not("member_id", "is", null) : Promise.resolve({ data: [] as { session_id: string; member_id: string }[] }),
   ]);
@@ -307,7 +307,7 @@ export async function addTripBooking(
   });
   if (error) return { ok: false, error: guardMessage(error) ?? `Gagal menambah peserta: ${error.message}` };
   await audit(auth.userId, `menambah ${name} ke paket ${trip.title}`, "trip", tripId);
-  refreshPaths(`/admin/activities/trip/${tripId}/peserta`, "/admin/activities");
+  refreshPaths(SLOTS_PATH, `/admin/activities/trip/${tripId}/peserta`, "/admin/activities");
   return { ok: true, message: `${name} terdaftar di paket & semua ${activityCount ?? 0} activity.` };
 }
 
@@ -318,7 +318,7 @@ export async function cancelTripBooking(bookingId: string): Promise<ActionResult
   const { data, error } = await supabase.from("trip_bookings").update({ cancelled_at: new Date().toISOString() }).eq("id", bookingId).is("cancelled_at", null).select("trip_id, full_name").maybeSingle();
   if (error || !data) return { ok: false, error: `Gagal membatalkan: ${error?.message ?? "peserta tidak ditemukan"}` };
   await audit(auth.userId, `membatalkan paket ${data.full_name}`, "trip", data.trip_id as string);
-  refreshPaths(`/admin/activities/trip/${data.trip_id}/peserta`, "/admin/activities", "/admin/keuangan");
+  refreshPaths(SLOTS_PATH, `/admin/activities/trip/${data.trip_id}/peserta`, "/admin/activities", "/admin/keuangan");
   return { ok: true, message: `Paket ${data.full_name} dibatalkan · keluar dari semua activity trip. Pembayarannya ikut dihapus dari Keuangan.` };
 }
 

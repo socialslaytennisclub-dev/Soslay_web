@@ -61,6 +61,14 @@ export type RefreshPath = string | [string, "page" | "layout"];
  */
 export const PUBLIC_SESSION_PATHS: RefreshPath[] = ["/", "/activity", ["/activity/[type]", "page"], ["/venue/[slug]", "page"]];
 
+/** Satu-satunya halaman website yang menampilkan sisa slot ("x slots left", Upcoming Activities di detail venue). */
+export const SLOTS_PATH: RefreshPath = ["/venue/[slug]", "page"];
+
+/** Daftar peserta / booking sesi berubah → admin sesi + sisa slot di website. */
+export function refreshRoster(sessionId: string, ...extra: RefreshPath[]) {
+  refreshPaths(SLOTS_PATH, `/admin/activities/${sessionId}`, ...extra);
+}
+
 /** Segarkan admin (sidebar, daftar) + halaman website yang terdampak. */
 export function refreshPaths(...paths: RefreshPath[]) {
   invalidateDataset();

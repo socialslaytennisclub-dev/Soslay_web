@@ -127,8 +127,9 @@ export async function deleteProduct(id: string): Promise<ActionResult> {
 }
 
 // ── Venues ──────────────────────────────────────────────────────────────────
+/** Card venue di Participant Guide (/venue/[slug]/guide) juga dari master → ikut disegarkan. */
 function refreshVenues(slug?: string) {
-  refreshPaths("/venue", ["/venue/kota/[city]", "page"], ...PUBLIC_SESSION_PATHS, "/admin/venues", ...(slug ? [`/admin/venues/${slug}`] : []));
+  refreshPaths("/venue", ["/venue/kota/[city]", "page"], ...PUBLIC_SESSION_PATHS, ["/venue/[slug]/guide", "page"], "/admin/venues", ...(slug ? [`/admin/venues/${slug}`] : []));
 }
 
 function validateVenue(v: VenueForm): string | null {
