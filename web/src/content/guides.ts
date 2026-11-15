@@ -242,7 +242,7 @@ export const participantGuides: ParticipantGuide[] = [
   },
   /** Figma 2388:2 "Participant Guide — Vale Racquet". */
   {
-    venueSlug: "vale-racquet",
+    venueSlug: "vale-court",
     intro: "Everything you need to know before you step on court — what to wear, what to bring, and what the venue feels like.",
     hero: { src: `${VALE}/hero.webp`, alt: "Soslay members jumping with their rackets on the sage court inside the Vale Racquet hall", position: "50% 50%" },
     theme: { panel: "#4e7a5e", ink: "#4e7a5e" },
