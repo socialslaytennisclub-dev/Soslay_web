@@ -24,6 +24,10 @@ export function generateStaticParams() {
 
 export const dynamicParams = false;
 
+/** Nama, tipe, court color & tagline di card dari master venue (admin) → disegarkan saat venue disimpan,
+ * plus tiap jam seperti halaman venue (jaga-jaga bila data master diubah langsung di database). */
+export const revalidate = 3600;
+
 export async function generateMetadata({ params }: PageProps<"/venue/[slug]/guide">): Promise<Metadata> {
   const { slug } = await params;
   const [guide, venue] = [findGuide(slug), await findWebsiteVenue(slug)];
