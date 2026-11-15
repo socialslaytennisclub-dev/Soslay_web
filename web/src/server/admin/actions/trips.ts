@@ -361,7 +361,7 @@ export async function recordTripPayment(formData: FormData): Promise<ActionResul
     if (!attached) proofNote = ` Bukti gagal diunggah${up.ok ? "" : ` (${up.error})`} — pembayaran tetap tercatat.`;
   }
   await audit(auth.userId, `mencatat ${PAYMENT_KIND_LABEL[kind]} ${formatRupiahPlain(amount)} · ${booking.full_name}`, "trip", booking.trip_id as string);
-  refreshPaths(...PUBLIC_SESSION_PATHS, `/admin/activities/trip/${booking.trip_id}/peserta`, "/admin/activities", "/admin/keuangan");
+  refreshPaths(`/admin/activities/trip/${booking.trip_id}/peserta`, "/admin/activities", "/admin/keuangan");
   return { ok: true, message: `${PAYMENT_KIND_LABEL[kind]} ${formatRupiahPlain(amount)} dari ${booking.full_name} tercatat · masuk Keuangan.${proofNote}` };
 }
 
@@ -381,6 +381,6 @@ export async function voidTripPayment(paymentId: string, reason: string): Promis
   if (error || !data) return { ok: false, error: `Gagal membatalkan: ${error?.message ?? "pembayaran tidak ditemukan"}` };
   const b = data.trip_bookings as unknown as { trip_id: string; full_name: string } | null;
   await audit(auth.userId, `membatalkan pembayaran ${formatRupiahPlain(data.amount as number)} · ${b?.full_name ?? ""} (${reason.trim()})`, "trip", b?.trip_id);
-  refreshPaths(...PUBLIC_SESSION_PATHS, `/admin/activities/trip/${b?.trip_id}/peserta`, "/admin/activities", "/admin/keuangan");
+  refreshPaths(`/admin/activities/trip/${b?.trip_id}/peserta`, "/admin/activities", "/admin/keuangan");
   return { ok: true, message: "Pembayaran dibatalkan · Keuangan dikoreksi." };
 }

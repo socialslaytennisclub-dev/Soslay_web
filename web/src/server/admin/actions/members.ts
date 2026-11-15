@@ -8,7 +8,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { changedPhoneError, localPhone, phoneFormatError } from "@/lib/wa-invite";
 import { inviteMemberByEmail, requestOrigin } from "../invite";
 import type { MemberForm, MembersQuery } from "../types";
-import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } from "./common";
+import { audit, done, fail, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, type ActionResult } from "./common";
 
 /** CRM: ubah data member, catatan internal, penyesuaian poin, booking oleh admin, segmen. */
 
@@ -198,11 +198,12 @@ export async function bookMemberIntoSession(memberId: string, sessionId: string)
   const auth = await requireEditor("activities");
   if ("error" in auth) return fail(auth.error);
   const supabase = await createSupabaseServerClient();
-  const [{ data: session }, { count }, { data: current }] = await Promise.all([
+  const [{ data: session }, { data: fill }, { data: current }, { count: inRoster }] = await Promise.all([
     supabase.from("sessions").select("title, capacity, price, waitlist_enabled, status, starts_at, ends_at, ended_at").eq("id", sessionId).maybeSingle(),
-    // Kursi terisi oleh member LAIN — booking member ini sendiri tidak dihitung (re-book tidak menurunkannya ke waitlist).
-    supabase.from("bookings").select("id", { count: "exact", head: true }).eq("session_id", sessionId).neq("member_id", memberId).in("status", ["registered", "attended", "no_show"]),
+    // Keterisian sama dengan admin & website (daftar peserta + booking aktif), bukan hanya tabel bookings.
+    supabase.rpc("session_fill_counts").eq("session_id", sessionId).maybeSingle<{ filled: number }>(),
     supabase.from("bookings").select("status, payment_status").eq("session_id", sessionId).eq("member_id", memberId).maybeSingle(),
+    supabase.from("session_participants").select("id", { count: "exact", head: true }).eq("session_id", sessionId).eq("member_id", memberId),
   ]);
   if (!session || session.status !== "published") return fail("Sesi tidak tersedia.");
   // Sesi yang sudah selesai tidak menerima booking baru (tidak akan pernah di-check-in → tampak no-show).
@@ -214,7 +215,10 @@ export async function bookMemberIntoSession(memberId: string, sessionId: string)
   // sementara daftar peserta tetap Hadir) — juga dijaga di query update di bawah (check-in bersamaan).
   if (current?.status === "attended") return fail("Member ini sudah tercatat hadir di sesi tersebut.");
   if (current?.status === "registered") return done("Member ini sudah terdaftar di sesi tersebut — tidak ada yang diubah.");
-  const full = (count ?? 0) >= (session.capacity as number);
+  // Kursi terisi oleh orang LAIN — member ini sendiri (sudah di daftar peserta, atau booking no_show yang
+  // masih terhitung) tidak dihitung, supaya re-book tidak menurunkannya ke waitlist.
+  const self = inRoster || current?.status === "no_show" ? 1 : 0;
+  const full = (fill?.filled ?? 0) - self >= (session.capacity as number);
   if (full && !session.waitlist_enabled) return fail("Sesi sudah penuh dan waitlist tidak aktif.");
 
   const status = full ? "waitlisted" : "registered";
@@ -238,7 +242,8 @@ export async function bookMemberIntoSession(memberId: string, sessionId: string)
     return fail(now?.status === "attended" ? "Member ini baru saja tercatat hadir — tidak diubah." : "Booking tidak bisa diubah — cek izin akses Activities.");
   }
   await audit(auth.userId, `booking-kan member ke ${session.title}`, "booking", sessionId);
-  refreshPaths(`/admin/members/${memberId}`, `/admin/activities/${sessionId}`, "/admin/activities");
+  // Sisa slot "x slots left" di website ikut berubah.
+  refreshPaths(...PUBLIC_SESSION_PATHS, `/admin/members/${memberId}`, `/admin/activities/${sessionId}`, "/admin/activities");
   return done(full ? `Sesi penuh — member masuk waitlist ${session.title}.` : `Member terdaftar di ${session.title} (pembayaran: menunggu).`);
 }
 

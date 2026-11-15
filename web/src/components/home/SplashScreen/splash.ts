@@ -7,9 +7,10 @@ import { OPEN_EVENT } from "@/lib/intro-gate";
  * kecuali reduced motion. Navigasi di dalam situs tidak menjalankan skrip ini lagi.
  *
  * Pengaman: overlay navy hanya dilepas oleh SplashScreen (React + GSAP). Bila komponen itu telat / gagal
- * memulai animasi (HP Android lambat, JS halaman error), layar tertahan navy polos. Maka bila setelah
- * SPLASH_FAILSAFE_MS animasi belum mulai (belum ada [data-splash-root][data-active]), skrip ini melepas
- * data-splash sendiri → homepage tampil. Ditulis ES5 (tanpa arrow function) supaya aman di browser lama.
+ * berjalan (JS halaman error / tidak termuat), layar tertahan navy polos. Maka bila setelah SPLASH_FAILSAFE_MS
+ * komponen belum mengambil alih (belum ada [data-splash-root][data-active], dipasang saat efeknya mulai),
+ * skrip ini melepas data-splash sendiri → homepage tampil. Komponen yang telat mount lalu melihat data-splash
+ * sudah hilang dan tidak memutar splash. Ditulis ES5 (tanpa arrow function) supaya aman di browser lama.
  */
 const SPLASH_FAILSAFE_MS = 4500;
 

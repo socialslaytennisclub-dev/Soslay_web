@@ -721,7 +721,8 @@ export async function updateParticipantPayment(
     member ? audit(auth.userId, `menautkan tamu ${row.full_name} ke member ${member.fullName} (nomor HP)`, "session", sessionId) : null,
     audit(auth.userId, `mengubah pembayaran ${who}: ${formatRupiahPlain(amount)} · ${status}`, "session", sessionId),
   ]);
-  refreshPaths(...PUBLIC_SESSION_PATHS, `/admin/activities/${sessionId}`, ...(member ? [`/admin/members/${member.id}`] : []), ...moved.map((id) => `/admin/activities/${id}`));
+  // Pembayaran / penautan tamu tidak mengubah jumlah peserta → halaman publik tidak perlu disegarkan.
+  refreshPaths(`/admin/activities/${sessionId}`, ...(member ? [`/admin/members/${member.id}`] : []), ...moved.map((id) => `/admin/activities/${id}`));
   const linked = member ? ` · ${row.full_name} ditautkan ke member ${member.fullName} (${member.memberCode})${moved.length ? `, ${moved.length} activity lain ikut pindah` : ""}` : "";
   return { ok: true, message: `Pembayaran ${who} disimpan · ${formatRupiahPlain(amount)} · ${status}${linked}.` };
 }

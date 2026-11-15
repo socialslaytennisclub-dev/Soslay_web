@@ -39,17 +39,13 @@ export function SplashScreen() {
         setDone(true);
         return;
       }
+      // Komponen mengambil alih sekarang (sebelum menunggu font): overlay tetap tampil sampai timeline selesai
+      // walau <html data-splash> sudah dilepas, dan pengaman SPLASH_SCRIPT tidak lagi memotongnya di HP lambat.
+      el.dataset.active = "";
       let tl: gsap.core.Timeline | undefined;
       let cancelled = false;
 
       const build = contextSafe!(() => {
-        // Pengaman SPLASH_SCRIPT sudah melepas splash (JS telat) → homepage sudah tampil, jangan tutup lagi.
-        if (!document.documentElement.hasAttribute("data-splash")) {
-          setDone(true);
-          return;
-        }
-        // Overlay tetap tampil sampai timeline selesai, walau <html data-splash> sudah dilepas.
-        el.dataset.active = "";
         const q = gsap.utils.selector(el);
         const [ball] = q("[data-ball]");
         const [sprite] = q("[data-sprite]");

@@ -909,6 +909,13 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await fillAs(fsa)) === 4, `keterisian Super Admin ${await fillAs(fsa)} (harus 4: 2 ghost + 1 member Kuyy + 1 booking website)`);
   console.assert((await fillAs(rec)) === 4, "keterisian Pencatat keuangan beda dengan Super Admin");
   console.assert((await fillAs(webMember)) === null, "non-staf bisa membaca keterisian sesi");
+  // Website (anon): sisa slot = kapasitas − keterisian yang sama dengan admin; fungsi hitung internal tertutup.
+  await db.exec(`set role anon`);
+  const slot = await one(`select slots_left from public_session_slots() where session_id = $1`, [fillSid]);
+  const baseBlocked = await db.query(`select * from session_fill_base(null)`).then(() => false, () => true);
+  await db.exec(`reset role`);
+  console.assert(slot?.slots_left === 6, `sisa slot website ${slot?.slots_left} (harus 6: kapasitas 10 − terisi 4)`);
+  console.assert(baseBlocked, "anon bisa memanggil session_fill_base langsung");
   console.log("✓ keuangan: import Kuyy, Tandai Lunas & order shop tercatat otomatis (+ koreksi), go-live dihormati, RLS Pencatat keuangan");
 }
 
