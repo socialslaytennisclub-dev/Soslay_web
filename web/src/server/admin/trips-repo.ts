@@ -29,7 +29,7 @@ type PaymentRowDb = {
 };
 type RundownRowDb = { id: string; trip_id: string; day: string; time_label: string; title: string; location: string; session_id: string | null; sort: number };
 
-type RawTrip = Omit<TripDetail, "activities" | "bookings" | "image"> & { bookings: Omit<TripBooking, "money" | "memberCode">[] };
+type RawTrip = Omit<TripDetail, "activities" | "bookings" | "image"> & { bookings: Omit<TripBooking, "money" | "memberCode" | "kuyId">[] };
 
 /** Activity trip dari dataset (urut nomor activity, lalu jadwal). */
 function activitiesOf(d: Dataset, tripId: string): TripActivity[] {
@@ -46,11 +46,10 @@ function activitiesOf(d: Dataset, tripId: string): TripActivity[] {
 function assemble(d: Dataset, raw: RawTrip): TripDetail {
   const today = todayWib(d.now);
   const activities = activitiesOf(d, raw.id);
-  const bookings = raw.bookings.map((b) => ({
-    ...b,
-    memberCode: b.memberId ? (d.memberById.get(b.memberId)?.memberCode ?? "") : "",
-    money: bookingMoney(raw, b.payments, today),
-  }));
+  const bookings = raw.bookings.map((b) => {
+    const member = b.memberId ? d.memberById.get(b.memberId) : undefined;
+    return { ...b, memberCode: member?.memberCode ?? "", kuyId: member?.kuyId ?? "", money: bookingMoney(raw, b.payments, today) };
+  });
   return { ...raw, image: raw.coverPath || activities[0]?.image || TRIP_PLACEHOLDER, activities, bookings };
 }
 

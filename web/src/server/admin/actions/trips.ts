@@ -8,9 +8,9 @@ import { normalizeBookingUrl, slugify } from "@/lib/text";
 import { localPhone } from "@/lib/wa-invite";
 import { uploadPrivateFile } from "@/server/storage";
 import { FINANCE_PROOF_BUCKET } from "../finance-repo";
-import { findMemberById, searchMembers, type MemberIdentity } from "../identity";
+import { findMemberById, findMemberByPhone, searchMembers, type MemberIdentity } from "../identity";
 import { getTrip } from "../trips-repo";
-import { audit, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, type ActionResult } from "./common";
+import { audit, confirmLinkResult, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, type ActionResult, type ConfirmLinkResult } from "./common";
 
 /**
  * Aksi Tennis Escape = Trip (BR-22): simpan trip (info, activity, rundown, paket), arsip / duplikat,
@@ -264,22 +264,36 @@ export async function searchTripMembers(tripId: string, query: string): Promise<
   };
 }
 
-/** Tambah pembeli paket: member Soslay (dipilih dari saran searchTripMembers) atau tamu (nama + no. HP). */
-export async function addTripBooking(tripId: string, input: { memberId?: string; name?: string; phone?: string }): Promise<ActionResult> {
+/**
+ * Tambah pembeli paket: member Soslay (dipilih dari saran searchTripMembers) atau tamu (nama + no. HP).
+ * Nomor tamu milik satu member terdaftar → admin diminta konfirmasi dulu (confirmLink), sama seperti tamu activity;
+ * linkMember = id member (tautkan) / false (tetap tamu). Tamu yang baru daftar belakangan ditautkan otomatis oleh
+ * trigger profiles_claim_trip_bookings.
+ */
+export async function addTripBooking(
+  tripId: string,
+  input: { memberId?: string; name?: string; phone?: string; linkMember?: string | false },
+): Promise<ActionResult | ConfirmLinkResult> {
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
   // Hanya yang dibutuhkan: judul trip, jumlah activity, pembeli aktif. Kuota paket & trip diarsipkan dijaga
   // trigger trip_bookings_guard (aman dari dua admin menambah bersamaan) — pesannya lewat guardMessage.
   const supabase = await createSupabaseServerClient();
-  const [{ data: trip }, { count: activityCount }, { data: activeRows }, member] = await Promise.all([
+  const guestPhone = !input.memberId && input.phone?.trim() ? localPhone(input.phone) : "";
+  const [{ data: trip }, { count: activityCount }, { data: activeRows }, picked, phoneOwner] = await Promise.all([
     supabase.from("trips").select("title").eq("id", tripId).maybeSingle(),
     supabase.from("sessions").select("id", { count: "exact", head: true }).eq("trip_id", tripId),
     supabase.from("trip_bookings").select("member_id").eq("trip_id", tripId).is("cancelled_at", null),
     input.memberId ? findMemberById(input.memberId) : Promise.resolve(null),
+    guestPhone && input.linkMember !== false ? findMemberByPhone(guestPhone, { unique: true }) : Promise.resolve(null),
   ]);
   if (!trip) return { ok: false, error: "Trip tidak ditemukan." };
   const active = activeRows ?? [];
-  if (input.memberId && !member) return { ok: false, error: "Member tidak ditemukan — pilih ulang dari daftar." };
+  if (input.memberId && !picked) return { ok: false, error: "Member tidak ditemukan — pilih ulang dari daftar." };
+  // Pemilik nomor sudah ikut paket (mis. member mendaftarkan temannya dengan nomornya sendiri) → tetap tamu.
+  const byPhone = phoneOwner && !active.some((b) => b.member_id === phoneOwner.id) ? phoneOwner : null;
+  if (byPhone && input.linkMember !== byPhone.id) return confirmLinkResult(byPhone);
+  const member = byPhone ?? picked;
   if (member && active.some((b) => b.member_id === member.id)) return { ok: false, error: `${member.fullName} sudah terdaftar di paket ini.` };
   const name = member?.fullName ?? input.name?.trim() ?? "";
   if (!name) return { ok: false, error: "Isi nama peserta." };
@@ -288,7 +302,7 @@ export async function addTripBooking(tripId: string, input: { memberId?: string;
     trip_id: tripId,
     member_id: member?.id ?? null,
     full_name: name,
-    phone: member?.phone || (input.phone ? localPhone(input.phone) : "") || null,
+    phone: member?.phone || guestPhone || null,
     email: member?.email || null,
   });
   if (error) return { ok: false, error: guardMessage(error) ?? `Gagal menambah peserta: ${error.message}` };

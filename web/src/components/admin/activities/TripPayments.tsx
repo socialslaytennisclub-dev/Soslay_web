@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, useTransition } from "react";
 import { formatRupiahPlain } from "@/lib/admin-labels";
@@ -10,6 +11,7 @@ import { PAY_STATUS_LABEL, PAYMENT_KIND_LABEL, PLAN_LABEL, reminderText, shortDa
 import { addTripBooking, cancelTripBooking, recordTripPayment, searchTripMembers, voidTripPayment, type TripMemberOption } from "@/server/admin/actions/trips";
 import type { TripBooking } from "@/server/admin/types";
 import { FinanceModal } from "../finance/FinanceModal";
+import { withMemberLinkConfirm } from "./confirm-member-link";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge, MemberAvatar, PickerInput, type BadgeTone } from "../ui/AdminUI";
 import { useConfirm } from "../ui/ConfirmDialog";
@@ -172,7 +174,11 @@ export function TripPayments({ tripId, tripTitle, activities, quota, due, minDp,
   const canAdd = usingMember ? Boolean(picked && !picked.alreadyIn) : guest.name.trim() !== "";
   const addBooking = () =>
     start(async () => {
-      const r = await addTripBooking(tripId, picked ? { memberId: picked.id } : { name: guest.name, phone: guest.phone });
+      const input = picked ? { memberId: picked.id } : { name: guest.name, phone: guest.phone };
+      const r = await withMemberLinkConfirm(
+        (linkMember) => addTripBooking(tripId, { ...input, linkMember }),
+        "Daftarkan paket ini atas akunnya? Semua activity trip, kehadiran & poin ikut ke member itu.",
+      );
       toast.result(r);
       if (r.ok) {
         resetAdd();
@@ -238,7 +244,23 @@ export function TripPayments({ tripId, tripTitle, activities, quota, due, minDp,
                       <span className={styles.person}>
                         <MemberAvatar name={b.name} size={32} />
                         <span>
-                          <strong>{b.name}</strong>
+                          {b.memberId ? (
+                            <Link href={`/admin/members/${b.memberId}`} className={styles.personName}>
+                              {b.name}
+                            </Link>
+                          ) : (
+                            <strong>{b.name}</strong>
+                          )}
+                          {/* Sama seperti peserta activity: member terverifikasi (ID Soslay ✓ · Kuy ID) / ghost member. */}
+                          {b.memberId ? (
+                            <small className={styles.identity}>
+                              {b.memberCode || "Member Soslay"}
+                              <AdminIcon name="verified" size={14} label="Member Soslay terverifikasi" className={styles.verified} />
+                              {b.kuyId && ` · Kuy @${b.kuyId}`}
+                            </small>
+                          ) : (
+                            <small className={styles.identity}>Ghost member</small>
+                          )}
                           <small>{trail(b)}</small>
                         </span>
                       </span>

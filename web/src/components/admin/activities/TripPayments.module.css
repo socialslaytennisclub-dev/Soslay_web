@@ -210,6 +210,32 @@
   color: var(--color-indigo-600);
 }
 
+.personName {
+  display: block;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: 700;
+  color: inherit;
+  text-decoration: none;
+}
+
+.personName:hover {
+  text-decoration: underline;
+}
+
+/* Baris identitas: ID Soslay + centang (member) / "Ghost member" — seperti tabel peserta activity. */
+.person small.identity {
+  display: flex;
+  white-space: nowrap;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-indigo-700, var(--color-indigo-600));
+}
+
+.verified {
+  color: var(--color-lime-600);
+}
+
 .plan {
   display: inline-block;
   padding: 2px 10px;

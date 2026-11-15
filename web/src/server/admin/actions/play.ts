@@ -11,7 +11,7 @@ import { ownContacts, parseKuyExport, type KuyRow } from "../kuy-import";
 import { findMemberById, findMemberByIdentifier, findMemberByPhone, type MemberIdentity } from "../identity";
 import { getAdminSession } from "../session";
 import type { KuyImportPreview, KuyImportPreviewRow, SessionMatch } from "../types";
-import { audit, refreshPaths, requireEditor, type ActionResult } from "./common";
+import { audit, confirmLinkResult, refreshPaths, requireEditor, type ActionResult, type ConfirmLinkResult } from "./common";
 
 /**
  * Aksi permainan sesi (admin): impor peserta dari export XLSX Kuyy dan simpan line-up.
@@ -608,8 +608,6 @@ async function dropUnusedGhost(supabase: Supabase, ghostId: string) {
  * diubah di profilnya. Boleh kapan saja, juga setelah activity selesai: nominal peserta lunas masuk Keuangan
  * begitu activity selesai, perubahan sesudahnya dicatat sebagai koreksi (trigger finance_on_participant).
  */
-/** Nomor HP tamu milik member → admin diminta konfirmasi dulu sebelum baris ditautkan ke akunnya. */
-export type ConfirmLinkResult = { ok: false; error: string; confirmLink: { memberId: string; name: string; memberCode: string } };
 
 export async function updateParticipantPayment(
   sessionId: string,
@@ -658,7 +656,7 @@ export async function updateParticipantPayment(
     }
   }
   if (member && input.linkMember !== member.id) {
-    return { ok: false, error: "Konfirmasi penautan ke member dulu.", confirmLink: { memberId: member.id, name: member.fullName, memberCode: member.memberCode } };
+    return confirmLinkResult(member);
   }
   // Nama tidak diubah (beda huruf besar/kecil tetap sama) → tamu ini memang orang yang sama: ghost-nya diklaim &
   // riwayat activity lainnya ikut pindah. Nama diubah → slotnya dipakai orang lain: hanya baris ini yang ditautkan.

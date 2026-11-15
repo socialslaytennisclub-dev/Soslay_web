@@ -8,6 +8,14 @@ import type { AdminModule } from "../types";
 /** Hasil server action admin — ditampilkan sebagai notice di UI. */
 export type ActionResult = { ok: true; message: string } | { ok: false; error: string };
 
+/** Nomor HP tamu milik member → admin diminta konfirmasi dulu sebelum tamu ditautkan ke akunnya (activity & paket trip). */
+export type ConfirmLinkResult = { ok: false; error: string; confirmLink: { memberId: string; name: string; memberCode: string } };
+export const confirmLinkResult = (member: { id: string; fullName: string; memberCode: string }): ConfirmLinkResult => ({
+  ok: false,
+  error: "Konfirmasi penautan ke member dulu.",
+  confirmLink: { memberId: member.id, name: member.fullName, memberCode: member.memberCode },
+});
+
 const MODULE_LABEL: Record<AdminModule, string> = {
   overview: "Overview",
   members: "Members",

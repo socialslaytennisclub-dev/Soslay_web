@@ -13,6 +13,7 @@ import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, PaymentBadge } from "../ui/AdminUI";
 import { Drawer } from "../ui/Drawer";
 import { toast } from "../ui/Toaster";
+import { withMemberLinkConfirm } from "./confirm-member-link";
 import styles from "./SessionEditor.module.css";
 
 type Payment = "paid" | "pending";
@@ -64,14 +65,11 @@ function PaymentDrawer({ sessionId, finished, ref }: { sessionId: string; finish
     target &&
     start(async () => {
       const input = { amount: Number(amount || 0), payment, via, ...(guest ? { name, phone } : {}) };
-      let r = await updateParticipantPayment(sessionId, target.id, input);
-      // Nomor tamu milik member terdaftar → admin memastikan dulu orangnya sama (salah ketik nomor bisa
-      // menautkan tamu ke member lain). Tidak → tetap tamu, pembayaran tetap disimpan.
-      if (!r.ok && "confirmLink" in r) {
-        const { memberId, name: memberName, memberCode } = r.confirmLink;
-        const yes = window.confirm(`Nomor ini milik member ${memberName} (${memberCode}).\n\nTautkan peserta ini ke akunnya? Booking, kehadiran & poin ikut ke member itu.\nPilih Cancel untuk tetap menyimpan sebagai tamu.`);
-        r = await updateParticipantPayment(sessionId, target.id, { ...input, linkMember: yes ? memberId : false });
-      }
+      // Tidak ditautkan → tetap tamu, pembayaran tetap disimpan.
+      const r = await withMemberLinkConfirm(
+        (linkMember) => updateParticipantPayment(sessionId, target.id, { ...input, linkMember }),
+        "Tautkan peserta ini ke akunnya? Booking, kehadiran & poin ikut ke member itu.",
+      );
       toast.result(r);
       if (r.ok) {
         dialog.close();
