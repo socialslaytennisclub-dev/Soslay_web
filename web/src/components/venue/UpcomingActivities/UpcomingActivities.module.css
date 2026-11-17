@@ -1,5 +1,7 @@
 /* Figma Website v2 375:3700 — section/01-upcoming-activities */
+/* Padding atas = jarak hero → section pertama, sama dengan Participant Guide (hero + 24 / 32 px). */
 .section {
+  padding-top: var(--space-24);
   padding-bottom: var(--space-48);
 }
 
@@ -182,6 +184,7 @@
 
 @media (min-width: 1200px) {
   .section {
+    padding-top: var(--space-32);
     padding-bottom: 68px;
   }
 
