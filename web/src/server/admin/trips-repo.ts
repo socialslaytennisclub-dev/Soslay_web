@@ -9,7 +9,7 @@ import { getDataset, type Dataset } from "./dataset";
 import { getPaymentAccounts } from "./finance-repo";
 import { toRow } from "./session-rows";
 import { demoTrip, demoTripBookings, demoTripRundown } from "./trip-demo";
-import type { TripActivity, TripBooking, TripCandidate, TripDetail, TripStatus, TripSummary } from "./types";
+import type { SessionHost, TripActivity, TripBooking, TripCandidate, TripDetail, TripStatus, TripSummary } from "./types";
 
 /**
  * Tennis Escape = Trip (BR-22): trip + activity (sesi bertautan trip_id) + rundown + paket bundling &
@@ -29,7 +29,9 @@ type PaymentRowDb = {
 };
 type RundownRowDb = { id: string; trip_id: string; day: string; time_label: string; title: string; location: string; session_id: string | null; sort: number };
 
-type RawTrip = Omit<TripDetail, "activities" | "bookings" | "image"> & { bookings: Omit<TripBooking, "money" | "memberCode" | "kuyId">[] };
+type HostRowDb = { member_id: string; role: SessionHost["role"] | null; sessions: { trip_id: string | null } | null };
+
+type RawTrip = Omit<TripDetail, "activities" | "bookings" | "image" | "hosts"> & { bookings: Omit<TripBooking, "money" | "memberCode" | "kuyId">[]; hostRows: { memberId: string; role: SessionHost["role"] }[] };
 
 /** Activity trip dari dataset (urut nomor activity, lalu jadwal). */
 function activitiesOf(d: Dataset, tripId: string): TripActivity[] {
@@ -50,12 +52,17 @@ function assemble(d: Dataset, raw: RawTrip): TripDetail {
     const member = b.memberId ? d.memberById.get(b.memberId) : undefined;
     return { ...b, memberCode: member?.memberCode ?? "", kuyId: member?.kuyId ?? "", money: bookingMoney(raw, b.payments, today) };
   });
-  return { ...raw, image: raw.coverPath || activities[0]?.image || TRIP_PLACEHOLDER, activities, bookings };
+  const { hostRows, ...rest } = raw;
+  const hosts = hostRows.map((h): SessionHost => {
+    const member = d.memberById.get(h.memberId);
+    return { memberId: h.memberId, name: member?.fullName ?? "Member", code: member?.memberCode ?? "", role: h.role };
+  });
+  return { ...rest, image: raw.coverPath || activities[0]?.image || TRIP_PLACEHOLDER, activities, bookings, hosts };
 }
 
 async function loadLiveTrips(): Promise<RawTrip[]> {
   const supabase = await createSupabaseServerClient();
-  const [trips, bookings, payments, rundown, { names: accountName }] = await Promise.all([
+  const [trips, bookings, payments, rundown, { names: accountName }, hostRows] = await Promise.all([
     supabase.from("trips").select("*").order("starts_on").returns<TripRowDb[]>(),
     supabase.from("trip_bookings").select("id, trip_id, member_id, full_name, phone, email, created_at, cancelled_at").order("created_at").returns<BookingRowDb[]>(),
     supabase
@@ -65,6 +72,8 @@ async function loadLiveTrips(): Promise<RawTrip[]> {
       .returns<PaymentRowDb[]>(),
     supabase.from("trip_rundown_items").select("id, trip_id, day, time_label, title, location, session_id, sort").order("day").order("sort").returns<RundownRowDb[]>(),
     getPaymentAccounts(),
+    // Host & fotografer activity trip (satu member per trip; peran host diutamakan).
+    supabase.from("session_hosts").select("member_id, role, sessions!inner(trip_id)").not("sessions.trip_id", "is", null).returns<HostRowDb[]>(),
   ]);
   if (trips.error) throw new Error(`Gagal memuat trip: ${trips.error.message}`);
   // Kelompokkan sekali (bukan filter per trip / salin array per baris).
@@ -80,6 +89,14 @@ async function loadLiveTrips(): Promise<RawTrip[]> {
   const paymentsOf = group(payments.data, (p) => p.booking_id);
   const rundownOf = group(rundown.data, (r) => r.trip_id);
   const bookingsOf = group(bookings.data, (b) => b.trip_id);
+  const hostsOf = new Map<string, Map<string, SessionHost["role"]>>();
+  for (const h of hostRows.data ?? []) {
+    const tripId = h.sessions?.trip_id;
+    if (!tripId) continue;
+    const byMember = hostsOf.get(tripId) ?? new Map<string, SessionHost["role"]>();
+    if (byMember.get(h.member_id) !== "host") byMember.set(h.member_id, h.role ?? "host");
+    hostsOf.set(tripId, byMember);
+  }
   return (trips.data ?? []).map((t) => ({
     id: t.id,
     slug: t.slug,
@@ -100,6 +117,7 @@ async function loadLiveTrips(): Promise<RawTrip[]> {
     minDp: t.min_dp,
     inclusions: t.inclusions ?? [],
     version: t.form_version,
+    hostRows: [...(hostsOf.get(t.id) ?? new Map<string, SessionHost["role"]>())].map(([memberId, role]) => ({ memberId, role })),
     rundown: (rundownOf.get(t.id) ?? []).map((r) => ({ id: r.id, day: r.day, time: r.time_label, title: r.title, location: r.location, sessionId: r.session_id })),
     bookings: (bookingsOf.get(t.id) ?? [])
       .map((b) => ({
@@ -127,7 +145,7 @@ async function loadLiveTrips(): Promise<RawTrip[]> {
   }));
 }
 
-const demoRaw = (): RawTrip[] => [{ ...demoTrip, version: null, rundown: demoTripRundown, bookings: demoTripBookings.map((b) => ({ ...b, cancelled: false })) }];
+const demoRaw = (): RawTrip[] => [{ ...demoTrip, version: null, hostRows: [], rundown: demoTripRundown, bookings: demoTripBookings.map((b) => ({ ...b, cancelled: false })) }];
 
 /** Semua trip (termasuk draft & arsip), lengkap. */
 export const listTripDetails = cache(async (): Promise<TripDetail[]> => {

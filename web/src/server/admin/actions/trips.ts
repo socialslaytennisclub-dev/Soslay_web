@@ -60,6 +60,8 @@ export type TripInput = {
   createKey?: string;
   activities: TripActivityInput[];
   rundown: TripRundownInput[];
+  /** Host / fotografer member untuk semua activity trip (akses Panel Host per activity). Tidak diisi = tidak diubah. */
+  crew?: { memberId: string; role: "host" | "photographer" }[];
 };
 
 type SaveResult = ({ ok: true; message: string; id: string; version?: number; activityIds?: Record<string, string> } | { ok: false; error: string });
@@ -84,6 +86,7 @@ function validate(input: TripInput): string | null {
   if (input.priceEarlyBird !== null && (!okInt(input.priceEarlyBird) || input.priceEarlyBird > input.priceNormal)) return "Harga early bird tidak boleh di atas harga normal.";
   if (input.priceEarlyBird !== null && !(input.earlyBirdUntil && DAY_RE.test(input.earlyBirdUntil))) return "Isi batas tanggal early bird.";
   if (input.minDp > input.priceNormal) return "Minimal DP tidak boleh di atas harga paket.";
+  if (input.crew?.some((c) => !c.memberId || (c.role !== "host" && c.role !== "photographer"))) return "Peran host / fotografer tidak dikenal.";
   if (input.status === "published" && input.priceNormal <= 0) return "Isi harga paket normal sebelum dipublikasikan.";
   for (const [i, a] of input.activities.entries()) {
     const n = `Activity ${i + 1}`;
@@ -194,18 +197,38 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
   // mencocokkan key (sessions.trip_key), jadi simpan ulang tanpa id pun tidak membuat activity kembar.
   // Versi baru trip ikut dikembalikan supaya simpan berikutnya dari form yang sama tidak dianggap basi.
   const [{ data: savedSessions }, { data: savedTrip }] = await Promise.all([
-    supabase.from("sessions").select("id, trip_key").eq("trip_id", id).not("trip_key", "is", null),
+    supabase.from("sessions").select("id, trip_key").eq("trip_id", id),
     supabase.from("trips").select("form_version").eq("id", id).maybeSingle(),
   ]);
-  const byKey = new Map((savedSessions ?? []).map((s) => [s.trip_key as string, s.id as string]));
+  const byKey = new Map((savedSessions ?? []).flatMap((s) => (s.trip_key ? [[s.trip_key as string, s.id as string] as const] : [])));
   const activityIds = Object.fromEntries(activities.flatMap((a) => {
     const sessionId = byKey.get(a.key);
     return sessionId ? [[a.key, sessionId]] : [];
   }));
 
+  // Host & fotografer trip → session_hosts di setiap activity trip (member host melihat activity-nya di
+  // My Activities walau tidak ikut main, plus akses Panel Host). Trip sudah tersimpan; gagal di sini dilaporkan.
+  let hostWarning = "";
+  if (input.crew) {
+    const crew = [...new Map(input.crew.map((c) => [c.memberId, c])).values()];
+    const sessionIds = (savedSessions ?? []).map((s) => s.id as string);
+    if (sessionIds.length) {
+      const keep = crew.length ? crew.map((c) => c.memberId).join(",") : "00000000-0000-0000-0000-000000000000";
+      const { error: hostDelete } = await supabase.from("session_hosts").delete().in("session_id", sessionIds).not("member_id", "in", `(${keep})`);
+      const { error: hostUpsert } = crew.length
+        ? await supabase
+            .from("session_hosts")
+            .upsert(sessionIds.flatMap((sessionId) => crew.map((c) => ({ session_id: sessionId, member_id: c.memberId, role: c.role, assigned_by: auth.userId }))), { onConflict: "session_id,member_id" })
+        : { error: null };
+      const hostError = hostDelete ?? hostUpsert;
+      // Bukan ok:false — trip & versinya sudah tersimpan; form harus tetap memakai versi baru.
+      if (hostError) hostWarning = ` Host gagal disimpan (${hostError.message}) — coba simpan lagi.`;
+    }
+  }
+
   await audit(auth.userId, `${input.id ? "mengubah" : "membuat"} trip ${tripRow.title}`, "trip", id);
   refreshPaths(...PUBLIC_SESSION_PATHS, "/admin/activities", `/admin/activities/trip/${id}`);
-  return { ok: true, id, activityIds, version: (savedTrip?.form_version as number | undefined) ?? undefined, message: input.status === "published" ? "Trip dipublikasikan." : "Trip tersimpan sebagai draft." };
+  return { ok: true, id, activityIds, version: (savedTrip?.form_version as number | undefined) ?? undefined, message: (input.status === "published" ? "Trip dipublikasikan." : "Trip tersimpan sebagai draft.") + hostWarning };
 }
 
 export async function archiveTrip(id: string): Promise<ActionResult> {

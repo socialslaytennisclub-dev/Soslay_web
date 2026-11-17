@@ -832,6 +832,8 @@ export type TripDetail = {
   activities: TripActivity[];
   rundown: TripRundownItem[];
   bookings: TripBooking[];
+  /** Host & fotografer trip (member) — gabungan session_hosts semua activity trip ini. */
+  hosts: SessionHost[];
 };
 
 /** Baris induk trip di daftar Activities. */
