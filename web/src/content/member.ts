@@ -28,6 +28,12 @@ export const member = {
   memberId: "SOS 0067 2507",
   validThru: "07/26",
   cover: "/images/home/hero.webp",
+  /**
+   * Potongan foto cover di header akun — disetel untuk foto `cover` di atas (grup ~45–78% tinggi foto,
+   * watermark ~89–93%). Ganti fotonya → sesuaikan angka ini. Ponsel (<480px): digeser ke bawah + zoom supaya
+   * pemain lebih besar di atas avatar; ≥480px tanpa zoom (zoom memotong kepala mulai ~640px).
+   */
+  coverFrame: { mobile: "center 85%", desktop: "center 62%", mobileZoom: 1.25, mobileOrigin: "66% 40%" },
   bookingUrl: KUYY_PROFILE_URL,
 };
 

@@ -48,7 +48,7 @@ export function Lightbox({ dialogRef, item, position, onClose, onNext, onPrev, o
               <p className={styles.date}>{item.dateLabel}</p>
               {item.person && (
                 <p className={styles.person}>
-                  <AvatarStack items={[item.person]} />
+                  <AvatarStack items={[item.person]} className={styles.personAvatar} />
                   <span className={styles.handle}>{item.person.label}</span>
                   {item.person.verified && <Icon name="seal-check-fill" label="Terverifikasi" className={styles.verified} />}
                 </p>

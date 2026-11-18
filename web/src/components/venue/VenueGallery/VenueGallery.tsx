@@ -26,7 +26,7 @@ export function VenueGallery({ venueName, photos, dateLabels }: VenueGalleryProp
     alt: active.alt,
     dateLabel: dateLabels[active.id],
     caption: active.caption,
-    person: tagged && { label: tagged.handle, initial: tagged.initial, tone: tagged.tone, verified: tagged.verified },
+    person: tagged && { label: tagged.label, initial: tagged.initial, tone: tagged.tone, verified: tagged.verified },
   };
 
   return (
@@ -47,7 +47,7 @@ export function VenueGallery({ venueName, photos, dateLabels }: VenueGalleryProp
                   alt={photo.alt}
                   position={photo.position}
                   dateLabel={dateLabels[photo.id]}
-                  people={photo.members.map((m) => ({ label: m.handle, initial: m.initial, tone: m.tone }))}
+                  people={photo.members.map((m) => ({ label: m.label, initial: m.initial, tone: m.tone }))}
                   onOpen={() => lightbox.open(i)}
                 />
               </li>

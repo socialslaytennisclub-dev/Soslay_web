@@ -10,6 +10,8 @@
   overflow: hidden;
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
   background: var(--color-navy-900);
+  /* Safari: foto yang di-zoom (transform) tetap terpotong mengikuti radius bawah. */
+  isolation: isolate;
 }
 
 .cover::after {
@@ -19,9 +21,20 @@
   background: var(--overlay-hero);
 }
 
+/* Potongan foto dari member.coverFrame (content/member.ts, disetel untuk fotonya) lewat variabel di .cover.
+   --cover-position juga dipakai placeholder blur (objectPosition inline) supaya tidak melompat. */
 .image {
+  --cover-position: var(--cover-mobile);
   object-fit: cover;
-  object-position: center 40%;
+  transform: scale(var(--cover-zoom));
+  transform-origin: var(--cover-origin);
+}
+
+@media (min-width: 480px) {
+  .image {
+    --cover-position: var(--cover-desktop);
+    transform: none;
+  }
 }
 
 .profile {

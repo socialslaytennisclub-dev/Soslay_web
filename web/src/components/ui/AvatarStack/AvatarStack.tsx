@@ -18,8 +18,9 @@ type AvatarStackProps = {
 export function AvatarStack({ items, size = "md", className }: AvatarStackProps) {
   return (
     <ul className={cx(styles.stack, styles[size], className)} aria-label={`In photo: ${items.map((i) => i.label).join(", ")}`}>
-      {items.map((item) => (
-        <li key={item.label} className={cx(styles.avatar, styles[item.tone])} aria-hidden>
+      {items.map((item, i) => (
+        // Daftar statis & tidak diurutkan ulang; label bisa sama (nama depan sama, tanpa IG) → key index.
+        <li key={i} className={cx(styles.avatar, styles[item.tone])} aria-hidden>
           {item.initial}
         </li>
       ))}

@@ -3,10 +3,13 @@
  * Foto dari Figma "Vanue detail" (25:917), semuanya diambil di Common Grounds Menteng.
  */
 
+import { memberTag } from "@/lib/member-label";
+
 export type AvatarTone = "lime" | "pink" | "indigo";
 
 export type TaggedMember = {
-  handle: string;
+  /** Label tampilan: "Nama (@instagram)", atau "Nama" saja bila member tidak punya Instagram. */
+  label: string;
   initial: string;
   tone: AvatarTone;
   verified?: boolean;
@@ -26,10 +29,10 @@ export type GalleryPhoto = {
 };
 
 const members = {
-  dimas: { handle: "@dimasf", initial: "D", tone: "lime" },
-  felisya: { handle: "@felisyafernanda", initial: "F", tone: "pink", verified: true },
-  rizky: { handle: "@rizkyramadhan", initial: "R", tone: "lime" },
-  arya: { handle: "@aryasoslay67", initial: "A", tone: "indigo", verified: true },
+  dimas: { ...memberTag("Dimas", "dimasf"), tone: "lime" },
+  felisya: { ...memberTag("Felisya", "felisyafernanda"), tone: "pink", verified: true },
+  rizky: { ...memberTag("Rizky", "rizkyramadhan"), tone: "lime" },
+  arya: { ...memberTag("Arya"), tone: "indigo", verified: true },
 } satisfies Record<string, TaggedMember>;
 
 const DF = [members.dimas, members.felisya];
@@ -65,7 +68,7 @@ export const galleryPhotos: GalleryPhoto[] = photos.map(([position, tagged, capt
     venueSlug: VENUE,
     src: `${IMG}/photo-${n}.webp`,
     position,
-    alt: `Foto sesi Soslay di Common Grounds Menteng (${tagged.map((m) => m.handle).join(", ")})`,
+    alt: `Foto sesi Soslay di Common Grounds Menteng (${tagged.map((m) => m.label).join(", ")})`,
     date: DATE,
     members: tagged,
     caption,
