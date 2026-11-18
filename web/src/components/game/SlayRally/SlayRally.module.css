@@ -1,0 +1,316 @@
+/* Slay Rally — halaman /game. Mobile-first; lapangan 3D selalu muat dalam satu layar. */
+
+.section {
+  padding-top: var(--nav-height);
+  background: var(--color-navy-950);
+}
+
+/* ── HUD ─────────────────────────────────────────────────────── */
+.hud {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2; /* di atas overlay supaya tombol suara selalu bisa dipakai */
+  padding: var(--space-16) var(--space-16) var(--space-32);
+  background: linear-gradient(
+    color-mix(in srgb, var(--color-navy-950) 75%, transparent),
+    transparent
+  );
+  pointer-events: none;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  color: var(--text-on-inverse);
+}
+
+.hudGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.hudGroup:nth-child(2) {
+  align-items: center;
+}
+
+.hudLabel {
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-overline);
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.lives {
+  display: flex;
+  gap: var(--space-8);
+}
+
+.life {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-neon);
+  transition: opacity var(--duration-fast) var(--ease-out);
+}
+
+.lifeLost {
+  opacity: 0.2;
+}
+
+.score {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: var(--weight-extrabold);
+  line-height: 1;
+  color: var(--color-lime-neon);
+  font-variant-numeric: tabular-nums;
+}
+
+.hudButtons {
+  justify-self: end;
+  display: flex;
+  gap: var(--space-8);
+  pointer-events: auto;
+}
+
+.soundIcon {
+  width: 20px;
+  height: 20px;
+  color: var(--color-white);
+}
+
+.pause {
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-navy-950) 50%, transparent);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.pause:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.pause:focus-visible {
+  outline: 2px solid var(--color-lime-neon);
+  outline-offset: 2px;
+}
+
+.pauseIcon {
+  width: 12px;
+  height: 14px;
+  border-inline: 4px solid var(--color-white);
+}
+
+.pauseIconPlay {
+  width: 0;
+  height: 0;
+  border-block: 7px solid transparent;
+  border-inline: 0;
+  border-left: 12px solid var(--color-white);
+  margin-left: 3px;
+}
+
+/* ── Lapangan ────────────────────────────────────────────────── */
+.court {
+  position: relative;
+  /* Selebar layar, setinggi layar di bawah navbar. */
+  height: calc(100svh - var(--nav-height));
+  min-height: 480px;
+  overflow: hidden;
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  font-family: var(
+    --font-display
+  ); /* dibaca court3d untuk tulisan di lapangan */
+  touch-action: pan-y; /* di luar permainan, usapan tetap menggulir halaman */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Saat bermain: kursor disembunyikan (mouse "menjadi" raket) dan usapan sepenuhnya milik raket. */
+.canvasLive {
+  cursor: none;
+  touch-action: none;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  padding: var(--space-24);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-16);
+  background: color-mix(in srgb, var(--color-navy-950) 82%, transparent);
+  backdrop-filter: blur(6px);
+  animation: fade var(--duration-base) var(--ease-out);
+}
+
+.overlay > * {
+  max-width: 560px;
+}
+
+.overlayClear {
+  background: color-mix(in srgb, var(--color-navy-950) 35%, transparent);
+  backdrop-filter: none;
+  pointer-events: none;
+}
+
+.overline {
+  letter-spacing: var(--tracking-overline);
+  text-transform: uppercase;
+}
+
+.accent {
+  color: var(--color-lime-neon);
+}
+
+.count {
+  font-family: var(--font-display);
+  font-size: 120px;
+  font-weight: var(--weight-extrabold);
+  line-height: 1;
+  color: var(--color-lime-neon);
+  animation: pop 600ms var(--ease-out);
+}
+
+.finalScore {
+  font-family: var(--font-display);
+  font-size: 88px;
+  font-weight: var(--weight-extrabold);
+  line-height: 1;
+  color: var(--color-lime-neon);
+  font-variant-numeric: tabular-nums;
+}
+
+.toast {
+  position: absolute;
+  top: 46%;
+  left: 50%;
+  translate: -50% -50%;
+  padding: var(--space-8) var(--space-20);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-navy-950) 70%, transparent);
+  border: 1px solid var(--color-lime-neon);
+  color: var(--color-lime-neon);
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-overline);
+  text-transform: uppercase;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: toast 1400ms var(--ease-out) forwards;
+}
+
+/* ── Daftar bonus ────────────────────────────────────────────── */
+.bonusGrid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-12);
+}
+
+.bonus {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--space-10);
+  align-items: center;
+  color: var(--text-on-inverse);
+}
+
+.bonusBadge {
+  grid-row: span 2;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  display: grid;
+  place-items: center;
+  font-family: var(--font-display);
+  font-size: 14px;
+  font-weight: var(--weight-bold);
+  color: var(--color-navy-900);
+}
+
+.bonusLabel {
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: var(--weight-semibold);
+  line-height: 1.2;
+}
+
+.bonusHint {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  line-height: 1.25;
+  opacity: 0.7;
+}
+
+.help {
+  position: absolute;
+  inset: auto 0 var(--space-12);
+  padding-inline: var(--space-16);
+  font-size: 13px;
+  pointer-events: none;
+}
+
+@media (min-width: 768px) {
+  .hud {
+    padding-inline: var(--space-32);
+  }
+
+  .bonusGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    scale: 1.6;
+  }
+}
+
+@keyframes toast {
+  0% {
+    opacity: 0;
+    scale: 0.8;
+  }
+  15%,
+  70% {
+    opacity: 1;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.05;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .count,
+  .toast {
+    animation: none;
+  }
+}

@@ -19,6 +19,7 @@ export const primaryNav: {
   links: [
     { label: "Venue", href: "/venue" },
     { label: "Shop", href: "/shop" },
+    { label: "Game", href: "/game" },
   ],
 };
 
