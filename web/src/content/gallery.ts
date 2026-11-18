@@ -6,7 +6,8 @@
 export type AvatarTone = "lime" | "pink" | "indigo";
 
 export type TaggedMember = {
-  handle: string;
+  /** Label tampilan: "Nama (@instagram)", atau "Nama" saja bila member tidak punya Instagram. */
+  label: string;
   initial: string;
   tone: AvatarTone;
   verified?: boolean;
@@ -25,11 +26,17 @@ export type GalleryPhoto = {
   caption: string;
 };
 
+/** "Rizky (@kiu.kiu)" bila ada Instagram, kalau tidak "Rizky". */
+export function memberLabel(name: string, instagram?: string | null): string {
+  const ig = instagram?.trim().replace(/^@/, "");
+  return ig ? `${name} (@${ig})` : name;
+}
+
 const members = {
-  dimas: { handle: "@dimasf", initial: "D", tone: "lime" },
-  felisya: { handle: "@felisyafernanda", initial: "F", tone: "pink", verified: true },
-  rizky: { handle: "@rizkyramadhan", initial: "R", tone: "lime" },
-  arya: { handle: "@aryasoslay67", initial: "A", tone: "indigo", verified: true },
+  dimas: { label: memberLabel("Dimas", "dimasf"), initial: "D", tone: "lime" },
+  felisya: { label: memberLabel("Felisya", "felisyafernanda"), initial: "F", tone: "pink", verified: true },
+  rizky: { label: memberLabel("Rizky", "rizkyramadhan"), initial: "R", tone: "lime" },
+  arya: { label: memberLabel("Arya"), initial: "A", tone: "indigo", verified: true },
 } satisfies Record<string, TaggedMember>;
 
 const DF = [members.dimas, members.felisya];
@@ -65,7 +72,7 @@ export const galleryPhotos: GalleryPhoto[] = photos.map(([position, tagged, capt
     venueSlug: VENUE,
     src: `${IMG}/photo-${n}.webp`,
     position,
-    alt: `Foto sesi Soslay di Common Grounds Menteng (${tagged.map((m) => m.handle).join(", ")})`,
+    alt: `Foto sesi Soslay di Common Grounds Menteng (${tagged.map((m) => m.label).join(", ")})`,
     date: DATE,
     members: tagged,
     caption,
