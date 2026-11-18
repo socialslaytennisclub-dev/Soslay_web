@@ -1,10 +1,19 @@
 import Image from "next/image";
+import type { CSSProperties } from "react";
 import { Avatar, Button, Chip, Container } from "@/components/ui";
 import { member } from "@/content/member";
 import styles from "./MemberHeader.module.css";
 import { blurProps } from "@/lib/image";
 
-type HeaderData = { name: string; username: string; email: string; tier: string; memberSince: string; memberId: string; photo?: string | null };
+const { coverFrame } = member;
+const coverVars = {
+  "--cover-mobile": coverFrame.mobile,
+  "--cover-desktop": coverFrame.desktop,
+  "--cover-zoom": String(coverFrame.mobileZoom),
+  "--cover-origin": coverFrame.mobileOrigin,
+} as CSSProperties;
+
+type HeaderData ={ name: string; username: string; email: string; tier: string; memberSince: string; memberId: string; photo?: string | null };
 
 /**
  * Figma 25:2602 — cover foto, avatar menimpa cover, nama + meta, tier, aksi. Dipakai semua tab member.
@@ -15,8 +24,9 @@ export function MemberHeader({ data }: { data?: HeaderData | null }) {
   return (
     <header className={styles.header}>
       <Container>
-        <div className={styles.cover}>
-          <Image src={member.cover} {...blurProps(member.cover)} alt="" fill preload sizes="(min-width: 1440px) 1312px, 100vw" className={styles.image} />
+        <div className={styles.cover} style={coverVars}>
+          {/* objectPosition inline (lewat variabel per breakpoint) supaya placeholder blur dipotong sama dengan fotonya. */}
+          <Image src={member.cover} {...blurProps(member.cover)} alt="" fill preload sizes="(min-width: 1440px) 1312px, 100vw" className={styles.image} style={{ objectPosition: "var(--cover-position)" }} />
         </div>
 
         <div className={styles.profile}>

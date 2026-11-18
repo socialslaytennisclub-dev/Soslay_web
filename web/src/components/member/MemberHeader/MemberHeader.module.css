@@ -10,6 +10,8 @@
   overflow: hidden;
   border-radius: 0 0 var(--radius-xl) var(--radius-xl);
   background: var(--color-navy-900);
+  /* Safari: foto yang di-zoom (transform) tetap terpotong mengikuti radius bawah. */
+  isolation: isolate;
 }
 
 .cover::after {
@@ -19,20 +21,18 @@
   background: var(--overlay-hero);
 }
 
-/* Foto grup ada di ~45–78% tinggi gambar, watermark di ~89–93%. Ponsel: digeser ke bawah + zoom 1.25
-   supaya pemain lebih besar di atas avatar (avatar menimpa lapangan) dan watermark terpotong.
-   ≥480px: tanpa zoom (kepala bisa terpotong), raket s.d. kaki utuh. */
+/* Potongan foto dari member.coverFrame (content/member.ts, disetel untuk fotonya) lewat variabel di .cover.
+   --cover-position juga dipakai placeholder blur (objectPosition inline) supaya tidak melompat. */
 .image {
+  --cover-position: var(--cover-mobile);
   object-fit: cover;
-  object-position: center 85%;
-  transform: scale(1.25);
-  /* x 66%: grup (17–89% lebar foto) jadi di tengah, jarak kiri = kanan */
-  transform-origin: 66% 40%;
+  transform: scale(var(--cover-zoom));
+  transform-origin: var(--cover-origin);
 }
 
 @media (min-width: 480px) {
   .image {
-    object-position: center 62%;
+    --cover-position: var(--cover-desktop);
     transform: none;
   }
 }
