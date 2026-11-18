@@ -18,10 +18,11 @@ const STATUS_TONE: Record<SessionDisplayStatus, BadgeTone> = {
   cancelled: "pink",
 };
 
-export function StatusBadge({ status }: { status: SessionDisplayStatus }) {
+/** `label` menimpa teks bawaan, mis. Overview menyebut sesi published "Buka". */
+export function StatusBadge({ status, label }: { status: SessionDisplayStatus; label?: string }) {
   return (
     <Badge tone={STATUS_TONE[status]} dot>
-      {SESSION_STATUS_LABEL[status]}
+      {label ?? SESSION_STATUS_LABEL[status]}
     </Badge>
   );
 }

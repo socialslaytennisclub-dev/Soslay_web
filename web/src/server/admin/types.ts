@@ -142,6 +142,8 @@ export type UpcomingSession = {
   startsAt: string;
   capacity: number;
   booked: number;
+  /** Penuh / Hampir penuh / Buka — aturan sama dengan daftar Activities. */
+  status: SessionDisplayStatus;
 };
 
 export type OrderRow = {

@@ -32,7 +32,8 @@ function fill(d: Dataset, sessionId: string) {
  */
 export const isFinished = (s: DataSession, now: Date) => isSessionFinished({ status: s.status, endedAt: null, endsAt: s.endsAt, now });
 
-function displayStatus(s: DataSession, booked: number, now: Date): SessionDisplayStatus {
+/** Status tampilan sesi (daftar Activities & Overview "Sesi mendatang"): penuh > hampir penuh (≥85%) > buka. */
+export function displayStatus(s: DataSession, booked: number, now: Date): SessionDisplayStatus {
   if (isFinished(s, now)) return "completed";
   if (s.status !== "published") return s.status;
   if (s.publishAt && s.publishAt > now) return "scheduled";
