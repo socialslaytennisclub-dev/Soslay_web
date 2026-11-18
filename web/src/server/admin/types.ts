@@ -264,6 +264,8 @@ export type SessionParticipant = {
 };
 
 export type SessionDetail = SessionRow & {
+  /** Activity trip (Tennis Escape): host & fotografer member diatur di editor trip. Tidak ada = sesi biasa. */
+  tripId?: string;
   description: string;
   /** Foto cover yang diupload (URL Storage) — null = pakai foto venue. */
   coverPath: string | null;
@@ -832,8 +834,6 @@ export type TripDetail = {
   activities: TripActivity[];
   rundown: TripRundownItem[];
   bookings: TripBooking[];
-  /** Host & fotografer trip (member) — gabungan session_hosts semua activity trip ini. */
-  hosts: SessionHost[];
 };
 
 /** Baris induk trip di daftar Activities. */

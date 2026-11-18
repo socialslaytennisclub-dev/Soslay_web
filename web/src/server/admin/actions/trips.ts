@@ -10,7 +10,7 @@ import { uploadPrivateFile } from "@/server/storage";
 import { FINANCE_PROOF_BUCKET } from "../finance-repo";
 import { findMemberById, findMemberByPhone, searchMembers, type MemberIdentity } from "../identity";
 import { getTrip } from "../trips-repo";
-import { audit, confirmLinkResult, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, SLOTS_PATH, type ActionResult, type ConfirmLinkResult } from "./common";
+import { audit, confirmLinkResult, invalidCrew, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, SLOTS_PATH, syncSessionHosts, type ActionResult, type ConfirmLinkResult, type CrewMemberInput } from "./common";
 
 /**
  * Aksi Tennis Escape = Trip (BR-22): simpan trip (info, activity, rundown, paket), arsip / duplikat,
@@ -60,8 +60,11 @@ export type TripInput = {
   createKey?: string;
   activities: TripActivityInput[];
   rundown: TripRundownInput[];
-  /** Host / fotografer member untuk semua activity trip (akses Panel Host per activity). Tidak diisi = tidak diubah. */
-  crew?: { memberId: string; role: "host" | "photographer" }[];
+  /**
+   * Host / fotografer member untuk semua activity trip (akses Panel Host per activity). Hanya dikirim saat
+   * daftarnya diubah di form — tidak diisi = session_hosts activity trip tidak disentuh.
+   */
+  crew?: CrewMemberInput[];
 };
 
 type SaveResult = ({ ok: true; message: string; id: string; version?: number; activityIds?: Record<string, string> } | { ok: false; error: string });
@@ -86,7 +89,7 @@ function validate(input: TripInput): string | null {
   if (input.priceEarlyBird !== null && (!okInt(input.priceEarlyBird) || input.priceEarlyBird > input.priceNormal)) return "Harga early bird tidak boleh di atas harga normal.";
   if (input.priceEarlyBird !== null && !(input.earlyBirdUntil && DAY_RE.test(input.earlyBirdUntil))) return "Isi batas tanggal early bird.";
   if (input.minDp > input.priceNormal) return "Minimal DP tidak boleh di atas harga paket.";
-  if (input.crew?.some((c) => !c.memberId || (c.role !== "host" && c.role !== "photographer"))) return "Peran host / fotografer tidak dikenal.";
+  if (input.crew && invalidCrew(input.crew)) return "Host / fotografer tidak valid.";
   if (input.status === "published" && input.priceNormal <= 0) return "Isi harga paket normal sebelum dipublikasikan.";
   for (const [i, a] of input.activities.entries()) {
     const n = `Activity ${i + 1}`;
@@ -208,23 +211,9 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
 
   // Host & fotografer trip → session_hosts di setiap activity trip (member host melihat activity-nya di
   // My Activities walau tidak ikut main, plus akses Panel Host). Trip sudah tersimpan; gagal di sini dilaporkan.
-  let hostWarning = "";
-  if (input.crew) {
-    const crew = [...new Map(input.crew.map((c) => [c.memberId, c])).values()];
-    const sessionIds = (savedSessions ?? []).map((s) => s.id as string);
-    if (sessionIds.length) {
-      const keep = crew.length ? crew.map((c) => c.memberId).join(",") : "00000000-0000-0000-0000-000000000000";
-      const { error: hostDelete } = await supabase.from("session_hosts").delete().in("session_id", sessionIds).not("member_id", "in", `(${keep})`);
-      const { error: hostUpsert } = crew.length
-        ? await supabase
-            .from("session_hosts")
-            .upsert(sessionIds.flatMap((sessionId) => crew.map((c) => ({ session_id: sessionId, member_id: c.memberId, role: c.role, assigned_by: auth.userId }))), { onConflict: "session_id,member_id" })
-        : { error: null };
-      const hostError = hostDelete ?? hostUpsert;
-      // Bukan ok:false — trip & versinya sudah tersimpan; form harus tetap memakai versi baru.
-      if (hostError) hostWarning = ` Host gagal disimpan (${hostError.message}) — coba simpan lagi.`;
-    }
-  }
+  // Bukan ok:false — trip & versinya sudah tersimpan; form harus tetap memakai versi baru.
+  const hostError = input.crew ? await syncSessionHosts((savedSessions ?? []).map((s) => s.id as string), input.crew, auth.userId) : null;
+  const hostWarning = hostError ? ` Host gagal disimpan (${hostError}) — coba simpan lagi.` : "";
 
   await audit(auth.userId, `${input.id ? "mengubah" : "membuat"} trip ${tripRow.title}`, "trip", id);
   refreshPaths(...PUBLIC_SESSION_PATHS, "/admin/activities", `/admin/activities/trip/${id}`);

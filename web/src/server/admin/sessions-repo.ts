@@ -179,6 +179,7 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
   const seed = Number(id.replace(/\D/g, "")) || 0;
   return {
     ...row,
+    tripId: s.tripId,
     description: s.description,
     coverPath: s.coverPath ?? null,
     court: s.court,

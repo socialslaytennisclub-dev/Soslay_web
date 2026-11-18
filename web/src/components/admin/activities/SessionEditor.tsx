@@ -1004,20 +1004,26 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                   <span className={styles.personText}>
                     <span className={styles.personName}>{h.name}</span>
                     <span className={styles.crewMeta}>
-                      <label className={styles.roleSelect}>
-                        <span className="visually-hidden">Peran {h.name}</span>
-                        <select value={h.role} onChange={(e) => setHosts((list) => list.map((x) => (x.memberId === h.memberId ? { ...x, role: e.target.value as SessionHost["role"] } : x)))}>
-                          <option value="host">Host</option>
-                          <option value="photographer">Fotografer</option>
-                        </select>
-                        <AdminIcon name="caret-down" size={12} className={styles.roleCaret} />
-                      </label>
+                      {session.tripId ? (
+                        <span className={styles.muted}>{h.role === "host" ? "Host" : "Fotografer"}</span>
+                      ) : (
+                        <label className={styles.roleSelect}>
+                          <span className="visually-hidden">Peran {h.name}</span>
+                          <select value={h.role} onChange={(e) => setHosts((list) => list.map((x) => (x.memberId === h.memberId ? { ...x, role: e.target.value as SessionHost["role"] } : x)))}>
+                            <option value="host">Host</option>
+                            <option value="photographer">Fotografer</option>
+                          </select>
+                          <AdminIcon name="caret-down" size={12} className={styles.roleCaret} />
+                        </label>
+                      )}
                       <span className={styles.muted}>member {h.code}</span>
                     </span>
                   </span>
-                  <button type="button" className={styles.iconButton} aria-label={`Hapus ${h.name}`} onClick={() => setHosts((list) => list.filter((x) => x.memberId !== h.memberId))}>
-                    <AdminIcon name="x" size={14} />
-                  </button>
+                  {!session.tripId && (
+                    <button type="button" className={styles.iconButton} aria-label={`Hapus ${h.name}`} onClick={() => setHosts((list) => list.filter((x) => x.memberId !== h.memberId))}>
+                      <AdminIcon name="x" size={14} />
+                    </button>
+                  )}
                 </li>
               ))}
               {crew.map((c) => (
@@ -1033,14 +1039,21 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                 </li>
               ))}
             </ul>
-            <CrewDrawer
-              sessionTitle={session.title || title}
-              sessionWhen={sessionWhen}
-              members={members}
-              participantIds={new Set(session.participants.map((p) => p.memberId).filter((id): id is string => Boolean(id)))}
-              exclude={new Set(hosts.map((h) => h.memberId))}
-              onAdd={(c) => setHosts((list) => [...list, c])}
-            />
+            {session.tripId ? (
+              // Activity trip: host & fotografer member diatur sekali di editor trip (berlaku untuk semua activity-nya).
+              <span className={styles.muted}>
+                Host & fotografer member activity ini diatur di <Link href={`/admin/activities/trip/${session.tripId}`}>editor trip</Link>.
+              </span>
+            ) : (
+              <CrewDrawer
+                sessionTitle={session.title || title}
+                sessionWhen={sessionWhen}
+                members={members}
+                participantIds={new Set(session.participants.map((p) => p.memberId).filter((id): id is string => Boolean(id)))}
+                exclude={new Set(hosts.map((h) => h.memberId))}
+                onAdd={(c) => setHosts((list) => [...list, c])}
+              />
+            )}
             {hosts.some((h) => h.role === "host") && (
               <span className={styles.muted}>Host member bisa input skor, atur line-up & check-in hanya untuk sesi ini. Akses berakhir otomatis saat sesi diakhiri.</span>
             )}

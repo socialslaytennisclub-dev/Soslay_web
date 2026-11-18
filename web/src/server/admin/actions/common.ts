@@ -81,3 +81,30 @@ export function refreshPaths(...paths: RefreshPath[]) {
 
 export const fail = (error: string): ActionResult => ({ ok: false, error });
 export const done = (message: string): ActionResult => ({ ok: true, message });
+
+// ── Host & fotografer member (session_hosts) ────────────────────────────────
+export type CrewMemberInput = { memberId: string; role: "host" | "photographer" };
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Id member harus UUID (ikut masuk filter PostgREST) dan perannya dikenal. */
+export const invalidCrew = (crew: CrewMemberInput[]) => crew.some((c) => !UUID_RE.test(c.memberId) || (c.role !== "host" && c.role !== "photographer"));
+
+/**
+ * Samakan session_hosts di `sessionIds` dengan `crew`. Upsert dulu, baru hapus yang tidak ada di daftar —
+ * gagal di tengah tidak pernah meninggalkan sesi tanpa host lamanya. Mengembalikan pesan error, atau null.
+ */
+export async function syncSessionHosts(sessionIds: string[], crew: CrewMemberInput[], assignedBy: string): Promise<string | null> {
+  if (!sessionIds.length) return null;
+  const supabase = await createSupabaseServerClient();
+  const unique = [...new Map(crew.map((c) => [c.memberId, c])).values()];
+  if (unique.length) {
+    const rows = sessionIds.flatMap((sessionId) => unique.map((c) => ({ session_id: sessionId, member_id: c.memberId, role: c.role, assigned_by: assignedBy })));
+    const { error } = await supabase.from("session_hosts").upsert(rows, { onConflict: "session_id,member_id" });
+    if (error) return error.message;
+  }
+  let removal = supabase.from("session_hosts").delete().in("session_id", sessionIds);
+  if (unique.length) removal = removal.not("member_id", "in", `(${unique.map((c) => c.memberId).join(",")})`);
+  const { error } = await removal;
+  return error?.message ?? null;
+}
