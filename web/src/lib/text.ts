@@ -5,6 +5,12 @@ export function initials(name: string): string {
   return words[0].slice(0, 2).toUpperCase();
 }
 
+/** "@user" dari isian bebas ("user", "@user", "instagram.com/user"). */
+export function normalizeHandle(raw: string): string {
+  const h = raw.trim().replace(/^https?:\/\/[^/]+\//, "").replace(/^@+/, "").replace(/\/.*$/, "");
+  return h ? `@${h}` : "";
+}
+
 /** "Faqih Muflihun" → "Faqih". */
 export const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 

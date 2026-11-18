@@ -13,7 +13,7 @@ const coverVars = {
   "--cover-origin": coverFrame.mobileOrigin,
 } as CSSProperties;
 
-type HeaderData ={ name: string; username: string; email: string; tier: string; memberSince: string; memberId: string; photo?: string | null };
+type HeaderData = { name: string; username: string; email: string; tier: string; memberSince: string; memberId: string; photo?: string | null };
 
 /**
  * Figma 25:2602 — cover foto, avatar menimpa cover, nama + meta, tier, aksi. Dipakai semua tab member.

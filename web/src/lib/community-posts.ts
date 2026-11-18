@@ -55,8 +55,4 @@ export function postLinkError(platform: PostPlatform, href: string): string | nu
   return full || short ? null : "Link harus video TikTok, mis. https://www.tiktok.com/@user/video/…";
 }
 
-/** "@user" dari isian admin ("user", "@user", "instagram.com/user"). */
-export function normalizeHandle(raw: string): string {
-  const h = raw.trim().replace(/^https?:\/\/[^/]+\//, "").replace(/^@+/, "").replace(/\/.*$/, "");
-  return h ? `@${h}` : "";
-}
+export { normalizeHandle } from "./text";

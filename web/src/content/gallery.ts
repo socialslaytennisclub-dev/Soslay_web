@@ -3,7 +3,7 @@
  * Foto dari Figma "Vanue detail" (25:917), semuanya diambil di Common Grounds Menteng.
  */
 
-import { memberLabel } from "@/lib/member-label";
+import { memberTag } from "@/lib/member-label";
 
 export type AvatarTone = "lime" | "pink" | "indigo";
 
@@ -29,10 +29,10 @@ export type GalleryPhoto = {
 };
 
 const members = {
-  dimas: { label: memberLabel("Dimas", "dimasf"), initial: "D", tone: "lime" },
-  felisya: { label: memberLabel("Felisya", "felisyafernanda"), initial: "F", tone: "pink", verified: true },
-  rizky: { label: memberLabel("Rizky", "rizkyramadhan"), initial: "R", tone: "lime" },
-  arya: { label: memberLabel("Arya"), initial: "A", tone: "indigo", verified: true },
+  dimas: { ...memberTag("Dimas", "dimasf"), tone: "lime" },
+  felisya: { ...memberTag("Felisya", "felisyafernanda"), tone: "pink", verified: true },
+  rizky: { ...memberTag("Rizky", "rizkyramadhan"), tone: "lime" },
+  arya: { ...memberTag("Arya"), tone: "indigo", verified: true },
 } satisfies Record<string, TaggedMember>;
 
 const DF = [members.dimas, members.felisya];

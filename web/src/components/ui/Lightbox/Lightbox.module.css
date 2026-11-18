@@ -106,11 +106,13 @@
   margin-top: calc(var(--space-8) - var(--space-16));
 }
 
-.person > :not(.handle) {
+/* Hanya teks label yang mengecil / turun baris; avatar & centang tetap utuh. */
+.personAvatar {
   flex-shrink: 0;
 }
 
 .verified {
+  flex-shrink: 0;
   color: var(--color-lime-400);
 }
 
