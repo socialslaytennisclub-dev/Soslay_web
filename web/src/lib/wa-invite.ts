@@ -79,3 +79,102 @@ export function signupWaLink(person: { name: string; phone: string }): string | 
 export function memberInviteWaLink(person: { name: string; phone: string }, sessionTitle: string): string | null {
   return waLink(person.phone, memberInviteMessage(person.name, sessionTitle));
 }
+
+/**
+ * Pengingat bayar order Shop (admin → customer, ikon chat di panel order): template diminta 19 Nov 2026.
+ * Semua isian dari data order; `total` dikirim apa adanya supaya 3 digit kode unik ikut.
+ */
+export function orderPaymentReminderMessage(o: {
+  name: string;
+  code: string;
+  products: string[];
+  /** "J&T Express — Reguler · Rp18.000" / "Free Pickup di Mabar Session · Min, 23 Nov 2026 07.00 · Rana Grounds". */
+  shipping: string;
+  total: string;
+  bank: { short: string; accountNo: string; accountName: string };
+  deadline: string | null;
+}): string {
+  return [
+    `Halo Kak ${firstName(o.name) || o.name}! 👋`,
+    "",
+    "Terima kasih sudah order di Soslay 💚 Pesanan Kakak sedang menunggu pembayaran:",
+    "",
+    `🧾 *Order #${o.code}*`,
+    ...o.products.map((p) => `🛍️ ${p}`),
+    `🚚 ${o.shipping}`,
+    "",
+    `💰 *Total transfer: ${o.total}*`,
+    "_(mohon transfer persis sampai 3 digit terakhir ya Kak)_",
+    "",
+    "Transfer ke:",
+    `🏦 ${o.bank.short} — ${o.bank.accountNo}`,
+    `a.n. ${o.bank.accountName}`,
+    "",
+    "Setelah transfer, jangan lupa *upload bukti transfer* di sini ya Kak:",
+    `👉 ${PUBLIC_SITE_URL}/akun/pesanan/${encodeURIComponent(o.code)}`,
+    ...(o.deadline ? ["", `Pesanan otomatis batal kalau belum dibayar sampai *${o.deadline} WIB*.`] : []),
+    "",
+    "Ada pertanyaan? Langsung balas chat ini aja 🙌",
+  ].join("\n");
+}
+
+const greetKak = (name: string) => `Halo Kak ${firstName(name) || name}!`;
+
+/** "A", "A & B", "A, B & C" — nama produk dalam satu kalimat. */
+const joinNames = (names: string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`);
+
+/** Order lunas, sedang disiapkan (status Diproses / Perlu dikirim). */
+export function orderProcessingMessage(o: { name: string; code: string; products: string[]; total: string; courier: string }): string {
+  return [
+    `${greetKak(o.name)} 👋`,
+    "",
+    `Pembayaran untuk pesanan *#${o.code}* sudah kami terima, terima kasih ya Kak 💚`,
+    "",
+    ...o.products.map((p) => `🛍️ ${p}`),
+    `💰 Total: ${o.total}`,
+    "",
+    "📦 Status: *Sedang diproses*",
+    `Pesanan Kakak sedang kami siapkan dan packing dengan rapi. Nomor resi akan kami kirimkan begitu paket diserahkan ke kurir ${o.courier}.`,
+    "",
+    "Kalau ada pertanyaan, langsung balas chat ini aja ya Kak 🙌",
+  ].join("\n");
+}
+
+/** Paket sudah diserahkan ke kurir (status Dikirim). Baris resi / link / estimasi dilewati bila datanya kosong. */
+export function orderShippedMessage(o: {
+  name: string;
+  code: string;
+  products: string[];
+  courier: string;
+  tracking: string | null;
+  /** Label baris nomor: "No. resi" (J&T) / "Driver / no. booking" (Instant). */
+  trackingLabel: string;
+  trackingUrl: string | null;
+  eta: string | null;
+}): string {
+  return [
+    `${greetKak(o.name)} 🚚`,
+    "",
+    `Kabar baik, pesanan *#${o.code}* sudah *dikirim* ya Kak!`,
+    "",
+    ...o.products.map((p) => `🛍️ ${p}`),
+    `🚚 Kurir: ${o.courier}`,
+    ...(o.tracking ? [`🔢 ${o.trackingLabel}: *${o.tracking}*`] : []),
+    ...(o.trackingUrl ? ["", "Cek posisi paket di sini:", `👉 ${o.trackingUrl}`] : []),
+    "",
+    `${o.eta ? `Estimasi tiba: ${o.eta}. ` : ""}Kalau paket belum sampai${o.eta ? " sesuai estimasi" : ""} atau ada kendala di pengiriman, kabari kami ya Kak 🙏`,
+  ].join("\n");
+}
+
+/** Pesanan selesai. */
+export function orderCompletedMessage(o: { name: string; code: string; productNames: string[] }): string {
+  return [
+    `${greetKak(o.name)} 🎉`,
+    "",
+    `Pesanan *#${o.code}* sudah sampai dan kami tandai *selesai*. Semoga suka dengan ${joinNames(o.productNames)} ya Kak 💚`,
+    "",
+    "Kalau ada yang kurang sesuai (ukuran, warna, atau kondisi barang), kabari kami maksimal 1x24 Jam setelah paket diterima, sertakan foto/video unboxing ya Kak.",
+    "",
+    "Kami juga senang banget kalau Kakak mau share foto pakai outfit-nya di instagram dan tag @socialslayclub & @slayclub.wear 📸 See you on court kak! 🎾",
+  ].join("\n");
+}

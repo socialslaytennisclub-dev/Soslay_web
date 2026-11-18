@@ -80,6 +80,10 @@ function reviewDemo(code: string, review: PaymentReview): ActionResult {
 
 export async function updateOrder(code: string, update: OrderUpdate): Promise<ActionResult> {
   if (update.action === "cancel" && !update.reason.trim()) return fail("Tulis alasan pembatalan.");
+  // Link lacak tampil sebagai tombol di halaman order member → hanya http(s).
+  if (update.action === "ship" && update.trackingUrl?.trim() && !/^https?:\/\/\S+$/i.test(update.trackingUrl.trim())) {
+    return fail("Link lacak harus diawali https:// (mis. https://jet.co.id/track).");
+  }
   if (!isSupabaseConfigured && demoOrders().has(code)) return updateDemo(code, update);
 
   const auth = await requireEditor("orders");

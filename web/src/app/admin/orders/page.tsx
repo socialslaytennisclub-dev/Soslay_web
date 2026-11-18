@@ -10,6 +10,7 @@ import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { formatRupiahShort, PAYMENT_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { getOrder, listOrders } from "@/server/admin/orders-repo";
+import { getShopSettings } from "@/server/shop/settings";
 import type { OrdersQuery, OrdersTab, PaymentStatus } from "@/server/admin/types";
 import { one } from "@/server/admin/query";
 import pageStyles from "../page.module.css";
@@ -51,7 +52,10 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
   const result = await listOrders(query);
   // Tanpa ?order= panel menampilkan order teratas, tapi hanya di desktop.
   const selectedCode = query.order ?? result.items[0]?.code;
-  const order = selectedCode ? await getOrder(selectedCode) : null;
+  const [order, shopSettings] = await Promise.all([selectedCode ? getOrder(selectedCode) : null, getShopSettings()]);
+  // Estimasi tiba J&T untuk template WA "dikirim": dari tarif kota tujuan (Pengaturan Shop).
+  const jntRate = order?.shop?.method === "jnt" ? shopSettings.rates.find((r) => r.city === order.shop?.recipient.city) : undefined;
+  const jntEta = jntRate?.eta ? `${jntRate.eta} hari kerja` : null;
   const { kpis } = result;
 
   return (
@@ -87,7 +91,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
 
           {order && (
             <div className={cx(styles.panelSlot, !query.order && styles.panelAuto)}>
-              <OrderPanel key={order.code} order={order} closeHref={query.order ? href(query, { order: undefined }) : undefined} />
+              <OrderPanel key={order.code} order={order} bank={shopSettings.bank} jntEta={jntEta} closeHref={query.order ? href(query, { order: undefined }) : undefined} />
             </div>
           )}
         </div>
