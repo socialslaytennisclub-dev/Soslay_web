@@ -1,5 +1,6 @@
 import "server-only";
-import { memberLabel, photosForVenue, type AvatarTone, type GalleryPhoto } from "@/content/gallery";
+import { photosForVenue, type AvatarTone, type GalleryPhoto } from "@/content/gallery";
+import { memberInitial, memberLabel } from "@/lib/member-label";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabasePublicClient } from "@/lib/supabase/public";
 
@@ -30,10 +31,11 @@ export async function getVenueGallery(venueSlug: string, venueName: string): Pro
     return photosForVenue(venueSlug);
   }
   return ((data ?? []) as Row[]).map((r) => {
-    const members = r.members.map((m) => {
-      const name = m.first_name || (m.instagram ?? "").replace(/^@/, "") || "Member";
-      return { label: memberLabel(name, m.first_name ? m.instagram : null), initial: name.charAt(0).toUpperCase(), tone: TONES[m.tone % TONES.length] ?? TONES[0] };
-    });
+    const members = r.members.map((m) => ({
+      label: memberLabel(m.first_name, m.instagram),
+      initial: memberInitial(m.first_name, m.instagram),
+      tone: TONES[m.tone % TONES.length] ?? TONES[0],
+    }));
     return {
       id: r.id,
       venueSlug,

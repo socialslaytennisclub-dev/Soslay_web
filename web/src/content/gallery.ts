@@ -3,6 +3,8 @@
  * Foto dari Figma "Vanue detail" (25:917), semuanya diambil di Common Grounds Menteng.
  */
 
+import { memberLabel } from "@/lib/member-label";
+
 export type AvatarTone = "lime" | "pink" | "indigo";
 
 export type TaggedMember = {
@@ -25,12 +27,6 @@ export type GalleryPhoto = {
   members: TaggedMember[];
   caption: string;
 };
-
-/** "Rizky (@kiu.kiu)" bila ada Instagram, kalau tidak "Rizky". */
-export function memberLabel(name: string, instagram?: string | null): string {
-  const ig = instagram?.trim().replace(/^@/, "");
-  return ig ? `${name} (@${ig})` : name;
-}
 
 const members = {
   dimas: { label: memberLabel("Dimas", "dimasf"), initial: "D", tone: "lime" },

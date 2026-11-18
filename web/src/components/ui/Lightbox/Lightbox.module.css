@@ -94,6 +94,9 @@
   font-weight: var(--weight-bold);
   font-size: 16px;
   line-height: 1.4;
+  /* "Nama (@instagram)" bisa panjang: boleh turun baris, jangan keluar kartu */
+  min-width: 0;
+  overflow-wrap: break-word;
 }
 
 .person {
@@ -101,6 +104,10 @@
   align-items: center;
   gap: var(--space-8);
   margin-top: calc(var(--space-8) - var(--space-16));
+}
+
+.person > :not(.handle) {
+  flex-shrink: 0;
 }
 
 .verified {
