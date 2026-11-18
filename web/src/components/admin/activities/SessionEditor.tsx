@@ -21,6 +21,7 @@ import { FormCard, MultiChips, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge, desktopOnlyClass, MemberAvatar, MobileCard, MobileCardList, PickerInput } from "../ui/AdminUI";
 import { CrewDrawer } from "./CrewDrawer";
+import { HostList } from "./HostList";
 import { PaymentCell, useParticipantPayment, viaLabel } from "./ParticipantPayment";
 import { ParticipantsDrawer } from "./ParticipantsDrawer";
 import { WaInviteLink } from "./WaInviteLink";
@@ -997,35 +998,8 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
           </FormCard>
 
           <FormCard title="Host & fotografer">
-            <ul className={styles.crew}>
-              {hosts.map((h) => (
-                <li key={h.memberId}>
-                  <MemberAvatar name={h.name} size={32} />
-                  <span className={styles.personText}>
-                    <span className={styles.personName}>{h.name}</span>
-                    <span className={styles.crewMeta}>
-                      {session.tripId ? (
-                        <span className={styles.muted}>{h.role === "host" ? "Host" : "Fotografer"}</span>
-                      ) : (
-                        <label className={styles.roleSelect}>
-                          <span className="visually-hidden">Peran {h.name}</span>
-                          <select value={h.role} onChange={(e) => setHosts((list) => list.map((x) => (x.memberId === h.memberId ? { ...x, role: e.target.value as SessionHost["role"] } : x)))}>
-                            <option value="host">Host</option>
-                            <option value="photographer">Fotografer</option>
-                          </select>
-                          <AdminIcon name="caret-down" size={12} className={styles.roleCaret} />
-                        </label>
-                      )}
-                      <span className={styles.muted}>member {h.code}</span>
-                    </span>
-                  </span>
-                  {!session.tripId && (
-                    <button type="button" className={styles.iconButton} aria-label={`Hapus ${h.name}`} onClick={() => setHosts((list) => list.filter((x) => x.memberId !== h.memberId))}>
-                      <AdminIcon name="x" size={14} />
-                    </button>
-                  )}
-                </li>
-              ))}
+            {/* Activity trip: host & fotografer member diatur sekali di editor trip (berlaku untuk semua activity-nya). */}
+            <HostList hosts={hosts} onChange={session.tripId ? undefined : setHosts}>
               {crew.map((c) => (
                 <li key={`${c.name}-${c.role}`}>
                   <MemberAvatar name={c.name} size={32} />
@@ -1038,9 +1012,8 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
                   </button>
                 </li>
               ))}
-            </ul>
+            </HostList>
             {session.tripId ? (
-              // Activity trip: host & fotografer member diatur sekali di editor trip (berlaku untuk semua activity-nya).
               <span className={styles.muted}>
                 Host & fotografer member activity ini diatur di <Link href={`/admin/activities/trip/${session.tripId}`}>editor trip</Link>.
               </span>

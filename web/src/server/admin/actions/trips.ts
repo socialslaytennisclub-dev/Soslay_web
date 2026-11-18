@@ -203,21 +203,24 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
     supabase.from("sessions").select("id, trip_key").eq("trip_id", id),
     supabase.from("trips").select("form_version").eq("id", id).maybeSingle(),
   ]);
-  const byKey = new Map((savedSessions ?? []).flatMap((s) => (s.trip_key ? [[s.trip_key as string, s.id as string] as const] : [])));
+  const sessions = (savedSessions ?? []) as { id: string; trip_key: string | null }[];
+  const byKey = new Map<string, string>();
+  for (const s of sessions) if (s.trip_key) byKey.set(s.trip_key, s.id);
   const activityIds = Object.fromEntries(activities.flatMap((a) => {
     const sessionId = byKey.get(a.key);
     return sessionId ? [[a.key, sessionId]] : [];
   }));
 
   // Host & fotografer trip → session_hosts di setiap activity trip (member host melihat activity-nya di
-  // My Activities walau tidak ikut main, plus akses Panel Host). Trip sudah tersimpan; gagal di sini dilaporkan.
-  // Bukan ok:false — trip & versinya sudah tersimpan; form harus tetap memakai versi baru.
-  const hostError = input.crew ? await syncSessionHosts((savedSessions ?? []).map((s) => s.id as string), input.crew, auth.userId) : null;
-  const hostWarning = hostError ? ` Host gagal disimpan (${hostError}) — coba simpan lagi.` : "";
+  // My Activities walau tidak ikut main, plus akses Panel Host). Bukan ok:false bila gagal — trip & versinya
+  // sudah tersimpan; form harus tetap memakai versi baru.
+  const hostError = input.crew ? await syncSessionHosts(sessions.map((s) => s.id), input.crew, auth.userId) : null;
 
   await audit(auth.userId, `${input.id ? "mengubah" : "membuat"} trip ${tripRow.title}`, "trip", id);
   refreshPaths(...PUBLIC_SESSION_PATHS, "/admin/activities", `/admin/activities/trip/${id}`);
-  return { ok: true, id, activityIds, version: (savedTrip?.form_version as number | undefined) ?? undefined, message: (input.status === "published" ? "Trip dipublikasikan." : "Trip tersimpan sebagai draft.") + hostWarning };
+  const saved = input.status === "published" ? "Trip dipublikasikan." : "Trip tersimpan sebagai draft.";
+  const message = hostError ? `${saved} Host gagal disimpan (${hostError}) — coba simpan lagi.` : saved;
+  return { ok: true, id, activityIds, version: (savedTrip?.form_version as number | undefined) ?? undefined, message };
 }
 
 export async function archiveTrip(id: string): Promise<ActionResult> {

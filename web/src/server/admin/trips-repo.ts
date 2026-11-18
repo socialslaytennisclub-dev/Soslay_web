@@ -5,6 +5,7 @@ import { wibParts } from "@/lib/format";
 import { bookingMoney, todayWib, TRIP_PLACEHOLDER, type TripPaymentKind } from "@/lib/trips";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { crewSignature } from "@/lib/crew";
 import { getDataset, type Dataset } from "./dataset";
 import { getPaymentAccounts } from "./finance-repo";
 import { toRow } from "./session-rows";
@@ -145,25 +146,25 @@ export async function getTrip(id: string): Promise<TripDetail | null> {
  * activity punya crew & peran yang sama (mis. diatur per activity sebelum fitur ini) — editor memberi tahu bahwa
  * menyimpan perubahan crew akan menyamakannya. Gagal memuat → error (jangan tampil kosong lalu ikut tersimpan).
  */
-export async function tripCrew(trip: TripDetail): Promise<{ hosts: SessionHost[]; mixed: boolean }> {
-  const sessionIds = trip.activities.map((a) => a.id);
-  if (!isSupabaseConfigured || !sessionIds.length) return { hosts: [], mixed: false };
+export async function tripCrew(tripId: string): Promise<{ hosts: SessionHost[]; mixed: boolean }> {
+  if (!isSupabaseConfigured) return { hosts: [], mixed: false };
   const supabase = await createSupabaseServerClient();
-  const [{ data, error }, d] = await Promise.all([
-    supabase.from("session_hosts").select("session_id, member_id, role").in("session_id", sessionIds).returns<{ session_id: string; member_id: string; role: SessionHost["role"] | null }[]>(),
+  // Paralel dengan getTrip di halaman (listTripDetails & dataset di-cache per request).
+  const [trip, { data, error }, d] = await Promise.all([
+    getTrip(tripId),
+    supabase.from("session_hosts").select("session_id, member_id, role, sessions!inner(trip_id)").eq("sessions.trip_id", tripId).returns<{ session_id: string; member_id: string; role: SessionHost["role"] | null }[]>(),
     getDataset(),
   ]);
   if (error) throw new Error(`Gagal memuat host trip: ${error.message}`);
-  const signature = (sessionId: string) =>
-    (data ?? [])
-      .filter((h) => h.session_id === sessionId)
-      .map((h) => `${h.member_id}:${h.role ?? "host"}`)
-      .sort()
-      .join(",");
-  const mixed = new Set(sessionIds.map(signature)).size > 1;
+  const bySession = new Map<string, Pick<SessionHost, "memberId" | "role">[]>();
   // Peran yang ditampilkan: host bila ia host di activity mana pun (hanya berlaku kalau admin mengubah crew).
   const roles = new Map<string, SessionHost["role"]>();
-  for (const h of data ?? []) if (roles.get(h.member_id) !== "host") roles.set(h.member_id, h.role ?? "host");
+  for (const h of data ?? []) {
+    const role = h.role ?? "host";
+    bySession.set(h.session_id, [...(bySession.get(h.session_id) ?? []), { memberId: h.member_id, role }]);
+    if (roles.get(h.member_id) !== "host") roles.set(h.member_id, role);
+  }
+  const mixed = new Set((trip?.activities ?? []).map((a) => crewSignature(bySession.get(a.id) ?? []))).size > 1;
   const hosts = [...roles].map(([memberId, role]): SessionHost => {
     const member = d.memberById.get(memberId);
     return { memberId, name: member?.fullName ?? "Member", code: member?.memberCode ?? "", role };

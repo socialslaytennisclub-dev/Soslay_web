@@ -13,9 +13,8 @@ export const metadata: Metadata = { title: "Edit trip" };
 /** Admin / 05x Edit trip — tab Info & activities · Rundown (anchor) · Peserta & pembayaran. */
 export default async function AdminTripPage({ params }: PageProps<"/admin/activities/trip/[id]">) {
   const { id } = await params;
-  const [trip, venues, candidates, members] = await Promise.all([getTrip(id), venueOptions(), tripCandidates(id), memberChoices()]);
+  const [trip, venues, candidates, members, crew] = await Promise.all([getTrip(id), venueOptions(), tripCandidates(id), memberChoices(), tripCrew(id)]);
   if (!trip) notFound();
-  const crew = await tripCrew(trip);
   return (
     <>
       <AdminTopbar breadcrumb={`CMS / Activities / ${trip.title}`} title={trip.title} />

@@ -8,17 +8,19 @@ import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { amountDigits, amountDisplay } from "@/lib/finance/format";
 import { wibParts } from "@/lib/format";
+import { crewSignature } from "@/lib/crew";
 import { addDays, dayLabel, settlementDue, shortDate, TRIP_PLACEHOLDER, TRIP_TYPE, tripDates, tripDays, tripRange } from "@/lib/trips";
 import { discardSessionUploads, uploadSessionCover } from "@/server/admin/actions/sessions";
 import { saveTrip, type TripActivityInput, type TripInput, type TripRundownInput } from "@/server/admin/actions/trips";
 import type { MemberChoice, SessionHost, TripCandidate, TripDetail } from "@/server/admin/types";
 import { FormCard, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
-import { AdminButton, Badge, MemberAvatar, PickerInput } from "../ui/AdminUI";
+import { AdminButton, Badge, PickerInput } from "../ui/AdminUI";
 import { FinanceModal } from "../finance/FinanceModal";
 import { toast } from "../ui/Toaster";
 import { useUploadCleanup } from "../ui/useUploadCleanup";
 import { CrewDrawer } from "./CrewDrawer";
+import { HostList } from "./HostList";
 import styles from "./SessionEditor.module.css";
 import trip from "./Trip.module.css";
 
@@ -41,12 +43,6 @@ type Props = {
   /** Host & fotografer tersimpan (gabungan semua activity); `mixed` = belum sama di semua activity. Trip baru: kosong. */
   crew?: { hosts: SessionHost[]; mixed: boolean };
 };
-
-const crewKey = (list: SessionHost[]) =>
-  list
-    .map((h) => `${h.memberId}:${h.role}`)
-    .sort()
-    .join(",");
 
 /** Admin / 05x Buat trip — Tennis Escape (Figma 05x, 05x-4, 05x-5). */
 export function TripEditor({ initial, venues, types, candidates, members, crew }: Props) {
@@ -72,9 +68,9 @@ export function TripEditor({ initial, venues, types, candidates, members, crew }
   const [quota, setQuota] = useState(String(initial?.packageQuota ?? ""));
   const [minDp, setMinDp] = useState(String(initial?.minDp ?? ""));
   const [inclusions, setInclusions] = useState<string[]>(initial?.inclusions ?? []);
-  const [hosts, setHosts] = useState<SessionHost[]>(crew?.hosts ?? []);
-  // Crew hanya dikirim bila diubah di form ini — simpan trip biasa tidak menimpa session_hosts activity-nya.
-  const crewChanged = crewKey(hosts) !== crewKey(crew?.hosts ?? []);
+  const savedHosts = crew?.hosts ?? [];
+  const [hosts, setHosts] = useState<SessionHost[]>(savedHosts);
+  const participantIds = useMemo(() => new Set((initial?.bookings ?? []).flatMap((b) => (b.memberId && !b.cancelled ? [b.memberId] : []))), [initial]);
   const [newInclusion, setNewInclusion] = useState("");
   const [activities, setActivities] = useState<ActivityForm[]>(
     () =>
@@ -104,6 +100,16 @@ export function TripEditor({ initial, venues, types, candidates, members, crew }
   const [saving, startSaving] = useTransition();
   const [uploading, startUploading] = useTransition();
   const sold = initial?.bookings.filter((b) => !b.cancelled).length ?? 0;
+  // Crew dikirim hanya bila daftarnya diubah, atau ada activity baru (ikut mendapat host trip) — simpan trip
+  // biasa tidak menimpa session_hosts activity-nya.
+  const sendCrew = crewSignature(hosts) !== crewSignature(savedHosts) || (hosts.length > 0 && activities.some((a) => !a.id));
+  const crewHint = crew?.mixed
+    ? sendCrew
+      ? "Saat disimpan, crew di atas berlaku sama untuk semua activity trip ini (pengaturan per activity sebelumnya diganti)."
+      : "Host / fotografer belum sama di semua activity (diatur per activity sebelumnya). Ubah daftar di atas untuk menyamakannya."
+    : hosts.some((h) => h.role === "host")
+      ? "Host melihat semua activity trip ini di My Activities (chip HOST) walau tidak membeli paket, dan mendapat akses Panel Host di tiap activity."
+      : "Tambahkan host supaya trip ini tampil di My Activities host-nya.";
 
   const days = startsOn && endsOn && endsOn >= startsOn ? tripDates(startsOn, endsOn) : [];
   const activeDay = days.includes(rundownDay) ? rundownDay : (days[0] ?? "");
@@ -206,7 +212,7 @@ export function TripEditor({ initial, venues, types, candidates, members, crew }
         kuyUrl: a.kuyUrl,
       }),
     ),
-    crew: crewChanged ? hosts.map((h) => ({ memberId: h.memberId, role: h.role })) : undefined,
+    crew: sendCrew ? hosts.map(({ memberId, role }) => ({ memberId, role })) : undefined,
     rundown: days.flatMap((d) => rundown.filter((r) => r.day === d).map((r): TripRundownInput => ({ day: r.day, time: r.time, title: r.title, location: r.location, activityKey: r.activityKey }))),
   });
 
@@ -674,52 +680,16 @@ export function TripEditor({ initial, venues, types, candidates, members, crew }
           </FormCard>
 
           <FormCard title="Host & fotografer" subtitle="Berlaku untuk semua activity di trip ini">
-            {hosts.length > 0 && (
-              <ul className={styles.crew}>
-                {hosts.map((h) => (
-                  <li key={h.memberId}>
-                    <MemberAvatar name={h.name} size={32} />
-                    <span className={styles.personText}>
-                      <span className={styles.personName}>{h.name}</span>
-                      <span className={styles.crewMeta}>
-                        <label className={styles.roleSelect}>
-                          <span className="visually-hidden">Peran {h.name}</span>
-                          <select value={h.role} onChange={(e) => setHosts((list) => list.map((x) => (x.memberId === h.memberId ? { ...x, role: e.target.value as SessionHost["role"] } : x)))}>
-                            <option value="host">Host</option>
-                            <option value="photographer">Fotografer</option>
-                          </select>
-                          <AdminIcon name="caret-down" size={12} className={styles.roleCaret} />
-                        </label>
-                        {h.code && <span className={styles.muted}>member {h.code}</span>}
-                      </span>
-                    </span>
-                    <button type="button" className={styles.iconButton} aria-label={`Hapus ${h.name}`} onClick={() => setHosts((list) => list.filter((x) => x.memberId !== h.memberId))}>
-                      <AdminIcon name="x" size={14} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <HostList hosts={hosts} onChange={setHosts} />
             <CrewDrawer
               sessionTitle={title || "Trip baru"}
               sessionWhen={startsOn && endsOn ? tripRange(startsOn, endsOn) : "Tanggal belum diisi"}
               members={members}
-              participantIds={new Set((initial?.bookings ?? []).flatMap((b) => (b.memberId && !b.cancelled ? [b.memberId] : [])))}
+              participantIds={participantIds}
               exclude={new Set(hosts.map((h) => h.memberId))}
               onAdd={(c) => setHosts((list) => [...list, c])}
             />
-            {crew?.mixed && (
-              <span className={styles.muted}>
-                {crewChanged
-                  ? "Saat disimpan, crew di atas berlaku sama untuk semua activity trip ini (pengaturan per activity sebelumnya diganti)."
-                  : "Host / fotografer belum sama di semua activity (diatur per activity sebelumnya). Ubah daftar di atas untuk menyamakannya."}
-              </span>
-            )}
-            <span className={styles.muted}>
-              {hosts.some((h) => h.role === "host")
-                ? "Host melihat semua activity trip ini di My Activities (chip HOST) walau tidak membeli paket, dan mendapat akses Panel Host di tiap activity."
-                : "Tambahkan host supaya trip ini tampil di My Activities host-nya."}
-            </span>
+            <span className={styles.muted}>{crewHint}</span>
           </FormCard>
         </aside>
       </div>
