@@ -59,6 +59,7 @@ export const venueList: Venue[] = [
 
 export const venueCities = [
   { slug: "jakarta", label: "Jakarta", city: "Jakarta" },
+  { slug: "tangerang", label: "Tangerang", city: "Tangerang" },
   { slug: "bali", label: "Bali", city: "Bali" },
 ] as const satisfies { slug: string; label: string; city: City }[];
 
