@@ -19,9 +19,22 @@
   background: var(--overlay-hero);
 }
 
+/* Foto grup ada di ~45–78% tinggi gambar, watermark di ~89–93%. Ponsel: digeser ke bawah + zoom 1.25
+   supaya pemain lebih besar di atas avatar (avatar menimpa lapangan) dan watermark terpotong.
+   ≥480px: tanpa zoom (kepala bisa terpotong), raket s.d. kaki utuh. */
 .image {
   object-fit: cover;
-  object-position: center 40%;
+  object-position: center 85%;
+  transform: scale(1.25);
+  /* x 66%: grup (17–89% lebar foto) jadi di tengah, jarak kiri = kanan */
+  transform-origin: 66% 40%;
+}
+
+@media (min-width: 480px) {
+  .image {
+    object-position: center 62%;
+    transform: none;
+  }
 }
 
 .profile {
