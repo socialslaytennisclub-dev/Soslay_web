@@ -9,8 +9,8 @@ import { whatsappUrl } from "@/content/social";
 
 /**
  * Trip Tennis Escape milik member (BR-22): banner "Special event · Tennis trip" di My Activities dan halaman
- * trip (/akun/trip/[slug]). Pembeli paket melihat paket, pembayaran, rundown & semua activity; peserta
- * satuan hanya activity yang dibeli + info trip. Tanpa Supabase → trip contoh.
+ * trip (/akun/trip/[slug]). Hanya untuk pembeli paket (paket, pembayaran, rundown & semua activity) dan host
+ * yang di-assign di activity trip (rundown & semua activity, tanpa pembayaran). Tanpa Supabase → trip contoh.
  */
 
 export type MemberTripActivity = { slug: string | null; order: number; title: string; venue: string; day: string; start: string; end: string };
@@ -25,10 +25,12 @@ export type MemberTrip = {
   endsOn: string;
   image: string;
   inclusions: string[];
-  /** Null = peserta satuan (tanpa paket). */
+  /** Null = host trip tanpa paket (tidak ada info pembayaran). */
   package: (BookingMoney & { due: string }) | null;
+  /** Member di-assign sebagai host di activity trip ini (session_hosts, peran host). */
+  host: boolean;
   activities: MemberTripActivity[];
-  /** Kosong untuk peserta satuan / rundown disembunyikan admin. */
+  /** Kosong bila rundown disembunyikan admin (host tetap melihatnya). */
   rundown: MemberTripRundown[];
   /** "Sab 17 Okt · 05.30 Penjemputan di hotel…, 07.00 Lapangan Maya Ubud". */
   next: string | null;
@@ -70,6 +72,7 @@ function demoTrips(): MemberTrip[] {
       image: TRIP_PLACEHOLDER,
       inclusions: demoTrip.inclusions,
       package: { ...money, due: shortDate(settlementDue(demoTrip.startsOn)) },
+      host: false,
       activities,
       rundown,
       next: nextAgenda(rundown, activities, today),
@@ -83,14 +86,17 @@ export const getMyTrips = cache(async (): Promise<MemberTrip[]> => {
   const { supabase, user } = await getMemberSession();
   if (!user) return [];
 
-  // Paket (trip_bookings milik sendiri) + activity trip yang ia ikuti (paket / satuan).
-  const [{ data: bookings }, { data: myBookings }] = await Promise.all([
+  // Card trip hanya untuk pembeli paket (trip_bookings) dan host yang di-assign di activity trip.
+  // Pembeli tiket satuan (booking 1 activity) tidak dapat card trip — cukup kartu activity biasa.
+  const [{ data: bookings }, { data: myBookings }, { data: myHosts }] = await Promise.all([
     supabase.from("trip_bookings").select("id, trip_id").eq("member_id", user.id).is("cancelled_at", null),
     supabase.from("bookings").select("session_id").eq("member_id", user.id).neq("status", "cancelled"),
+    supabase.from("session_hosts").select("session_id").eq("member_id", user.id).eq("role", "host"),
   ]);
-  const sessionIds = (myBookings ?? []).map((b) => b.session_id as string);
-  const { data: tripSessions } = sessionIds.length ? await supabase.from("sessions").select("trip_id").in("id", sessionIds).not("trip_id", "is", null) : { data: [] };
-  const tripIds = [...new Set([...(bookings ?? []).map((b) => b.trip_id as string), ...(tripSessions ?? []).map((s) => s.trip_id as string)])];
+  const hostedIds = (myHosts ?? []).map((h) => h.session_id as string);
+  const { data: hostedSessions } = hostedIds.length ? await supabase.from("sessions").select("trip_id").in("id", hostedIds).not("trip_id", "is", null) : { data: [] };
+  const hostTripIds = new Set((hostedSessions ?? []).map((s) => s.trip_id as string));
+  const tripIds = [...new Set([...(bookings ?? []).map((b) => b.trip_id as string), ...hostTripIds])];
   if (!tripIds.length) return [];
 
   const bookingIds = (bookings ?? []).map((b) => b.id as string);
@@ -101,18 +107,20 @@ export const getMyTrips = cache(async (): Promise<MemberTrip[]> => {
     supabase.from("trip_rundown_items").select("trip_id, day, time_label, title, location, session_id, sort").in("trip_id", tripIds).order("day").order("sort"),
   ]);
   const today = todayWib();
-  const mine = new Set(sessionIds);
+  // Activity yang bisa dibuka detailnya: yang ia booking atau ia host-i.
+  const mine = new Set([...(myBookings ?? []).map((b) => b.session_id as string), ...hostedIds]);
 
   return (trips ?? []).map((t) => {
     const booking = (bookings ?? []).find((b) => b.trip_id === t.id);
+    const host = hostTripIds.has(t.id);
     const all = (sessions ?? []).filter((s) => s.trip_id === t.id).sort((a, b) => (a.trip_order ?? 99) - (b.trip_order ?? 99) || a.starts_at.localeCompare(b.starts_at));
     const order = new Map(all.map((s, i) => [s.id, i + 1]));
-    const activities = all
-      .filter((s) => booking || mine.has(s.id))
-      .map((s) => ({ slug: mine.has(s.id) ? s.slug : null, order: order.get(s.id)!, title: s.title, venue: s.venues?.name ?? "", day: wibParts(s.starts_at).date, start: wibParts(s.starts_at).time, end: wibParts(s.ends_at).time }));
+    // Paket & host melihat semua activity trip.
+    const activities = all.map((s) => ({ slug: mine.has(s.id) ? s.slug : null, order: order.get(s.id)!, title: s.title, venue: s.venues?.name ?? "", day: wibParts(s.starts_at).date, start: wibParts(s.starts_at).time, end: wibParts(s.ends_at).time }));
     const bySession = new Map(all.map((s) => [s.id, s]));
+    // Rundown: pembeli paket (bila ditampilkan admin) dan host (selalu — mereka yang menjalankan acara).
     const items =
-      booking && t.show_rundown
+      host || (booking && t.show_rundown)
         ? (rundown ?? [])
             .filter((r) => r.trip_id === t.id)
             .map((r) => {
@@ -132,6 +140,7 @@ export const getMyTrips = cache(async (): Promise<MemberTrip[]> => {
       image: t.cover_path || all[0]?.cover_path || all[0]?.venues?.cover_path || TRIP_PLACEHOLDER,
       inclusions: booking ? t.inclusions : [],
       package: booking ? { ...bookingMoney(pricing, pays, today), due: shortDate(settlementDue(t.starts_on)) } : null,
+      host,
       activities,
       rundown: items,
       next: nextAgenda(items, activities, today),

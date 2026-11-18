@@ -49,7 +49,7 @@ export function TripPage({ trip }: { trip: MemberTrip }) {
       <div className={styles.content}>
         <section className={styles.card} aria-labelledby="paket-kamu">
           <p className={styles.cardHead}>
-            <span id="paket-kamu">{p ? "Paket kamu" : "Tiket kamu"}</span>
+            <span id="paket-kamu">{p ? "Paket kamu" : "Peran kamu"}</span>
             {p && <span className={cx(styles.status, p.status === "paid" ? styles.statusPaid : styles.statusDue)}>{PAY_STATUS_LABEL[p.status]}</span>}
           </p>
           {p ? (
@@ -76,8 +76,8 @@ export function TripPage({ trip }: { trip: MemberTrip }) {
             </>
           ) : (
             <>
-              <h2 className={styles.cardTitle}>Tiket satuan</h2>
-              <p className={styles.muted}>Kamu terdaftar di {trip.activities.length} activity trip ini. Rundown & fasilitas trip khusus pembeli paket bundling.</p>
+              <h2 className={styles.cardTitle}>Host trip</h2>
+              <p className={styles.muted}>Kamu di-assign sebagai host di trip ini. Rundown & {trip.activities.length} activity-nya ada di bawah.</p>
             </>
           )}
         </section>
