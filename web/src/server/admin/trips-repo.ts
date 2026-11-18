@@ -5,11 +5,12 @@ import { wibParts } from "@/lib/format";
 import { bookingMoney, todayWib, TRIP_PLACEHOLDER, type TripPaymentKind } from "@/lib/trips";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { crewSignature } from "@/lib/crew";
 import { getDataset, type Dataset } from "./dataset";
 import { getPaymentAccounts } from "./finance-repo";
 import { toRow } from "./session-rows";
 import { demoTrip, demoTripBookings, demoTripRundown } from "./trip-demo";
-import type { TripActivity, TripBooking, TripCandidate, TripDetail, TripStatus, TripSummary } from "./types";
+import type { SessionHost, TripActivity, TripBooking, TripCandidate, TripDetail, TripStatus, TripSummary } from "./types";
 
 /**
  * Tennis Escape = Trip (BR-22): trip + activity (sesi bertautan trip_id) + rundown + paket bundling &
@@ -138,6 +139,37 @@ export const listTripDetails = cache(async (): Promise<TripDetail[]> => {
 
 export async function getTrip(id: string): Promise<TripDetail | null> {
   return (await listTripDetails()).find((t) => t.id === id) ?? null;
+}
+
+/**
+ * Host & fotografer trip untuk editor trip: gabungan session_hosts semua activity-nya. `mixed` = tidak semua
+ * activity punya crew & peran yang sama (mis. diatur per activity sebelum fitur ini) — editor memberi tahu bahwa
+ * menyimpan perubahan crew akan menyamakannya. Gagal memuat → error (jangan tampil kosong lalu ikut tersimpan).
+ */
+export async function tripCrew(tripId: string): Promise<{ hosts: SessionHost[]; mixed: boolean }> {
+  if (!isSupabaseConfigured) return { hosts: [], mixed: false };
+  const supabase = await createSupabaseServerClient();
+  // Paralel dengan getTrip di halaman (listTripDetails & dataset di-cache per request).
+  const [trip, { data, error }, d] = await Promise.all([
+    getTrip(tripId),
+    supabase.from("session_hosts").select("session_id, member_id, role, sessions!inner(trip_id)").eq("sessions.trip_id", tripId).returns<{ session_id: string; member_id: string; role: SessionHost["role"] | null }[]>(),
+    getDataset(),
+  ]);
+  if (error) throw new Error(`Gagal memuat host trip: ${error.message}`);
+  const bySession = new Map<string, Pick<SessionHost, "memberId" | "role">[]>();
+  // Peran yang ditampilkan: host bila ia host di activity mana pun (hanya berlaku kalau admin mengubah crew).
+  const roles = new Map<string, SessionHost["role"]>();
+  for (const h of data ?? []) {
+    const role = h.role ?? "host";
+    bySession.set(h.session_id, [...(bySession.get(h.session_id) ?? []), { memberId: h.member_id, role }]);
+    if (roles.get(h.member_id) !== "host") roles.set(h.member_id, role);
+  }
+  const mixed = new Set((trip?.activities ?? []).map((a) => crewSignature(bySession.get(a.id) ?? []))).size > 1;
+  const hosts = [...roles].map(([memberId, role]): SessionHost => {
+    const member = d.memberById.get(memberId);
+    return { memberId, name: member?.fullName ?? "Member", code: member?.memberCode ?? "", role };
+  });
+  return { hosts, mixed };
 }
 
 /** Ringkasan baris induk: paket terjual, peserta satuan, belum lunas, uang masuk & sisa tagihan. */

@@ -9,7 +9,7 @@ import { normalizeBookingUrl, slugify } from "@/lib/text";
 import { discardUploads, isOwnUpload, uploadPublicImage } from "../../storage";
 import { monthKey } from "../time";
 import type { MatchFormat, TennisLevel } from "../types";
-import { audit, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, type ActionResult } from "./common";
+import { audit, invalidCrew, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, syncSessionHosts, type ActionResult, type CrewMemberInput } from "./common";
 
 /**
  * Tulis sesi dari Activity Editor ke Supabase. Izin dicek dua kali: di sini (pesan yang
@@ -45,8 +45,8 @@ export type SessionInput = {
   /** Hanya saat membuat sesi baru: buat juga 7 sesi mingguan berikutnya (total 8). */
   repeatWeekly: boolean;
   crew: { name: string; role: "Host" | "Coach" | "Fotografer" }[];
-  /** Member yang jadi crew sesi ini: host (akses Panel Host) atau fotografer. */
-  crewMembers: { memberId: string; role: "host" | "photographer" }[];
+  /** Member yang jadi crew sesi ini: host (akses Panel Host) atau fotografer. Activity trip: diabaikan (diatur di editor trip). */
+  crewMembers: CrewMemberInput[];
   /** Foto sesi: link album Google Drive, thumbnail (URL upload), jumlah foto. */
   photos: { albumUrl: string; coverPath: string | null; count: number | null };
   play: { matchFormat: MatchFormat; courtCount: number; roundCount: number; targetPoints: number; leaderboardMode: "points" | "wins"; showLeaderboard: boolean; /** null = tetap aturan lama (activity lama). */ podiumBonus: [number, number, number] | null };
@@ -79,7 +79,7 @@ function validate(input: SessionInput): string | null {
   if (input.photos.coverPath && !isCoverUrl(input.photos.coverPath)) return "Foto thumbnail tidak valid.";
   if (input.photos.albumUrl && !isDriveUrl(input.photos.albumUrl)) return "Link album harus link folder Google Drive (drive.google.com).";
   if (input.photos.count !== null && (!Number.isInteger(input.photos.count) || input.photos.count < 0)) return "Jumlah foto tidak valid.";
-  if (input.crewMembers.some((c) => c.role !== "host" && c.role !== "photographer")) return "Peran crew tidak dikenal.";
+  if (invalidCrew(input.crewMembers)) return "Host / fotografer tidak valid.";
   const { matchFormat, courtCount, roundCount, targetPoints } = input.play;
   if (!ENABLED_FORMATS.includes(matchFormat)) return "Format pertandingan ini belum tersedia.";
   if (matchFormat !== "none") {
@@ -143,12 +143,15 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
   const bookingUrl = normalizeBookingUrl(input.kuyUrl);
   if (bookingUrl === null) return { ok: false, error: "Link booking Kuy tidak valid — contoh: https://kuyy.id/…" };
 
+  // Activity trip: host & fotografer milik editor trip (berlaku untuk semua activity-nya) — tidak ditulis dari sini.
+  let tripActivity = false;
   if (input.id) {
     const [{ data: fill }, { data: stored }] = await Promise.all([
       // Keterisian yang sama dengan admin & website: daftar peserta (impor Kuyy, ghost, paket trip) + booking aktif.
       supabase.rpc("session_fill_counts", { p_sessions: [input.id] }).maybeSingle<{ filled: number }>(),
-      supabase.from("sessions").select("photo_cover_path, photo_count").eq("id", input.id).maybeSingle(),
+      supabase.from("sessions").select("photo_cover_path, photo_count, trip_id").eq("id", input.id).maybeSingle(),
     ]);
+    tripActivity = Boolean(stored?.trip_id);
     // Kapasitas tidak boleh di bawah jumlah peserta yang sudah terdaftar.
     const count = fill?.filled ?? 0;
     if (count > input.capacity) return { ok: false, error: `Sudah ada ${count} peserta terdaftar — kapasitas minimal ${count}.` };
@@ -248,19 +251,9 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
   }
 
   // Crew member: host (hak Panel Host hanya untuk sesi ini, lihat is_session_host) / fotografer.
-  const crewMembers = [...new Map(input.crewMembers.map((c) => [c.memberId, c])).values()];
-  const hostIds = crewMembers.map((c) => c.memberId);
-  const { error: hostDelete } = await supabase
-    .from("session_hosts")
-    .delete()
-    .eq("session_id", id)
-    .not("member_id", "in", `(${hostIds.length ? hostIds.join(",") : "00000000-0000-0000-0000-000000000000"})`);
-  if (hostDelete) return { ok: false, error: `Gagal menyimpan host: ${hostDelete.message}` };
-  if (hostIds.length) {
-    const { error } = await supabase
-      .from("session_hosts")
-      .upsert(crewMembers.map((c) => ({ session_id: id, member_id: c.memberId, role: c.role, assigned_by: auth.userId })), { onConflict: "session_id,member_id" });
-    if (error) return { ok: false, error: `Gagal menyimpan host: ${error.message}` };
+  if (!tripActivity) {
+    const hostError = await syncSessionHosts([id], input.crewMembers, auth.userId);
+    if (hostError) return { ok: false, error: `Gagal menyimpan host: ${hostError}` };
   }
 
   await audit(auth.userId, input.id ? `mengubah sesi ${input.title}` : `membuat sesi ${input.title}${input.repeatWeekly ? " (8 minggu)" : ""}`, "session", id);

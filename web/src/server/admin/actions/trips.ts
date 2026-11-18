@@ -10,7 +10,7 @@ import { uploadPrivateFile } from "@/server/storage";
 import { FINANCE_PROOF_BUCKET } from "../finance-repo";
 import { findMemberById, findMemberByPhone, searchMembers, type MemberIdentity } from "../identity";
 import { getTrip } from "../trips-repo";
-import { audit, confirmLinkResult, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, SLOTS_PATH, type ActionResult, type ConfirmLinkResult } from "./common";
+import { audit, confirmLinkResult, invalidCrew, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, SLOTS_PATH, syncSessionHosts, type ActionResult, type ConfirmLinkResult, type CrewMemberInput } from "./common";
 
 /**
  * Aksi Tennis Escape = Trip (BR-22): simpan trip (info, activity, rundown, paket), arsip / duplikat,
@@ -60,6 +60,11 @@ export type TripInput = {
   createKey?: string;
   activities: TripActivityInput[];
   rundown: TripRundownInput[];
+  /**
+   * Host / fotografer member untuk semua activity trip (akses Panel Host per activity). Hanya dikirim saat
+   * daftarnya diubah di form — tidak diisi = session_hosts activity trip tidak disentuh.
+   */
+  crew?: CrewMemberInput[];
 };
 
 type SaveResult = ({ ok: true; message: string; id: string; version?: number; activityIds?: Record<string, string> } | { ok: false; error: string });
@@ -84,6 +89,7 @@ function validate(input: TripInput): string | null {
   if (input.priceEarlyBird !== null && (!okInt(input.priceEarlyBird) || input.priceEarlyBird > input.priceNormal)) return "Harga early bird tidak boleh di atas harga normal.";
   if (input.priceEarlyBird !== null && !(input.earlyBirdUntil && DAY_RE.test(input.earlyBirdUntil))) return "Isi batas tanggal early bird.";
   if (input.minDp > input.priceNormal) return "Minimal DP tidak boleh di atas harga paket.";
+  if (input.crew && invalidCrew(input.crew)) return "Host / fotografer tidak valid.";
   if (input.status === "published" && input.priceNormal <= 0) return "Isi harga paket normal sebelum dipublikasikan.";
   for (const [i, a] of input.activities.entries()) {
     const n = `Activity ${i + 1}`;
@@ -194,18 +200,27 @@ export async function saveTrip(input: TripInput): Promise<SaveResult> {
   // mencocokkan key (sessions.trip_key), jadi simpan ulang tanpa id pun tidak membuat activity kembar.
   // Versi baru trip ikut dikembalikan supaya simpan berikutnya dari form yang sama tidak dianggap basi.
   const [{ data: savedSessions }, { data: savedTrip }] = await Promise.all([
-    supabase.from("sessions").select("id, trip_key").eq("trip_id", id).not("trip_key", "is", null),
+    supabase.from("sessions").select("id, trip_key").eq("trip_id", id),
     supabase.from("trips").select("form_version").eq("id", id).maybeSingle(),
   ]);
-  const byKey = new Map((savedSessions ?? []).map((s) => [s.trip_key as string, s.id as string]));
+  const sessions = (savedSessions ?? []) as { id: string; trip_key: string | null }[];
+  const byKey = new Map<string, string>();
+  for (const s of sessions) if (s.trip_key) byKey.set(s.trip_key, s.id);
   const activityIds = Object.fromEntries(activities.flatMap((a) => {
     const sessionId = byKey.get(a.key);
     return sessionId ? [[a.key, sessionId]] : [];
   }));
 
+  // Host & fotografer trip → session_hosts di setiap activity trip (member host melihat activity-nya di
+  // My Activities walau tidak ikut main, plus akses Panel Host). Bukan ok:false bila gagal — trip & versinya
+  // sudah tersimpan; form harus tetap memakai versi baru.
+  const hostError = input.crew ? await syncSessionHosts(sessions.map((s) => s.id), input.crew, auth.userId) : null;
+
   await audit(auth.userId, `${input.id ? "mengubah" : "membuat"} trip ${tripRow.title}`, "trip", id);
   refreshPaths(...PUBLIC_SESSION_PATHS, "/admin/activities", `/admin/activities/trip/${id}`);
-  return { ok: true, id, activityIds, version: (savedTrip?.form_version as number | undefined) ?? undefined, message: input.status === "published" ? "Trip dipublikasikan." : "Trip tersimpan sebagai draft." };
+  const saved = input.status === "published" ? "Trip dipublikasikan." : "Trip tersimpan sebagai draft.";
+  const message = hostError ? `${saved} Host gagal disimpan (${hostError}) — coba simpan lagi.` : saved;
+  return { ok: true, id, activityIds, version: (savedTrip?.form_version as number | undefined) ?? undefined, message };
 }
 
 export async function archiveTrip(id: string): Promise<ActionResult> {

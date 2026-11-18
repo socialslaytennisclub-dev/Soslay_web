@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useDialog } from "@/hooks/useDialog";
 import { TIER_LABEL } from "@/lib/admin-labels";
+import { CREW_ROLE_LABEL, CREW_ROLES } from "@/lib/crew";
 import { cx } from "@/lib/cx";
 import type { MemberChoice, SessionHost } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
@@ -11,11 +12,6 @@ import { Drawer } from "../ui/Drawer";
 import { toast } from "../ui/Toaster";
 import editor from "./SessionEditor.module.css";
 import styles from "./Play.module.css";
-
-const ROLES = [
-  { value: "host", label: "Host" },
-  { value: "photographer", label: "Fotografer" },
-] as const;
 
 /** Hak host di member web (Figma 05k) — pengaturan format, tiket & menutup sesi tetap di admin. */
 const HOST_ACCESS = ["Input & verifikasi skor court", "Tinjau skor berbeda", "Atur line-up saat live", "Check-in peserta"];
@@ -124,9 +120,9 @@ export function CrewDrawer({
           <fieldset className={editor.fieldset}>
             <legend className={editor.label}>Peran</legend>
             <div className={editor.segmentWrap}>
-              {ROLES.map((r) => (
-                <button key={r.value} type="button" aria-pressed={role === r.value} className={cx(editor.option, role === r.value && editor.optionOn)} onClick={() => setRole(r.value)}>
-                  {r.label}
+              {CREW_ROLES.map((r) => (
+                <button key={r} type="button" aria-pressed={role === r} className={cx(editor.option, role === r && editor.optionOn)} onClick={() => setRole(r)}>
+                  {CREW_ROLE_LABEL[r]}
                 </button>
               ))}
             </div>

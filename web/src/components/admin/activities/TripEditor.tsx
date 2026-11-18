@@ -8,16 +8,19 @@ import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { amountDigits, amountDisplay } from "@/lib/finance/format";
 import { wibParts } from "@/lib/format";
+import { crewSignature } from "@/lib/crew";
 import { addDays, dayLabel, settlementDue, shortDate, TRIP_PLACEHOLDER, TRIP_TYPE, tripDates, tripDays, tripRange } from "@/lib/trips";
 import { discardSessionUploads, uploadSessionCover } from "@/server/admin/actions/sessions";
 import { saveTrip, type TripActivityInput, type TripInput, type TripRundownInput } from "@/server/admin/actions/trips";
-import type { TripCandidate, TripDetail } from "@/server/admin/types";
+import type { MemberChoice, SessionHost, TripCandidate, TripDetail } from "@/server/admin/types";
 import { FormCard, TextArea, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge, PickerInput } from "../ui/AdminUI";
 import { FinanceModal } from "../finance/FinanceModal";
 import { toast } from "../ui/Toaster";
 import { useUploadCleanup } from "../ui/useUploadCleanup";
+import { CrewDrawer } from "./CrewDrawer";
+import { HostList } from "./HostList";
 import styles from "./SessionEditor.module.css";
 import trip from "./Trip.module.css";
 
@@ -35,10 +38,14 @@ type Props = {
   venues: { name: string; city: string; image: string }[];
   types: { slug: string; label: string }[];
   candidates: TripCandidate[];
+  /** Pilihan member untuk host / fotografer trip. */
+  members: MemberChoice[];
+  /** Host & fotografer tersimpan (gabungan semua activity); `mixed` = belum sama di semua activity. Trip baru: kosong. */
+  crew?: { hosts: SessionHost[]; mixed: boolean };
 };
 
 /** Admin / 05x Buat trip — Tennis Escape (Figma 05x, 05x-4, 05x-5). */
-export function TripEditor({ initial, venues, types, candidates }: Props) {
+export function TripEditor({ initial, venues, types, candidates, members, crew }: Props) {
   const router = useRouter();
   const uploads = useUploadCleanup(discardSessionUploads);
   // Trip baru: key tetap selama form terbuka → simpan ulang (respons hilang, klik dua kali) memperbarui trip yang sama.
@@ -61,6 +68,9 @@ export function TripEditor({ initial, venues, types, candidates }: Props) {
   const [quota, setQuota] = useState(String(initial?.packageQuota ?? ""));
   const [minDp, setMinDp] = useState(String(initial?.minDp ?? ""));
   const [inclusions, setInclusions] = useState<string[]>(initial?.inclusions ?? []);
+  const savedHosts = crew?.hosts ?? [];
+  const [hosts, setHosts] = useState<SessionHost[]>(savedHosts);
+  const participantIds = useMemo(() => new Set((initial?.bookings ?? []).flatMap((b) => (b.memberId && !b.cancelled ? [b.memberId] : []))), [initial]);
   const [newInclusion, setNewInclusion] = useState("");
   const [activities, setActivities] = useState<ActivityForm[]>(
     () =>
@@ -90,6 +100,16 @@ export function TripEditor({ initial, venues, types, candidates }: Props) {
   const [saving, startSaving] = useTransition();
   const [uploading, startUploading] = useTransition();
   const sold = initial?.bookings.filter((b) => !b.cancelled).length ?? 0;
+  // Crew dikirim hanya bila daftarnya diubah, atau ada activity baru (ikut mendapat host trip) — simpan trip
+  // biasa tidak menimpa session_hosts activity-nya.
+  const sendCrew = crewSignature(hosts) !== crewSignature(savedHosts) || (hosts.length > 0 && activities.some((a) => !a.id));
+  const crewHint = crew?.mixed
+    ? sendCrew
+      ? "Saat disimpan, crew di atas berlaku sama untuk semua activity trip ini (pengaturan per activity sebelumnya diganti)."
+      : "Host / fotografer belum sama di semua activity (diatur per activity sebelumnya). Ubah daftar di atas untuk menyamakannya."
+    : hosts.some((h) => h.role === "host")
+      ? "Host melihat semua activity trip ini di My Activities (chip HOST) walau tidak membeli paket, dan mendapat akses Panel Host di tiap activity."
+      : "Tambahkan host supaya trip ini tampil di My Activities host-nya.";
 
   const days = startsOn && endsOn && endsOn >= startsOn ? tripDates(startsOn, endsOn) : [];
   const activeDay = days.includes(rundownDay) ? rundownDay : (days[0] ?? "");
@@ -192,6 +212,7 @@ export function TripEditor({ initial, venues, types, candidates }: Props) {
         kuyUrl: a.kuyUrl,
       }),
     ),
+    crew: sendCrew ? hosts.map(({ memberId, role }) => ({ memberId, role })) : undefined,
     rundown: days.flatMap((d) => rundown.filter((r) => r.day === d).map((r): TripRundownInput => ({ day: r.day, time: r.time, title: r.title, location: r.location, activityKey: r.activityKey }))),
   });
 
@@ -658,8 +679,17 @@ export function TripEditor({ initial, venues, types, candidates }: Props) {
             )}
           </FormCard>
 
-          <FormCard title="Host & fotografer">
-            <p className={styles.muted}>Host & fotografer diatur per activity (Edit activity › Host & fotografer). Host trip otomatis mendapat akses Panel Host di activity yang ia pegang.</p>
+          <FormCard title="Host & fotografer" subtitle="Berlaku untuk semua activity di trip ini">
+            <HostList hosts={hosts} onChange={setHosts} />
+            <CrewDrawer
+              sessionTitle={title || "Trip baru"}
+              sessionWhen={startsOn && endsOn ? tripRange(startsOn, endsOn) : "Tanggal belum diisi"}
+              members={members}
+              participantIds={participantIds}
+              exclude={new Set(hosts.map((h) => h.memberId))}
+              onAdd={(c) => setHosts((list) => [...list, c])}
+            />
+            <span className={styles.muted}>{crewHint}</span>
           </FormCard>
         </aside>
       </div>

@@ -1,6 +1,7 @@
 import type { OrderStage, ShippingMethod } from "@/lib/checkout";
 import type { MyOrder } from "@/server/shop/types";
 import type { KudosTop, MemberKudos } from "@/lib/kudos";
+import type { CrewRole } from "@/lib/crew";
 /**
  * Tipe data admin — cermin dari tabel/view di supabase/migrations (profiles, member_stats,
  * sessions + session_fill, bookings, orders, …). UI admin hanya bergantung pada tipe ini,
@@ -264,6 +265,8 @@ export type SessionParticipant = {
 };
 
 export type SessionDetail = SessionRow & {
+  /** Activity trip (Tennis Escape): host & fotografer member diatur di editor trip. Tidak ada = sesi biasa. */
+  tripId?: string;
   description: string;
   /** Foto cover yang diupload (URL Storage) — null = pakai foto venue. */
   coverPath: string | null;
@@ -343,7 +346,7 @@ export type SessionPlay = {
 };
 
 /** Member yang jadi crew sesi: host (akses Panel Host) atau fotografer. */
-export type SessionHost = { memberId: string; name: string; code: string; role: "host" | "photographer" };
+export type SessionHost = { memberId: string; name: string; code: string; role: CrewRole };
 
 /** Foto sesi: album Google Drive + 1 thumbnail, tampil di halaman Sesi Selesai member. */
 export type SessionPhotos = { albumUrl: string; coverPath: string | null; count: number | null; postedAt: string | null };

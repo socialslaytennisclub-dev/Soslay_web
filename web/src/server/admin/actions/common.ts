@@ -3,7 +3,8 @@ import { invalidateDataset } from "../dataset";
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { canAccess, getAdminSession } from "../session";
-import type { AdminModule } from "../types";
+import { CREW_ROLES } from "@/lib/crew";
+import type { AdminModule, SessionHost } from "../types";
 
 /** Hasil server action admin — ditampilkan sebagai notice di UI. */
 export type ActionResult = { ok: true; message: string } | { ok: false; error: string };
@@ -81,3 +82,32 @@ export function refreshPaths(...paths: RefreshPath[]) {
 
 export const fail = (error: string): ActionResult => ({ ok: false, error });
 export const done = (message: string): ActionResult => ({ ok: true, message });
+
+// ── Host & fotografer member (session_hosts) ────────────────────────────────
+export type CrewMemberInput = Pick<SessionHost, "memberId" | "role">;
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Id member harus UUID (ikut masuk filter PostgREST) dan perannya dikenal. */
+export const invalidCrew = (crew: CrewMemberInput[]) => crew.some((c) => !UUID_RE.test(c.memberId) || !CREW_ROLES.includes(c.role));
+
+/**
+ * Samakan session_hosts di `sessionIds` dengan `crew`. Upsert dulu, baru hapus yang tidak ada di daftar —
+ * gagal di tengah tidak pernah meninggalkan sesi tanpa host lamanya. Crew divalidasi di sini juga (id masuk
+ * filter PostgREST). Mengembalikan pesan error, atau null.
+ */
+export async function syncSessionHosts(sessionIds: string[], crew: CrewMemberInput[], assignedBy: string): Promise<string | null> {
+  if (invalidCrew(crew)) return "Host / fotografer tidak valid.";
+  if (!sessionIds.length) return null;
+  const supabase = await createSupabaseServerClient();
+  const unique = [...new Map(crew.map((c) => [c.memberId, c])).values()];
+  if (unique.length) {
+    const rows = sessionIds.flatMap((sessionId) => unique.map((c) => ({ session_id: sessionId, member_id: c.memberId, role: c.role, assigned_by: assignedBy })));
+    const { error } = await supabase.from("session_hosts").upsert(rows, { onConflict: "session_id,member_id" });
+    if (error) return error.message;
+  }
+  let removal = supabase.from("session_hosts").delete().in("session_id", sessionIds);
+  if (unique.length) removal = removal.not("member_id", "in", `(${unique.map((c) => c.memberId).join(",")})`);
+  const { error } = await removal;
+  return error?.message ?? null;
+}

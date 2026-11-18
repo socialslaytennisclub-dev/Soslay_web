@@ -128,8 +128,12 @@
   position: relative;
   isolation: isolate;
   padding-top: calc(var(--nav-height) + 40px);
-  /* Kartu info → section pertama: cukup ruang atas section-nya (64 / 80 px), tidak ditumpuk. */
   padding-bottom: var(--space-24);
+}
+
+/* Kartu info → section pertama: jarak ringkas (hero 24 + 24 / 40 + 32 px), bukan jarak antar-section penuh. */
+.hero + .section {
+  padding-top: var(--space-24);
 }
 
 /* Navy menutupi judul + anchor + setengah foto */
@@ -756,6 +760,10 @@
 
   .sectionTight {
     padding-top: 0;
+  }
+
+  .hero + .section {
+    padding-top: var(--space-32);
   }
 
   .sectionLast {

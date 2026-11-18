@@ -3,8 +3,9 @@ import { notFound } from "next/navigation";
 import { TripEditor } from "@/components/admin/activities/TripEditor";
 import { TripTabs } from "@/components/admin/activities/TripTabs";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
+import { memberChoices } from "@/server/admin/repo";
 import { activityTypeOptions, venueOptions } from "@/server/admin/sessions-repo";
-import { getTrip, tripCandidates } from "@/server/admin/trips-repo";
+import { getTrip, tripCandidates, tripCrew } from "@/server/admin/trips-repo";
 import pageStyles from "../../../page.module.css";
 
 export const metadata: Metadata = { title: "Edit trip" };
@@ -12,7 +13,7 @@ export const metadata: Metadata = { title: "Edit trip" };
 /** Admin / 05x Edit trip — tab Info & activities · Rundown (anchor) · Peserta & pembayaran. */
 export default async function AdminTripPage({ params }: PageProps<"/admin/activities/trip/[id]">) {
   const { id } = await params;
-  const [trip, venues, candidates] = await Promise.all([getTrip(id), venueOptions(), tripCandidates(id)]);
+  const [trip, venues, candidates, members, crew] = await Promise.all([getTrip(id), venueOptions(), tripCandidates(id), memberChoices(), tripCrew(id)]);
   if (!trip) notFound();
   return (
     <>
@@ -20,7 +21,7 @@ export default async function AdminTripPage({ params }: PageProps<"/admin/activi
       <div className={pageStyles.content}>
         <TripTabs tripId={trip.id} active="info" />
         {/* Di-mount ulang saat trip berubah (disimpan di sini / tab lain): form selalu mulai dari data terbaru. */}
-        <TripEditor key={`${trip.id}:${trip.version}`} initial={trip} venues={venues} types={activityTypeOptions()} candidates={candidates} />
+        <TripEditor key={`${trip.id}:${trip.version}`} initial={trip} venues={venues} types={activityTypeOptions()} candidates={candidates} members={members} crew={crew} />
       </div>
     </>
   );
