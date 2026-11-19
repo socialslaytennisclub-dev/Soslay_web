@@ -19,6 +19,7 @@ export const primaryNav: {
   links: [
     { label: "Venue", href: "/venue" },
     { label: "Shop", href: "/shop" },
+    { label: "Game", href: "/game" },
   ],
 };
 
@@ -42,6 +43,7 @@ export const footerColumns: { title: string; links: NavLink[] }[] = [
       { label: "Shop", href: "/shop" },
       { label: "Community", href: "/komunitas" },
       { label: "Events", href: "/acara" },
+      { label: "Game", href: "/game" },
     ],
   },
   {
