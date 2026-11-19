@@ -23,8 +23,9 @@ export const CITY_TIMEZONE = {
 
 export type City = keyof typeof CITY_TIMEZONE;
 
-/** Wilayah zona waktu dari kota venue di database: Bali & Denpasar → "Bali" (WITA), lainnya → Jakarta (WIB). */
-export const cityOf = (city: string): City => (websiteRegion(city) === "Bali" ? "Bali" : "Jakarta");
+/** Wilayah website dari kota venue di database (sama dengan filter Venue): Denpasar → "Bali" (WITA),
+ * Tangerang & Tangerang Selatan → "Tangerang", lainnya → "Jakarta" (WIB). */
+export const cityOf = (city: string): City => websiteRegion(city) ?? "Jakarta";
 
 const dateFormatters = new Map<string, Intl.DateTimeFormat>();
 

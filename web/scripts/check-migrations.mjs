@@ -1057,7 +1057,7 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.query(`update trips set status = 'draft' where id = $1`, [trip]);
   await db.query(`update trips set status = 'published' where id = $1`, [trip]);
   console.assert((await one(`select status::text s from sessions where id = $1`, [s2])).s === "published", "publikasikan trip tidak mempublikasikan activity draft");
-  await db.exec(`grant select on trips, trip_bookings, sessions, bookings to anon, authenticated`);
+  await db.exec(`grant select on trips, trip_bookings, trip_rundown_items, sessions, bookings, session_hosts to anon, authenticated`);
   const visibleTo = async (uid) => {
     await db.exec(`set role ${uid ? "authenticated" : "anon"}`);
     await as(uid);
@@ -1070,6 +1070,22 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await visibleTo(null)) === 0 && (await visibleTo(stranger)) === 0, "trip Link terbaca orang luar");
   await db.query(`update trip_bookings set cancelled_at = null where id = $1`, [bk]);
   console.assert((await visibleTo(buyer)) === 1, "trip Link tidak terbaca pembeli paketnya");
+  // Host trip (session_hosts peran host di activity trip): trip Link & rundown terbaca walau rundown disembunyikan.
+  const tripHost = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Host Trip', 'hosttrip@trip.test')`, [tripHost]);
+  await db.query(`insert into session_hosts (session_id, member_id, role) values ($1, $2, 'host')`, [s1, tripHost]);
+  await db.query(`update trips set show_rundown = false where id = $1`, [trip]);
+  const rundownFor = async (uid) => {
+    await db.exec(`set role authenticated`);
+    await as(uid);
+    const n = (await one(`select count(*)::int n from trip_rundown_items where trip_id = $1`, [trip])).n;
+    await as(null);
+    await db.exec(`reset role`);
+    return n;
+  };
+  console.assert((await visibleTo(tripHost)) === 1 && (await rundownFor(tripHost)) === 2, "host trip tidak bisa membaca trip Link / rundown");
+  console.assert((await rundownFor(buyer)) === 0 && (await rundownFor(stranger)) === 0, "rundown tersembunyi terbaca pembeli / orang luar");
+  await db.query(`update trips set show_rundown = true where id = $1`, [trip]);
   // Daftar akun penerima: tim Activities tanpa akses Keuangan tetap mendapatkannya; orang luar tidak.
   await db.exec(`grant execute on function payment_accounts() to anon`);
   await as(tripAdmin);

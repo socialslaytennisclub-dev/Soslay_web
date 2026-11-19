@@ -44,6 +44,8 @@ export const samePhone = (a: string | null | undefined, b: string | null | undef
 export const changedPhoneError = (raw: string, stored: string | null | undefined) => (localPhone(raw) === localPhone(stored ?? "") ? null : phoneFormatError(raw));
 
 const greetName = (name: string) => firstName(name) || "kak";
+/** "Halo Kak Rina!" — sapaan template order Shop. */
+const greetKak = (name: string) => `Halo Kak ${firstName(name) || name}!`;
 
 /** Link wa.me ke nomor tersimpan dengan pesan terisi, atau null kalau nomornya tidak valid. */
 export function waLink(phone: string, text: string): string | null {
@@ -95,7 +97,7 @@ export function orderPaymentReminderMessage(o: {
   deadline: string | null;
 }): string {
   return [
-    `Halo Kak ${firstName(o.name) || o.name}! 👋`,
+    `${greetKak(o.name)} 👋`,
     "",
     "Terima kasih sudah order di Soslay 💚 Pesanan Kakak sedang menunggu pembayaran:",
     "",
@@ -117,8 +119,6 @@ export function orderPaymentReminderMessage(o: {
     "Ada pertanyaan? Langsung balas chat ini aja 🙌",
   ].join("\n");
 }
-
-const greetKak = (name: string) => `Halo Kak ${firstName(name) || name}!`;
 
 /** "A", "A & B", "A, B & C" — nama produk dalam satu kalimat. */
 const joinNames = (names: string[]) => (names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`);

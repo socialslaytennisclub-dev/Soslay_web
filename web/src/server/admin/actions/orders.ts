@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { MAX_REJECTIONS, REJECT_REASONS } from "@/lib/checkout";
+import { MAX_REJECTIONS, REJECT_REASONS, trackingUrlError } from "@/lib/checkout";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { demoOrders } from "@/server/shop/demo-store";
@@ -80,10 +80,8 @@ function reviewDemo(code: string, review: PaymentReview): ActionResult {
 
 export async function updateOrder(code: string, update: OrderUpdate): Promise<ActionResult> {
   if (update.action === "cancel" && !update.reason.trim()) return fail("Tulis alasan pembatalan.");
-  // Link lacak tampil sebagai tombol di halaman order member → hanya http(s).
-  if (update.action === "ship" && update.trackingUrl?.trim() && !/^https?:\/\/\S+$/i.test(update.trackingUrl.trim())) {
-    return fail("Link lacak harus diawali https:// (mis. https://jet.co.id/track).");
-  }
+  const badUrl = update.action === "ship" ? trackingUrlError(update.trackingUrl) : null;
+  if (badUrl) return fail(badUrl);
   if (!isSupabaseConfigured && demoOrders().has(code)) return updateDemo(code, update);
 
   const auth = await requireEditor("orders");

@@ -91,11 +91,12 @@ export const getMyTrips = cache(async (): Promise<MemberTrip[]> => {
   const [{ data: bookings }, { data: myBookings }, { data: myHosts }] = await Promise.all([
     supabase.from("trip_bookings").select("id, trip_id").eq("member_id", user.id).is("cancelled_at", null),
     supabase.from("bookings").select("session_id").eq("member_id", user.id).neq("status", "cancelled"),
-    supabase.from("session_hosts").select("session_id").eq("member_id", user.id).eq("role", "host"),
+    // Trip activity yang ia host-i ikut dalam satu query (embed sessions), bukan query kedua.
+    supabase.from("session_hosts").select("session_id, sessions(trip_id)").eq("member_id", user.id).eq("role", "host"),
   ]);
-  const hostedIds = (myHosts ?? []).map((h) => h.session_id as string);
-  const { data: hostedSessions } = hostedIds.length ? await supabase.from("sessions").select("trip_id").in("id", hostedIds).not("trip_id", "is", null) : { data: [] };
-  const hostTripIds = new Set((hostedSessions ?? []).map((s) => s.trip_id as string));
+  const hosted = (myHosts ?? []) as unknown as { session_id: string; sessions: { trip_id: string | null } | null }[];
+  const hostedIds = hosted.map((h) => h.session_id);
+  const hostTripIds = new Set(hosted.flatMap((h) => (h.sessions?.trip_id ? [h.sessions.trip_id] : [])));
   const tripIds = [...new Set([...(bookings ?? []).map((b) => b.trip_id as string), ...hostTripIds])];
   if (!tripIds.length) return [];
 

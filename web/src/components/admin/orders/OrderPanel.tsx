@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { formatRupiahPlain, TIER_LABEL } from "@/lib/admin-labels";
-import { fmtDate, fmtDayDate, fmtTime, isJntCourier, JNT_TRACK_URL, MAX_REJECTIONS, REJECT_REASONS, SHIPPING_LABEL, STAGE, type StageTone } from "@/lib/checkout";
+import { fmtDate, fmtDayDate, fmtTime, isJntCourier, JNT_TRACK_URL, MAX_REJECTIONS, REJECT_REASONS, SHIPPING_LABEL, STAGE, trackingUrlError, type StageTone } from "@/lib/checkout";
 import { orderCompletedMessage, orderPaymentReminderMessage, orderProcessingMessage, orderShippedMessage, waLink, waNumber } from "@/lib/wa-invite";
 import type { ShopBank } from "@/content/checkout";
 import { reviewPayment, updateOrder, type OrderUpdate } from "@/server/admin/actions/orders";
@@ -32,7 +32,7 @@ const ago = (iso: string) => {
  * diproses · dikirim · selesai dari kurir & resi yang dicatat admin; pengingat bayar hanya order website.
  * Pickup: hanya pengingat bayar & selesai (template diproses / dikirim menyebut kurir & resi).
  */
-function chatTemplate(order: OrderDetail, shop: OrderDetail["shop"], bank: ShopBank, jntEta: string | null): { text: string; label: string } | null {
+function chatTemplate(order: OrderDetail, shop: OrderDetail["shop"], bank: ShopBank | null, jntEta: string | null): { text: string; label: string } | null {
   const products = order.items.map((i) => `${i.name}${i.variant ? ` (${i.variant})` : ""} ×${i.quantity}`);
   const total = formatRupiahPlain(shop?.total ?? order.grandTotal);
   const base = { name: order.customer, code: order.code };
@@ -40,8 +40,9 @@ function chatTemplate(order: OrderDetail, shop: OrderDetail["shop"], bank: ShopB
   const courier = order.courier?.trim() || (method ? SHIPPING_LABEL[method].short : "");
   switch (order.stage) {
     case "awaiting_payment":
-    case "reupload":
-      if (!shop) return null;
+    case "reupload": {
+      const payTo = shop?.bank ?? bank;
+      if (!shop || !payTo) return null;
       return {
         label: "pengingat bayar",
         text: orderPaymentReminderMessage({
@@ -52,10 +53,11 @@ function chatTemplate(order: OrderDetail, shop: OrderDetail["shop"], bank: ShopB
               ? `${SHIPPING_LABEL.pickup.title}${shop.pickup ? ` · ${fmtDayDate(shop.pickup.startsAt)} ${fmtTime(shop.pickup.startsAt)} · ${shop.pickup.venue}` : ""}`
               : `${SHIPPING_LABEL[shop.method].title} · ${formatRupiahPlain(shop.shippingFee)}`,
           total,
-          bank: shop.bank ?? bank,
+          bank: payTo,
           deadline: shop.payDeadline ? `${fmtDayDate(shop.payDeadline)} ${fmtTime(shop.payDeadline)}` : null,
         }),
       };
+    }
     case "processing":
       if (method === "pickup") return null;
       return {
@@ -64,7 +66,7 @@ function chatTemplate(order: OrderDetail, shop: OrderDetail["shop"], bank: ShopB
           ...base,
           products,
           total,
-          courier: method === "jnt" ? "J&T Express" : method === "instant" ? "Instant (GoSend / GrabExpress)" : courier || "kurir",
+          courier: method === "jnt" ? SHIPPING_LABEL.jnt.short : method === "instant" ? `Instant (${INSTANT_COURIERS.join(" / ")})` : courier || "kurir",
         }),
       };
     case "shipped":
@@ -88,7 +90,7 @@ function chatTemplate(order: OrderDetail, shop: OrderDetail["shop"], bank: ShopB
   }
 }
 
-export function OrderPanel({ order, closeHref, bank, jntEta }: { order: OrderDetail; closeHref?: string; bank: ShopBank; jntEta: string | null }) {
+export function OrderPanel({ order, closeHref, bank, jntEta }: { order: OrderDetail; closeHref?: string; bank: ShopBank | null; jntEta: string | null }) {
   const shop = order.shop;
   const method = shop?.method ?? null;
   const [courier, setCourierState] = useState(order.courier && order.courier !== "Instant" ? order.courier : method === "instant" ? INSTANT_COURIERS[0] : method === "jnt" ? "J&T Express Reguler" : COURIERS[0]);
@@ -127,7 +129,8 @@ export function OrderPanel({ order, closeHref, bank, jntEta }: { order: OrderDet
     if (reason?.trim()) run({ action: "cancel", reason });
   };
   const markShipped = () => {
-    if (trackingUrl.trim() && !/^https?:\/\/\S+$/i.test(trackingUrl.trim())) return toast.error("Link lacak harus diawali https:// (mis. https://jet.co.id/track).");
+    const badUrl = trackingUrlError(trackingUrl);
+    if (badUrl) return toast.error(badUrl);
     if (method === "instant") {
       if (!courier.trim()) return toast.error("Isi nama kurir (GoSend / GrabExpress).");
       return run({ action: "ship", courier, tracking, trackingUrl });
