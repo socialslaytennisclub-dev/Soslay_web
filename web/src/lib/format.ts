@@ -14,10 +14,11 @@ export function parseStat(raw: string): { value: number; prefix: string; suffix:
   return { value: Number(digits.replace(/[.,]/g, "")), prefix, suffix };
 }
 
-/** Zona waktu IANA per wilayah venue (Jakarta & Tangerang = WIB, Bali = WITA). */
+/** Zona waktu IANA per wilayah venue (Jakarta, Tangerang & Yogyakarta = WIB, Bali = WITA). */
 export const CITY_TIMEZONE = {
   Jakarta: "Asia/Jakarta",
   Tangerang: "Asia/Jakarta",
+  Yogyakarta: "Asia/Jakarta",
   Bali: "Asia/Makassar",
 } as const;
 
@@ -62,7 +63,7 @@ export function formatTanggalISO(date: string, city: City): string {
 }
 
 /** Label zona waktu tiap kota venue. */
-export const CITY_TZ_LABEL: Record<City, string> = { Jakarta: "WIB", Tangerang: "WIB", Bali: "WITA" };
+export const CITY_TZ_LABEL: Record<City, string> = { Jakarta: "WIB", Tangerang: "WIB", Yogyakarta: "WIB", Bali: "WITA" };
 
 const shortFormatters = new Map<City, Intl.DateTimeFormat>();
 

@@ -9,7 +9,8 @@ import type { City } from "@/lib/format";
 export type Venue = {
   slug: string;
   name: string;
-  city: City;
+  /** Wilayah filter website (Jakarta / Tangerang / Yogyakarta / Bali), atau kota master bila belum punya filter. */
+  city: City | (string & {});
   /** Karakter venue: Indoor, Rooftop, Outdoor, Premium, Tropical. */
   type: string;
   image: string;
@@ -23,7 +24,7 @@ export type Venue = {
   heroImage?: string;
   /** Wilayah, mis. "Central Jakarta" — breadcrumb & kartu info hero Venue detail. */
   area?: string;
-  /** Kota asli di master venue (mis. "Jakarta Pusat"); `city` = wilayah website (Jakarta / Bali). */
+  /** Kota asli di master venue (mis. "Jakarta Pusat"); `city` = wilayah filter website. */
   cityName?: string;
   /** Warna court dari master venue, mis. "Terracotta-walled" → "Terracotta-walled court". */
   courtColor?: string;
@@ -61,6 +62,7 @@ export const venueList: Venue[] = [
 export const venueCities = [
   { slug: "jakarta", label: "Jakarta", city: "Jakarta" },
   { slug: "tangerang", label: "Tangerang", city: "Tangerang" },
+  { slug: "yogyakarta", label: "Yogyakarta", city: "Yogyakarta" },
   { slug: "bali", label: "Bali", city: "Bali" },
 ] as const satisfies { slug: string; label: string; city: City }[];
 
