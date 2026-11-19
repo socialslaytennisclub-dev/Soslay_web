@@ -85,6 +85,7 @@
 /* ── Activity dalam trip ── */
 .activityList {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-10);
   margin: 0;
   padding: 0;
@@ -157,12 +158,14 @@
 
 .activityBody {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-14);
   padding: 0 var(--space-14) var(--space-14);
 }
 
 .single {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-12);
   padding: var(--space-12);
   border-radius: var(--radius-lg);
