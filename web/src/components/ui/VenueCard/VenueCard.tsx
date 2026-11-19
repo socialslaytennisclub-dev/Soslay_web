@@ -1,4 +1,5 @@
 import { IMAGE_ASPECT } from "@/lib/image-aspect";
+import { cityInEnglish } from "@/lib/venue-options";
 import Link from "next/link";
 import { MediaCard } from "../MediaCard/MediaCard";
 import { Text } from "../Text/Text";
@@ -6,7 +7,10 @@ import styles from "./VenueCard.module.css";
 
 export type VenueCardProps = {
   name: string;
+  /** Wilayah website ("Jakarta" / "Tangerang" / "Bali") — dipakai bila kota master kosong. */
   city: string;
+  /** Kota dari master venue ("Jakarta Pusat") — ditampilkan dalam bahasa Inggris, sama dengan card detail venue. */
+  cityName?: string;
   type: string;
   image: string;
   imagePosition?: string;
@@ -14,7 +18,8 @@ export type VenueCardProps = {
 };
 
 /** Figma: Card/Venue — foto 633×371, nama lime + "Kota · Tipe". Dipakai di homepage & halaman Venue. */
-export function VenueCard({ name, city, type, image, imagePosition, href }: VenueCardProps) {
+export function VenueCard({ name, city, cityName, type, image, imagePosition, href }: VenueCardProps) {
+  const location = cityInEnglish(cityName ?? city);
   return (
     <Link href={href} className={styles.link} data-cursor="Lihat">
       <MediaCard
@@ -28,7 +33,7 @@ export function VenueCard({ name, city, type, image, imagePosition, href }: Venu
         <div className={styles.text}>
           <h3 className={styles.name}>{name}</h3>
           <Text variant="body-18-ui" tone="on-inverse" muted>
-            {city} · {type}
+            {[location, type].filter(Boolean).join(" · ")}
           </Text>
         </div>
       </MediaCard>

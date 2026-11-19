@@ -50,7 +50,10 @@ export function VenueCityFilter({ venues, initialCity, heading }: { venues: Venu
 
   const chips: FilterChip[] = [
     { label: "All", href: cityHref(), active: !city },
-    ...venueCities.map((item) => ({ label: item.label, href: cityHref(item.slug), active: item.slug === city })),
+    // Kota tanpa venue aktif (mis. Tangerang sebelum ada venue di master) tidak ditampilkan — kecuali sedang dibuka lewat URL.
+    ...venueCities
+      .filter((item) => item.slug === city || venues.some((venue) => venue.city === item.city))
+      .map((item) => ({ label: item.label, href: cityHref(item.slug), active: item.slug === city })),
   ];
   const cityName = venueCities.find((item) => item.slug === city)?.city;
   const [left, right] = splitInHalf(cityName ? venues.filter((venue) => venue.city === cityName) : venues);

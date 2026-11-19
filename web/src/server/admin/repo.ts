@@ -7,6 +7,7 @@ import { LEVEL_LABEL } from "@/lib/admin-labels";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getDataset, type DataMember, type Dataset } from "./dataset";
+import { displayStatus } from "./session-rows";
 import { countSegmentsLive, listMembersLive, sidebarCountsLive } from "./member-list";
 import { jakartaWeekStart, TIERS } from "./demo-data";
 import { DAY, pctDelta, startOfTodayWib } from "./time";
@@ -547,14 +548,10 @@ export async function getOverview(weeks = 12): Promise<OverviewData> {
     },
     weeklyBookings,
     upcomingCount: upcoming.length,
-    upcomingSessions: upcoming.slice(0, 4).map((s) => ({
-      id: s.id,
-      title: s.title,
-      venueName: s.venueName,
-      startsAt: s.startsAt.toISOString(),
-      capacity: s.capacity,
-      booked: d.filled(s.id),
-    })),
+    upcomingSessions: upcoming.slice(0, 4).map((s) => {
+      const booked = d.filled(s.id);
+      return { id: s.id, title: s.title, venueName: s.venueName, startsAt: s.startsAt.toISOString(), capacity: s.capacity, booked, status: displayStatus(s, booked, d.now) };
+    }),
     newestMembers: [...everyone].sort((a, b) => b.joinedAt.localeCompare(a.joinedAt)).slice(0, 5),
     tierDistribution: TIERS.map(({ tier }) => ({ tier, count: everyone.filter((m) => m.tier === tier && m.status !== "suspended").length })),
     levelDistribution: (Object.keys(LEVEL_LABEL) as TennisLevel[]).map((level) => ({

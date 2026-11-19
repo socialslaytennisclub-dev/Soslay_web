@@ -77,6 +77,14 @@ export const REJECT_REASONS = [
 
 export const MAX_REJECTIONS = 3;
 
+/** Halaman lacak resmi J&T — link lacak default order J&T (resi dimasukkan member di halaman itu). */
+export const JNT_TRACK_URL = "https://jet.co.id/track";
+/** Kurir J&T (J&T Express Reguler, J&T EZ) → link lacak otomatis JNT_TRACK_URL. */
+export const isJntCourier = (courier: string) => /^j\s*&\s*t\b/i.test(courier.trim());
+/** Link lacak order (tombol di halaman pesanan member) — hanya http(s); kosong boleh. */
+export const trackingUrlError = (url: string | undefined) =>
+  url?.trim() && !/^https?:\/\/\S+$/i.test(url.trim()) ? "Link lacak harus diawali https:// (mis. https://jet.co.id/track)." : null;
+
 export const SHIPPING_LABEL: Record<ShippingMethod, { title: string; short: string; summary: string }> = {
   jnt: { title: "J&T Express — Reguler", short: "J&T Express", summary: "J&T Reguler" },
   instant: { title: "Instant — Area Jakarta", short: "Instant · Jakarta", summary: "Instant" },

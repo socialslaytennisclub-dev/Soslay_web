@@ -97,21 +97,27 @@ export function cityInEnglish(city: string): string {
   return m ? `${COMPASS_EN[m[2]]} ${m[1]}` : name;
 }
 
-/** Provinsi yang masuk wilayah website "Jakarta" (Jabodetabek) & "Bali". */
-const REGION_PROVINCES: Record<string, "Jakarta" | "Bali"> = {
+export type WebsiteRegion = "Jakarta" | "Tangerang" | "Bali";
+
+/** Provinsi yang masuk wilayah website "Jakarta" (Jabodetabek), "Tangerang" & "Bali". */
+const REGION_PROVINCES: Record<string, WebsiteRegion> = {
   "DKI Jakarta": "Jakarta",
   Banten: "Jakarta",
   "Jawa Barat": "Jakarta",
   Bali: "Bali",
 };
-const JABODETABEK = new Set(["Bekasi", "Bogor", "Depok", "Tangerang", "Tangerang Selatan"]);
+const JABODETABEK = new Set(["Bekasi", "Bogor", "Depok"]);
+/** Tangerang & Tangerang Selatan punya filter sendiri di halaman Venue. */
+const TANGERANG = new Set(["Tangerang", "Tangerang Selatan"]);
 
 /**
- * Wilayah website (filter Venue & zona waktu jadwal) dari kota venue: Jakarta & Jabodetabek →
- * "Jakarta", Denpasar → "Bali". Kota lain belum punya wilayah di website → undefined.
+ * Wilayah website (filter Venue & zona waktu jadwal) dari kota venue: Jakarta, Bogor, Depok, Bekasi →
+ * "Jakarta", Tangerang & Tangerang Selatan → "Tangerang", Denpasar → "Bali". Kota lain belum punya
+ * wilayah di website → undefined.
  */
-export function websiteRegion(city: string): "Jakarta" | "Bali" | undefined {
-  if (city === "Jakarta" || city === "Bali") return city;
+export function websiteRegion(city: string): WebsiteRegion | undefined {
+  if (city === "Jakarta" || city === "Tangerang" || city === "Bali") return city;
+  if (TANGERANG.has(city)) return "Tangerang";
   const found = INDONESIA_CITIES.find((c) => c.city === city);
   if (!found) return undefined;
   const region = REGION_PROVINCES[found.province];

@@ -20,20 +20,19 @@ export function TripBanner({ trip }: { trip: MemberTrip }) {
           {tripRange(trip.startsOn, trip.endsOn)} · {trip.activities.length} activity{trip.area ? ` · ${trip.area.replace(/^[^·]*·\s*/, "")}` : ""} · {tripDays(trip.startsOn, trip.endsOn)} hari
         </p>
         <p className={styles.chips}>
-          {p ? (
+          {trip.host && <span className={styles.chip}>Host trip</span>}
+          {p && (
             <>
               <span className={styles.chip}>Paket bundling · {PLAN_LABEL[p.plan]}</span>
               <span className={p.status === "paid" ? styles.chipPaid : styles.chipDue}>
                 {p.status === "paid" ? "Lunas" : `${PAY_STATUS_LABEL[p.status]} · sisa ${formatRupiahPlain(p.remaining)} · lunasi s.d. ${p.due}`}
               </span>
             </>
-          ) : (
-            <span className={styles.chip}>Tiket satuan · {trip.activities.length} activity</span>
           )}
         </p>
         {trip.next && <p className={styles.next}>Berikutnya: {trip.next}</p>}
         <Link href={`/akun/trip/${trip.slug}`} className={styles.cta}>
-          {p ? "Lihat rundown & rangkaian acara" : "Lihat info trip"}
+          {trip.rundown.length ? "Lihat rundown & rangkaian acara" : "Lihat rangkaian acara"}
         </Link>
       </div>
     </article>

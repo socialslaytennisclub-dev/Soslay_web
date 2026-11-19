@@ -6,6 +6,8 @@
 const IMG = "/images/guide/common-grounds";
 const RANA = "/images/guide/rana-grounds";
 const VALE = "/images/guide/vale-racquet";
+const TEMPLE = "/images/guide/racquette-temple";
+const OFF = "/images/guide/off-court";
 
 export type GuidePhoto = { src: string; alt: string; position?: string };
 
@@ -329,6 +331,190 @@ export const participantGuides: ParticipantGuide[] = [
         { title: "Rain or shine", body: "It's indoor — the session runs whatever the weather." },
         { title: "Hydrate early", body: "Indoor courts still get warm. Bring a full bottle." },
         { title: "Respect the venue", body: "It's a shared space — keep the lounge tidy and the vibe friendly." },
+        { title: "Meet someone new", body: "Come for the tennis, stay for the people. Have fun!" },
+      ],
+    },
+  },
+  {
+    venueSlug: "the-racquette-temple-airdome",
+    intro: "Everything you need to know before you step on court — what to wear, what to bring, and what the venue feels like.",
+    hero: { src: `${TEMPLE}/hero.webp`, alt: "Soslay members waving from the blue courts under the white air-dome of The Racquette Temple", position: "50% 56%" },
+    theme: { panel: "#3d6f99", ink: "#3d6f99" },
+    outfit: {
+      title: "What should I wear?",
+      body: "White and blush pop against the blue court, and black works as a sharp contrast on the floor — just don't go head-to-toe black next to the black walls. Keep it monochrome with one bright pop.",
+      palette: [
+        { name: "Optic White", role: "Your base", hex: "#ffffff" },
+        { name: "Blush Pink", role: "Pop", hex: "#f2c4ce" },
+        { name: "Jet Black", role: "Contrast", hex: "#161616" },
+        { name: "Lime", role: "Accent", hex: "#c5eb00" },
+      ],
+      avoid: [
+        { name: "Court Blue", hex: "#6a9ac2" },
+        { name: "Navy", hex: "#1b2547" },
+        { name: "Teal", hex: "#2e8a8a" },
+        { name: "Denim", hex: "#4f6d8f" },
+      ],
+      avoidNote:
+        "Anything blue melts into the court — you'll disappear in photos. Going all-black? Add one light piece — a white visor, socks or shoes. Head-to-toe black blends right into the black walls.",
+      looks: [
+        { title: "Blush + white", caption: "Blush tee, white pleated skirt, white socks", photo: { src: `${TEMPLE}/outfit-blush.webp`, alt: "Member in a blush tee and white pleated skirt on the blue court" } },
+        { title: "Classic whites", caption: "White polo or tee, black shorts", photo: { src: `${TEMPLE}/outfit-classic.webp`, alt: "Member in a white tee and black shorts walking on the blue court", position: "60% 50%" } },
+        { title: "Black set + visor", caption: "All-black on the blue floor, white visor & shoes", photo: { src: `${TEMPLE}/outfit-black.webp`, alt: "Member in an all-black set with a white visor and white shoes" } },
+        { title: "Mix & match duo", caption: "One in black, one in light contrast as a pair", photo: { src: `${TEMPLE}/outfit-duo.webp`, alt: "Two members posing together, one in black and one in light colours" } },
+      ],
+    },
+    bring: {
+      title: "What should I bring?",
+      body: "Bring the essentials — we'll take care of the rest. It's an indoor dome court, so no sun or rain to worry about — just bring your game.",
+      items: [
+        { name: "Racket", note: "Bring a spare if you have one" },
+        { name: "Tennis shoes", note: "Non-marking soles — required indoors" },
+        { name: "White socks", note: "Keeps the look clean" },
+        { name: "Water bottle", note: "Indoor play still works up a sweat" },
+        { name: "Small towel", note: "For between games" },
+        { name: "Headband / wristband", note: "Keeps sweat out of your eyes" },
+        { name: "Extra overgrip", note: "Hard courts are grippy, your handle should be too" },
+        { name: "Light jacket", note: "For hanging out in the lounge after", optional: true },
+        { name: "Spare tee", note: "For hanging out after", optional: true },
+      ],
+    },
+    photoReference: {
+      title: ["The mood we're", "shooting for."],
+      body: "This isn't a shot list of specific photos — it's the kind of photography and visual mood we go for at Social Slay sessions: real moments, soft dome light, colour on blue.",
+      columns: [
+        [
+          { label: "In action", photo: { src: `${TEMPLE}/ref-in-action.webp`, alt: "A member mid-swing on the blue court under the dome", position: "50% 51%" } },
+          { label: "The little details", photo: { src: `${TEMPLE}/ref-details.webp`, alt: "A player's pink racket, black wristband and shoes on the blue court", position: "50% 51%" } },
+        ],
+        [
+          { label: "With your people", photo: { src: `${TEMPLE}/ref-people.webp`, alt: "Members together on court", position: "50% 81%" } },
+          { label: "Portrait", photo: { src: `${TEMPLE}/ref-portrait.webp`, alt: "Portrait of a member on the blue court", position: "50% 100%" } },
+        ],
+        [
+          { label: "Blur in motion", photo: { src: `${TEMPLE}/ref-motion.webp`, alt: "Motion-blurred player hitting a forehand under the white dome", position: "50% 91%" } },
+          { label: "Candid moments", photo: { src: `${TEMPLE}/ref-candid.webp`, alt: "Members sharing a candid moment by the court", position: "50% 60%" } },
+        ],
+      ],
+    },
+    courtVibe: {
+      title: "A glimpse of where you'll be playing.",
+      body: "An indoor air-dome court: soft white light from the dome, blue hard courts and sleek black walls marked with the Temple crest. Rain or shine, it's always game day.",
+      palette: [
+        { name: "Court blue", hex: "#6a9ac2", dark: true },
+        { name: "Temple black", hex: "#1b1b1d", dark: true },
+        { name: "Dome white", hex: "#efefec" },
+        { name: "Lounge timber", hex: "#c7a97f" },
+        { name: "White lines", hex: "#ffffff" },
+      ],
+      note: "rain or shine, game on ↗",
+      feature: { src: `${TEMPLE}/court-main.webp`, alt: "Members on the blue courts inside the white air-dome, black walls with the Temple crest behind them" },
+      side: [
+        { src: `${TEMPLE}/court-side-1.webp`, alt: "\"The Racquette Temple\" lettering painted on the blue court" },
+        { src: `${TEMPLE}/court-side-2.webp`, alt: "The Temple crest on a black wall beside the court" },
+        { src: `${TEMPLE}/court-wide.webp`, alt: "View along the net towards the black walls and the Temple crest" },
+      ],
+      strip: [],
+    },
+    tips: {
+      title: "Before you come.",
+      items: [
+        { title: "Come photo-ready", body: "Whites, blush or a lime pop. Skip anything blue." },
+        { title: "Non-marking only", body: "Indoor hard courts — check your soles before you come." },
+        { title: "Hydrate early", body: "Indoor play still works up a sweat. Bring a full bottle." },
+        { title: "Respect the venue", body: "It's a shared space — keep the lounge tidy and the vibe friendly." },
+        { title: "Meet someone new", body: "Come for the tennis, stay for the people. Have fun!" },
+      ],
+    },
+  },
+  {
+    venueSlug: "off-court",
+    intro: "Everything you need to know before you step on court — what to wear, what to bring, and what the venue feels like.",
+    hero: { src: `${OFF}/hero.webp`, alt: "Soslay members jumping with their rackets on the grey court under Off Court's black steel roof", position: "50% 45%" },
+    theme: { panel: "#787e81", ink: "#3e4f45" },
+    outfit: {
+      title: "What should I wear?",
+      body: "Grey court, grey walls and a wall of green behind the glass — so go for contrast. White and black look crisp on the concrete, orange is the brightest thing on court, and sky blue keeps it soft. Skip greys.",
+      palette: [
+        { name: "Optic White", role: "Your base", hex: "#ffffff" },
+        { name: "Jet Black", role: "Contrast", hex: "#161616" },
+        { name: "Blaze Orange", role: "Pop", hex: "#ff6b1a" },
+        { name: "Sky Blue", role: "Soft accent", hex: "#a9cbe6" },
+      ],
+      avoid: [
+        { name: "Slate Grey", hex: "#6e7275" },
+        { name: "Concrete", hex: "#a7a9a6" },
+        { name: "Charcoal", hex: "#3a3d40" },
+        { name: "Olive", hex: "#6b7040" },
+      ],
+      avoidNote:
+        "Greys melt into the court and walls, olive into the trees behind the glass. Love grey? Keep it to one piece — a full grey set disappears into the concrete court and walls.",
+      looks: [
+        { title: "White tee + black shorts", caption: "White tee, black shorts, cap", photo: { src: `${OFF}/outfit-white.webp`, alt: "Member in a white tee, black shorts and a cap on the grey court" } },
+        { title: "Orange pop", caption: "Orange tee, white shorts — brightest on court", photo: { src: `${OFF}/outfit-orange.webp`, alt: "Member in an orange tee and white shorts hitting a volley", position: "60% 50%" } },
+        { title: "Sky blue polo", caption: "Sky blue polo, white shorts, white socks", photo: { src: `${OFF}/outfit-sky.webp`, alt: "Member in a sky blue polo and white shorts" } },
+        { title: "Modest layers + pink", caption: "Dark long top, pink skirt, leggings", photo: { src: `${OFF}/outfit-modest.webp`, alt: "Member in a dark long top, pink skirt and leggings" } },
+      ],
+    },
+    bring: {
+      title: "What should I bring?",
+      body: "Bring the essentials — we'll take care of the rest. It's a covered court, so you're shaded — but the sides are open, so it can get warm and humid.",
+      items: [
+        { name: "Racket", note: "Bring a spare if you have one" },
+        { name: "Tennis shoes", note: "Non-marking soles" },
+        { name: "White socks", note: "Keeps the look clean" },
+        { name: "Water bottle", note: "It gets humid under the roof" },
+        { name: "Small towel", note: "For between games" },
+        { name: "Headband / wristband", note: "Keeps sweat out of your eyes" },
+        { name: "Bug spray", note: "Lots of greenery around the court" },
+        { name: "Small fan", note: "Open-air humidity is real", optional: true },
+        { name: "Spare tee", note: "For hanging out after", optional: true },
+      ],
+    },
+    photoReference: {
+      title: ["The mood we're", "shooting for."],
+      body: "This isn't a shot list of specific photos — it's the kind of photography and visual mood we go for at Social Slay sessions: real moments, soft cool light, colour against grey.",
+      columns: [
+        [
+          { label: "In action", photo: { src: `${OFF}/ref-in-action.webp`, alt: "A member mid-swing on the grey court under the steel roof", position: "50% 51%" } },
+          { label: "The little details", photo: { src: `${OFF}/ref-details.webp`, alt: "A tennis ball resting by the white line on the grey court", position: "50% 51%" } },
+        ],
+        [
+          { label: "With your people", photo: { src: `${OFF}/ref-people.webp`, alt: "Members together on court", position: "50% 76%" } },
+          { label: "Portrait", photo: { src: `${OFF}/ref-portrait.webp`, alt: "Portrait of a member on the grey court", position: "50% 100%" } },
+        ],
+        [
+          { label: "Blur in motion", photo: { src: `${OFF}/ref-motion.webp`, alt: "Motion-blurred player hitting a forehand with the trees behind the glass", position: "50% 91%" } },
+          { label: "Candid moments", photo: { src: `${OFF}/ref-candid.webp`, alt: "Members sharing a candid moment by the court", position: "50% 60%" } },
+        ],
+      ],
+    },
+    courtVibe: {
+      title: "A glimpse of where you'll be playing.",
+      body: "A covered court with a grey hard surface, concrete walls and a black steel frame — wrapped in frosted glass with jungle-green trees just behind. Soft, cool daylight: shaded, but open-air.",
+      palette: [
+        { name: "Court grey", hex: "#6e7275", dark: true },
+        { name: "Steel black", hex: "#1e1f21", dark: true },
+        { name: "Frosted glass", hex: "#e6e9e7" },
+        { name: "Greenery", hex: "#4f6b3a", dark: true },
+        { name: "White lines", hex: "#ffffff" },
+      ],
+      note: "concrete, glass & jungle ↗",
+      feature: { src: `${OFF}/court-main.webp`, alt: "A player on the grey court in front of the frosted glass wall and the trees behind it" },
+      side: [
+        { src: `${OFF}/court-side-1.webp`, alt: "Black steel roof frame and frosted glass panels above the court" },
+        { src: `${OFF}/court-side-2.webp`, alt: "Close-up of the net over the grey hard court" },
+        { src: `${OFF}/court-wide.webp`, alt: "View along the net towards the covered seating area", position: "50% 79%" },
+      ],
+      strip: [],
+    },
+    tips: {
+      title: "Before you come.",
+      items: [
+        { title: "Come photo-ready", body: "White or black, plus one bright pop. Skip greys." },
+        { title: "Shaded, not sealed", body: "Covered court, open sides — it can get warm and humid." },
+        { title: "Hydrate early", body: "Humid air works up a sweat. Bring a full bottle." },
+        { title: "Respect the venue", body: "It's a shared space — keep the court tidy and the vibe friendly." },
         { title: "Meet someone new", body: "Come for the tennis, stay for the people. Have fun!" },
       ],
     },

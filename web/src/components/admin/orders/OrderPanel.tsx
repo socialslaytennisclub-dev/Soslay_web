@@ -4,7 +4,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { formatRupiahPlain, TIER_LABEL } from "@/lib/admin-labels";
-import { fmtDate, fmtDayDate, fmtTime, MAX_REJECTIONS, REJECT_REASONS, SHIPPING_LABEL, STAGE, type StageTone } from "@/lib/checkout";
+import { fmtDate, fmtDayDate, fmtTime, isJntCourier, JNT_TRACK_URL, MAX_REJECTIONS, REJECT_REASONS, SHIPPING_LABEL, STAGE, trackingUrlError, type StageTone } from "@/lib/checkout";
+import { orderCompletedMessage, orderPaymentReminderMessage, orderProcessingMessage, orderShippedMessage, waLink, waNumber } from "@/lib/wa-invite";
+import type { ShopBank } from "@/content/checkout";
 import { reviewPayment, updateOrder, type OrderUpdate } from "@/server/admin/actions/orders";
 import type { OrderDetail } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
@@ -24,12 +26,82 @@ const ago = (iso: string) => {
 };
 
 /** Panel detail order (kanan di desktop, di atas daftar di HP). Order checkout website: verifikasi transfer (ADM-03). */
-export function OrderPanel({ order, closeHref }: { order: OrderDetail; closeHref?: string }) {
+/**
+ * Template WA per status (ikon chat di Customer): pengingat bayar · diproses · dikirim · selesai.
+ * Status lain (verifikasi, siap diambil, dibatalkan) → chat kosong. Order lama / Kuy (tanpa data checkout):
+ * diproses · dikirim · selesai dari kurir & resi yang dicatat admin; pengingat bayar hanya order website.
+ * Pickup: hanya pengingat bayar & selesai (template diproses / dikirim menyebut kurir & resi).
+ */
+function chatTemplate(order: OrderDetail, shop: OrderDetail["shop"], bank: ShopBank | null, jntEta: string | null): { text: string; label: string } | null {
+  const products = order.items.map((i) => `${i.name}${i.variant ? ` (${i.variant})` : ""} ×${i.quantity}`);
+  const total = formatRupiahPlain(shop?.total ?? order.grandTotal);
+  const base = { name: order.customer, code: order.code };
+  const method = shop?.method ?? null;
+  const courier = order.courier?.trim() || (method ? SHIPPING_LABEL[method].short : "");
+  switch (order.stage) {
+    case "awaiting_payment":
+    case "reupload": {
+      const payTo = shop?.bank ?? bank;
+      if (!shop || !payTo) return null;
+      return {
+        label: "pengingat bayar",
+        text: orderPaymentReminderMessage({
+          ...base,
+          products,
+          shipping:
+            shop.method === "pickup"
+              ? `${SHIPPING_LABEL.pickup.title}${shop.pickup ? ` · ${fmtDayDate(shop.pickup.startsAt)} ${fmtTime(shop.pickup.startsAt)} · ${shop.pickup.venue}` : ""}`
+              : `${SHIPPING_LABEL[shop.method].title} · ${formatRupiahPlain(shop.shippingFee)}`,
+          total,
+          bank: payTo,
+          deadline: shop.payDeadline ? `${fmtDayDate(shop.payDeadline)} ${fmtTime(shop.payDeadline)}` : null,
+        }),
+      };
+    }
+    case "processing":
+      if (method === "pickup") return null;
+      return {
+        label: "info pesanan diproses",
+        text: orderProcessingMessage({
+          ...base,
+          products,
+          total,
+          courier: method === "jnt" ? SHIPPING_LABEL.jnt.short : method === "instant" ? `Instant (${INSTANT_COURIERS.join(" / ")})` : courier || "kurir",
+        }),
+      };
+    case "shipped":
+      if (method === "pickup") return null;
+      return {
+        label: "info pesanan dikirim",
+        text: orderShippedMessage({
+          ...base,
+          products,
+          courier: courier || "kurir",
+          tracking: order.trackingNumber,
+          trackingLabel: method === "instant" ? "Driver / no. booking" : "No. resi",
+          trackingUrl: shop?.trackingUrl ?? (method === "jnt" || isJntCourier(courier) ? JNT_TRACK_URL : null),
+          eta: method === "instant" ? "hari ini" : jntEta,
+        }),
+      };
+    case "completed":
+      return { label: "info pesanan selesai", text: orderCompletedMessage({ ...base, productNames: order.items.map((i) => i.name) }) };
+    default:
+      return null;
+  }
+}
+
+export function OrderPanel({ order, closeHref, bank, jntEta }: { order: OrderDetail; closeHref?: string; bank: ShopBank | null; jntEta: string | null }) {
   const shop = order.shop;
   const method = shop?.method ?? null;
-  const [courier, setCourier] = useState(order.courier && order.courier !== "Instant" ? order.courier : method === "instant" ? INSTANT_COURIERS[0] : method === "jnt" ? "J&T Express Reguler" : COURIERS[0]);
+  const [courier, setCourierState] = useState(order.courier && order.courier !== "Instant" ? order.courier : method === "instant" ? INSTANT_COURIERS[0] : method === "jnt" ? "J&T Express Reguler" : COURIERS[0]);
   const [tracking, setTracking] = useState(order.trackingNumber ?? "");
-  const [trackingUrl, setTrackingUrl] = useState(shop?.trackingUrl ?? "");
+  // Link lacak: J&T terisi otomatis halaman lacak resmi; kurir lain diisi admin (boleh kosong).
+  const [trackingUrl, setTrackingUrl] = useState(shop?.trackingUrl ?? (isJntCourier(courier) ? JNT_TRACK_URL : ""));
+  const setCourier = (next: string) => {
+    setCourierState(next);
+    if (isJntCourier(next) && !trackingUrl.trim()) setTrackingUrl(JNT_TRACK_URL);
+    else if (!isJntCourier(next) && trackingUrl === JNT_TRACK_URL) setTrackingUrl("");
+  };
   const [funds, setFunds] = useState(false);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [saving, start] = useTransition();
@@ -40,8 +112,10 @@ export function OrderPanel({ order, closeHref }: { order: OrderDetail; closeHref
     if (closeHref && window.matchMedia("(max-width: 1199px)").matches) ref.current?.scrollIntoView({ block: "start" });
   }, [closeHref, order.code]);
   const canShip = order.status === "processing" || (order.status === "pending" && order.payment === "paid");
-  const waPhone = order.customerPhone.replace(/\D/g, "").replace(/^0/, "62");
+  const waPhone = waNumber(order.customerPhone);
   const proof = shop?.proofs.find((p) => p.status === "pending");
+  const chat = chatTemplate(order, shop, bank, jntEta);
+  const chatHref = (chat && waLink(order.customerPhone, chat.text)) || (waPhone ? `https://wa.me/${waPhone}` : null);
 
   const run = (update: OrderUpdate, confirmText?: string) => {
     if (confirmText && !window.confirm(confirmText)) return;
@@ -55,6 +129,8 @@ export function OrderPanel({ order, closeHref }: { order: OrderDetail; closeHref
     if (reason?.trim()) run({ action: "cancel", reason });
   };
   const markShipped = () => {
+    const badUrl = trackingUrlError(trackingUrl);
+    if (badUrl) return toast.error(badUrl);
     if (method === "instant") {
       if (!courier.trim()) return toast.error("Isi nama kurir (GoSend / GrabExpress).");
       return run({ action: "ship", courier, tracking, trackingUrl });
@@ -63,7 +139,7 @@ export function OrderPanel({ order, closeHref }: { order: OrderDetail; closeHref
       toast.error("Isi nomor resi dulu sebelum menandai dikirim.");
       return;
     }
-    run({ action: "ship", courier, tracking });
+    run({ action: "ship", courier, tracking, trackingUrl });
   };
   const approve = () =>
     start(async () => {
@@ -192,8 +268,15 @@ export function OrderPanel({ order, closeHref }: { order: OrderDetail; closeHref
               {TIER_LABEL[order.customerTier]} member · {order.previousOrders ? `${order.previousOrders} order sebelumnya` : "order pertama"}
             </span>
           </span>
-          {waPhone && (
-            <a href={`https://wa.me/${waPhone}`} target="_blank" rel="noreferrer" className={styles.iconLink} aria-label={`WhatsApp ${order.customer}`}>
+          {chatHref && (
+            <a
+              href={chatHref}
+              target="_blank"
+              rel="noreferrer"
+              className={styles.iconLink}
+              aria-label={chat ? `Kirim ${chat.label} ke ${order.customer} via WhatsApp` : `WhatsApp ${order.customer}`}
+              title={chat ? `Kirim ${chat.label} via WhatsApp` : undefined}
+            >
               <AdminIcon name="whatsapp-logo" size={18} />
             </a>
           )}
@@ -321,12 +404,10 @@ export function OrderPanel({ order, closeHref }: { order: OrderDetail; closeHref
                 <input value={tracking} onChange={(e) => setTracking(e.target.value)} placeholder={method === "instant" ? "Driver / no. booking…" : "No. resi…"} />
               </label>
             </div>
-            {method === "instant" && (
-              <label className={styles.shipInput}>
-                <span className="visually-hidden">Link lacak kurir</span>
-                <input value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="Link lacak kurir (https://…)" inputMode="url" />
-              </label>
-            )}
+            <label className={styles.shipInput}>
+              <span className="visually-hidden">Link lacak kurir</span>
+              <input value={trackingUrl} onChange={(e) => setTrackingUrl(e.target.value)} placeholder="Link lacak kurir (https://…)" inputMode="url" type="url" />
+            </label>
             <div className={styles.shipActions}>
               <AdminButton href={`/admin/orders/${order.code}/label`} target="_blank" icon="download-simple">
                 Cetak label

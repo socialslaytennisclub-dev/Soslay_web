@@ -4,9 +4,9 @@ import type { CSSProperties } from "react";
 import { formatRupiahPlain, formatRupiahShort, formatShortDate, LEVEL_LABEL, TIER_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import type { OverviewData } from "@/server/admin/types";
+import { StatusBadge } from "../activities/ActivityCells";
 import { AdminIcon, type AdminIconName } from "../ui/AdminIcon";
 import {
-  Badge,
   Card,
   CardLink,
   DateBox,
@@ -143,7 +143,7 @@ export function UpcomingSessions({ data }: { data: OverviewData }) {
               <div className={styles.sessionBody}>
                 <p className={styles.sessionHead}>
                   <span className={styles.sessionTitle}>{session.title}</span>
-                  {fill >= 0.85 ? <Badge tone="pink" dot>Hampir penuh</Badge> : <Badge tone="lime" dot>Buka</Badge>}
+                  <StatusBadge status={session.status} label={session.status === "published" ? "Buka" : undefined} />
                 </p>
                 <p className={styles.sessionMeta}>
                   {session.venueName} · {time}

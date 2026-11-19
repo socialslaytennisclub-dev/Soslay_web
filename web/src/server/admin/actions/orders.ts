@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { MAX_REJECTIONS, REJECT_REASONS } from "@/lib/checkout";
+import { MAX_REJECTIONS, REJECT_REASONS, trackingUrlError } from "@/lib/checkout";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { demoOrders } from "@/server/shop/demo-store";
@@ -80,6 +80,8 @@ function reviewDemo(code: string, review: PaymentReview): ActionResult {
 
 export async function updateOrder(code: string, update: OrderUpdate): Promise<ActionResult> {
   if (update.action === "cancel" && !update.reason.trim()) return fail("Tulis alasan pembatalan.");
+  const badUrl = update.action === "ship" ? trackingUrlError(update.trackingUrl) : null;
+  if (badUrl) return fail(badUrl);
   if (!isSupabaseConfigured && demoOrders().has(code)) return updateDemo(code, update);
 
   const auth = await requireEditor("orders");
