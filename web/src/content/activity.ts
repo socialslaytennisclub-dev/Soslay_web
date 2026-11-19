@@ -1,6 +1,6 @@
 import { LEVEL_LABEL } from "@/lib/levels";
 import { ACTIVITY_PATHS } from "./activity-paths";
-import { CITY_TIMEZONE, type City } from "@/lib/format";
+import { CITY_TIMEZONE, cityOffset, type City } from "@/lib/format";
 import { KUYY_PROFILE_URL } from "@/lib/kuyy";
 
 /**
@@ -160,7 +160,7 @@ export const sessions: Session[] = [
 
 /** Waktu mulai sesi sebagai Date (memperhitungkan WIB/WITA). */
 export function sessionStart(session: Session): Date {
-  const offset = session.venue.city === "Bali" ? "+08:00" : "+07:00";
+  const offset = cityOffset(session.venue.city);
   return new Date(`${session.date}T${session.start}:00${offset}`);
 }
 

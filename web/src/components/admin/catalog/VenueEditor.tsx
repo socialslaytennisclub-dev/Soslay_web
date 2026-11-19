@@ -174,7 +174,7 @@ export function VenueEditor({ initial, imageOptions, initialNotice }: { initial:
                   </select>
                   <AdminIcon name="caret-down" size={14} />
                 </span>
-                {v.city && !websiteRegion(v.city) && <span className={styles.muted}>Website baru menampilkan venue di Jakarta (Jabodetabek), Tangerang & Bali — venue di kota ini belum tampil di halaman Venue.</span>}
+                {v.city && !websiteRegion(v.city) && <span className={styles.muted}>Filter kota di halaman Venue: Jakarta (Jabodetabek), Tangerang, Yogyakarta & Bali — venue di kota ini tetap tampil, hanya di &ldquo;All&rdquo;.</span>}
               </label>
               <label className={styles.field}>
                 <span className={styles.label}>Area</span>

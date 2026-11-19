@@ -7,7 +7,7 @@ import styles from "./VenueCard.module.css";
 
 export type VenueCardProps = {
   name: string;
-  /** Wilayah website ("Jakarta" / "Tangerang" / "Bali") — dipakai bila kota master kosong. */
+  /** Wilayah website ("Jakarta" / "Tangerang" / "Yogyakarta" / "Bali") atau kota master — dipakai bila cityName kosong. */
   city: string;
   /** Kota dari master venue ("Jakarta Pusat") — ditampilkan dalam bahasa Inggris, sama dengan card detail venue. */
   cityName?: string;

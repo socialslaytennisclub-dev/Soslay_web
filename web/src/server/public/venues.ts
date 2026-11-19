@@ -43,11 +43,9 @@ export const getWebsiteVenues = cache(async (): Promise<WebsiteVenue[]> => {
   }
 
   return (data as Row[])
-    // Website baru punya wilayah Jakarta (Jabodetabek) & Bali — kota venue dipetakan ke wilayahnya.
-    .flatMap((v) => {
-      const region = websiteRegion(v.city);
-      return region ? [{ ...v, cityName: v.city, city: region }] : [];
-    })
+    // Kota venue dipetakan ke wilayah filter website (Jakarta, Tangerang, Yogyakarta, Bali). Kota yang belum
+    // punya filter tetap tampil (hanya di "All"): `city` diisi kota master, tidak cocok dengan chip mana pun.
+    .map((v) => ({ ...v, cityName: v.city, city: websiteRegion(v.city) ?? v.city }))
     .map((v) => {
       const content = venueList.find((c) => c.slug === v.slug);
       return {

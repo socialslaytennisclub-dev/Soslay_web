@@ -9,6 +9,7 @@ import { getWebsiteSessions } from "@/server/public/sessions";
 import { demoOrders, DEMO_RATES } from "./demo-store";
 import { getShopBank, toInstant } from "./settings";
 import type { CheckoutContext, MyOrder, MyOrderListItem, PickupSession, ProofView, Recipient } from "./types";
+import { cityOffset } from "@/lib/format";
 
 /**
  * Data checkout & pesanan member. Dengan Supabase: tabel orders / order_payment_proofs (RLS: milik
@@ -45,7 +46,7 @@ async function demoPickupSessions(): Promise<PickupSession[]> {
   return sessions
     .filter((s) => s.type === "weekly-mabar")
     .map((s, i) => {
-      const offset = s.venue.city === "Bali" ? "+08:00" : "+07:00";
+      const offset = cityOffset(s.venue.city);
       const startsAt = new Date(`${s.date}T${s.start}:00${offset}`).toISOString();
       return { id: s.slug, title: "Mabar Session", startsAt, endsAt: new Date(`${s.date}T${s.end}:00${offset}`).toISOString(), venue: s.venue.name, registered: i === 0, deadline: pickupDeadline(startsAt) };
     })
