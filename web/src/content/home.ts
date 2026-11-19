@@ -1,6 +1,6 @@
 import type { IconName } from "@/components/ui";
 import { featuredProducts, productCardProps, productDetails } from "./products";
-import { venueList } from "./venues";
+import { venueList, type Venue } from "./venues";
 import type { PostPlatform } from "@/lib/community-posts";
 import { KUYY_PROFILE_URL } from "@/lib/kuyy";
 import { INSTAGRAM_URL, THREADS_URL } from "./social";
@@ -98,7 +98,7 @@ export const venues = {
   ],
   cta: { label: "See All Courts", href: "/venue" },
   /** Urutan = kolom kiri dulu (3), lalu kolom kanan (3), seperti di Figma. */
-  items: venueList,
+  items: venueList as Venue[],
 };
 
 export type Testimonial = {

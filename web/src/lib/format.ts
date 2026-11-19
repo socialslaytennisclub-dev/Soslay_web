@@ -1,4 +1,4 @@
-import { websiteRegion } from "./venue-options";
+import { timezoneForCity, websiteRegion } from "./venue-options";
 const rupiah = new Intl.NumberFormat("id-ID");
 
 /** 220000 → "Rp. 220.000" (format harga di desain Soslay). */
@@ -14,19 +14,37 @@ export function parseStat(raw: string): { value: number; prefix: string; suffix:
   return { value: Number(digits.replace(/[.,]/g, "")), prefix, suffix };
 }
 
-/** Zona waktu IANA per wilayah venue (Jakarta, Tangerang & Yogyakarta = WIB, Bali = WITA). */
+/**
+ * Zona waktu IANA per wilayah venue (Jakarta, Tangerang & Yogyakarta = WIB, Bali = WITA). WITA / WIT: venue di
+ * kota tanpa filter website di zona itu (mis. Makassar, Jayapura) — supaya jam jadwalnya tetap jam lokal.
+ */
 export const CITY_TIMEZONE = {
   Jakarta: "Asia/Jakarta",
   Tangerang: "Asia/Jakarta",
   Yogyakarta: "Asia/Jakarta",
   Bali: "Asia/Makassar",
+  WITA: "Asia/Makassar",
+  WIT: "Asia/Jayapura",
 } as const;
 
 export type City = keyof typeof CITY_TIMEZONE;
 
-/** Wilayah website dari kota venue di database (sama dengan filter Venue): Denpasar → "Bali" (WITA),
- * Tangerang & Tangerang Selatan → "Tangerang", lainnya → "Jakarta" (WIB). */
-export const cityOf = (city: string): City => websiteRegion(city) ?? "Jakarta";
+const UTC_OFFSET = { "Asia/Jakarta": "+07:00", "Asia/Makassar": "+08:00", "Asia/Jayapura": "+09:00" } as const;
+
+/** Offset UTC wilayah venue ("+07:00") — untuk menyusun waktu lokal "2026-11-20T07:00" jadi ISO. */
+export const cityOffset = (city: City) => UTC_OFFSET[CITY_TIMEZONE[city]];
+
+/**
+ * Wilayah website dari kota venue di database (sama dengan filter Venue): Denpasar → "Bali", Tangerang &
+ * Tangerang Selatan → "Tangerang", Yogyakarta → "Yogyakarta", Jabodetabek → "Jakarta". Kota tanpa filter →
+ * zona waktunya (WITA / WIT), selain itu "Jakarta" (WIB).
+ */
+export const cityOf = (city: string): City => {
+  const region = websiteRegion(city);
+  if (region) return region;
+  const tz = timezoneForCity(city);
+  return tz === "Asia/Makassar" ? "WITA" : tz === "Asia/Jayapura" ? "WIT" : "Jakarta";
+};
 
 const dateFormatters = new Map<string, Intl.DateTimeFormat>();
 
@@ -58,12 +76,11 @@ export function formatJamRange(start: string, end: string, separator = " - "): s
 
 /** "2026-09-20" + kota → "Sunday, 20 September 2026" (tanggal saja, di zona waktu kota). */
 export function formatTanggalISO(date: string, city: City): string {
-  const offset = city === "Bali" ? "+08:00" : "+07:00";
-  return formatTanggal(new Date(`${date}T12:00:00${offset}`), CITY_TIMEZONE[city]);
+  return formatTanggal(new Date(`${date}T12:00:00${cityOffset(city)}`), CITY_TIMEZONE[city]);
 }
 
 /** Label zona waktu tiap kota venue. */
-export const CITY_TZ_LABEL: Record<City, string> = { Jakarta: "WIB", Tangerang: "WIB", Yogyakarta: "WIB", Bali: "WITA" };
+export const CITY_TZ_LABEL: Record<City, string> = { Jakarta: "WIB", Tangerang: "WIB", Yogyakarta: "WIB", Bali: "WITA", WITA: "WITA", WIT: "WIT" };
 
 const shortFormatters = new Map<City, Intl.DateTimeFormat>();
 

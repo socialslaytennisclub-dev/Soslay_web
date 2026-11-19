@@ -46,7 +46,8 @@ export function venueCardInfo(venue: Venue, cityInEnglish: (city: string) => str
 
 const IMG = "/images/home";
 
-export const venueList: Venue[] = [
+/** Konten statis (fallback & demo): `city` wajib wilayah website — salah ketik ditolak tsc. */
+export const venueList: (Venue & { city: City })[] = [
   { slug: "ayana-midplaza-jakarta", name: "AYANA Midplaza Jakarta", city: "Jakarta", type: "Indoor", image: `${IMG}/venue-ayana.webp`, imagePosition: "50% 40%" , tagline: "An indoor court in the heart of Sudirman — keep playing even when it rains.", description: "An indoor hard court with even lighting. A favorite for early Weekly MABAR sessions before the Jakarta traffic kicks in.", area: "Central Jakarta", cityName: "Jakarta Pusat" },
   { slug: "raffles-hotel-jakarta", name: "Raffles Hotel Jakarta", city: "Jakarta", type: "Rooftop", image: `${IMG}/venue-raffles.webp`, imagePosition: "50% 50%" , tagline: "A rooftop court overlooking the Kuningan skyline.", description: "Play high above the city with the Jakarta sky as your backdrop. Perfect for afternoon coaching and sunset rallies.", area: "South Jakarta", cityName: "Jakarta Selatan" },
   { slug: "common-grounds-menteng", name: "Common Grounds Menteng", city: "Jakarta", type: "Outdoor", image: `${IMG}/venue-common-grounds.webp`, imagePosition: "50% 50%" , tagline: "Iconic terracotta walls, leafy shade, and always photogenic.", description: "A hidden tennis courtyard in the heart of Menteng. Check upcoming sessions, the participant guide, and highlights from past sessions — all on one page.", heroImage: "/images/venues/common-grounds-hero.webp", area: "Central Jakarta", cityName: "Jakarta Pusat", courtColor: "Terracotta-walled" },

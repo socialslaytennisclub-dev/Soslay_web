@@ -4,7 +4,7 @@ import { cache } from "react";
 import QRCode from "qrcode";
 import { memberSessions, splitSessions } from "@/content/member";
 import { LEVEL_LABEL, PARTICIPANT_SOURCE_LABEL } from "@/lib/admin-labels";
-import { cityOf, type City } from "@/lib/format";
+import { cityOf, cityOffset, type City } from "@/lib/format";
 import { sessionClosesAt } from "@/lib/session-close";
 import { compareStandings, DEFAULT_PODIUM_BONUS, DEFAULT_REVIEW_POINTS, effectivePodiumBonus, toPodiumBonus, type PodiumBonus } from "@/lib/standings";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -464,7 +464,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
 async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
   const s = memberSessions.find((x) => x.slug === slug);
   if (!s) return null;
-  const offset = s.city === "Bali" ? "+08:00" : "+07:00";
+  const offset = cityOffset(s.city);
   const startsAt = new Date(`${s.date}T${s.start}:00${offset}`).toISOString();
   const endsAt = new Date(`${s.date}T${s.end}:00${offset}`).toISOString();
   const now = Date.now();

@@ -7,6 +7,7 @@ import type { RedemptionStatus, RewardCategory, Tier } from "@/server/admin/type
 import { getWebsiteSessions } from "@/server/public/sessions";
 import type { ShippingMethod } from "@/lib/checkout";
 import { getMemberSession } from "./user";
+import { cityOffset } from "@/lib/format";
 
 /**
  * Katalog penukaran Slay Point untuk member (tab Dashboard › Tukar) + riwayat penukaran sendiri.
@@ -109,7 +110,7 @@ export const getRewardPage = cache(async (): Promise<RewardPage | null> => {
       redemptions: demoRedemptions(now),
       activities: sessions
         .map((s) => {
-          const offset = s.venue.city === "Bali" ? "+08:00" : "+07:00";
+          const offset = cityOffset(s.venue.city);
           return { id: s.slug, title: s.title, startsAt: new Date(`${s.date}T${s.start}:00${offset}`).toISOString(), endsAt: new Date(`${s.date}T${s.end}:00${offset}`).toISOString(), venue: s.venue.name };
         })
         .filter((a) => new Date(a.startsAt).getTime() > now && new Date(a.startsAt).getTime() < now + WINDOW_DAYS * 86_400_000)

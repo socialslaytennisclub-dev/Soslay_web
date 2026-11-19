@@ -47,7 +47,7 @@ export default async function VenueDetailPage({ params }: PageProps<"/venue/[slu
     .filter((session) => session.venue.name === venue.name)
     .slice(0, venuePage.detail.upcoming.limit);
   const photos = await getVenueGallery(venue.slug, venue.name);
-  const dateLabels = Object.fromEntries(photos.map((photo) => [photo.id, formatTanggalISO(photo.date, cityOf(venue.cityName ?? venue.city))]));
+  const dateLabels = Object.fromEntries(photos.map((photo) => [photo.id, formatTanggalISO(photo.date, cityOf(venue.city))]));
   const heroImage = venue.heroImage ?? venue.image;
 
   return (
