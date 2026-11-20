@@ -470,3 +470,41 @@
   align-items: center;
   gap: var(--space-12);
 }
+
+/* ── Share ke Instagram Story ────────────────────────────────── */
+.share {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.shareButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 48px;
+  padding: var(--space-12) var(--space-24);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-pink-500);
+  color: var(--color-navy-950);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+  transition: transform var(--duration-fast) var(--ease-out), filter var(--duration-fast) var(--ease-out);
+}
+
+.shareButton:hover {
+  filter: brightness(1.08);
+}
+
+.shareButton:active {
+  transform: scale(0.97);
+}
+
+.shareButton:focus-visible {
+  outline: 2px solid var(--color-lime-neon);
+  outline-offset: 3px;
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, Text } from "@/components/ui";
+import { Button, Icon, Text } from "@/components/ui";
 import { useMemberUser } from "@/hooks/useMemberUser";
 import { cx } from "@/lib/cx";
 import {
@@ -17,6 +17,7 @@ import { getGameLeaderboard, submitGameScore } from "@/server/game";
 import { Court3D, type Palette } from "./court3d";
 import { BONUSES, Game, START_LIVES, type BonusId } from "./engine";
 import { Sound } from "./sound";
+import { renderStoryCard, STORY_FILENAME } from "./storyCard";
 import styles from "./SlayRally.module.css";
 
 type Phase =
@@ -30,6 +31,8 @@ type Phase =
   | "over";
 
 const GAME_PATH = "/game";
+/** Teks ajakan di gambar Story — domain publik + path game. */
+const STORY_LINK = "slayclub.id/game";
 
 const BEST_KEY = "soslay-rally-best";
 
@@ -130,6 +133,9 @@ export function SlayRally() {
   const [result, setResult] = useState<SubmitScoreResult | null>(null);
   /** null = memuat, "error" = server tidak terjangkau. */
   const [board, setBoard] = useState<LeaderboardRow[] | "error" | null>(null);
+  /** Gambar Story 1080×1920 untuk game over ini — dibuat lebih dulu supaya share tetap di dalam klik (iOS). */
+  const [story, setStory] = useState<Blob | null>(null);
+  const [shareNote, setShareNote] = useState<string | null>(null);
 
   useEffect(() => {
     memberRef.current = Boolean(member);
@@ -297,6 +303,32 @@ export function SlayRally() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
+  // Gambar Story disiapkan setelah leaderboard selesai dimuat (peringkat ikut tergambar).
+  useEffect(() => {
+    if (phase !== "over" || board === null) return;
+    let cancelled = false;
+    const rank = Array.isArray(board) ? (board.find((row) => row.isMe)?.rank ?? null) : null;
+    renderStoryCard({
+      score,
+      level,
+      newBest,
+      rank,
+      points: result?.ok ? result.pointsAwarded : null,
+      link: STORY_LINK,
+    })
+      .then((blob) => {
+        if (!cancelled) setStory(blob);
+      })
+      .catch(() => {
+        // Canvas gagal (memori / browser lama) — tombol share tidak ditampilkan.
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Sekali per game over, setelah leaderboard & hasil simpan skor tersedia.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, board]);
+
   // Hitung mundur 3-2-1 sebelum bola diluncurkan.
   useEffect(() => {
     if (phase !== "countdown") return;
@@ -384,6 +416,8 @@ export function SlayRally() {
     setToast(null);
     setResult(null);
     setBoard(null);
+    setStory(null);
+    setShareNote(null);
     setCount(3);
     setPhase("countdown");
   };
@@ -414,6 +448,36 @@ export function SlayRally() {
   };
 
   const nextParam = `?next=${encodeURIComponent(GAME_PATH)}`;
+
+  const downloadStory = (blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = STORY_FILENAME;
+    link.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
+    setShareNote("Image saved. Open Instagram, add to your Story, and pick this image.");
+  };
+
+  /**
+   * HP: lembar share bawaan (pilih Instagram → Stories). Desktop / browser tanpa share file:
+   * gambar diunduh. navigator.share dipanggil langsung di klik — gambar sudah siap sebelumnya.
+   */
+  const shareStory = async () => {
+    if (!story) return;
+    const file = new File([story], STORY_FILENAME, { type: "image/png" });
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] });
+        setShareNote(null);
+      } catch (error) {
+        // Dibatalkan pengguna → diam; gagal lainnya → unduh saja.
+        if ((error as DOMException)?.name !== "AbortError") downloadStory(story);
+      }
+      return;
+    }
+    downloadStory(story);
+  };
 
   const inGame =
     phase === "countdown" || phase === "playing" || phase === "paused";
@@ -806,6 +870,20 @@ export function SlayRally() {
                 </ol>
               )}
             </div>
+
+            {story && (
+              <div className={styles.share}>
+                <button type="button" className={styles.shareButton} onClick={shareStory}>
+                  <Icon name="instagram-logo" size={22} />
+                  Share to Instagram Story
+                </button>
+                {shareNote && (
+                  <Text variant="body-14" tone="on-inverse" align="center" muted role="status">
+                    {shareNote}
+                  </Text>
+                )}
+              </div>
+            )}
 
             <div className={styles.actions}>
               <Button variant="arrow" onClick={startRound}>
