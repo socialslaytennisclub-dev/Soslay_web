@@ -48,7 +48,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       suppressHydrationWarning
     >
       <body suppressHydrationWarning>
-        {/* Splash homepage: tandai <html data-splash> sebelum paint supaya homepage tidak berkedip dulu. */}
+        {/* Splash homepage & /game (SPLASH_PATHS): tandai <html data-splash> sebelum paint supaya halaman tidak berkedip dulu. */}
         <Script id="soslay-splash" strategy="beforeInteractive">
           {SPLASH_SCRIPT}
         </Script>

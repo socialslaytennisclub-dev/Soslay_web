@@ -26,7 +26,7 @@ const genderValue = (label: string) => GENDERS.find(([l]) => l === label)?.[1] ?
  * Figma 25:1854 — form daftar: Nama Lengkap + Gender · Display Name + Kuy ID · Tanggal lahir + Phone ·
  * Email + Password · persetujuan · tombol arrow → server action `signUp` (Supabase Auth + profil member).
  */
-export function RegisterForm() {
+export function RegisterForm({ next: after }: { next?: string } = {}) {
   const formRef = useRef<HTMLFormElement>(null);
   const [values, setValues] = useState<Values>(initialValues);
   const [consent, setConsent] = useState(false);
@@ -59,7 +59,7 @@ export function RegisterForm() {
       return;
     }
     startSubmit(async () => {
-      const result = await signUp(values);
+      const result = await signUp(values, after);
       if (result?.fieldErrors) {
         setErrors(result.fieldErrors);
         requestAnimationFrame(() => formRef.current?.querySelector<HTMLElement>("[aria-invalid='true']")?.focus());
@@ -69,7 +69,7 @@ export function RegisterForm() {
     });
   }
 
-  if (confirmEmail) return <ConfirmEmailNotice email={confirmEmail} onChanged={setConfirmEmail} />;
+  if (confirmEmail) return <ConfirmEmailNotice email={confirmEmail} onChanged={setConfirmEmail} next={after} />;
 
   return (
     <form ref={formRef} className={styles.form} onSubmit={submit} noValidate>

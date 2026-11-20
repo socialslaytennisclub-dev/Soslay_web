@@ -1,0 +1,65 @@
+/* Halaman controller Slay Tennis — satu layar penuh, tanpa gulir. */
+
+.page {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-navy-950);
+  color: var(--text-on-inverse);
+  overscroll-behavior: none;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-8);
+  padding: calc(var(--space-12) + env(safe-area-inset-top)) var(--space-16) var(--space-12);
+  border-bottom: 1px solid rgb(255 255 255 / 0.12);
+}
+
+.title {
+  letter-spacing: var(--tracking-overline);
+  text-transform: uppercase;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  font-family: var(--font-ui);
+  font-size: 13px;
+  opacity: 0.9;
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-pink-500);
+}
+
+.status[data-state="connected"] .dot {
+  background: var(--color-lime-neon);
+}
+
+.status[data-state="connecting"] .dot,
+.status[data-state="waiting"] .dot {
+  background: var(--color-indigo-200);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot {
+    animation: none !important;
+  }
+}

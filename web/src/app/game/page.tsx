@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { SlayRally } from "@/components/game/SlayRally/SlayRally";
+import { SplashScreen } from "@/components/home/SplashScreen/SplashScreen";
 import { Footer } from "@/components/layout/Footer/Footer";
 import { Navbar } from "@/components/layout/Navbar/Navbar";
 import { MotionProvider } from "@/components/motion/MotionProvider";
@@ -13,6 +14,8 @@ export const metadata: Metadata = {
 export default function GamePage() {
   return (
     <>
+      {/* Onboarding sama dengan homepage — penandanya dipasang SPLASH_SCRIPT (SPLASH_PATHS) di root layout. */}
+      <SplashScreen />
       <Navbar variant="solid" />
       <MotionProvider>
         <main>

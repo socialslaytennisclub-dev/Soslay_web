@@ -1,8 +1,8 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { ADMIN_LOGIN, AFTER_AUTH, registerPage, RESET_PASSWORD } from "@/content/auth";
+import { ADMIN_LOGIN, AFTER_AUTH, AFTER_CONFIRM_COOKIE, registerPage, RESET_PASSWORD } from "@/content/auth";
 import { compact, normalizeKuyId, required, todayIso, validateBirthDate, validateGender, validateEmail, validateKuyId, validateNewEmail, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -10,16 +10,24 @@ import { isSupabaseConfigured, supabaseAnonKey, supabaseUrl } from "@/lib/supaba
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { localPhone } from "@/lib/wa-invite";
 import { allowAttempt, clientIp } from "@/server/rate-limit";
+import { DEMO_MEMBER_COOKIE } from "@/lib/demo-member";
+import { isInternalPath, safeNext as safePath } from "@/lib/safe-path";
 
 /** Hanya path internal ("/admin", "/akun?x=1") — cegah open redirect lewat ?next=. */
 function safeNext(next: string | undefined) {
-  return next && next.startsWith("/") && !next.startsWith("//") ? next : AFTER_AUTH;
+  return safePath(next, AFTER_AUTH);
+}
+
+/** Mode demo: tandai "sudah login" supaya alur yang butuh akun (mis. ronde 2 /game) bisa dicoba. */
+async function enterDemo(next: string | undefined): Promise<never> {
+  (await cookies()).set(DEMO_MEMBER_COOKIE, "1", { path: "/", sameSite: "lax", maxAge: 60 * 60 * 24 * 7 });
+  redirect(safeNext(next));
 }
 
 export type SignInResult = { error: string; code: "invalid_credentials" | "failed" } | undefined;
 
 export async function signIn(email: string, password: string, next?: string): Promise<SignInResult> {
-  if (!isSupabaseConfigured) redirect(safeNext(next));
+  if (!isSupabaseConfigured) await enterDemo(next);
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
@@ -52,8 +60,8 @@ export type SignUpResult = { error?: string; fieldErrors?: FieldErrors<SignUpFie
  * `handle_member_signup` membuat baris profiles. Bila "Confirm email" aktif di Supabase,
  * belum ada sesi → form menampilkan "cek email"; selain itu langsung masuk ke /akun.
  */
-export async function signUp(input: SignUpInput): Promise<SignUpResult> {
-  if (!isSupabaseConfigured) redirect(AFTER_AUTH);
+export async function signUp(input: SignUpInput, next?: string): Promise<SignUpResult> {
+  if (!isSupabaseConfigured) await enterDemo(next);
 
   const values = Object.fromEntries(Object.entries(input).map(([k, v]) => [k, k === "password" ? String(v ?? "") : String(v ?? "").trim()])) as SignUpInput;
   const fieldErrors = compact<SignUpField>({
@@ -73,11 +81,12 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
   const { data: kuyFree } = await supabase.rpc("kuy_id_available", { p_kuy_id: kuyId });
   if (kuyFree === false) return { fieldErrors: { kuyId: "This Kuy ID is already registered" } };
 
+  await rememberAfterConfirm(next);
   const { data, error } = await supabase.auth.signUp({
     email: values.email.toLowerCase(),
     password: values.password,
     options: {
-      emailRedirectTo: await signupRedirect(),
+      emailRedirectTo: await signupRedirect(next),
       data: {
         signup: "member",
         full_name: values.fullName,
@@ -105,12 +114,26 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
   // Supabase tidak membocorkan email yang sudah terdaftar: user tanpa identities = sudah ada.
   if (data.user && data.user.identities?.length === 0) return { fieldErrors: { email: "This email is already registered — sign in instead" } };
   if (!data.session) return { confirmEmail: values.email.toLowerCase() };
-  redirect(AFTER_AUTH);
+  redirect(safeNext(next));
 }
 
-/** Link di email konfirmasi signup — sama dengan signUp. */
-async function signupRedirect() {
-  return `${await requestOrigin()}/auth/confirm?next=${encodeURIComponent(AFTER_AUTH)}`;
+/** Link di email konfirmasi signup — tujuan sama dengan signUp (`next`, mis. /game, atau /akun). */
+async function signupRedirect(next?: string) {
+  return `${await requestOrigin()}/auth/confirm?next=${encodeURIComponent(safeNext(next))}`;
+}
+
+/**
+ * Template email Supabase menulis `next=/akun` sendiri (tidak memakai emailRedirectTo), jadi tujuan
+ * khusus setelah verifikasi (mis. /game) dititipkan di cookie — dibaca /auth/confirm di browser yang
+ * sama. Dipanggil setiap kali link konfirmasi dikirim.
+ */
+async function rememberAfterConfirm(next?: string) {
+  const jar = await cookies();
+  if (isInternalPath(next) && next !== AFTER_AUTH) {
+    jar.set(AFTER_CONFIRM_COOKIE, next, { path: "/", httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 });
+  } else {
+    jar.delete(AFTER_CONFIRM_COOKIE);
+  }
 }
 
 /** Klien anon tanpa cookie — cek password tanpa membuat / menimpa sesi login di browser. */
@@ -135,7 +158,7 @@ export type ChangeSignupEmailResult = {
  * benar tapi akun belum aktif. Setelah itu email Auth diganti (service role), link konfirmasi
  * dikirim ulang ke email baru, dan profiles.email disamakan.
  */
-export async function changeSignupEmail(currentEmail: string, newEmail: string, password: string): Promise<ChangeSignupEmailResult> {
+export async function changeSignupEmail(currentEmail: string, newEmail: string, password: string, next?: string): Promise<ChangeSignupEmailResult> {
   const from = String(currentEmail ?? "").trim().toLowerCase();
   const to = String(newEmail ?? "").trim().toLowerCase();
   const fieldErrors = compact<"email" | "password">({
@@ -201,7 +224,8 @@ export async function changeSignupEmail(currentEmail: string, newEmail: string, 
   }
 
   // 4) Kirim ulang link konfirmasi ke email baru.
-  const { error: resendError } = await anon.auth.resend({ type: "signup", email: to, options: { emailRedirectTo: await signupRedirect() } });
+  await rememberAfterConfirm(next);
+  const { error: resendError } = await anon.auth.resend({ type: "signup", email: to, options: { emailRedirectTo: await signupRedirect(next) } });
   if (resendError) console.warn(`[changeSignupEmail] kirim ulang konfirmasi gagal: ${resendError.message}`);
   return { confirmEmail: to, resendFailed: !!resendError };
 }
@@ -209,7 +233,7 @@ export async function changeSignupEmail(currentEmail: string, newEmail: string, 
 export type ResendConfirmationResult = { sent?: boolean; error?: string };
 
 /** Kirim ulang link konfirmasi signup. Supabase membatasi ±1 kali per menit per akun. */
-export async function resendSignupConfirmation(email: string): Promise<ResendConfirmationResult> {
+export async function resendSignupConfirmation(email: string, next?: string): Promise<ResendConfirmationResult> {
   const value = String(email ?? "").trim().toLowerCase();
   if (validateEmail(value)) return { error: "Please enter a valid email" };
   if (!isSupabaseConfigured) return { sent: true };
@@ -218,7 +242,8 @@ export async function resendSignupConfirmation(email: string): Promise<ResendCon
   if (!allowAttempt(`resend:ip:${ip}`, 5, 15 * 60_000) || !allowAttempt(`resend:acct:${value}`, 3, 15 * 60_000)) {
     return { error: "Please wait a few minutes before requesting another email." };
   }
-  const { error } = await ephemeralClient().auth.resend({ type: "signup", email: value, options: { emailRedirectTo: await signupRedirect() } });
+  await rememberAfterConfirm(next);
+  const { error } = await ephemeralClient().auth.resend({ type: "signup", email: value, options: { emailRedirectTo: await signupRedirect(next) } });
   if (isRateLimited(error?.code) || error?.status === 429) return { error: "Please wait a minute before requesting another email." };
   if (error) return { error: "Couldn't send the email. Please try again in a moment." };
   return { sent: true };
@@ -280,6 +305,8 @@ export async function signOut(formData?: FormData) {
   if (isSupabaseConfigured) {
     const supabase = await createSupabaseServerClient(admin ? "admin" : "member");
     await supabase.auth.signOut({ scope: "local" });
+  } else {
+    (await cookies()).delete(DEMO_MEMBER_COOKIE);
   }
   redirect(admin ? ADMIN_LOGIN : "/masuk");
 }

@@ -1,0 +1,215 @@
+/* Kontrol sentuh Slay Tennis — dipakai halaman controller (HP) dan overlay di layar permainan. */
+
+.pad {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-24);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Controller penuh: joystick di atas & tombol di bawah (potret), berdampingan saat lanskap. */
+.full {
+  flex: 1;
+  flex-direction: column;
+  justify-content: space-evenly;
+  padding: var(--space-24);
+}
+
+@media (orientation: landscape) {
+  .full {
+    flex-direction: row;
+    padding-inline: var(--space-48, 48px);
+  }
+}
+
+.overlay {
+  position: absolute;
+  inset: auto 0 0;
+  z-index: 2;
+  padding: var(--space-12) var(--space-16) calc(var(--space-16) + env(safe-area-inset-bottom));
+  pointer-events: none;
+}
+
+.overlay > * {
+  pointer-events: auto;
+}
+
+.stick {
+  position: relative;
+  flex: none;
+  width: min(62vw, 46vh, 260px);
+  aspect-ratio: 1;
+  border-radius: var(--radius-full);
+  border: 2px solid rgb(255 255 255 / 0.28);
+  background: radial-gradient(circle, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.03));
+  display: grid;
+  place-items: center;
+}
+
+.overlay .stick {
+  width: min(34vw, 132px);
+  background: color-mix(in srgb, var(--color-navy-950) 45%, transparent);
+}
+
+.knob {
+  width: 44%;
+  aspect-ratio: 1;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-neon);
+  box-shadow: 0 6px 18px rgb(0 0 0 / 0.35);
+  pointer-events: none;
+}
+
+.shots {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: end;
+  gap: var(--space-12);
+  width: min(100%, 420px);
+}
+
+.overlay .shots {
+  width: auto;
+  grid-template-columns: repeat(3, auto);
+  gap: var(--space-8);
+}
+
+.shot {
+  aspect-ratio: 1;
+  min-width: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: var(--color-navy-950);
+  font-family: var(--font-display);
+  cursor: pointer;
+  touch-action: none;
+  transition: transform 80ms var(--ease-out);
+}
+
+.overlay .shot {
+  width: min(19vw, 76px);
+}
+
+/* Tombol utama (Hit) lebih besar dan lebih tinggi. */
+.flat {
+  background: var(--color-lime-neon);
+  transform: translateY(-14%);
+}
+
+.lob {
+  background: var(--color-indigo-200);
+}
+
+.drop {
+  background: var(--color-pink-500);
+}
+
+.shotPressed {
+  transform: scale(0.9);
+}
+
+.flat.shotPressed {
+  transform: translateY(-14%) scale(0.9);
+}
+
+.shot:focus-visible {
+  outline: 3px solid var(--color-white);
+  outline-offset: 3px;
+}
+
+.shotLabel {
+  font-size: clamp(16px, 5vw, 26px);
+  font-weight: var(--weight-extrabold);
+  line-height: 1;
+}
+
+.shotHint {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  font-weight: var(--weight-semibold);
+  opacity: 0.75;
+}
+
+.overlay .shotHint {
+  display: none;
+}
+
+.overlay .shotLabel {
+  font-size: 15px;
+}
+
+/* Hanya tombol pukulan (geraknya lewat MoveZone): rapat ke kanan bawah. */
+.shotsOnly {
+  justify-content: flex-end;
+}
+
+.overlay.shotsOnly .shot {
+  width: min(21vw, 22vh, 92px);
+}
+
+.overlay.shotsOnly .shotLabel {
+  font-size: 17px;
+}
+
+/* ── Joystick mengambang (separuh kiri lapangan) ─────────────── */
+.zone {
+  position: absolute;
+  inset: 64px 50% 0 0;
+  z-index: 1;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.zoneHint {
+  position: absolute;
+  left: var(--space-16);
+  /* Di atas deretan tombol pukulan, supaya tidak tertutup di layar tegak yang sempit. */
+  bottom: calc(132px + env(safe-area-inset-bottom));
+  padding: var(--space-8) var(--space-12);
+  border: 1px dashed rgb(255 255 255 / 0.4);
+  border-radius: var(--radius-full);
+  color: var(--text-on-inverse);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  font-weight: var(--weight-semibold);
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.zoneRing {
+  position: absolute;
+  width: 112px;
+  height: 112px;
+  margin: -56px 0 0 -56px;
+  border-radius: var(--radius-full);
+  border: 2px solid rgb(255 255 255 / 0.35);
+  background: color-mix(in srgb, var(--color-navy-950) 35%, transparent);
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+
+.zoneKnob {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-neon);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.35);
+}
+
+@media (orientation: landscape) {
+  .zoneHint {
+    bottom: calc(var(--space-24) + env(safe-area-inset-bottom));
+  }
+}
