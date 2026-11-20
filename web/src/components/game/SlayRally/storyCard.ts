@@ -102,18 +102,105 @@ function drawCourt(ctx: CanvasRenderingContext2D, c: ReturnType<typeof tokens>) 
   line(0, 0.78, 1, 0.78);
   line(0.42, -0.78, 0.42, 0.78);
   line(0.42, 0, 1, 0);
-  // Net.
-  const net = at(0.16);
-  ctx.fillStyle = "rgba(255,255,255,0.9)";
-  ctx.fillRect(mid - net.half - 20, net.y - 6, (net.half + 20) * 2, 10);
-  ctx.strokeStyle = "rgba(255,255,255,0.25)";
-  ctx.lineWidth = 2;
-  for (let x = mid - net.half; x <= mid + net.half; x += 22) {
+  drawNet(ctx, c, mid, at(0.2));
+}
+
+/**
+ * Net berdiri di lapangan (dilihat dari belakang baseline): tiang di kedua sisi, jaring kotak
+ * tembus pandang, pita putih di atas yang sedikit melengkung turun ke tengah, dan bayangan di lantai.
+ */
+function drawNet(
+  ctx: CanvasRenderingContext2D,
+  c: ReturnType<typeof tokens>,
+  mid: number,
+  base: { y: number; half: number },
+) {
+  const overhang = 34; // tiang berdiri sedikit di luar garis lapangan
+  const left = mid - base.half - overhang;
+  const right = mid + base.half + overhang;
+  const height = base.half * 0.3; // tinggi net di tiang
+  const sag = height * 0.12; // pita turun sedikit di tengah
+  const topAt = (x: number) => {
+    const t = (x - mid) / (right - mid); // -1..1
+    return base.y - height + sag * (1 - t * t);
+  };
+
+  // Bayangan net di lantai lapangan.
+  ctx.save();
+  ctx.fillStyle = "rgba(6,6,40,0.35)";
+  ctx.beginPath();
+  ctx.moveTo(left, base.y);
+  ctx.lineTo(right, base.y);
+  ctx.lineTo(right + 30, base.y + 26);
+  ctx.lineTo(left - 30, base.y + 26);
+  ctx.closePath();
+  ctx.fill();
+
+  // Badan jaring: area di antara pita & lantai, digelapkan tipis supaya terbaca sebagai jaring.
+  const body = new Path2D();
+  body.moveTo(left, base.y);
+  for (let x = left; x <= right; x += 8) body.lineTo(x, topAt(x));
+  body.lineTo(right, topAt(right));
+  body.lineTo(right, base.y);
+  body.closePath();
+  ctx.fillStyle = "rgba(6,6,40,0.28)";
+  ctx.fill(body);
+
+  // Mata jaring (kotak) dipotong mengikuti bentuk jaring.
+  ctx.clip(body);
+  ctx.strokeStyle = "rgba(255,255,255,0.28)";
+  ctx.lineWidth = 1.5;
+  const cell = 14;
+  for (let x = left; x <= right; x += cell) {
     ctx.beginPath();
-    ctx.moveTo(x, net.y + 4);
-    ctx.lineTo(x, net.y + 70);
+    ctx.moveTo(x, base.y - height - 4);
+    ctx.lineTo(x, base.y);
     ctx.stroke();
   }
+  for (let y = base.y; y >= base.y - height - 4; y -= cell) {
+    ctx.beginPath();
+    ctx.moveTo(left, y);
+    ctx.lineTo(right, y);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // Pita putih di atas (dengan sisi bawah sedikit gelap supaya bervolume).
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "rgba(6,6,40,0.35)";
+  ctx.lineWidth = 16;
+  ctx.beginPath();
+  for (let x = left; x <= right; x += 8) ctx.lineTo(x, topAt(x) + 4);
+  ctx.stroke();
+  ctx.strokeStyle = c.white;
+  ctx.lineWidth = 12;
+  ctx.beginPath();
+  for (let x = left; x <= right; x += 8) ctx.lineTo(x, topAt(x));
+  ctx.lineTo(right, topAt(right));
+  ctx.stroke();
+
+  // Tali bawah net.
+  ctx.strokeStyle = "rgba(255,255,255,0.6)";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(left, base.y);
+  ctx.lineTo(right, base.y);
+  ctx.stroke();
+
+  // Tiang: batang navy dengan sisi terang, topi lime di atas.
+  for (const x of [left, right]) {
+    const top = base.y - height - 10;
+    roundRect(ctx, x - 9, top, 18, base.y - top + 6, 6);
+    ctx.fillStyle = c.navy950;
+    ctx.fill();
+    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.fillRect(x - 5, top + 6, 4, base.y - top - 6);
+    ctx.beginPath();
+    ctx.arc(x, top, 12, 0, Math.PI * 2);
+    ctx.fillStyle = c.lime;
+    ctx.fill();
+  }
+  ctx.lineCap = "butt";
 }
 
 export async function renderStoryCard(data: StoryData): Promise<Blob> {
@@ -207,19 +294,19 @@ export async function renderStoryCard(data: StoryData): Promise<Blob> {
   ctx.font = `800 76px ${c.display}`;
   ctx.shadowColor = "rgba(6,6,40,0.55)";
   ctx.shadowBlur = 24;
-  ctx.fillText("Can you beat me?", STORY_W / 2, 1500);
+  ctx.fillText("Can you beat me?", STORY_W / 2, 1525);
   ctx.shadowBlur = 0;
   const link = data.link;
   ctx.font = `700 44px ${c.display}`;
   const lw = ctx.measureText(link).width + 96;
-  roundRect(ctx, (STORY_W - lw) / 2, 1545, lw, 96, 48);
+  roundRect(ctx, (STORY_W - lw) / 2, 1565, lw, 96, 48);
   ctx.fillStyle = c.navy950;
   ctx.fill();
   ctx.lineWidth = 4;
   ctx.strokeStyle = c.lime;
   ctx.stroke();
   ctx.fillStyle = c.lime;
-  ctx.fillText(link, STORY_W / 2, 1609);
+  ctx.fillText(link, STORY_W / 2, 1629);
 
   return new Promise((resolve, reject) =>
     canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("toBlob failed"))), "image/png"),

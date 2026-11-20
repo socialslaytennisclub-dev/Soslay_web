@@ -871,6 +871,15 @@ export function SlayRally() {
               )}
             </div>
 
+            <div className={styles.actions}>
+              <Button variant="arrow" onClick={startRound}>
+                Play again
+              </Button>
+              <Button variant="outline-light" size="sm" href="/activity">
+                Play for real
+              </Button>
+            </div>
+
             {story && (
               <div className={styles.share}>
                 <button type="button" className={styles.shareButton} onClick={shareStory}>
@@ -884,15 +893,6 @@ export function SlayRally() {
                 )}
               </div>
             )}
-
-            <div className={styles.actions}>
-              <Button variant="arrow" onClick={startRound}>
-                Play again
-              </Button>
-              <Button variant="outline-light" size="sm" href="/activity">
-                Play for real
-              </Button>
-            </div>
           </div>
         )}
       </div>
