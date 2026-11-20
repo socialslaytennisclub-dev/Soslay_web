@@ -2,13 +2,34 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Text } from "@/components/ui";
+import { useMemberUser } from "@/hooks/useMemberUser";
 import { cx } from "@/lib/cx";
+import {
+  FREE_ROUNDS,
+  GAME_POINTS_PER_SLAY_POINT,
+  GATE_SAVE_KEY,
+  GATE_SAVE_TTL_MS,
+  type GateSave,
+  type LeaderboardRow,
+  type SubmitScoreResult,
+} from "@/lib/game";
+import { getGameLeaderboard, submitGameScore } from "@/server/game";
 import { Court3D, type Palette } from "./court3d";
 import { BONUSES, Game, START_LIVES, type BonusId } from "./engine";
 import { Sound } from "./sound";
 import styles from "./SlayRally.module.css";
 
-type Phase = "intro" | "bonuses" | "countdown" | "playing" | "paused" | "over";
+type Phase =
+  | "intro"
+  | "resume"
+  | "bonuses"
+  | "countdown"
+  | "playing"
+  | "paused"
+  | "gate"
+  | "over";
+
+const GAME_PATH = "/game";
 
 const BEST_KEY = "soslay-rally-best";
 
@@ -27,6 +48,31 @@ function readBest(): number {
     return Number(window.localStorage.getItem(BEST_KEY)) || 0;
   } catch {
     return 0;
+  }
+}
+
+/** Game tamu yang berhenti di gerbang ronde 2 — dilanjutkan setelah daftar / masuk. */
+function readGateSave(): GateSave | null {
+  try {
+    const raw = window.localStorage.getItem(GATE_SAVE_KEY);
+    if (!raw) return null;
+    const save = JSON.parse(raw) as GateSave;
+    if (!save || Date.now() - save.savedAt > GATE_SAVE_TTL_MS) {
+      window.localStorage.removeItem(GATE_SAVE_KEY);
+      return null;
+    }
+    return save;
+  } catch {
+    return null;
+  }
+}
+
+function writeGateSave(save: GateSave | null) {
+  try {
+    if (save) window.localStorage.setItem(GATE_SAVE_KEY, JSON.stringify(save));
+    else window.localStorage.removeItem(GATE_SAVE_KEY);
+  } catch {
+    // Penyimpanan diblokir — lanjut ronde 2 tetap bisa di tab ini selama halaman tidak ditutup.
   }
 }
 
@@ -63,6 +109,12 @@ export function SlayRally() {
   const courtRef = useRef<Court3D | null>(null);
   const soundRef = useRef<Sound | null>(null);
   const phaseRef = useRef<Phase>("intro");
+  const member = useMemberUser();
+  const memberRef = useRef(false);
+  /** Waktu bermain aktif (tanpa jeda) — dikirim bersama skor untuk dicek masuk akal di server. */
+  const playMsRef = useRef(0);
+  const levelRef = useRef(1);
+  const gateRef = useRef<GateSave | null>(null);
 
   const [phase, setPhaseState] = useState<Phase>("intro");
   const [score, setScore] = useState(0);
@@ -74,6 +126,14 @@ export function SlayRally() {
   const [unsupported, setUnsupported] = useState(false);
   const [muted, setMuted] = useState(false);
   const [toast, setToast] = useState<{ id: BonusId; key: number } | null>(null);
+  const [saved, setSaved] = useState<GateSave | null>(null);
+  const [result, setResult] = useState<SubmitScoreResult | null>(null);
+  /** null = memuat, "error" = server tidak terjangkau. */
+  const [board, setBoard] = useState<LeaderboardRow[] | "error" | null>(null);
+
+  useEffect(() => {
+    memberRef.current = Boolean(member);
+  }, [member]);
 
   const setPhase = useCallback((next: Phase) => {
     phaseRef.current = next;
@@ -103,10 +163,25 @@ export function SlayRally() {
     const game = new Game({
       onScore: setScore,
       onLives: setLives,
-      onLevel: setLevel,
+      onLevel: (next) => {
+        levelRef.current = next;
+        setLevel(next);
+      },
+      // Tamu hanya boleh main ronde 1; ronde berikutnya wajib akun.
+      canEnterLevel: (next) => memberRef.current || next <= FREE_ROUNDS,
+      onGate: (state) => {
+        const save = { ...state, durationMs: Math.round(playMsRef.current), savedAt: Date.now() };
+        gateRef.current = save;
+        writeGateSave(save);
+        setSaved(save);
+        setPhase("gate");
+      },
       onBonus: (id) => setToast({ id, key: Date.now() }),
       onSound: (kind) => sound.play(kind),
       onGameOver: (finalScore) => {
+        writeGateSave(null);
+        gateRef.current = null;
+        setSaved(null);
         const previous = readBest();
         if (finalScore > previous) {
           try {
@@ -140,7 +215,10 @@ export function SlayRally() {
       const dt = Math.min((now - last) / 1000, 0.033);
       last = now;
       const current = phaseRef.current;
-      if (current === "playing") game.update(dt);
+      if (current === "playing") {
+        playMsRef.current += dt * 1000;
+        game.update(dt);
+      }
       // Di layar lain adegannya diam — gambar ulang hanya bila ada yang berubah (ukuran, font).
       if (current === "playing" || current === "countdown" || court.dirty)
         court.render(game, dt);
@@ -176,6 +254,47 @@ export function SlayRally() {
           ? 0
           : 0.45;
     soundRef.current?.setMusicLevel(level);
+  }, [phase]);
+
+  // Kembali dari Daftar / Masuk dengan game tamu tersimpan → tawarkan lanjut ronde 2.
+  useEffect(() => {
+    if (!member || phaseRef.current !== "intro") return;
+    const save = readGateSave();
+    if (!save) return;
+    queueMicrotask(() => {
+      setSaved(save);
+      setPhase("resume");
+    });
+  }, [member, setPhase]);
+
+  // Game over: member → skor disimpan (→ Slay Point), lalu leaderboard dimuat (sudah termasuk skor ini).
+  useEffect(() => {
+    if (phase !== "over") return;
+    let cancelled = false;
+    const finalScore = score;
+    const run = async () => {
+      let saveResult: SubmitScoreResult | null = null;
+      if (member && finalScore > 0) {
+        saveResult = await submitGameScore({
+          score: finalScore,
+          level: levelRef.current,
+          durationMs: Math.round(playMsRef.current),
+        }).catch(() => ({
+          ok: false as const,
+          error: "Connection lost — your score wasn't saved. Check your internet and reload the page.",
+        }));
+        if (cancelled) return;
+        setResult(saveResult);
+      }
+      const rows = await getGameLeaderboard(saveResult?.ok ? finalScore : undefined).catch(() => "error" as const);
+      if (!cancelled) setBoard(rows);
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+    // Sekali per game over — skor & status login dibaca saat itu.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
   // Hitung mundur 3-2-1 sebelum bola diluncurkan.
@@ -259,14 +378,42 @@ export function SlayRally() {
     soundRef.current?.setMuted(next);
   };
 
-  const startRound = () => {
+  const beginCountdown = () => {
     soundRef.current?.unlock();
-    gameRef.current?.reset();
     setNewBest(false);
     setToast(null);
+    setResult(null);
+    setBoard(null);
     setCount(3);
     setPhase("countdown");
   };
+
+  const startRound = () => {
+    gameRef.current?.reset();
+    playMsRef.current = 0;
+    writeGateSave(null);
+    gateRef.current = null;
+    setSaved(null);
+    beginCountdown();
+  };
+
+  /** Lanjut ke ronde 2 setelah daftar / masuk — dari gerbang di tab ini atau dari simpanan. */
+  const continueSaved = () => {
+    const game = gameRef.current;
+    if (!game) return;
+    if (gateRef.current && phaseRef.current === "gate") {
+      game.continueRound();
+    } else if (saved) {
+      game.restore(saved);
+      playMsRef.current = saved.durationMs;
+    }
+    writeGateSave(null);
+    gateRef.current = null;
+    setSaved(null);
+    beginCountdown();
+  };
+
+  const nextParam = `?next=${encodeURIComponent(GAME_PATH)}`;
 
   const inGame =
     phase === "countdown" || phase === "playing" || phase === "paused";
@@ -422,6 +569,92 @@ export function SlayRally() {
           </div>
         )}
 
+        {phase === "resume" && saved && (
+          <div className={styles.overlay}>
+            <Text
+              as="p"
+              variant="body-14-bold"
+              tone="accent"
+              className={styles.overline}
+            >
+              Welcome{member ? `, ${member.name.split(" ")[0]}` : ""}
+            </Text>
+            <Text as="h2" variant="heading-42" tone="white" align="center">
+              Round {saved.level} is <span className={styles.accent}>unlocked</span>
+            </Text>
+            <Text variant="body-16" tone="on-inverse" align="center" muted>
+              Your Round 1 score of {saved.score} is saved. Every{" "}
+              {GAME_POINTS_PER_SLAY_POINT} game points now turns into 1 Slay
+              Point.
+            </Text>
+            <Button variant="arrow" onClick={continueSaved}>
+              Continue to Round {saved.level}
+            </Button>
+            <Button variant="outline-light" size="sm" onClick={() => setPhase("intro")}>
+              Start a new game
+            </Button>
+          </div>
+        )}
+
+        {phase === "gate" && saved && (
+          <div className={styles.overlay} role="dialog" aria-labelledby="rally-gate-title">
+            <Text
+              as="p"
+              variant="body-14-bold"
+              tone="accent"
+              className={styles.overline}
+            >
+              Round {saved.level - 1} cleared
+            </Text>
+            <span className={styles.finalScore}>{saved.score}</span>
+            <Text
+              as="h2"
+              id="rally-gate-title"
+              variant="title-24"
+              tone="white"
+              align="center"
+            >
+              {member ? (
+                <>
+                  Ready for <span className={styles.accent}>Round {saved.level}</span>?
+                </>
+              ) : (
+                <>
+                  Sign up free to play{" "}
+                  <span className={styles.accent}>Round {saved.level}</span>
+                </>
+              )}
+            </Text>
+            {!member && (
+              <ul className={styles.perks}>
+                <li>Keep your score and continue right where you stopped</li>
+                <li>
+                  Earn 1 Slay Point for every {GAME_POINTS_PER_SLAY_POINT} game
+                  points
+                </li>
+                <li>Get your name on the Slay Rally leaderboard</li>
+              </ul>
+            )}
+            {member ? (
+              <Button variant="arrow" onClick={continueSaved}>
+                Continue
+              </Button>
+            ) : (
+              <>
+                <Button variant="arrow" href={`/daftar${nextParam}`}>
+                  Sign up &amp; continue
+                </Button>
+                <Text variant="body-14" tone="on-inverse" muted>
+                  Already a member?{" "}
+                  <a className={styles.link} href={`/masuk${nextParam}`}>
+                    Sign in
+                  </a>
+                </Text>
+              </>
+            )}
+          </div>
+        )}
+
         {phase === "bonuses" && (
           <div className={styles.overlay}>
             <Text as="h2" variant="title-24" tone="white" align="center">
@@ -483,7 +716,7 @@ export function SlayRally() {
         )}
 
         {phase === "over" && (
-          <div className={styles.overlay} role="status">
+          <div className={cx(styles.overlay, styles.overlayOver)} role="status">
             <Text
               variant="body-14-bold"
               tone="accent"
@@ -497,12 +730,91 @@ export function SlayRally() {
                 ? `You reached level ${level}. That's a slay.`
                 : `Level ${level} · Your best: ${best}`}
             </Text>
-            <Button variant="arrow" onClick={startRound}>
-              Play again
-            </Button>
-            <Button variant="outline-light" size="sm" href="/activity">
-              Play for real
-            </Button>
+
+            {member ? (
+              <Text
+                variant="body-14-bold"
+                tone="on-inverse"
+                align="center"
+                className={styles.points}
+                aria-live="polite"
+              >
+                {score === 0
+                  ? "Score points to earn Slay Points."
+                  : !result
+                    ? "Saving your score…"
+                    : !result.ok
+                      ? result.error
+                      : result.pointsAwarded > 0
+                        ? `+${result.pointsAwarded} Slay Point${result.pointsAwarded > 1 ? "s" : ""} added to your account`
+                        : result.todayAwarded >= result.dailyCap
+                          ? `Daily limit reached (${result.dailyCap} Slay Points). Come back tomorrow!`
+                          : `${GAME_POINTS_PER_SLAY_POINT - result.carry} more game points to your next Slay Point`}
+              </Text>
+            ) : (
+              <Text variant="body-14" tone="on-inverse" align="center" muted>
+                <a className={styles.link} href={`/daftar${nextParam}`}>
+                  Sign up
+                </a>{" "}
+                to save your score, earn Slay Points and join the leaderboard.
+              </Text>
+            )}
+
+            <div className={styles.board} aria-label="Slay Rally leaderboard">
+              <Text
+                as="h3"
+                variant="body-14-bold"
+                tone="accent"
+                className={styles.overline}
+              >
+                Leaderboard
+              </Text>
+              {!board ? (
+                <Text variant="body-14" tone="on-inverse" muted>
+                  Loading…
+                </Text>
+              ) : board === "error" ? (
+                <Text variant="body-14" tone="on-inverse" muted>
+                  Couldn&apos;t load the leaderboard. Reload the page to try again.
+                </Text>
+              ) : board.length === 0 ? (
+                <Text variant="body-14" tone="on-inverse" muted>
+                  No scores yet — be the first on the board.
+                </Text>
+              ) : (
+                <ol className={styles.boardList}>
+                  {board
+                    .filter((row) => row.rank <= 5 || row.isMe)
+                    .map((row) => (
+                      <li
+                        key={row.rank}
+                        className={cx(
+                          styles.boardRow,
+                          row.rank <= 3 && styles[`podium${row.rank}`],
+                          row.isMe && styles.boardMe,
+                          row.isMe && row.rank > 6 && styles.boardGap,
+                        )}
+                      >
+                        <span className={styles.boardRank}>{row.rank}</span>
+                        <span className={styles.boardName}>
+                          {row.name}
+                          {row.isMe && " (you)"}
+                        </span>
+                        <span className={styles.boardScore}>{row.best}</span>
+                      </li>
+                    ))}
+                </ol>
+              )}
+            </div>
+
+            <div className={styles.actions}>
+              <Button variant="arrow" onClick={startRound}>
+                Play again
+              </Button>
+              <Button variant="outline-light" size="sm" href="/activity">
+                Play for real
+              </Button>
+            </div>
           </div>
         )}
       </div>

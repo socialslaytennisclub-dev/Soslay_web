@@ -2307,3 +2307,70 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert(tagged?.caption === "Tos!" && tagged.session_title === "Mabar Galeri" && tagged.members[0].first_name === "Felisya" && tagged.members[0].instagram === "felisyafernanda" && !("email" in tagged.members[0]) && !("id" in tagged.members[0]) && [0, 1, 2].includes(tagged.members[0].tone), `tag publik hanya nama depan & IG ${JSON.stringify(tagged)}`);
   console.log("✓ galeri foto: per activity (album otomatis tayang), hanya admin konten, activity harus sudah berlangsung, tag hanya peserta (tag lama aman saat edit), caption, cover pindah saat dihapus, galeri venue publik");
 }
+
+// ── Slay Rally: skor game → Slay Point (100 : 1, maks per hari) + leaderboard ──
+{
+  const ts = await readFile(path.resolve(import.meta.dirname, "../src/lib/game.ts"), "utf8");
+  const rate = Number(ts.match(/GAME_POINTS_PER_SLAY_POINT = (\d+)/)?.[1]);
+  const cap = Number(ts.match(/GAME_DAILY_POINT_CAP = (\d+)/)?.[1]);
+  const fn = (await one(`select prosrc from pg_proc where proname = 'submit_game_score'`)).prosrc;
+  console.assert(fn.includes(`c_cap constant integer := ${cap};`) && fn.includes(`c_rate constant integer := ${rate};`), "konstanta game sama di SQL & lib/game.ts");
+
+  const mk = async (name, status = "active") => {
+    const id = (await one(`insert into auth.users (email) values ($1) returning id`, [`${name}@game.test`])).id;
+    await db.query(`insert into profiles (id, full_name, display_name, email, status) values ($1, $2, $3, $4, $5)`, [id, `${name} Lengkap`, name === "Gamer" ? null : name, `${name}@game.test`, status]);
+    return id;
+  };
+  const err = async (sql, params) => db.query(sql, params).then(() => null, (e) => e.message);
+  const gamer = await mk("Gamer");
+  const rival = await mk("Rival");
+  const banned = await mk("Banned", "suspended");
+  const balance = async (id) => (await one(`select coalesce(sum(delta), 0)::int b from points_ledger where member_id = $1`, [id])).b;
+  const age = (id) => db.query(`update game_scores set created_at = created_at - interval '1 minute' where member_id = $1`, [id]);
+
+  const start = await balance(gamer);
+  await as(null);
+  console.assert((await err(`select submit_game_score(50, 1, 60000)`))?.includes("not_member"), "tamu tidak bisa kirim skor");
+  await as(banned);
+  console.assert((await err(`select submit_game_score(50, 1, 60000)`))?.includes("not_member"), "member suspended ditolak");
+  await as(gamer);
+  console.assert((await err(`select submit_game_score(5000, 2, 10000)`))?.includes("implausible"), "skor tidak masuk akal untuk durasinya ditolak");
+  console.assert((await err(`select submit_game_score(50, 20, 10000)`))?.includes("implausible"), "level tidak masuk akal ditolak");
+  let r = (await one(`select submit_game_score(150, 3, 60000) r`)).r;
+  console.assert(r.points_awarded === 1 && r.carry === 50 && r.best === 150 && (await balance(gamer)) === start + 1, `150 poin → 1 SP, sisa 50 ${JSON.stringify(r)}`);
+  console.assert((await err(`select submit_game_score(10, 1, 60000)`))?.includes("too_fast"), "jeda antar kiriman");
+  await age(gamer);
+  r = (await one(`select submit_game_score(60, 2, 60000) r`)).r;
+  console.assert(r.points_awarded === 1 && r.carry === 10 && r.best === 150, `sisa terbawa: 50 + 60 → 1 SP ${JSON.stringify(r)}`);
+  await age(gamer);
+  r = (await one(`select submit_game_score(1500, 30, 600000) r`)).r;
+  console.assert(r.points_awarded === cap - 2 && r.today_awarded === cap && (await balance(gamer)) === start + cap, `batas harian ${JSON.stringify(r)}`);
+  const note = (await one(`select note, reason::text from points_ledger where member_id = $1 order by id desc limit 1`, [gamer]));
+  console.assert(note.reason === "bonus" && note.note === "Slay Rally · skor 1500", `catatan ledger ${JSON.stringify(note)}`);
+  // Besok: sisa poin game yang tertahan batas harian dibayar.
+  await db.query(`update game_scores set created_at = created_at - interval '1 day' where member_id = $1`, [gamer]);
+  r = (await one(`select submit_game_score(0, 1, 5000) r`)).r;
+  console.assert(r.points_awarded === 7 && r.carry === 10, `hari berikutnya sisa tertahan dibayar (1710 poin → 17 SP total) ${JSON.stringify(r)}`);
+
+  await as(rival);
+  await one(`select submit_game_score(300, 5, 120000) r`);
+  await as(banned);
+  await db.exec(`reset role`);
+  await db.query(`insert into game_scores (member_id, score, level, duration_ms) values ($1, 9999, 50, 900000)`, [banned]);
+
+  await as(rival);
+  const board = (await db.query(`select * from game_leaderboard(10)`)).rows;
+  console.assert(board.length === 2 && board[0].name === "Gamer" && board[0].best === 1500 && board[0].rank === 1 && board[1].name === "Rival" && board[1].is_me && !board[0].is_me, `leaderboard: skor terbaik, nama depan bila tanpa nama tampilan, tanpa member suspended ${JSON.stringify(board)}`);
+  const top1 = (await db.query(`select * from game_leaderboard(1)`)).rows;
+  console.assert(top1.length === 2 && top1[1].is_me && top1[1].rank === 2, "baris sendiri tetap muncul di luar top N");
+  await as(null);
+  await db.exec(`set role anon`);
+  const pub = (await db.query(`select * from game_leaderboard(10)`)).rows;
+  const anonSubmit = await err(`select submit_game_score(10, 1, 60000)`);
+  const anonRows = await db.query(`select * from game_scores`).then((x) => x.rows.length, () => 0);
+  await db.exec(`reset role`);
+  console.assert(pub.length === 2 && !("member_id" in pub[0]) && pub.every((x) => !x.is_me), "leaderboard publik tanpa id member");
+  console.assert(anonSubmit !== null, "anon tidak punya akses submit_game_score");
+  console.assert(anonRows === 0, "anon tidak bisa membaca tabel game_scores");
+  console.log("✓ Slay Rally: skor game → Slay Point 100:1 dengan sisa terbawa & batas harian, cek skor masuk akal, jeda kiriman, leaderboard publik");
+}

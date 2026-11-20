@@ -1,6 +1,6 @@
 "use server";
 
-import { headers } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { ADMIN_LOGIN, AFTER_AUTH, registerPage, RESET_PASSWORD } from "@/content/auth";
 import { compact, normalizeKuyId, required, todayIso, validateBirthDate, validateGender, validateEmail, validateKuyId, validateNewEmail, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
@@ -10,16 +10,23 @@ import { isSupabaseConfigured, supabaseAnonKey, supabaseUrl } from "@/lib/supaba
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { localPhone } from "@/lib/wa-invite";
 import { allowAttempt, clientIp } from "@/server/rate-limit";
+import { DEMO_MEMBER_COOKIE } from "@/lib/demo-member";
 
 /** Hanya path internal ("/admin", "/akun?x=1") — cegah open redirect lewat ?next=. */
 function safeNext(next: string | undefined) {
   return next && next.startsWith("/") && !next.startsWith("//") ? next : AFTER_AUTH;
 }
 
+/** Mode demo: tandai "sudah login" supaya alur yang butuh akun (mis. ronde 2 /game) bisa dicoba. */
+async function enterDemo(next: string | undefined): Promise<never> {
+  (await cookies()).set(DEMO_MEMBER_COOKIE, "1", { path: "/", sameSite: "lax", maxAge: 60 * 60 * 24 * 7 });
+  redirect(safeNext(next));
+}
+
 export type SignInResult = { error: string; code: "invalid_credentials" | "failed" } | undefined;
 
 export async function signIn(email: string, password: string, next?: string): Promise<SignInResult> {
-  if (!isSupabaseConfigured) redirect(safeNext(next));
+  if (!isSupabaseConfigured) await enterDemo(next);
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
@@ -52,8 +59,8 @@ export type SignUpResult = { error?: string; fieldErrors?: FieldErrors<SignUpFie
  * `handle_member_signup` membuat baris profiles. Bila "Confirm email" aktif di Supabase,
  * belum ada sesi → form menampilkan "cek email"; selain itu langsung masuk ke /akun.
  */
-export async function signUp(input: SignUpInput): Promise<SignUpResult> {
-  if (!isSupabaseConfigured) redirect(AFTER_AUTH);
+export async function signUp(input: SignUpInput, next?: string): Promise<SignUpResult> {
+  if (!isSupabaseConfigured) await enterDemo(next);
 
   const values = Object.fromEntries(Object.entries(input).map(([k, v]) => [k, k === "password" ? String(v ?? "") : String(v ?? "").trim()])) as SignUpInput;
   const fieldErrors = compact<SignUpField>({
@@ -77,7 +84,7 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
     email: values.email.toLowerCase(),
     password: values.password,
     options: {
-      emailRedirectTo: await signupRedirect(),
+      emailRedirectTo: await signupRedirect(next),
       data: {
         signup: "member",
         full_name: values.fullName,
@@ -105,12 +112,12 @@ export async function signUp(input: SignUpInput): Promise<SignUpResult> {
   // Supabase tidak membocorkan email yang sudah terdaftar: user tanpa identities = sudah ada.
   if (data.user && data.user.identities?.length === 0) return { fieldErrors: { email: "This email is already registered — sign in instead" } };
   if (!data.session) return { confirmEmail: values.email.toLowerCase() };
-  redirect(AFTER_AUTH);
+  redirect(safeNext(next));
 }
 
-/** Link di email konfirmasi signup — sama dengan signUp. */
-async function signupRedirect() {
-  return `${await requestOrigin()}/auth/confirm?next=${encodeURIComponent(AFTER_AUTH)}`;
+/** Link di email konfirmasi signup — tujuan sama dengan signUp (`next`, mis. /game, atau /akun). */
+async function signupRedirect(next?: string) {
+  return `${await requestOrigin()}/auth/confirm?next=${encodeURIComponent(safeNext(next))}`;
 }
 
 /** Klien anon tanpa cookie — cek password tanpa membuat / menimpa sesi login di browser. */
@@ -280,6 +287,8 @@ export async function signOut(formData?: FormData) {
   if (isSupabaseConfigured) {
     const supabase = await createSupabaseServerClient(admin ? "admin" : "member");
     await supabase.auth.signOut({ scope: "local" });
+  } else {
+    (await cookies()).delete(DEMO_MEMBER_COOKIE);
   }
   redirect(admin ? ADMIN_LOGIN : "/masuk");
 }

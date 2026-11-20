@@ -63,6 +63,23 @@ export const resetPage = {
 export const RESET_PASSWORD = "/reset-password";
 
 /** Halaman login khusus tim (admin). */
+/** Datang dari gerbang ronde 2 Slay Rally (/game) → judul & ajakan khusus game. */
+export const gameAuthCopy = {
+  register: {
+    title: "Sign up to play Round 2",
+    description: "Your Round 1 score is saved. Create a free account to keep playing, collect Slay Points from every game, and get on the Slay Rally leaderboard.",
+  },
+  login: {
+    title: "Sign in to play Round 2",
+    description: "Your Round 1 score is saved. Sign in to keep playing and collect Slay Points from your game.",
+  },
+};
+
+/** `?next=` yang dibawa bolak-balik Masuk ↔ Daftar (hanya path internal). */
+export function withNext(href: string, next: string | undefined) {
+  return next && next.startsWith("/") && !next.startsWith("//") ? `${href}?next=${encodeURIComponent(next)}` : href;
+}
+
 export const ADMIN_LOGIN = "/masuk/admin";
 
 /** Tujuan setelah berhasil masuk / daftar. */

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { DEMO_MEMBER_COOKIE, DEMO_MEMBER_NAME } from "@/lib/demo-member";
 import { isSupabaseConfigured, supabaseUrl } from "@/lib/supabase/env";
 
 export type MemberUser = { name: string; photo?: string | null };
@@ -61,7 +62,12 @@ export function useMemberUser(initial?: MemberUser | null) {
   const photo = initial?.photo;
 
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
+    if (!isSupabaseConfigured) {
+      // Mode demo: cookie dari Masuk / Daftar demo (lihat lib/demo-member.ts).
+      const demo = document.cookie.split("; ").some((c) => c.startsWith(`${DEMO_MEMBER_COOKIE}=`));
+      queueMicrotask(() => setUser(demo ? { name: DEMO_MEMBER_NAME } : null));
+      return;
+    }
     // Server tahu nama & foto terbaru dari profil; cookie sesi yang menentukan masih login atau tidak
     // (keluar di tab lain → cookie hilang → navbar kembali ke Sign In).
     const read = () => {

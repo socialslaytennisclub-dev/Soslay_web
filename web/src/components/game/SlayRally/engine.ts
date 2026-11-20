@@ -59,6 +59,12 @@ export type GameEvents = {
   onLevel: (level: number) => void;
   onBonus: (id: BonusId) => void;
   onGameOver: (score: number) => void;
+  /**
+   * Dipanggil saat ronde selesai, sebelum ronde berikutnya dimuat. `false` = berhenti di gerbang
+   * (mis. tamu wajib daftar untuk ronde 2) sampai `continueRound()` dipanggil.
+   */
+  canEnterLevel?: (level: number) => boolean;
+  onGate?: (state: { score: number; lives: number; level: number }) => void;
 };
 
 export type Ball = {
@@ -162,6 +168,7 @@ export class Game {
   private level = 1;
   private serveTimer = 0;
   private over = false;
+  private gated = false;
 
   private effects = noEffects();
   private net = false;
@@ -177,10 +184,34 @@ export class Game {
     this.lives = START_LIVES;
     this.level = 1;
     this.over = false;
+    this.gated = false;
     this.racketX = this.targetX = W / 2;
     this.events.onScore(0);
     this.events.onLives(this.lives);
     this.events.onLevel(1);
+    this.loadLevel();
+  }
+
+  /**
+   * Lanjut dari keadaan tersimpan (tamu yang berhenti di gerbang lalu daftar / masuk):
+   * ronde `level` dimulai dari awal dengan skor & nyawa yang dibawa.
+   */
+  restore(state: { score: number; lives: number; level: number }) {
+    this.reset();
+    this.score = Math.max(0, Math.floor(state.score));
+    this.lives = Math.min(Math.max(1, Math.floor(state.lives)), START_LIVES);
+    this.level = Math.max(1, Math.floor(state.level));
+    this.events.onScore(this.score);
+    this.events.onLives(this.lives);
+    this.events.onLevel(this.level);
+    this.loadLevel();
+  }
+
+  /** Lepas gerbang → ronde berikutnya dimuat. */
+  continueRound() {
+    if (!this.gated) return;
+    this.gated = false;
+    this.events.onSound?.("level");
     this.loadLevel();
   }
 
@@ -386,7 +417,7 @@ export class Game {
   }
 
   update(dt: number) {
-    if (this.over) return;
+    if (this.over || this.gated) return;
 
     // Raket
     const half = this.racketW / 2;
@@ -464,6 +495,13 @@ export class Game {
       this.score += 10;
       this.events.onScore(this.score);
       this.events.onLevel(this.level);
+      if (this.events.canEnterLevel && !this.events.canEnterLevel(this.level)) {
+        this.gated = true;
+        this.balls = [];
+        this.drops = [];
+        this.events.onGate?.({ score: this.score, lives: this.lives, level: this.level });
+        return;
+      }
       this.events.onSound?.("level");
       this.loadLevel();
     }

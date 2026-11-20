@@ -3,7 +3,7 @@ import { AuthStage } from "@/components/auth/AuthStage/AuthStage";
 import { RegisterForm } from "@/components/auth/AuthForms/RegisterForm";
 import { Footer } from "@/components/layout/Footer/Footer";
 import { Navbar } from "@/components/layout/Navbar/Navbar";
-import { registerPage } from "@/content/auth";
+import { gameAuthCopy, registerPage, withNext } from "@/content/auth";
 
 export const metadata: Metadata = {
   title: "Sign Up — SOSLAY",
@@ -11,18 +11,21 @@ export const metadata: Metadata = {
 };
 
 /** Halaman Daftar (Figma 25:1850 "Desktop - 30"). */
-export default function RegisterPage() {
+export default async function RegisterPage({ searchParams }: PageProps<"/daftar">) {
+  const raw = (await searchParams).next;
+  const next = Array.isArray(raw) ? raw[0] : raw;
+  const copy = next?.startsWith("/game") ? gameAuthCopy.register : registerPage;
   return (
     <>
       <Navbar variant="overlay" />
       <main>
         <AuthStage
           id="register-title"
-          title={registerPage.title}
-          description={registerPage.description}
-          switchTo={registerPage.switch}
+          title={copy.title}
+          description={copy.description}
+          switchTo={{ ...registerPage.switch, href: withNext(registerPage.switch.href, next) }}
         >
-          <RegisterForm />
+          <RegisterForm next={next} />
         </AuthStage>
       </main>
       <Footer />
