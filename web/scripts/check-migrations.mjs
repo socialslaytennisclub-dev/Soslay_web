@@ -2478,7 +2478,17 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   m = await match(budi, ana, 20);
   await report(ana, m, true);
   r = await report(budi, m, true);
-  console.assert(r.won && r.points === 0 && r.reason === "too_short", `pertandingan < 60 detik ${JSON.stringify(r)}`);
+  console.assert(r.won && r.points === 0 && r.reason === "too_short", `pertandingan < 30 detik ${JSON.stringify(r)}`);
+  // Di-suspend setelah bergabung → laporannya ditolak.
+  m = await match(citra, ana);
+  await as(null);
+  await db.exec(`reset role`);
+  await db.query(`update profiles set status = 'suspended' where id = $1`, [citra]);
+  await as(citra);
+  console.assert((await err(`select tennis_match_report($1, true)`, [m]))?.includes("not_member"), "member suspended tidak bisa melapor hasil");
+  await as(null);
+  await db.exec(`reset role`);
+  await db.query(`update profiles set status = 'active' where id = $1`, [citra]);
 
   // Batas pasangan: 3 per hari untuk dua pemain yang sama (siapa pun pemenangnya).
   for (let i = 0; i < 2; i++) {
@@ -2511,5 +2521,10 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const anonRows = await db.query(`select * from tennis_matches`).then((x) => x.rows.length, () => 0);
   await db.exec(`reset role`);
   console.assert(anonOpen !== null && anonRows === 0, "anon tidak punya akses pertandingan tenis");
-  console.log("✓ Slay Tennis: pemenang member vs member +1 Slay Point bila kedua laporan sama, tanpa poin bila diperdebatkan / < 60 detik, batas 3 per pasangan & 5 per pemenang per hari");
+  // Membuka catatan pertandingan terus-menerus ditahan (30 per 10 menit).
+  await db.query(`insert into tennis_matches (host_id) select $1 from generate_series(1, 30)`, [citra]);
+  await as(citra);
+  console.assert((await err(`select tennis_match_open()`))?.includes("too_many_matches"), "catatan pertandingan dibatasi per 10 menit");
+  await db.exec(`reset role`);
+  console.log("✓ Slay Tennis: pemenang member vs member +1 Slay Point bila kedua laporan sama, tanpa poin bila diperdebatkan / < 30 detik, batas 3 per pasangan & 5 per pemenang per hari");
 }

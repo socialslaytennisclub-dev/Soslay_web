@@ -15,6 +15,7 @@ import { getMemberSession } from "@/server/member/user";
 
 const NOT_MEMBER = "Sign in as a member to play for Slay Points.";
 const FAILED = "Couldn't reach the server. This match won't count for Slay Points.";
+const TOO_MANY = "Too many matches started in a short time. This one won't count for Slay Points — try again in a few minutes.";
 const isUuid = (value: string) => /^[0-9a-f-]{36}$/i.test(value);
 
 async function demoMember() {
@@ -29,7 +30,10 @@ export async function openTennisMatch(): Promise<TennisMatchStart> {
   const { supabase, user } = await getMemberSession();
   if (!user) return { ok: false, error: NOT_MEMBER };
   const { data, error } = await supabase.rpc("tennis_match_open");
-  if (error || typeof data !== "string") return { ok: false, error: error?.message?.includes("not_member") ? NOT_MEMBER : FAILED };
+  if (error || typeof data !== "string") {
+    const message = error?.message ?? "";
+    return { ok: false, error: message.includes("not_member") ? NOT_MEMBER : message.includes("too_many_matches") ? TOO_MANY : FAILED };
+  }
   return { ok: true, matchId: data };
 }
 
@@ -55,7 +59,7 @@ export async function reportTennisMatch(matchId: string, hostWon: boolean, iAmHo
   const { supabase, user } = await getMemberSession();
   if (!user) return { ok: false, error: NOT_MEMBER };
   const { data, error } = await supabase.rpc("tennis_match_report", { p_match: matchId, p_host_won: Boolean(hostWon) });
-  if (error || !data) return { ok: false, error: FAILED };
+  if (error || !data) return { ok: false, error: error?.message?.includes("not_member") ? NOT_MEMBER : FAILED };
   const r = data as { pending: boolean; won: boolean; points: number; reason: string | null };
   return {
     ok: true,

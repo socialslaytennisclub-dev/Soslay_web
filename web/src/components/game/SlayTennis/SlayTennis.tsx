@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, Icon, Text } from "@/components/ui";
 import { useMemberUser } from "@/hooks/useMemberUser";
 import { cx } from "@/lib/cx";
+import { firstName } from "@/lib/text";
 import { TENNIS_FREE_GAMES, TENNIS_GATE_KEY, TENNIS_GATE_TTL_MS, TENNIS_WIN_POINTS, type TennisGateSave, type TennisReport } from "@/lib/tennis";
 import { joinTennisMatch, openTennisMatch, reportTennisMatch } from "@/server/tennis";
 import { Sound } from "../SlayRally/sound";
@@ -26,6 +27,7 @@ const STALE_INPUT_MS = 700;
 const GONE_MS = 8000;
 /** Teks ajakan di gambar Story. */
 const STORY_LINK = "slayclub.id/gameoncourt";
+const CLIENT_ID_KEY = "soslay-tennis-client";
 
 const SOUND_MAP: Record<TennisSound, Parameters<Sound["play"]>[0]> = {
   hit: "racket",
@@ -97,12 +99,12 @@ export function SlayTennis() {
   const snapRef = useRef<Snapshot | null>(null);
   /** Input perangkat ini (keyboard / sentuh). */
   const localRef = useRef({ mx: 0, my: 0 });
-  /** Input dari jaringan per sisi: HP controller atau layar lawan. */
-  const remoteRef = useRef([
-    { mx: 0, my: 0, at: 0 },
-    { mx: 0, my: 0, at: 0 },
-  ]);
-  const padSeenRef = useRef([0, 0]);
+  /** Input dari HP controller milik layar ini (kanal controller sendiri). */
+  const padRef = useRef({ mx: 0, my: 0, at: 0 });
+  /** Host: input dari layar lawan (room pertandingan). */
+  const farRef = useRef({ mx: 0, my: 0, at: 0 });
+  const padLinkRef = useRef<RoomLink | null>(null);
+  const padSeenRef = useRef(0);
   const guestRef = useRef<{ id: string; name: string; at: number } | null>(null);
   const hostSeenRef = useRef(0);
   const nameRef = useRef("Player");
@@ -123,6 +125,9 @@ export function SlayTennis() {
   const [padOpen, setPadOpen] = useState(false);
   const [padQr, setPadQr] = useState<string | null>(null);
   const [padOn, setPadOn] = useState(false);
+  const [padCode, setPadCode] = useState<string | null>(null);
+  /** Layar lawan: tab host sedang disembunyikan (simulasinya berhenti). */
+  const [hostAway, setHostAway] = useState(false);
   const [copied, setCopied] = useState(false);
   const [touch, setTouch] = useState(false);
   const [muted, setMuted] = useState(false);
@@ -144,8 +149,30 @@ export function SlayTennis() {
     setRoleState(next);
   }, []);
 
+  /** Detak layar ini: siapa host, siapa lawannya, pertandingan mana (juga jawaban untuk "who"). */
+  const hostBeat = useCallback(
+    (): RoomMsg => ({
+      t: "host",
+      id: idRef.current,
+      name: nameRef.current,
+      guest: guestRef.current?.name ?? null,
+      guestId: guestRef.current?.id ?? null,
+      mode: roleRef.current === "host" ? "vs" : "ai",
+      match: matchRef.current,
+    }),
+    [],
+  );
+
+  /** Arah gerak pemain layar ini: keyboard / sentuh lebih dulu, selain itu HP controller yang masih aktif. */
+  const myInput = useCallback(() => {
+    const local = localRef.current;
+    const pad = padRef.current;
+    const padFresh = Date.now() - pad.at < STALE_INPUT_MS;
+    return local.mx !== 0 || local.my !== 0 || !padFresh ? local : { mx: pad.mx, my: pad.my };
+  }, []);
+
   useEffect(() => {
-    nameRef.current = member?.name.split(" ")[0] || "Player";
+    nameRef.current = firstName(member?.name ?? "") || "Player";
     memberRef.current = isMember;
   }, [member, isMember]);
 
@@ -162,11 +189,13 @@ export function SlayTennis() {
         .then((next) => {
           if (matchRef.current !== id) return;
           setResult(next);
-          // Poin baru keluar setelah lawan juga melapor — cek lagi sebentar.
-          if (next.ok && next.pending && left > 0) window.setTimeout(() => attempt(left - 1), 2500);
+          // Poin baru keluar setelah lawan juga melapor — cek lagi sebentar (±20 detik).
+          if (!next.ok || !next.pending) return;
+          if (left > 0) window.setTimeout(() => attempt(left - 1), 2500);
+          else setResult({ ok: false, error: "Your opponent's screen didn't confirm the result, so no Slay Point was given." });
         });
     };
-    attempt(5);
+    attempt(8);
   }, []);
 
   const mySide: Side = role === "guest" ? 1 : 0;
@@ -247,6 +276,7 @@ export function SlayTennis() {
           setRival(msg.name);
         } else if (msg.t === "snap") {
           hostSeenRef.current = now;
+          setHostAway(!msg.live && msg.s.phase !== "over");
           const prev = snapRef.current;
           snapRef.current = msg.s;
           // Suara di layar lawan diturunkan dari perubahan snapshot.
@@ -258,9 +288,8 @@ export function SlayTennis() {
           } else if (screenRef.current !== "play") setScreen("play");
         } else if (msg.t === "start") {
           setNotice(null);
+          setHostAway(false);
           setScreen("play");
-        } else if (msg.t === "pad" && msg.side === 1) {
-          padSeenRef.current[1] = now;
         }
         return;
       }
@@ -268,7 +297,7 @@ export function SlayTennis() {
       const vs = currentRole === "host";
       switch (msg.t) {
         case "who":
-          linkRef.current?.send({ t: "host", id: idRef.current, name: nameRef.current, guest: guestRef.current?.name ?? null, mode: vs ? "vs" : "ai", match: matchRef.current });
+          linkRef.current?.send(hostBeat());
           break;
         case "join":
           if (!vs) break;
@@ -282,21 +311,18 @@ export function SlayTennis() {
         case "leave":
           if (guestRef.current?.id === msg.id) guestRef.current.at = 0;
           break;
-        case "pad":
-          padSeenRef.current[msg.side] = now;
-          break;
+        // Input dari room pertandingan hanya untuk sisi lawan, dan hanya dari klien yang sudah bergabung.
         case "in":
-          if (msg.side === 1 && !vs) break;
-          remoteRef.current[msg.side] = { mx: msg.mx, my: msg.my, at: now };
+          if (!vs || !msg.id || msg.id !== guestRef.current?.id) break;
+          farRef.current = { mx: msg.mx, my: msg.my, at: now };
           break;
         case "shot":
-          if (msg.side === 1 && !vs) break;
-          soundRef.current?.unlock();
-          if (screenRef.current === "play") gameRef.current?.shot(msg.side, msg.kind);
+          if (!vs || !msg.id || msg.id !== guestRef.current?.id) break;
+          if (screenRef.current === "play") gameRef.current?.shot(1, msg.kind);
           break;
       }
     },
-    [reportResult, setScreen, startMatch],
+    [hostBeat, reportResult, setScreen, startMatch],
   );
 
   const closeRoom = useCallback(() => {
@@ -306,7 +332,7 @@ export function SlayTennis() {
     guestRef.current = null;
     setRoom(null);
     setRival(null);
-    setPadOn(false);
+    setHostAway(false);
   }, []);
 
   const connect = useCallback(
@@ -347,7 +373,7 @@ export function SlayTennis() {
         if (decided || msg.t !== "host") return;
         decided = true;
         stop();
-        if (msg.mode !== "vs" || (msg.guest && msg.guest !== nameRef.current)) {
+        if (msg.mode !== "vs" || (msg.guestId && msg.guestId !== idRef.current)) {
           closeRoom();
           setRole("solo");
           setNotice(msg.mode === "vs" ? "That match already has two players." : "That link is a solo game.");
@@ -358,13 +384,19 @@ export function SlayTennis() {
         setRival(msg.name);
         link.send({ t: "join", id: idRef.current, name: nameRef.current });
       });
-      void link.ready.then(() => link.send({ t: "who", id: idRef.current })).catch(() => {});
-      window.setTimeout(() => {
-        if (decided || linkRef.current !== link) return;
-        decided = true;
-        stop();
-        hostRoom(code);
-      }, 1800);
+      // Batas waktu mencari host baru dihitung SETELAH kanal tersambung: di koneksi lambat, menyambung
+      // saja bisa lebih lama dari batasnya, dan yang diundang jadi host kedua di room yang sama.
+      void link.ready
+        .then(() => {
+          link.send({ t: "who", id: idRef.current });
+          window.setTimeout(() => {
+            if (decided || linkRef.current !== link) return;
+            decided = true;
+            stop();
+            hostRoom(code);
+          }, 2500);
+        })
+        .catch(() => {});
     },
     [closeRoom, connect, hostRoom, setRole, setScreen],
   );
@@ -402,9 +434,12 @@ export function SlayTennis() {
   // Detak room: host mengumumkan diri, lawan menandai masih ada, dan deteksi yang pergi.
   useEffect(() => {
     const beat = window.setInterval(() => {
+      const now = Date.now();
+      // Controller HP menunggu tanda layar ini hidup di kanalnya sendiri.
+      padLinkRef.current?.send(hostBeat());
+      setPadOn(now - padSeenRef.current < 1500);
       const link = linkRef.current;
       if (!link) return;
-      const now = Date.now();
       if (roleRef.current === "guest") {
         link.send({ t: "join", id: idRef.current, name: nameRef.current });
         if (hostSeenRef.current && now - hostSeenRef.current > GONE_MS && screenRef.current !== "menu") {
@@ -412,7 +447,7 @@ export function SlayTennis() {
           setScreen("joining");
         }
       } else {
-        link.send({ t: "host", id: idRef.current, name: nameRef.current, guest: guestRef.current?.name ?? null, mode: roleRef.current === "host" ? "vs" : "ai", match: matchRef.current });
+        link.send(hostBeat());
         const guest = guestRef.current;
         if (guest && now - guest.at > GONE_MS) {
           guestRef.current = null;
@@ -421,17 +456,22 @@ export function SlayTennis() {
           setScreen("lobby");
         }
       }
-      setPadOn(now - padSeenRef.current[roleRef.current === "guest" ? 1 : 0] < 1500);
     }, 1500);
     return () => window.clearInterval(beat);
-  }, [setScreen]);
+  }, [hostBeat, setScreen]);
 
   // ── Kanvas & loop ─────────────────────────────────────────────
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    idRef.current = newClientId();
+    // Id klien bertahan selama tab ini hidup: memuat ulang halaman tetap dikenali host sebagai lawan yang sama.
+    try {
+      idRef.current = window.sessionStorage.getItem(CLIENT_ID_KEY) ?? newClientId();
+      window.sessionStorage.setItem(CLIENT_ID_KEY, idRef.current);
+    } catch {
+      idRef.current = newClientId();
+    }
     queueMicrotask(() => setTouch(window.matchMedia("(pointer: coarse)").matches));
     const sound = new Sound();
     soundRef.current = sound;
@@ -467,13 +507,10 @@ export function SlayTennis() {
       const playing = screenRef.current === "play";
       if (currentRole !== "guest" && game && playing) {
         const stamp = Date.now();
-        const local = localRef.current;
-        const pad = remoteRef.current[0];
-        const padFresh = stamp - pad.at < STALE_INPUT_MS;
-        const useLocal = local.mx !== 0 || local.my !== 0 || !padFresh;
-        game.setInput(0, useLocal ? local.mx : pad.mx, useLocal ? local.my : pad.my);
+        const mine = myInput();
+        game.setInput(0, mine.mx, mine.my);
         if (currentRole === "host") {
-          const far = remoteRef.current[1];
+          const far = farRef.current;
           const fresh = stamp - far.at < STALE_INPUT_MS;
           game.setInput(1, fresh ? far.mx : 0, fresh ? far.my : 0);
         }
@@ -500,8 +537,13 @@ export function SlayTennis() {
 
     const onHide = () => {
       sound.setSuspended(document.hidden);
-      // Lawan komputer: jeda otomatis saat pindah tab. Lawan member: pertandingan jalan terus.
+      // Lawan komputer: jeda otomatis saat pindah tab.
       if (document.hidden && roleRef.current === "solo" && screenRef.current === "play") setScreen("paused");
+      // Lawan member: browser menghentikan simulasi di tab tersembunyi, jadi lawan diberi tahu
+      // (snapshot `live: false`) alih-alih menatap permainan yang diam.
+      if (document.hidden && roleRef.current === "host" && screenRef.current === "play" && snapRef.current) {
+        linkRef.current?.send({ t: "snap", s: snapRef.current, live: false });
+      }
     };
     document.addEventListener("visibilitychange", onHide);
     const onLeave = () => linkRef.current?.send({ t: "leave", id: idRef.current });
@@ -515,12 +557,14 @@ export function SlayTennis() {
       onLeave();
       linkRef.current?.close();
       linkRef.current = null;
+      padLinkRef.current?.close();
+      padLinkRef.current = null;
       gameRef.current = null;
       soundRef.current = null;
       sound.dispose();
       view.dispose();
     };
-  }, [setScreen]);
+  }, [myInput, setScreen]);
 
   // HP mendatar (layar pendek): mode layar penuh tanpa navbar — lihat SlayTennis.module.css.
   useEffect(() => {
@@ -545,24 +589,32 @@ export function SlayTennis() {
 
   // ── Input perangkat ini ───────────────────────────────────────
 
-  const move = useCallback((mx: number, my: number) => {
-    localRef.current = { mx, my };
-    if (roleRef.current === "guest") linkRef.current?.send({ t: "in", side: 1, mx, my });
-  }, []);
+  /** Layar lawan → host: arah gerak yang sedang berlaku (perangkat ini atau HP controller-nya). */
+  const sendInput = useCallback(() => {
+    if (roleRef.current === "guest") linkRef.current?.send({ t: "in", side: 1, id: idRef.current, ...myInput() });
+  }, [myInput]);
+
+  const move = useCallback(
+    (mx: number, my: number) => {
+      localRef.current = { mx, my };
+      sendInput();
+    },
+    [sendInput],
+  );
 
   const shot = useCallback((kind: ShotKind) => {
     soundRef.current?.unlock();
     if (screenRef.current !== "play") return;
-    if (roleRef.current === "guest") linkRef.current?.send({ t: "shot", side: 1, kind });
+    if (roleRef.current === "guest") linkRef.current?.send({ t: "shot", side: 1, id: idRef.current, kind });
     else gameRef.current?.shot(0, kind);
   }, []);
 
   // Layar lawan: ulangi arah terakhir (pesan bisa hilang, dan host menganggap input basi setelah 0,7 dtk).
   useEffect(() => {
     if (role !== "guest") return;
-    const timer = window.setInterval(() => linkRef.current?.send({ t: "in", side: 1, ...localRef.current }), 150);
+    const timer = window.setInterval(sendInput, 150);
     return () => window.clearInterval(timer);
-  }, [role]);
+  }, [role, sendInput]);
 
   useEffect(() => {
     const held = new Set<string>();
@@ -606,11 +658,26 @@ export function SlayTennis() {
 
   // ── HP sebagai controller ─────────────────────────────────────
 
-  const padUrl = room && typeof window !== "undefined" ? `${window.location.origin}${PATH}/pad?room=${room}&side=${mySide}` : null;
+  const padUrl = padCode && typeof window !== "undefined" ? `${window.location.origin}${PATH}/pad?room=${padCode}` : null;
 
+  /**
+   * Controller HP memakai kanal sendiri dengan kode acak yang hanya ada di QR layar ini. Lawan tahu
+   * kode room pertandingan, tetapi tidak kode ini — jadi tidak bisa menggerakkan pemain layar ini.
+   */
   const openPad = () => {
-    // Lawan komputer belum punya room → buat (tanpa mengubah alamat halaman).
-    if (!linkRef.current) connect(newRoomCode());
+    if (!padLinkRef.current) {
+      const code = newRoomCode();
+      const link = openRoom(code);
+      padLinkRef.current = link;
+      link.listen((msg) => {
+        if (msg.t === "pad") padSeenRef.current = Date.now();
+        else if (msg.t === "in") {
+          padRef.current = { mx: msg.mx, my: msg.my, at: Date.now() };
+          sendInput();
+        } else if (msg.t === "shot") shot(msg.kind);
+      });
+      setPadCode(code);
+    }
     setPadOpen(true);
   };
 
@@ -819,11 +886,16 @@ export function SlayTennis() {
             <span>{hud.won === null ? "Second serve" : youWon ? "Your point" : `${foeName}'s point`}</span>
           </div>
         )}
-        {inPlay && hud?.phase === "serve" && (
+        {inPlay && !hostAway && hud?.phase === "serve" && (
           <div className={styles.hint} role="status">
             {hud.server === me
               ? `${hud.second ? "Second serve" : "Your serve"} — press Hit · aim into the service box`
               : `${foeName} is serving${hud.second ? " (second serve)" : ""}`}
+          </div>
+        )}
+        {inPlay && hostAway && (
+          <div className={styles.hint} role="status">
+            {foeName} switched away from the game — the match is paused until they&apos;re back.
           </div>
         )}
         {inPlay && !touch && !padOn && (

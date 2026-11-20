@@ -44,6 +44,7 @@ export const footerColumns: { title: string; links: NavLink[] }[] = [
       { label: "Community", href: "/komunitas" },
       { label: "Events", href: "/acara" },
       { label: "Game", href: "/game" },
+      { label: "Slay Tennis", href: "/gameoncourt" },
     ],
   },
   {

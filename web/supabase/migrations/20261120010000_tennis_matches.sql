@@ -6,7 +6,7 @@
 --      – host membuka catatan pertandingan, lawan bergabung dengan akunnya sendiri;
 --      – KEDUA pemain melaporkan hasil, dan poin hanya diberikan bila laporannya sama
 --        (yang kalah ikut mengakui kekalahannya);
---      – pertandingan minimal 60 detik sejak lawan bergabung;
+--      – pertandingan minimal 30 detik sejak lawan bergabung (menang 2–0 tercepat ±40 detik);
 --      – maksimal 5 Slay Point per pemenang per hari WIB, dan 3 per pasangan pemain per hari
 --        (dua akun yang sama tidak bisa saling "memberi" poin terus-menerus).
 --    Angka poin & batas harian sama dengan web/src/lib/tennis.ts (dicek di check-migrations).
@@ -45,6 +45,11 @@ begin
   end if;
   -- Room lama yang tidak pernah dimainkan tidak perlu disimpan.
   delete from tennis_matches where host_id = v_member and finished_at is null and created_at < now() - interval '1 day';
+  -- Satu pertandingan = satu catatan; 30 per 10 menit jauh di atas main normal, cukup untuk menahan
+  -- skrip yang membuka catatan terus-menerus.
+  if (select count(*) from tennis_matches where host_id = v_member and created_at > now() - interval '10 minutes') >= 30 then
+    raise exception 'too_many_matches';
+  end if;
   insert into tennis_matches (host_id) values (v_member) returning id into v_id;
   return v_id;
 end;
@@ -83,7 +88,7 @@ declare
   c_points constant integer := 1;        -- TENNIS_WIN_POINTS
   c_daily constant integer := 5;         -- TENNIS_DAILY_WIN_CAP
   c_pair constant integer := 3;
-  c_min_seconds constant integer := 60;
+  c_min_seconds constant integer := 30;
   v_member uuid := auth.uid();
   v_match tennis_matches%rowtype;
   v_winner uuid;
@@ -91,8 +96,12 @@ declare
   v_reason text;
   v_today date := (now() at time zone 'Asia/Jakarta')::date;
 begin
-  if v_member is null or p_host_won is null then
+  if p_host_won is null then
     raise exception 'invalid_report';
+  end if;
+  -- Sama dengan open / join: akun yang di-suspend tidak bisa melapor (dan tidak bisa mendapat poin).
+  if not game_member_ok(v_member) then
+    raise exception 'not_member';
   end if;
   select * into v_match from tennis_matches where id = p_match for update;
   if not found or v_match.guest_id is null or v_member not in (v_match.host_id, v_match.guest_id) then

@@ -7,6 +7,9 @@ import type { ShotKind, Side, Snapshot } from "./engine";
  *
  *  · Produksi: Supabase Realtime broadcast (kanal `slay-tennis:<kode>`). Dipakai RealtimeClient
  *    langsung — TANPA klien auth Supabase di browser (lihat catatan Web Locks di useMemberUser).
+ *  · Kode room cukup untuk bergabung ke kanalnya, dan semua pesan terlihat oleh semua anggota —
+ *    jadi tidak ada rahasia yang boleh dikirim lewat kanal. Host hanya menerima input sisi lawan
+ *    dari klien yang sudah bergabung, dan controller HP memakai kanal terpisah (lihat `pad`).
  *  · Mode demo (tanpa Supabase): BroadcastChannel — hanya antar tab di browser yang sama, cukup
  *    untuk mencoba alurnya di lokal.
  *
@@ -17,14 +20,19 @@ export type RoomMsg =
   /** Layar baru bertanya siapa host room ini. */
   | { t: "who"; id: string }
   /** Jawaban host (juga dikirim berkala) — `mode` & nama untuk layar tunggu. */
-  | { t: "host"; id: string; name: string; guest: string | null; mode: "ai" | "vs"; match: string | null }
+  | { t: "host"; id: string; name: string; guest: string | null; guestId: string | null; mode: "ai" | "vs"; match: string | null }
   /** Layar lawan bergabung / masih ada. */
   | { t: "join"; id: string; name: string }
   | { t: "leave"; id: string }
-  /** Controller HP terhubung untuk sisi tertentu (dikirim berkala). */
-  | { t: "pad"; side: Side }
-  | { t: "in"; side: Side; mx: number; my: number }
-  | { t: "shot"; side: Side; kind: ShotKind }
+  /**
+   * Controller HP masih terhubung (dikirim berkala). HP memakai kanal SENDIRI dengan kode rahasia
+   * dari QR layar pemiliknya — bukan room pertandingan — supaya lawan tidak bisa mengirim input
+   * atas nama pemain lain.
+   */
+  | { t: "pad" }
+  /** Input: dari HP ke layar pemiliknya (kanal controller), atau dari layar lawan ke host (`id` = pengirim). */
+  | { t: "in"; side: Side; mx: number; my: number; id?: string }
+  | { t: "shot"; side: Side; kind: ShotKind; id?: string }
   /** Host → semua: keadaan permainan. */
   | { t: "snap"; s: Snapshot; live: boolean }
   /** Host → semua: mulai / ulang pertandingan. `match` = id catatan pertandingan di server (Slay Point). */

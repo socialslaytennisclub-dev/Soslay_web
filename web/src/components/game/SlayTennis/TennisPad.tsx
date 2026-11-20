@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Text } from "@/components/ui";
-import type { ShotKind, Side } from "./engine";
+import type { ShotKind } from "./engine";
 import { cleanRoomCode, openRoom, type RoomLink } from "./link";
 import { PadControls } from "./PadControls";
 import styles from "./TennisPad.module.css";
@@ -10,12 +10,11 @@ import styles from "./TennisPad.module.css";
 type Status = "connecting" | "waiting" | "connected" | "failed" | "invalid";
 
 /**
- * HP sebagai controller Slay Tennis (halaman /gameoncourt/pad?room=KODE&side=0|1). Hanya mengirim
- * input ke room — permainannya tampil di layar lain yang membuka room yang sama.
+ * HP sebagai controller Slay Tennis (halaman /gameoncourt/pad?room=KODE). KODE = kanal controller
+ * milik satu layar (dari QR-nya), bukan room pertandingan — hanya layar itu yang menerima inputnya.
  */
 export function TennisPad() {
   const linkRef = useRef<RoomLink | null>(null);
-  const sideRef = useRef<Side>(0);
   const moveRef = useRef({ mx: 0, my: 0 });
   const [status, setStatus] = useState<Status>("connecting");
   const [code, setCode] = useState("");
@@ -27,8 +26,8 @@ export function TennisPad() {
       queueMicrotask(() => setStatus("invalid"));
       return;
     }
-    const side: Side = params.get("side") === "1" ? 1 : 0;
-    sideRef.current = side;
+    // Layar pemilik yang menentukan sisinya; `side` di pesan hanya pengisi bentuk.
+    const side = 0;
     queueMicrotask(() => setCode(room));
 
     const link = openRoom(room);
@@ -46,7 +45,7 @@ export function TennisPad() {
     );
     // Tanda "controller masih ada" + ulangi arah terakhir (pesan bisa hilang di jaringan).
     const beat = window.setInterval(() => {
-      link.send({ t: "pad", side });
+      link.send({ t: "pad" });
       link.send({ t: "in", side, ...moveRef.current });
       if (lastHost && Date.now() - lastHost > 6000) setStatus("waiting");
     }, 180);
@@ -79,9 +78,9 @@ export function TennisPad() {
 
   const move = (mx: number, my: number) => {
     moveRef.current = { mx, my };
-    linkRef.current?.send({ t: "in", side: sideRef.current, mx, my });
+    linkRef.current?.send({ t: "in", side: 0, mx, my });
   };
-  const shot = (kind: ShotKind) => linkRef.current?.send({ t: "shot", side: sideRef.current, kind });
+  const shot = (kind: ShotKind) => linkRef.current?.send({ t: "shot", side: 0, kind });
 
   const message: Record<Status, string> = {
     connecting: "Connecting…",
