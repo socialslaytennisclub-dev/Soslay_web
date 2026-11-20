@@ -3,6 +3,8 @@
  * & font situs, lalu dibagikan lewat Web Share API (lembar share HP → Instagram → Story) atau diunduh.
  */
 
+import { slayPointsLabel } from "@/lib/game";
+
 // Isi penting berada di antara y 250–1670: bagian atas & bawah Story tertutup bar profil / kolom balas Instagram.
 export const STORY_W = 1080;
 export const STORY_H = 1920;
@@ -13,13 +15,17 @@ export const STORY_FILENAME = "slay-rally-score.jpg";
 /** Perangkat bisa membagikan file gambar lewat lembar share bawaan (umumnya HP). */
 export function canShareStory() {
   try {
-    return Boolean(navigator.canShare?.({ files: [new File([], STORY_FILENAME, { type: STORY_TYPE })] }));
+    return Boolean(
+      navigator.canShare?.({
+        files: [new File([], STORY_FILENAME, { type: STORY_TYPE })],
+      }),
+    );
   } catch {
     return false;
   }
 }
 
-export type StoryData = {
+type StoryData = {
   score: number;
   level: number;
   newBest: boolean;
@@ -43,29 +49,60 @@ function loadImage(src: string) {
 /** Nilai token CSS (warna / keluarga font) — canvas tidak bisa membaca var(--…). */
 function tokens() {
   const css = getComputedStyle(document.documentElement);
-  const t = (name: string, fallback: string) => css.getPropertyValue(name).trim() || fallback;
+  const t = (name: string) => css.getPropertyValue(name).trim();
   return {
-    navy950: t("--color-navy-950", "#060628"),
-    navy900: t("--color-navy-900", "#0a084a"),
-    indigo500: t("--color-indigo-500", "#4035de"),
-    indigo700: t("--color-indigo-700", "#26209a"),
-    lime: t("--color-lime-neon", "#d7ff00"),
-    pink: t("--color-pink-500", "#ec6abc"),
-    white: "#ffffff",
-    display: t("--font-display", "system-ui, sans-serif"),
-    ui: t("--font-ui", "system-ui, sans-serif"),
+    navy950: t("--color-navy-950"),
+    navy900: t("--color-navy-900"),
+    indigo500: t("--color-indigo-500"),
+    indigo700: t("--color-indigo-700"),
+    lime: t("--color-lime-neon"),
+    pink: t("--color-pink-500"),
+    white: t("--color-white"),
+    display: t("--font-display") || "system-ui, sans-serif",
+    ui: t("--font-ui") || "system-ui, sans-serif",
   };
 }
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+let probe: CanvasRenderingContext2D | null = null;
+
+/**
+ * Warna token dengan transparansi (bayangan, cahaya, garis tipis). Canvas menormalkan warna apa pun
+ * menjadi "#rrggbb" saat dibaca kembali dari fillStyle, jadi format token bebas.
+ */
+function alpha(color: string, opacity: number) {
+  probe ??= document.createElement("canvas").getContext("2d");
+  if (!probe) return color;
+  probe.fillStyle = color;
+  const hex = String(probe.fillStyle);
+  if (!hex.startsWith("#")) return color;
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+  return `rgba(${r},${g},${b},${opacity})`;
+}
+
+function roundRect(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+) {
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, r);
 }
 
 /** Teks dengan jarak huruf (overline) — canvas lama tidak punya letterSpacing. */
-function spaced(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, spacing: number) {
+function spaced(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  x: number,
+  y: number,
+  spacing: number,
+) {
   const chars = [...text];
-  const width = chars.reduce((sum, ch) => sum + ctx.measureText(ch).width, 0) + spacing * (chars.length - 1);
+  const width =
+    chars.reduce((sum, ch) => sum + ctx.measureText(ch).width, 0) +
+    spacing * (chars.length - 1);
   let cx = x - width / 2;
   ctx.textAlign = "left";
   for (const ch of chars) {
@@ -76,13 +113,19 @@ function spaced(ctx: CanvasRenderingContext2D, text: string, x: number, y: numbe
 }
 
 /** Lapangan tenis perspektif di bagian bawah, sama nuansanya dengan lapangan 3D di game. */
-function drawCourt(ctx: CanvasRenderingContext2D, c: ReturnType<typeof tokens>) {
+function drawCourt(
+  ctx: CanvasRenderingContext2D,
+  c: ReturnType<typeof tokens>,
+) {
   const top = 1270;
   const bottom = STORY_H + 40;
   const farHalf = 250;
   const nearHalf = 640;
   const mid = STORY_W / 2;
-  const at = (t: number) => ({ y: top + (bottom - top) * t, half: farHalf + (nearHalf - farHalf) * t });
+  const at = (t: number) => ({
+    y: top + (bottom - top) * t,
+    half: farHalf + (nearHalf - farHalf) * t,
+  });
 
   const grad = ctx.createLinearGradient(0, top, 0, bottom);
   grad.addColorStop(0, c.indigo700);
@@ -96,7 +139,7 @@ function drawCourt(ctx: CanvasRenderingContext2D, c: ReturnType<typeof tokens>) 
   ctx.closePath();
   ctx.fill();
 
-  ctx.strokeStyle = "rgba(255,255,255,0.85)";
+  ctx.strokeStyle = alpha(c.white, 0.85);
   ctx.lineWidth = 6;
   ctx.stroke();
   // Garis singles, servis & tengah.
@@ -120,10 +163,16 @@ function drawCourt(ctx: CanvasRenderingContext2D, c: ReturnType<typeof tokens>) 
  * Bola tenis digambar langsung (selalu bulat sempurna — SVG bola memakai preserveAspectRatio="none"
  * sehingga bisa melar saat digambar ke canvas). Lime + dua jahitan putih + bayangan lembut.
  */
-function drawBall(ctx: CanvasRenderingContext2D, c: ReturnType<typeof tokens>, x: number, y: number, r: number) {
+function drawBall(
+  ctx: CanvasRenderingContext2D,
+  c: ReturnType<typeof tokens>,
+  x: number,
+  y: number,
+  r: number,
+) {
   ctx.save();
   // Bayangan di bawah bola.
-  ctx.fillStyle = "rgba(6,6,40,0.35)";
+  ctx.fillStyle = alpha(c.navy950, 0.35);
   ctx.beginPath();
   ctx.ellipse(x, y + r * 1.25, r * 0.8, r * 0.22, 0, 0, Math.PI * 2);
   ctx.fill();
@@ -142,10 +191,17 @@ function drawBall(ctx: CanvasRenderingContext2D, c: ReturnType<typeof tokens>, x
     ctx.stroke();
   }
   // Bayangan bulat di sisi kanan bawah supaya terlihat tiga dimensi.
-  const shade = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.2, x, y, r * 1.05);
-  shade.addColorStop(0, "rgba(255,255,255,0.18)");
-  shade.addColorStop(0.6, "rgba(255,255,255,0)");
-  shade.addColorStop(1, "rgba(6,6,40,0.28)");
+  const shade = ctx.createRadialGradient(
+    x - r * 0.35,
+    y - r * 0.35,
+    r * 0.2,
+    x,
+    y,
+    r * 1.05,
+  );
+  shade.addColorStop(0, alpha(c.white, 0.18));
+  shade.addColorStop(0.6, alpha(c.white, 0));
+  shade.addColorStop(1, alpha(c.navy950, 0.28));
   ctx.fillStyle = shade;
   ctx.fillRect(x - r, y - r, r * 2, r * 2);
   ctx.restore();
@@ -173,7 +229,7 @@ function drawNet(
 
   // Bayangan net di lantai lapangan.
   ctx.save();
-  ctx.fillStyle = "rgba(6,6,40,0.35)";
+  ctx.fillStyle = alpha(c.navy950, 0.35);
   ctx.beginPath();
   ctx.moveTo(left, base.y);
   ctx.lineTo(right, base.y);
@@ -189,12 +245,12 @@ function drawNet(
   body.lineTo(right, topAt(right));
   body.lineTo(right, base.y);
   body.closePath();
-  ctx.fillStyle = "rgba(6,6,40,0.28)";
+  ctx.fillStyle = alpha(c.navy950, 0.28);
   ctx.fill(body);
 
   // Mata jaring (kotak) dipotong mengikuti bentuk jaring.
   ctx.clip(body);
-  ctx.strokeStyle = "rgba(255,255,255,0.28)";
+  ctx.strokeStyle = alpha(c.white, 0.28);
   ctx.lineWidth = 1.5;
   const cell = 14;
   for (let x = left; x <= right; x += cell) {
@@ -213,7 +269,7 @@ function drawNet(
 
   // Pita putih di atas (dengan sisi bawah sedikit gelap supaya bervolume).
   ctx.lineCap = "round";
-  ctx.strokeStyle = "rgba(6,6,40,0.35)";
+  ctx.strokeStyle = alpha(c.navy950, 0.35);
   ctx.lineWidth = 16;
   ctx.beginPath();
   for (let x = left; x <= right; x += 8) ctx.lineTo(x, topAt(x) + 4);
@@ -226,7 +282,7 @@ function drawNet(
   ctx.stroke();
 
   // Tali bawah net.
-  ctx.strokeStyle = "rgba(255,255,255,0.6)";
+  ctx.strokeStyle = alpha(c.white, 0.6);
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(left, base.y);
@@ -239,7 +295,7 @@ function drawNet(
     roundRect(ctx, x - 9, top, 18, base.y - top + 6, 6);
     ctx.fillStyle = c.navy950;
     ctx.fill();
-    ctx.fillStyle = "rgba(255,255,255,0.35)";
+    ctx.fillStyle = alpha(c.white, 0.35);
     ctx.fillRect(x - 5, top + 6, 4, base.y - top - 6);
     ctx.beginPath();
     ctx.arc(x, top, 12, 0, Math.PI * 2);
@@ -260,7 +316,9 @@ export async function renderStoryCard(data: StoryData): Promise<Blob> {
     ]).catch(() => {}),
     new Promise((resolve) => setTimeout(resolve, 1500)),
   ]);
-  const logo = await loadImage("/images/brand/logo-lime.webp").catch(() => null);
+  const logo = await loadImage("/images/brand/logo-lime.webp").catch(
+    () => null,
+  );
 
   const canvas = document.createElement("canvas");
   canvas.width = STORY_W;
@@ -277,9 +335,16 @@ export async function renderStoryCard(data: StoryData): Promise<Blob> {
   bg.addColorStop(1, c.navy950);
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, STORY_W, STORY_H);
-  const glow = ctx.createRadialGradient(STORY_W / 2, 820, 40, STORY_W / 2, 820, 620);
-  glow.addColorStop(0, "rgba(215,255,0,0.22)");
-  glow.addColorStop(1, "rgba(215,255,0,0)");
+  const glow = ctx.createRadialGradient(
+    STORY_W / 2,
+    820,
+    40,
+    STORY_W / 2,
+    820,
+    620,
+  );
+  glow.addColorStop(0, alpha(c.lime, 0.22));
+  glow.addColorStop(1, alpha(c.lime, 0));
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, STORY_W, STORY_H);
 
@@ -295,7 +360,13 @@ export async function renderStoryCard(data: StoryData): Promise<Blob> {
   // Overline.
   ctx.fillStyle = c.lime;
   ctx.font = `700 40px ${c.display}`;
-  spaced(ctx, data.newBest ? "NEW PERSONAL BEST" : "SLAY RALLY", STORY_W / 2, 520, 10);
+  spaced(
+    ctx,
+    data.newBest ? "NEW PERSONAL BEST" : "SLAY RALLY",
+    STORY_W / 2,
+    520,
+    10,
+  );
 
   // Skor besar — diperkecil bila angkanya panjang.
   const scoreText = String(data.score);
@@ -314,9 +385,18 @@ export async function renderStoryCard(data: StoryData): Promise<Blob> {
 
   // Lencana peringkat & Slay Point.
   const chips: { text: string; fill: string; ink: string }[] = [];
-  if (data.rank) chips.push({ text: `#${data.rank} on the leaderboard`, fill: c.lime, ink: c.navy950 });
+  if (data.rank)
+    chips.push({
+      text: `#${data.rank} on the leaderboard`,
+      fill: c.lime,
+      ink: c.navy950,
+    });
   if (data.points && data.points > 0)
-    chips.push({ text: `+${data.points} Slay Point${data.points > 1 ? "s" : ""}`, fill: c.pink, ink: c.navy950 });
+    chips.push({
+      text: `+${slayPointsLabel(data.points)}`,
+      fill: c.pink,
+      ink: c.navy950,
+    });
   ctx.font = `700 40px ${c.display}`;
   let y = 990;
   for (const chip of chips) {
@@ -335,7 +415,7 @@ export async function renderStoryCard(data: StoryData): Promise<Blob> {
   // Ajakan di bawah.
   ctx.fillStyle = c.white;
   ctx.font = `800 76px ${c.display}`;
-  ctx.shadowColor = "rgba(6,6,40,0.55)";
+  ctx.shadowColor = alpha(c.navy950, 0.55);
   ctx.shadowBlur = 24;
   ctx.fillText("Can you beat me?", STORY_W / 2, 1525);
   ctx.shadowBlur = 0;
@@ -352,6 +432,10 @@ export async function renderStoryCard(data: StoryData): Promise<Blob> {
   ctx.fillText(link, STORY_W / 2, 1629);
 
   return new Promise((resolve, reject) =>
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("toBlob failed"))), STORY_TYPE, 0.9),
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("toBlob failed"))),
+      STORY_TYPE,
+      0.9,
+    ),
   );
 }

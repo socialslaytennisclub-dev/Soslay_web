@@ -13,9 +13,20 @@ export const FREE_ROUNDS = 1;
 export const GATE_SAVE_KEY = "soslay-rally-gate";
 export const GATE_SAVE_TTL_MS = 24 * 60 * 60 * 1000;
 
-export type GateSave = { score: number; lives: number; level: number; savedAt: number };
+/** Keadaan game yang dibawa melewati gerbang daftar (lihat engine.ts onGate / restore). */
+export type GateState = { score: number; lives: number; level: number };
+export type GateSave = GateState & { savedAt: number };
 
-export type LeaderboardRow = { rank: number; name: string; photo: string | null; best: number; isMe: boolean };
+/** Pesan saat skor tidak bisa disimpan (dipakai klien & server action). */
+export const NOT_MEMBER = "Sign in as a member to save your score.";
+export const CONNECTION_LOST = "Connection lost — your score wasn't saved. Check your internet and reload the page.";
+
+export const slayPointsLabel = (n: number) => `${n} Slay Point${n === 1 ? "" : "s"}`;
+
+/** Baris leaderboard yang ditampilkan setelah game over (top N + baris sendiri). */
+export const LEADERBOARD_SIZE = 5;
+
+export type LeaderboardRow = { rank: number; name: string; best: number; isMe: boolean };
 
 export type StartSessionResult = { ok: true; sessionId: string } | { ok: false; error: string };
 

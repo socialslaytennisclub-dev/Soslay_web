@@ -2315,6 +2315,16 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const cap = Number(ts.match(/GAME_DAILY_POINT_CAP = (\d+)/)?.[1]);
   const fn = (await one(`select prosrc from pg_proc where proname = 'submit_game_score'`)).prosrc;
   console.assert(fn.includes(`c_cap constant integer := ${cap};`) && fn.includes(`c_rate constant integer := ${rate};`), "konstanta game sama di SQL & lib/game.ts");
+  // Batas "masuk akal" di SQL mengikuti engine.ts: skor per ronde ≤ 2 × blok terbanyak + 10 (bonus ronde),
+  // dan cadangan skor tamu menutup semua ronde gratis.
+  const engine = await readFile(path.resolve(import.meta.dirname, "../src/components/game/SlayRally/engine.ts"), "utf8");
+  const at = engine.indexOf("const LEVELS");
+  const maps = new Function(`return ${engine.slice(engine.indexOf("= [", at) + 2, engine.indexOf("\n];", at) + 2)}`)();
+  const maxBricks = Math.max(...maps.map((rows) => rows.join("").replace(/[^12]/g, "").length));
+  const freeRounds = Number(ts.match(/FREE_ROUNDS = (\d+)/)?.[1]);
+  const perLevel = Number(fn.match(/p_score > (\d+) \* p_level/)?.[1]);
+  const reserve = Number(fn.match(/p_score > (\d+) \+ v_secs/)?.[1]);
+  console.assert(maxBricks > 0 && 2 * maxBricks + 10 <= perLevel && freeRounds * (2 * maxBricks + 10) <= reserve, `batas skor SQL (${perLevel}/ronde, cadangan ${reserve}) menutup engine.ts (${maxBricks} blok/ronde, ${freeRounds} ronde gratis)`);
 
   const err = async (sql, params) => db.query(sql, params).then(() => null, (e) => e.message);
   const mk = async (name, status = "active") => {
@@ -2387,7 +2397,12 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const anonRows = await db.query(`select * from game_scores`).then((x) => x.rows.length, () => 0);
   const anonSessions = await db.query(`select * from game_sessions`).then((x) => x.rows.length, () => 0);
   await db.exec(`reset role`);
-  console.assert(pub.length === 3 && !("member_id" in pub[0]) && pub.every((x) => !x.is_me), "leaderboard publik tanpa id member");
+  console.assert(pub.length === 3 && !("member_id" in pub[0]) && !("photo" in pub[0]) && pub.every((x) => x.is_me === false), "leaderboard publik tanpa id member / foto");
+  // Membuka sesi terus-menerus ditahan (30 sesi per 10 menit).
+  await db.query(`insert into game_sessions (member_id) select $1 from generate_series(1, 30)`, [sleepy]);
+  await as(sleepy);
+  console.assert((await err(`select start_game_session()`))?.includes("too_many_sessions"), "sesi game dibatasi per 10 menit");
+  await db.exec(`reset role`);
   console.assert(anonStart !== null && anonSubmit !== null, "anon tidak punya akses RPC game");
   console.assert(anonRows === 0 && anonSessions === 0, "anon tidak bisa membaca tabel game");
   console.log("✓ Slay Rally: sesi game dicatat server (durasi tidak bisa dipalsukan), batas skor/level, sekali kirim per sesi, kedaluwarsa 3 jam, Slay Point 100:1 + sisa terbawa + batas harian, leaderboard publik");

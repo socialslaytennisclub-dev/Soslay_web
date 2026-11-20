@@ -12,7 +12,7 @@
 --    GAME_DAILY_POINT_CAP (10) Slay Point per hari WIB. Dicatat di points_ledger reason 'bonus', note "Slay Rally · …".
 --    Angka sama di web/src/lib/game.ts — ubah keduanya bersamaan (dicek di check-migrations).
 --  · Leaderboard publik: skor terbaik per member (kecuali suspended — sama dengan syarat kirim skor),
---    nama tampilan (atau nama depan) + foto saja.
+--    nama tampilan (atau nama depan) saja.
 
 create table game_sessions (
   id            uuid primary key default gen_random_uuid(),
@@ -60,6 +60,11 @@ begin
   end if;
   -- Sesi lama yang tidak pernah dikirim tidak berguna lagi.
   delete from game_sessions where member_id = v_member and submitted_at is null and started_at < now() - interval '1 day';
+  -- Satu game = satu sesi; 30 sesi per 10 menit jauh di atas main normal, cukup untuk menahan skrip
+  -- yang membuka sesi terus-menerus.
+  if (select count(*) from game_sessions where member_id = v_member and started_at > now() - interval '10 minutes') >= 30 then
+    raise exception 'too_many_sessions';
+  end if;
   insert into game_sessions (member_id) values (v_member) returning id into v_id;
   return v_id;
 end;
@@ -108,11 +113,13 @@ begin
 
   update game_sessions set submitted_at = now() where id = v_session.id;
 
-  select coalesce(sum(score), 0), coalesce(sum(points_awarded), 0) into v_total, v_awarded
+  -- Satu kali baca riwayat skor member: total, yang sudah dibayar, yang dibayar hari ini (WIB), skor terbaik.
+  select coalesce(sum(score), 0),
+         coalesce(sum(points_awarded), 0),
+         coalesce(sum(points_awarded) filter (where (created_at at time zone 'Asia/Jakarta')::date = (now() at time zone 'Asia/Jakarta')::date), 0),
+         greatest(coalesce(max(score), 0), p_score)
+  into v_total, v_awarded, v_today, v_best
   from game_scores where member_id = v_member;
-  select coalesce(sum(points_awarded), 0) into v_today
-  from game_scores
-  where member_id = v_member and (created_at at time zone 'Asia/Jakarta')::date = (now() at time zone 'Asia/Jakarta')::date;
 
   v_new := greatest(0, least(((v_total + p_score) / c_rate) - v_awarded, c_cap - v_today))::integer;
 
@@ -124,7 +131,6 @@ begin
     values (v_member, v_new, 'bonus', format('Slay Rally · skor %s', p_score));
   end if;
 
-  select max(score) into v_best from game_scores where member_id = v_member;
   return jsonb_build_object(
     'points_awarded', v_new,
     'best', v_best,
@@ -140,7 +146,7 @@ grant execute on function submit_game_score(uuid, integer, integer) to authentic
 
 -- Top N skor terbaik per member + baris milik pemanggil bila di luar top N.
 create function game_leaderboard(p_limit integer default 10)
-returns table (rank integer, name text, photo text, best integer, is_me boolean)
+returns table (rank integer, name text, best integer, is_me boolean)
 language sql stable security definer set search_path = public as $$
   with best as (
     select distinct on (g.member_id) g.member_id, g.score, g.created_at
@@ -155,9 +161,8 @@ language sql stable security definer set search_path = public as $$
   )
   select r.rk,
          coalesce(nullif(trim(p.display_name), ''), split_part(trim(p.full_name), ' ', 1)),
-         p.avatar_path,
          r.score,
-         r.member_id = auth.uid()
+         coalesce(r.member_id = auth.uid(), false)
   from ranked r join profiles p on p.id = r.member_id
   where r.rk <= least(greatest(coalesce(p_limit, 10), 1), 50) or r.member_id = auth.uid()
   order by r.rk;

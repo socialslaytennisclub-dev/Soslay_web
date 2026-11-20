@@ -2,7 +2,7 @@
 
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { ADMIN_LOGIN, AFTER_AUTH, registerPage, RESET_PASSWORD } from "@/content/auth";
+import { ADMIN_LOGIN, AFTER_AUTH, AFTER_CONFIRM_COOKIE, registerPage, RESET_PASSWORD } from "@/content/auth";
 import { compact, normalizeKuyId, required, todayIso, validateBirthDate, validateGender, validateEmail, validateKuyId, validateNewEmail, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -11,11 +11,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { localPhone } from "@/lib/wa-invite";
 import { allowAttempt, clientIp } from "@/server/rate-limit";
 import { DEMO_MEMBER_COOKIE } from "@/lib/demo-member";
-import { isInternalPath } from "@/lib/safe-path";
+import { isInternalPath, safeNext as safePath } from "@/lib/safe-path";
 
 /** Hanya path internal ("/admin", "/akun?x=1") — cegah open redirect lewat ?next=. */
 function safeNext(next: string | undefined) {
-  return isInternalPath(next) ? next : AFTER_AUTH;
+  return safePath(next, AFTER_AUTH);
 }
 
 /** Mode demo: tandai "sudah login" supaya alur yang butuh akun (mis. ronde 2 /game) bisa dicoba. */
@@ -81,6 +81,7 @@ export async function signUp(input: SignUpInput, next?: string): Promise<SignUpR
   const { data: kuyFree } = await supabase.rpc("kuy_id_available", { p_kuy_id: kuyId });
   if (kuyFree === false) return { fieldErrors: { kuyId: "This Kuy ID is already registered" } };
 
+  await rememberAfterConfirm(next);
   const { data, error } = await supabase.auth.signUp({
     email: values.email.toLowerCase(),
     password: values.password,
@@ -119,6 +120,20 @@ export async function signUp(input: SignUpInput, next?: string): Promise<SignUpR
 /** Link di email konfirmasi signup — tujuan sama dengan signUp (`next`, mis. /game, atau /akun). */
 async function signupRedirect(next?: string) {
   return `${await requestOrigin()}/auth/confirm?next=${encodeURIComponent(safeNext(next))}`;
+}
+
+/**
+ * Template email Supabase menulis `next=/akun` sendiri (tidak memakai emailRedirectTo), jadi tujuan
+ * khusus setelah verifikasi (mis. /game) dititipkan di cookie — dibaca /auth/confirm di browser yang
+ * sama. Dipanggil setiap kali link konfirmasi dikirim.
+ */
+async function rememberAfterConfirm(next?: string) {
+  const jar = await cookies();
+  if (isInternalPath(next) && next !== AFTER_AUTH) {
+    jar.set(AFTER_CONFIRM_COOKIE, next, { path: "/", httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 });
+  } else {
+    jar.delete(AFTER_CONFIRM_COOKIE);
+  }
 }
 
 /** Klien anon tanpa cookie — cek password tanpa membuat / menimpa sesi login di browser. */
@@ -209,6 +224,7 @@ export async function changeSignupEmail(currentEmail: string, newEmail: string, 
   }
 
   // 4) Kirim ulang link konfirmasi ke email baru.
+  await rememberAfterConfirm(next);
   const { error: resendError } = await anon.auth.resend({ type: "signup", email: to, options: { emailRedirectTo: await signupRedirect(next) } });
   if (resendError) console.warn(`[changeSignupEmail] kirim ulang konfirmasi gagal: ${resendError.message}`);
   return { confirmEmail: to, resendFailed: !!resendError };
@@ -226,6 +242,7 @@ export async function resendSignupConfirmation(email: string, next?: string): Pr
   if (!allowAttempt(`resend:ip:${ip}`, 5, 15 * 60_000) || !allowAttempt(`resend:acct:${value}`, 3, 15 * 60_000)) {
     return { error: "Please wait a few minutes before requesting another email." };
   }
+  await rememberAfterConfirm(next);
   const { error } = await ephemeralClient().auth.resend({ type: "signup", email: value, options: { emailRedirectTo: await signupRedirect(next) } });
   if (isRateLimited(error?.code) || error?.status === 429) return { error: "Please wait a minute before requesting another email." };
   if (error) return { error: "Couldn't send the email. Please try again in a moment." };

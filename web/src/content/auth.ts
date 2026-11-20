@@ -96,12 +96,26 @@ export function authCopyFor(next: string | undefined, page: "register" | "login"
   return null;
 }
 
+/**
+ * Yang dibutuhkan halaman Masuk / Daftar dari `?next=`: nilai tunggalnya, judul & ajakan (khusus
+ * game bila datang dari game), dan link ke halaman sebelah yang tetap membawa `next`.
+ */
+export function authPageCopy(kind: "login" | "register", rawNext: string | string[] | undefined) {
+  const next = Array.isArray(rawNext) ? rawNext[0] : rawNext;
+  const page = kind === "login" ? loginPage : registerPage;
+  const { title, description } = authCopyFor(next, kind) ?? page;
+  return { next, title, description, switchTo: { ...page.switch, href: withNext(page.switch.href, next) } };
+}
+
 /** `?next=` yang dibawa bolak-balik Masuk ↔ Daftar (hanya path internal). */
 export function withNext(href: string, next: string | undefined) {
   return isInternalPath(next) ? `${href}?next=${encodeURIComponent(next)}` : href;
 }
 
 export const ADMIN_LOGIN = "/masuk/admin";
+
+/** Tujuan setelah klik link verifikasi bila daftar dari halaman lain (mis. /game) — lihat signupRedirect. */
+export const AFTER_CONFIRM_COOKIE = "soslay-after-confirm";
 
 /** Tujuan setelah berhasil masuk / daftar. */
 export const AFTER_AUTH = "/akun";

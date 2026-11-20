@@ -63,7 +63,9 @@ export function useMemberUser(initial?: MemberUser | null) {
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
-      // Mode demo: cookie dari Masuk / Daftar demo (lihat lib/demo-member.ts).
+      // Mode demo: data dari server (halaman /akun) tetap dipakai apa adanya.
+      if (name !== undefined) return;
+      // Selain itu: cookie dari Masuk / Daftar demo (lihat lib/demo-member.ts).
       const demo = document.cookie.split("; ").some((c) => c.startsWith(`${DEMO_MEMBER_COOKIE}=`));
       queueMicrotask(() => setUser(demo ? { name: DEMO_MEMBER_NAME } : null));
       return;

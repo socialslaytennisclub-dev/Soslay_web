@@ -6,6 +6,8 @@
  * Koordinat memakai ukuran logis W×H; renderer yang memetakannya ke ruang 3D.
  */
 
+import type { GateState } from "@/lib/game";
+
 export const W = 440;
 export const H = 660;
 
@@ -61,10 +63,10 @@ export type GameEvents = {
   onGameOver: (score: number) => void;
   /**
    * Dipanggil saat ronde selesai, sebelum ronde berikutnya dimuat. `false` = berhenti di gerbang
-   * (mis. tamu wajib daftar untuk ronde 2) sampai `continueRound()` dipanggil.
+   * (mis. tamu wajib daftar untuk ronde 2) sampai `restore()` dipanggil dengan keadaan dari `onGate`.
    */
   canEnterLevel?: (level: number) => boolean;
-  onGate?: (state: { score: number; lives: number; level: number }) => void;
+  onGate?: (state: GateState) => void;
 };
 
 export type Ball = {
@@ -193,10 +195,10 @@ export class Game {
   }
 
   /**
-   * Lanjut dari keadaan tersimpan (tamu yang berhenti di gerbang lalu daftar / masuk):
-   * ronde `level` dimulai dari awal dengan skor & nyawa yang dibawa.
+   * Lanjut dari keadaan `onGate` — langsung dari gerbang di tab ini, atau dari simpanan setelah
+   * daftar / masuk: ronde `level` dimulai dari awal dengan skor & nyawa yang dibawa.
    */
-  restore(state: { score: number; lives: number; level: number }) {
+  restore(state: GateState) {
     this.reset();
     this.score = Math.max(0, Math.floor(state.score));
     this.lives = Math.min(Math.max(1, Math.floor(state.lives)), START_LIVES);
@@ -204,13 +206,6 @@ export class Game {
     this.events.onScore(this.score);
     this.events.onLives(this.lives);
     this.events.onLevel(this.level);
-    this.loadLevel();
-  }
-
-  /** Lepas gerbang → ronde berikutnya dimuat. */
-  continueRound() {
-    if (!this.gated) return;
-    this.gated = false;
     this.events.onSound?.("level");
     this.loadLevel();
   }
@@ -499,7 +494,11 @@ export class Game {
         this.gated = true;
         this.balls = [];
         this.drops = [];
-        this.events.onGate?.({ score: this.score, lives: this.lives, level: this.level });
+        this.events.onGate?.({
+          score: this.score,
+          lives: this.lives,
+          level: this.level,
+        });
         return;
       }
       this.events.onSound?.("level");

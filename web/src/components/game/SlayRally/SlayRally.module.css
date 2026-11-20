@@ -493,7 +493,9 @@
   font-size: 16px;
   font-weight: var(--weight-bold);
   cursor: pointer;
-  transition: transform var(--duration-fast) var(--ease-out), filter var(--duration-fast) var(--ease-out);
+  transition:
+    transform var(--duration-fast) var(--ease-out),
+    filter var(--duration-fast) var(--ease-out);
 }
 
 .shareButton:hover {

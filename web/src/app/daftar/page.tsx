@@ -3,7 +3,7 @@ import { AuthStage } from "@/components/auth/AuthStage/AuthStage";
 import { RegisterForm } from "@/components/auth/AuthForms/RegisterForm";
 import { Footer } from "@/components/layout/Footer/Footer";
 import { Navbar } from "@/components/layout/Navbar/Navbar";
-import { authCopyFor, registerPage, withNext } from "@/content/auth";
+import { authPageCopy } from "@/content/auth";
 
 export const metadata: Metadata = {
   title: "Sign Up — SOSLAY",
@@ -12,18 +12,16 @@ export const metadata: Metadata = {
 
 /** Halaman Daftar (Figma 25:1850 "Desktop - 30"). */
 export default async function RegisterPage({ searchParams }: PageProps<"/daftar">) {
-  const raw = (await searchParams).next;
-  const next = Array.isArray(raw) ? raw[0] : raw;
-  const copy = authCopyFor(next, "register") ?? registerPage;
+  const { next, title, description, switchTo } = authPageCopy("register", (await searchParams).next);
   return (
     <>
       <Navbar variant="overlay" />
       <main>
         <AuthStage
           id="register-title"
-          title={copy.title}
-          description={copy.description}
-          switchTo={{ ...registerPage.switch, href: withNext(registerPage.switch.href, next) }}
+          title={title}
+          description={description}
+          switchTo={switchTo}
         >
           <RegisterForm next={next} />
         </AuthStage>

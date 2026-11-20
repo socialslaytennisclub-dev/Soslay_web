@@ -97,15 +97,8 @@ export class Sound {
    * Safari lama dipaksa lewat elemen <audio> diam yang diputar dari klik pengguna.
    */
   private preferPlayback() {
-    const session = (navigator as AudioSessionNavigator).audioSession;
-    if (session) {
-      try {
-        session.type = "playback";
-        return;
-      } catch {
-        // Lanjut ke trik <audio>.
-      }
-    }
+    // Saat di-mute tidak perlu "playback": kategori itu menghentikan musik lain di HP (Spotify dsb.).
+    if (this.setSessionType(this.muted ? "auto" : "playback")) return;
     // Hanya iPhone/iPad: di Android & desktop elemen <audio> yang terus diputar merebut fokus audio
     // (Spotify dsb. berhenti) dan memunculkan notifikasi / ikon "sedang memutar".
     if (this.keepAlive || !isAppleMobile()) return;
@@ -118,11 +111,24 @@ export class Sound {
     void el.play().catch(() => {});
   }
 
+  /** Safari 16.4+: ganti kategori sesi audio. `false` = tidak didukung (pakai trik <audio>). */
+  private setSessionType(type: "playback" | "auto") {
+    const session = (navigator as AudioSessionNavigator).audioSession;
+    if (!session) return false;
+    try {
+      session.type = type;
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** Panggil dari handler klik: browser hanya mengizinkan audio setelah interaksi. */
   unlock() {
     this.preferPlayback();
     if (!this.ctx) {
-      const Ctor = window.AudioContext ?? (window as AudioWindow).webkitAudioContext;
+      const Ctor =
+        window.AudioContext ?? (window as AudioWindow).webkitAudioContext;
       if (!Ctor) return;
       const ctx = new Ctor();
       this.ctx = ctx;
@@ -147,13 +153,15 @@ export class Sound {
       this.timer = window.setInterval(() => this.schedule(), 80);
       this.setMusicLevel(this.musicLevel);
       // iOS hanya menganggap touchend / click sebagai izin memutar audio (pointerdown = touchstart tidak).
-      for (const type of WAKE_EVENTS) window.addEventListener(type, this.wake, true);
+      for (const type of WAKE_EVENTS)
+        window.addEventListener(type, this.wake, true);
     }
     this.wake();
   }
 
   setMuted(muted: boolean) {
     this.muted = muted;
+    if (this.ctx) this.setSessionType(muted ? "auto" : "playback");
     if (this.ctx && this.master)
       this.master.gain.setTargetAtTime(
         muted ? 0 : 1,
@@ -187,8 +195,11 @@ export class Sound {
 
   dispose() {
     window.clearInterval(this.timer);
-    for (const type of WAKE_EVENTS) window.removeEventListener(type, this.wake, true);
+    for (const type of WAKE_EVENTS)
+      window.removeEventListener(type, this.wake, true);
     void this.ctx?.close();
+    // Halaman lain di situs tidak boleh mewarisi kategori "playback" dari game.
+    if (this.ctx) this.setSessionType("auto");
     this.ctx = null;
     if (this.keepAlive) {
       this.keepAlive.pause();
