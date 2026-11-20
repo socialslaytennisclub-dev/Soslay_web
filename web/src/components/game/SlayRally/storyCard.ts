@@ -106,6 +106,41 @@ function drawCourt(ctx: CanvasRenderingContext2D, c: ReturnType<typeof tokens>) 
 }
 
 /**
+ * Bola tenis digambar langsung (selalu bulat sempurna — SVG bola memakai preserveAspectRatio="none"
+ * sehingga bisa melar saat digambar ke canvas). Lime + dua jahitan putih + bayangan lembut.
+ */
+function drawBall(ctx: CanvasRenderingContext2D, c: ReturnType<typeof tokens>, x: number, y: number, r: number) {
+  ctx.save();
+  // Bayangan di bawah bola.
+  ctx.fillStyle = "rgba(6,6,40,0.35)";
+  ctx.beginPath();
+  ctx.ellipse(x, y + r * 1.25, r * 0.8, r * 0.22, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = c.lime;
+  ctx.fill();
+  ctx.clip();
+  // Jahitan: dua lingkaran besar di kiri & kanan, terpotong mengikuti bola (sama seperti ball.svg).
+  ctx.strokeStyle = c.white;
+  ctx.lineWidth = r * 0.09;
+  for (const side of [-1, 1]) {
+    ctx.beginPath();
+    ctx.arc(x + side * r * 1.4, y, r, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  // Bayangan bulat di sisi kanan bawah supaya terlihat tiga dimensi.
+  const shade = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.2, x, y, r * 1.05);
+  shade.addColorStop(0, "rgba(255,255,255,0.18)");
+  shade.addColorStop(0.6, "rgba(255,255,255,0)");
+  shade.addColorStop(1, "rgba(6,6,40,0.28)");
+  ctx.fillStyle = shade;
+  ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  ctx.restore();
+}
+
+/**
  * Net berdiri di lapangan (dilihat dari belakang baseline): tiang di kedua sisi, jaring kotak
  * tembus pandang, pita putih di atas yang sedikit melengkung turun ke tengah, dan bayangan di lantai.
  */
@@ -214,10 +249,7 @@ export async function renderStoryCard(data: StoryData): Promise<Blob> {
     ]).catch(() => {}),
     new Promise((resolve) => setTimeout(resolve, 1500)),
   ]);
-  const [logo, ball] = await Promise.all([
-    loadImage("/images/brand/logo-lime.webp").catch(() => null),
-    loadImage("/images/splash/ball.svg").catch(() => null),
-  ]);
+  const logo = await loadImage("/images/brand/logo-lime.webp").catch(() => null);
 
   const canvas = document.createElement("canvas");
   canvas.width = STORY_W;
@@ -287,7 +319,7 @@ export async function renderStoryCard(data: StoryData): Promise<Blob> {
   }
 
   // Bola tenis di atas lapangan.
-  if (ball) ctx.drawImage(ball, STORY_W / 2 + 300, 1150, 96, 96);
+  drawBall(ctx, c, STORY_W / 2 + 348, 1196, 48);
 
   // Ajakan di bawah.
   ctx.fillStyle = c.white;
