@@ -40,6 +40,14 @@ function silentWavUrl() {
   return URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
 }
 
+/** iPhone / iPad (iPadOS melapor sebagai Mac dengan layar sentuh). */
+function isAppleMobile() {
+  return (
+    /iP(hone|ad|od)/.test(navigator.userAgent) ||
+    (navigator.userAgent.includes("Macintosh") && navigator.maxTouchPoints > 1)
+  );
+}
+
 const midi = (note: number) => 440 * 2 ** ((note - 69) / 12);
 
 /** Progresi empat bar: nada bass + tiga nada arpeggio (nomor MIDI). */
@@ -98,7 +106,9 @@ export class Sound {
         // Lanjut ke trik <audio>.
       }
     }
-    if (this.keepAlive) return;
+    // Hanya iPhone/iPad: di Android & desktop elemen <audio> yang terus diputar merebut fokus audio
+    // (Spotify dsb. berhenti) dan memunculkan notifikasi / ikon "sedang memutar".
+    if (this.keepAlive || !isAppleMobile()) return;
     const el = document.createElement("audio");
     el.src = silentWavUrl();
     el.loop = true;

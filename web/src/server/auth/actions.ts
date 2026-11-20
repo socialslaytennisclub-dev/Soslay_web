@@ -11,10 +11,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { localPhone } from "@/lib/wa-invite";
 import { allowAttempt, clientIp } from "@/server/rate-limit";
 import { DEMO_MEMBER_COOKIE } from "@/lib/demo-member";
+import { isInternalPath } from "@/lib/safe-path";
 
 /** Hanya path internal ("/admin", "/akun?x=1") — cegah open redirect lewat ?next=. */
 function safeNext(next: string | undefined) {
-  return next && next.startsWith("/") && !next.startsWith("//") ? next : AFTER_AUTH;
+  return isInternalPath(next) ? next : AFTER_AUTH;
 }
 
 /** Mode demo: tandai "sudah login" supaya alur yang butuh akun (mis. ronde 2 /game) bisa dicoba. */
@@ -142,7 +143,7 @@ export type ChangeSignupEmailResult = {
  * benar tapi akun belum aktif. Setelah itu email Auth diganti (service role), link konfirmasi
  * dikirim ulang ke email baru, dan profiles.email disamakan.
  */
-export async function changeSignupEmail(currentEmail: string, newEmail: string, password: string): Promise<ChangeSignupEmailResult> {
+export async function changeSignupEmail(currentEmail: string, newEmail: string, password: string, next?: string): Promise<ChangeSignupEmailResult> {
   const from = String(currentEmail ?? "").trim().toLowerCase();
   const to = String(newEmail ?? "").trim().toLowerCase();
   const fieldErrors = compact<"email" | "password">({
@@ -208,7 +209,7 @@ export async function changeSignupEmail(currentEmail: string, newEmail: string, 
   }
 
   // 4) Kirim ulang link konfirmasi ke email baru.
-  const { error: resendError } = await anon.auth.resend({ type: "signup", email: to, options: { emailRedirectTo: await signupRedirect() } });
+  const { error: resendError } = await anon.auth.resend({ type: "signup", email: to, options: { emailRedirectTo: await signupRedirect(next) } });
   if (resendError) console.warn(`[changeSignupEmail] kirim ulang konfirmasi gagal: ${resendError.message}`);
   return { confirmEmail: to, resendFailed: !!resendError };
 }
@@ -216,7 +217,7 @@ export async function changeSignupEmail(currentEmail: string, newEmail: string, 
 export type ResendConfirmationResult = { sent?: boolean; error?: string };
 
 /** Kirim ulang link konfirmasi signup. Supabase membatasi ±1 kali per menit per akun. */
-export async function resendSignupConfirmation(email: string): Promise<ResendConfirmationResult> {
+export async function resendSignupConfirmation(email: string, next?: string): Promise<ResendConfirmationResult> {
   const value = String(email ?? "").trim().toLowerCase();
   if (validateEmail(value)) return { error: "Please enter a valid email" };
   if (!isSupabaseConfigured) return { sent: true };
@@ -225,7 +226,7 @@ export async function resendSignupConfirmation(email: string): Promise<ResendCon
   if (!allowAttempt(`resend:ip:${ip}`, 5, 15 * 60_000) || !allowAttempt(`resend:acct:${value}`, 3, 15 * 60_000)) {
     return { error: "Please wait a few minutes before requesting another email." };
   }
-  const { error } = await ephemeralClient().auth.resend({ type: "signup", email: value, options: { emailRedirectTo: await signupRedirect() } });
+  const { error } = await ephemeralClient().auth.resend({ type: "signup", email: value, options: { emailRedirectTo: await signupRedirect(next) } });
   if (isRateLimited(error?.code) || error?.status === 429) return { error: "Please wait a minute before requesting another email." };
   if (error) return { error: "Couldn't send the email. Please try again in a moment." };
   return { sent: true };

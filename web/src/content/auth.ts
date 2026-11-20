@@ -1,3 +1,5 @@
+import { isInternalPath } from "@/lib/safe-path";
+
 /**
  * Copy halaman Masuk & Daftar. Daftar = Figma Website v2 375:2379 ("Sign Up");
  * Masuk belum ada di Figma → memakai layout & gaya yang sama.
@@ -77,7 +79,7 @@ export const gameAuthCopy = {
 
 /** `?next=` yang dibawa bolak-balik Masuk ↔ Daftar (hanya path internal). */
 export function withNext(href: string, next: string | undefined) {
-  return next && next.startsWith("/") && !next.startsWith("//") ? `${href}?next=${encodeURIComponent(next)}` : href;
+  return isInternalPath(next) ? `${href}?next=${encodeURIComponent(next)}` : href;
 }
 
 export const ADMIN_LOGIN = "/masuk/admin";

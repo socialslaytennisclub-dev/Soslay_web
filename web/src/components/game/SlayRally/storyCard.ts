@@ -6,7 +6,18 @@
 // Isi penting berada di antara y 250–1670: bagian atas & bawah Story tertutup bar profil / kolom balas Instagram.
 export const STORY_W = 1080;
 export const STORY_H = 1920;
-export const STORY_FILENAME = "slay-rally-score.png";
+/** JPEG: ±5–10× lebih kecil dari PNG untuk gambar penuh warna ini — Instagram menerima keduanya. */
+export const STORY_TYPE = "image/jpeg";
+export const STORY_FILENAME = "slay-rally-score.jpg";
+
+/** Perangkat bisa membagikan file gambar lewat lembar share bawaan (umumnya HP). */
+export function canShareStory() {
+  try {
+    return Boolean(navigator.canShare?.({ files: [new File([], STORY_FILENAME, { type: STORY_TYPE })] }));
+  } catch {
+    return false;
+  }
+}
 
 export type StoryData = {
   score: number;
@@ -341,6 +352,6 @@ export async function renderStoryCard(data: StoryData): Promise<Blob> {
   ctx.fillText(link, STORY_W / 2, 1629);
 
   return new Promise((resolve, reject) =>
-    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("toBlob failed"))), "image/png"),
+    canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("toBlob failed"))), STORY_TYPE, 0.9),
   );
 }

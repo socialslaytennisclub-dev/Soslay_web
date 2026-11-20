@@ -13,9 +13,11 @@ export const FREE_ROUNDS = 1;
 export const GATE_SAVE_KEY = "soslay-rally-gate";
 export const GATE_SAVE_TTL_MS = 24 * 60 * 60 * 1000;
 
-export type GateSave = { score: number; lives: number; level: number; durationMs: number; savedAt: number };
+export type GateSave = { score: number; lives: number; level: number; savedAt: number };
 
 export type LeaderboardRow = { rank: number; name: string; photo: string | null; best: number; isMe: boolean };
+
+export type StartSessionResult = { ok: true; sessionId: string } | { ok: false; error: string };
 
 export type SubmitScoreResult =
   | { ok: true; pointsAwarded: number; best: number; carry: number; todayAwarded: number; dailyCap: number; demo?: boolean }

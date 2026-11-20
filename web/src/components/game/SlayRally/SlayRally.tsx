@@ -11,13 +11,14 @@ import {
   GATE_SAVE_TTL_MS,
   type GateSave,
   type LeaderboardRow,
+  type StartSessionResult,
   type SubmitScoreResult,
 } from "@/lib/game";
-import { getGameLeaderboard, submitGameScore } from "@/server/game";
+import { getGameLeaderboard, startGameSession, submitGameScore } from "@/server/game";
 import { Court3D, type Palette } from "./court3d";
 import { BONUSES, Game, START_LIVES, type BonusId } from "./engine";
 import { Sound } from "./sound";
-import { renderStoryCard, STORY_FILENAME } from "./storyCard";
+import { canShareStory, renderStoryCard, STORY_FILENAME, STORY_TYPE } from "./storyCard";
 import styles from "./SlayRally.module.css";
 
 type Phase =
@@ -113,9 +114,11 @@ export function SlayRally() {
   const soundRef = useRef<Sound | null>(null);
   const phaseRef = useRef<Phase>("intro");
   const member = useMemberUser();
+  /** useMemberUser membuat objek baru tiap tab dibuka lagi — efek bergantung pada status login saja. */
+  const isMember = Boolean(member);
   const memberRef = useRef(false);
-  /** Waktu bermain aktif (tanpa jeda) — dikirim bersama skor untuk dicek masuk akal di server. */
-  const playMsRef = useRef(0);
+  /** Sesi game di server (waktu mulai dicatat server) — skor game ini dikirim dengan id sesi ini. */
+  const sessionRef = useRef<Promise<StartSessionResult> | null>(null);
   const levelRef = useRef(1);
   const gateRef = useRef<GateSave | null>(null);
 
@@ -136,10 +139,11 @@ export function SlayRally() {
   /** Gambar Story 1080×1920 untuk game over ini — dibuat lebih dulu supaya share tetap di dalam klik (iOS). */
   const [story, setStory] = useState<Blob | null>(null);
   const [shareNote, setShareNote] = useState<string | null>(null);
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
-    memberRef.current = Boolean(member);
-  }, [member]);
+    memberRef.current = isMember;
+  }, [isMember]);
 
   const setPhase = useCallback((next: Phase) => {
     phaseRef.current = next;
@@ -176,7 +180,7 @@ export function SlayRally() {
       // Tamu hanya boleh main ronde 1; ronde berikutnya wajib akun.
       canEnterLevel: (next) => memberRef.current || next <= FREE_ROUNDS,
       onGate: (state) => {
-        const save = { ...state, durationMs: Math.round(playMsRef.current), savedAt: Date.now() };
+        const save = { ...state, savedAt: Date.now() };
         gateRef.current = save;
         writeGateSave(save);
         setSaved(save);
@@ -221,10 +225,7 @@ export function SlayRally() {
       const dt = Math.min((now - last) / 1000, 0.033);
       last = now;
       const current = phaseRef.current;
-      if (current === "playing") {
-        playMsRef.current += dt * 1000;
-        game.update(dt);
-      }
+      if (current === "playing") game.update(dt);
       // Di layar lain adegannya diam — gambar ulang hanya bila ada yang berubah (ukuran, font).
       if (current === "playing" || current === "countdown" || court.dirty)
         court.render(game, dt);
@@ -264,14 +265,14 @@ export function SlayRally() {
 
   // Kembali dari Daftar / Masuk dengan game tamu tersimpan → tawarkan lanjut ronde 2.
   useEffect(() => {
-    if (!member || phaseRef.current !== "intro") return;
+    if (!isMember || phaseRef.current !== "intro") return;
     const save = readGateSave();
     if (!save) return;
     queueMicrotask(() => {
       setSaved(save);
       setPhase("resume");
     });
-  }, [member, setPhase]);
+  }, [isMember, setPhase]);
 
   // Game over: member → skor disimpan (→ Slay Point), lalu leaderboard dimuat (sudah termasuk skor ini).
   useEffect(() => {
@@ -280,15 +281,23 @@ export function SlayRally() {
     const finalScore = score;
     const run = async () => {
       let saveResult: SubmitScoreResult | null = null;
+      const pending = sessionRef.current;
+      sessionRef.current = null;
       if (member && finalScore > 0) {
-        saveResult = await submitGameScore({
-          score: finalScore,
-          level: levelRef.current,
-          durationMs: Math.round(playMsRef.current),
-        }).catch(() => ({
+        const lost = {
           ok: false as const,
           error: "Connection lost — your score wasn't saved. Check your internet and reload the page.",
-        }));
+        };
+        const started = pending ? await pending : null;
+        saveResult = !started
+          ? { ok: false, error: "Sign in as a member to save your score." }
+          : !started.ok
+            ? started
+            : await submitGameScore({
+                sessionId: started.sessionId,
+                score: finalScore,
+                level: levelRef.current,
+              }).catch(() => lost);
         if (cancelled) return;
         setResult(saveResult);
       }
@@ -303,19 +312,22 @@ export function SlayRally() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
-  // Gambar Story disiapkan setelah leaderboard selesai dimuat (peringkat ikut tergambar).
+  const storyData = () => ({
+    score,
+    level,
+    newBest,
+    rank: Array.isArray(board) ? (board.find((row) => row.isMe)?.rank ?? null) : null,
+    points: result?.ok ? result.pointsAwarded : null,
+    link: STORY_LINK,
+  });
+
+  // HP dengan share file: gambar Story disiapkan setelah leaderboard dimuat, supaya navigator.share
+  // tetap dipanggil langsung di klik (iOS menolak share setelah kerja async). Perangkat lain (desktop)
+  // membuat gambar hanya saat tombol diklik.
   useEffect(() => {
-    if (phase !== "over" || board === null) return;
+    if (phase !== "over" || board === null || !canShareStory()) return;
     let cancelled = false;
-    const rank = Array.isArray(board) ? (board.find((row) => row.isMe)?.rank ?? null) : null;
-    renderStoryCard({
-      score,
-      level,
-      newBest,
-      rank,
-      points: result?.ok ? result.pointsAwarded : null,
-      link: STORY_LINK,
-    })
+    renderStoryCard(storyData())
       .then((blob) => {
         if (!cancelled) setStory(blob);
       })
@@ -420,11 +432,17 @@ export function SlayRally() {
     setShareNote(null);
     setCount(3);
     setPhase("countdown");
+    // Member: waktu mulai dicatat server sekarang (dipakai untuk menilai skor saat game over).
+    sessionRef.current = memberRef.current
+      ? startGameSession().catch(() => ({
+          ok: false as const,
+          error: "Connection lost — your score wasn't saved. Check your internet and reload the page.",
+        }))
+      : null;
   };
 
   const startRound = () => {
     gameRef.current?.reset();
-    playMsRef.current = 0;
     writeGateSave(null);
     gateRef.current = null;
     setSaved(null);
@@ -439,7 +457,6 @@ export function SlayRally() {
       game.continueRound();
     } else if (saved) {
       game.restore(saved);
-      playMsRef.current = saved.durationMs;
     }
     writeGateSave(null);
     gateRef.current = null;
@@ -464,9 +481,8 @@ export function SlayRally() {
    * gambar diunduh. navigator.share dipanggil langsung di klik — gambar sudah siap sebelumnya.
    */
   const shareStory = async () => {
-    if (!story) return;
-    const file = new File([story], STORY_FILENAME, { type: "image/png" });
-    if (navigator.canShare?.({ files: [file] })) {
+    if (story) {
+      const file = new File([story], STORY_FILENAME, { type: STORY_TYPE });
       try {
         await navigator.share({ files: [file] });
         setShareNote(null);
@@ -476,7 +492,22 @@ export function SlayRally() {
       }
       return;
     }
-    downloadStory(story);
+    // Tanpa share file (desktop): buat gambar sekarang lalu unduh.
+    setSharing(true);
+    try {
+      downloadStory(await renderStoryCard(storyData()));
+    } catch {
+      setShareNote("Couldn't create the image. Please try again.");
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  /** Mulai game baru dari layar "Round 2 is unlocked": simpanan tamu dibuang supaya tidak ditawarkan lagi. */
+  const discardSaved = () => {
+    writeGateSave(null);
+    setSaved(null);
+    setPhase("intro");
   };
 
   const inGame =
@@ -654,7 +685,7 @@ export function SlayRally() {
             <Button variant="arrow" onClick={continueSaved}>
               Continue to Round {saved.level}
             </Button>
-            <Button variant="outline-light" size="sm" onClick={() => setPhase("intro")}>
+            <Button variant="outline-light" size="sm" onClick={discardSaved}>
               Start a new game
             </Button>
           </div>
@@ -880,9 +911,9 @@ export function SlayRally() {
               </Button>
             </div>
 
-            {story && (
+            {(story || (board !== null && !canShareStory())) && (
               <div className={styles.share}>
-                <button type="button" className={styles.shareButton} onClick={shareStory}>
+                <button type="button" className={styles.shareButton} onClick={shareStory} disabled={sharing}>
                   <Icon name="instagram-logo" size={22} />
                   Share to Instagram Story
                 </button>

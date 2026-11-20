@@ -1,6 +1,7 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { AFTER_AUTH, RESET_PASSWORD } from "@/content/auth";
+import { isInternalPath } from "@/lib/safe-path";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 /**
@@ -13,7 +14,7 @@ export async function GET(request: NextRequest) {
   const host = request.headers.get("x-forwarded-host") ?? request.headers.get("host") ?? request.nextUrl.host;
   const origin = `${request.headers.get("x-forwarded-proto") ?? request.nextUrl.protocol.replace(":", "")}://${host}`;
   const rawNext = searchParams.get("next") ?? AFTER_AUTH;
-  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : AFTER_AUTH;
+  const next = isInternalPath(rawNext) ? rawNext : AFTER_AUTH;
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;

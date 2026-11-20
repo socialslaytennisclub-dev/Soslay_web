@@ -14,7 +14,8 @@ type Field = "email" | "password";
  * Layar "Check your email" setelah daftar + "Wrong email? Change it": member memperbaiki email
  * yang salah ketik sendiri (wajib password saat daftar), lalu link konfirmasi dikirim ulang.
  */
-export function ConfirmEmailNotice({ email, onChanged }: { email: string; onChanged: (email: string) => void }) {
+/** `next` = tujuan setelah klik link verifikasi (mis. /game) — sama dengan saat daftar. */
+export function ConfirmEmailNotice({ email, onChanged, next: after }: { email: string; onChanged: (email: string) => void; next?: string }) {
   const copy = registerPage.confirm;
   const [editing, setEditing] = useState(false);
   const [values, setValues] = useState({ email: "", password: "" });
@@ -36,7 +37,7 @@ export function ConfirmEmailNotice({ email, onChanged }: { email: string; onChan
     setErrors(next);
     if (next.email || next.password) return;
     startTransition(async () => {
-      const result = await changeSignupEmail(email, values.email, values.password);
+      const result = await changeSignupEmail(email, values.email, values.password, after);
       if (result.fieldErrors) setErrors(result.fieldErrors);
       if (result.error) setFormError(result.error);
       if (result.confirmEmail) {
@@ -50,7 +51,7 @@ export function ConfirmEmailNotice({ email, onChanged }: { email: string; onChan
 
   function resend() {
     startTransition(async () => {
-      const result = await resendSignupConfirmation(email);
+      const result = await resendSignupConfirmation(email, after);
       setNotice(result.sent ? copy.resent : (result.error ?? null));
     });
   }

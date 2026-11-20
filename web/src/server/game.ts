@@ -2,13 +2,14 @@
 
 import { cookies } from "next/headers";
 import { DEMO_MEMBER_COOKIE, DEMO_MEMBER_NAME } from "@/lib/demo-member";
-import { GAME_DAILY_POINT_CAP, GAME_POINTS_PER_SLAY_POINT, type LeaderboardRow, type SubmitScoreResult } from "@/lib/game";
+import { GAME_DAILY_POINT_CAP, GAME_POINTS_PER_SLAY_POINT, type LeaderboardRow, type StartSessionResult, type SubmitScoreResult } from "@/lib/game";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getMemberSession } from "@/server/member/user";
 
 /**
- * Slay Rally (/game): kirim skor game member (→ Slay Point lewat RPC submit_game_score) dan
- * leaderboard publik setelah game over. Aturan & validasi skor ada di migrasi 20261120000000.
+ * Slay Rally (/game): buka sesi game member (waktu mulai dicatat server), kirim skor sekali per
+ * sesi (→ Slay Point lewat RPC submit_game_score), dan leaderboard publik setelah game over.
+ * Aturan & validasi skor ada di migrasi 20261120000000.
  */
 
 const DEMO_BOARD: LeaderboardRow[] = [
@@ -22,18 +23,35 @@ const DEMO_BOARD: LeaderboardRow[] = [
 const ERRORS: Record<string, string> = {
   not_member: "Sign in as a member to save your score.",
   implausible_score: "We couldn't verify this score, so it wasn't saved.",
-  too_fast: "Score already saved a moment ago.",
+  already_submitted: "This game's score is already saved.",
+  session_expired: "This game ran too long to be saved. Start a new one!",
+  invalid_session: "This game couldn't be saved. Reload the page and play again.",
 };
+
+const SAVE_FAILED = "Couldn't save your score. Please try again.";
+
+/** Mulai game member: catat waktu mulai di server. Skor game ini hanya bisa dikirim dengan id sesi ini. */
+export async function startGameSession(): Promise<StartSessionResult> {
+  if (!isSupabaseConfigured) {
+    if (!(await cookies()).has(DEMO_MEMBER_COOKIE)) return { ok: false, error: ERRORS.not_member };
+    return { ok: true, sessionId: `demo-${Date.now()}` };
+  }
+  const { supabase, user } = await getMemberSession();
+  if (!user) return { ok: false, error: ERRORS.not_member };
+  const { data, error } = await supabase.rpc("start_game_session");
+  if (error || typeof data !== "string") return { ok: false, error: error?.message?.includes("not_member") ? ERRORS.not_member : SAVE_FAILED };
+  return { ok: true, sessionId: data };
+}
 
 function clean(n: unknown, max: number) {
   const v = Math.floor(Number(n));
   return Number.isFinite(v) ? Math.min(Math.max(v, 0), max) : 0;
 }
 
-export async function submitGameScore(input: { score: number; level: number; durationMs: number }): Promise<SubmitScoreResult> {
+export async function submitGameScore(input: { sessionId: string; score: number; level: number }): Promise<SubmitScoreResult> {
   const score = clean(input.score, 100_000);
   const level = Math.max(clean(input.level, 1000), 1);
-  const durationMs = clean(input.durationMs, 24 * 60 * 60 * 1000);
+  const sessionId = String(input.sessionId ?? "");
 
   if (!isSupabaseConfigured) {
     // Mode demo: tidak disimpan — hanya untuk mengecek tampilan.
@@ -44,10 +62,11 @@ export async function submitGameScore(input: { score: number; level: number; dur
 
   const { supabase, user } = await getMemberSession();
   if (!user) return { ok: false, error: ERRORS.not_member };
-  const { data, error } = await supabase.rpc("submit_game_score", { p_score: score, p_level: level, p_duration_ms: durationMs });
+  if (!/^[0-9a-f-]{36}$/i.test(sessionId)) return { ok: false, error: ERRORS.invalid_session };
+  const { data, error } = await supabase.rpc("submit_game_score", { p_session: sessionId, p_score: score, p_level: level });
   if (error || !data) {
     const key = Object.keys(ERRORS).find((k) => error?.message?.includes(k));
-    return { ok: false, error: key ? ERRORS[key] : "Couldn't save your score. Please try again." };
+    return { ok: false, error: key ? ERRORS[key] : SAVE_FAILED };
   }
   const r = data as { points_awarded: number; best: number; carry: number; today_awarded: number; daily_cap: number };
   return { ok: true, pointsAwarded: r.points_awarded, best: r.best, carry: r.carry, todayAwarded: r.today_awarded, dailyCap: r.daily_cap };

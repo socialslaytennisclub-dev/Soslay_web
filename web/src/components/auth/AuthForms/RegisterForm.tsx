@@ -69,7 +69,7 @@ export function RegisterForm({ next: after }: { next?: string } = {}) {
     });
   }
 
-  if (confirmEmail) return <ConfirmEmailNotice email={confirmEmail} onChanged={setConfirmEmail} />;
+  if (confirmEmail) return <ConfirmEmailNotice email={confirmEmail} onChanged={setConfirmEmail} next={after} />;
 
   return (
     <form ref={formRef} className={styles.form} onSubmit={submit} noValidate>
