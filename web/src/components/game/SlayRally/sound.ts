@@ -11,6 +11,35 @@ const SFX_VOLUME = 0.8;
 const BPM = 112;
 const STEP = 60 / BPM / 4; // satu not 1/16
 
+/** Safari < 14.1 hanya punya versi berawalan. */
+type AudioWindow = Window & { webkitAudioContext?: typeof AudioContext };
+/** Safari 16.4+: kategori sesi audio (lihat `preferPlayback`). */
+type AudioSessionNavigator = Navigator & { audioSession?: { type: string } };
+
+/** WAV PCM 8-bit berisi diam (0,1 detik) — untuk trik sesi audio iOS lama. */
+function silentWavUrl() {
+  const rate = 8000;
+  const samples = rate / 10;
+  const bytes = new Uint8Array(44 + samples);
+  const view = new DataView(bytes.buffer);
+  const text = (offset: number, value: string) =>
+    [...value].forEach((ch, i) => view.setUint8(offset + i, ch.charCodeAt(0)));
+  text(0, "RIFF");
+  view.setUint32(4, 36 + samples, true);
+  text(8, "WAVEfmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true); // PCM
+  view.setUint16(22, 1, true); // mono
+  view.setUint32(24, rate, true);
+  view.setUint32(28, rate, true);
+  view.setUint16(32, 1, true);
+  view.setUint16(34, 8, true);
+  text(36, "data");
+  view.setUint32(40, samples, true);
+  bytes.fill(128, 44); // 128 = nol untuk PCM 8-bit
+  return URL.createObjectURL(new Blob([bytes], { type: "audio/wav" }));
+}
+
 const midi = (note: number) => 440 * 2 ** ((note - 69) / 12);
 
 /** Progresi empat bar: nada bass + tiga nada arpeggio (nomor MIDI). */
@@ -23,6 +52,8 @@ const BARS = [
 const BASS_STEPS = new Set([0, 3, 6, 8, 11, 14]);
 /** Tangga pentatonik — nada naik setiap blok pecah beruntun. */
 const COMBO = [72, 74, 76, 79, 81, 84, 86, 88, 91];
+
+const WAKE_EVENTS = ["pointerdown", "touchend", "click", "keydown"] as const;
 
 export class Sound {
   private ctx: AudioContext | null = null;
@@ -39,20 +70,49 @@ export class Sound {
   private combo = 0;
   private lastPlayed = new Map<SoundKind, number>();
   private hidden = false;
+  private keepAlive: HTMLAudioElement | null = null;
 
   /**
    * Browser bisa menghentikan audio sendiri (pindah tab, layar terkunci, kebijakan autoplay).
    * Setiap sentuhan/tombol berikutnya menyalakannya lagi, supaya suara tidak "kadang hilang".
    */
   private wake = () => {
-    if (this.ctx && !this.hidden && this.ctx.state !== "running")
-      void this.ctx.resume();
+    if (this.hidden) return;
+    if (this.keepAlive?.paused) void this.keepAlive.play().catch(() => {});
+    // Safari juga punya status "interrupted" (telepon masuk, Siri) — semua selain "running" dibangunkan.
+    if (this.ctx && this.ctx.state !== "running") void this.ctx.resume();
   };
+
+  /**
+   * iPhone/iPad: Web Audio ikut kategori "ambient" → DIAM saat tombol senyap (ring/silent) aktif,
+   * padahal video & musik lain tetap bunyi. Safari 16.4+ bisa diminta kategori "playback";
+   * Safari lama dipaksa lewat elemen <audio> diam yang diputar dari klik pengguna.
+   */
+  private preferPlayback() {
+    const session = (navigator as AudioSessionNavigator).audioSession;
+    if (session) {
+      try {
+        session.type = "playback";
+        return;
+      } catch {
+        // Lanjut ke trik <audio>.
+      }
+    }
+    if (this.keepAlive) return;
+    const el = document.createElement("audio");
+    el.src = silentWavUrl();
+    el.loop = true;
+    el.setAttribute("playsinline", "");
+    el.setAttribute("x-webkit-airplay", "deny");
+    this.keepAlive = el;
+    void el.play().catch(() => {});
+  }
 
   /** Panggil dari handler klik: browser hanya mengizinkan audio setelah interaksi. */
   unlock() {
+    this.preferPlayback();
     if (!this.ctx) {
-      const Ctor = window.AudioContext;
+      const Ctor = window.AudioContext ?? (window as AudioWindow).webkitAudioContext;
       if (!Ctor) return;
       const ctx = new Ctor();
       this.ctx = ctx;
@@ -76,8 +136,8 @@ export class Sound {
       this.nextTime = ctx.currentTime + 0.1;
       this.timer = window.setInterval(() => this.schedule(), 80);
       this.setMusicLevel(this.musicLevel);
-      window.addEventListener("pointerdown", this.wake, true);
-      window.addEventListener("keydown", this.wake, true);
+      // iOS hanya menganggap touchend / click sebagai izin memutar audio (pointerdown = touchstart tidak).
+      for (const type of WAKE_EVENTS) window.addEventListener(type, this.wake, true);
     }
     this.wake();
   }
@@ -106,6 +166,10 @@ export class Sound {
   /** Tab disembunyikan → audio berhenti total. */
   setSuspended(suspended: boolean) {
     this.hidden = suspended;
+    if (this.keepAlive) {
+      if (suspended) this.keepAlive.pause();
+      else void this.keepAlive.play().catch(() => {});
+    }
     if (!this.ctx) return;
     if (suspended) void this.ctx.suspend();
     else void this.ctx.resume();
@@ -113,10 +177,14 @@ export class Sound {
 
   dispose() {
     window.clearInterval(this.timer);
-    window.removeEventListener("pointerdown", this.wake, true);
-    window.removeEventListener("keydown", this.wake, true);
+    for (const type of WAKE_EVENTS) window.removeEventListener(type, this.wake, true);
     void this.ctx?.close();
     this.ctx = null;
+    if (this.keepAlive) {
+      this.keepAlive.pause();
+      URL.revokeObjectURL(this.keepAlive.src);
+      this.keepAlive = null;
+    }
   }
 
   // ── Efek ──────────────────────────────────────────────────────
