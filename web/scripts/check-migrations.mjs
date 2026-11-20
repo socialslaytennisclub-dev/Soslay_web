@@ -2392,3 +2392,109 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert(anonRows === 0 && anonSessions === 0, "anon tidak bisa membaca tabel game");
   console.log("✓ Slay Rally: sesi game dicatat server (durasi tidak bisa dipalsukan), batas skor/level, sekali kirim per sesi, kedaluwarsa 3 jam, Slay Point 100:1 + sisa terbawa + batas harian, leaderboard publik");
 }
+
+// ── Slay Tennis: +1 Slay Point untuk pemenang member vs member (dua laporan harus sama) ──
+{
+  const ts = await readFile(path.resolve(import.meta.dirname, "../src/lib/tennis.ts"), "utf8");
+  const pts = Number(ts.match(/TENNIS_WIN_POINTS = (\d+)/)?.[1]);
+  const cap = Number(ts.match(/TENNIS_DAILY_WIN_CAP = (\d+)/)?.[1]);
+  const fn = (await one(`select prosrc from pg_proc where proname = 'tennis_match_report'`)).prosrc;
+  console.assert(fn.includes(`c_points constant integer := ${pts};`) && fn.includes(`c_daily constant integer := ${cap};`), "konstanta tenis sama di SQL & lib/tennis.ts");
+
+  const err = async (sql, params) => db.query(sql, params).then(() => null, (e) => e.message);
+  const mk = async (name, status = "active") => {
+    const id = (await one(`insert into auth.users (email) values ($1) returning id`, [`${name}@tennis.test`])).id;
+    await db.query(`insert into profiles (id, full_name, display_name, email, status) values ($1, $2, $3, $4, $5)`, [id, `${name} Lengkap`, name, `${name}@tennis.test`, status]);
+    return id;
+  };
+  const ana = await mk("Ana");
+  const budi = await mk("Budi");
+  const citra = await mk("Citra");
+  const banned = await mk("Dilarang", "suspended");
+  const balance = async (id) => (await one(`select coalesce(sum(delta), 0)::int b from points_ledger where member_id = $1`, [id])).b;
+  const report = async (who, match, hostWon) => {
+    await as(who);
+    return (await one(`select tennis_match_report($1, $2) r`, [match, hostWon])).r;
+  };
+  /** Pertandingan host vs guest yang sudah berjalan `secs` detik. */
+  const match = async (host, guest, secs = 120) => {
+    await as(host);
+    const id = (await one(`select tennis_match_open() id`)).id;
+    await as(guest);
+    await db.query(`select tennis_match_join($1)`, [id]);
+    await db.exec(`reset role`);
+    await db.query(`update tennis_matches set joined_at = now() - make_interval(secs => $2) where id = $1`, [id, secs]);
+    return id;
+  };
+  const [a0, b0] = [await balance(ana), await balance(budi)];
+
+  await as(null);
+  console.assert((await err(`select tennis_match_open()`))?.includes("not_member"), "tamu tidak bisa membuka pertandingan");
+  await as(banned);
+  console.assert((await err(`select tennis_match_open()`))?.includes("not_member"), "member suspended ditolak");
+
+  // Host menang, keduanya melapor sama → +1 untuk host saja.
+  let m = await match(ana, budi);
+  await as(ana);
+  console.assert((await err(`select tennis_match_join($1)`, [m]))?.includes("match_unavailable"), "host tidak bisa jadi lawan sendiri");
+  await as(citra);
+  console.assert((await err(`select tennis_match_join($1)`, [m]))?.includes("match_unavailable"), "pertandingan penuh");
+  console.assert((await err(`select tennis_match_report($1, true)`, [m]))?.includes("match_unavailable"), "orang luar tidak bisa melapor");
+  let r = await report(ana, m, true);
+  console.assert(r.pending && r.points === 0 && (await balance(ana)) === a0, `satu laporan saja belum memberi poin ${JSON.stringify(r)}`);
+  r = await report(budi, m, true);
+  console.assert(!r.pending && !r.won && r.points === 0, `yang kalah tidak dapat poin ${JSON.stringify(r)}`);
+  r = await report(ana, m, true);
+  console.assert(!r.pending && r.won && r.points === pts && (await balance(ana)) === a0 + pts && (await balance(budi)) === b0, `pemenang +${pts}, sekali saja ${JSON.stringify(r)}`);
+  await report(ana, m, true);
+  console.assert((await balance(ana)) === a0 + pts, "lapor ulang tidak menambah poin");
+  const note = await one(`select note, reason::text from points_ledger where member_id = $1 order by id desc limit 1`, [ana]);
+  console.assert(note.reason === "bonus" && note.note === "Slay Tennis · menang vs Budi", `catatan ledger ${JSON.stringify(note)}`);
+
+  // Laporan berbeda → tidak ada poin. Laporan pertama tiap pemain yang dipakai.
+  m = await match(ana, budi);
+  await report(ana, m, true);
+  r = await report(budi, m, false);
+  console.assert(!r.pending && r.points === 0 && r.reason === "disputed" && (await balance(ana)) === a0 + pts && (await balance(budi)) === b0, `hasil diperdebatkan ${JSON.stringify(r)}`);
+  r = await report(budi, m, true);
+  console.assert(r.reason === "disputed" && (await balance(ana)) === a0 + pts, "mengubah laporan setelah selesai tidak berpengaruh");
+
+  // Terlalu singkat → tanpa poin.
+  m = await match(budi, ana, 20);
+  await report(ana, m, true);
+  r = await report(budi, m, true);
+  console.assert(r.won && r.points === 0 && r.reason === "too_short", `pertandingan < 60 detik ${JSON.stringify(r)}`);
+
+  // Batas pasangan: 3 per hari untuk dua pemain yang sama (siapa pun pemenangnya).
+  for (let i = 0; i < 2; i++) {
+    m = await match(budi, ana);
+    await report(budi, m, false);
+    await report(ana, m, false);
+  }
+  console.assert((await balance(ana)) === a0 + 3 * pts, `tamu menang juga dapat poin (total 3) ${await balance(ana)}`);
+  m = await match(ana, budi);
+  await report(budi, m, false);
+  r = await report(ana, m, false);
+  console.assert(r.reason === "pair_cap" && (await balance(budi)) === b0, `batas pasangan ${JSON.stringify(r)}`);
+
+  // Batas harian pemenang: 5 per hari (lawan lain).
+  for (let i = 0; i < cap - 3; i++) {
+    const rival = await mk(`Lawan${i}`);
+    m = await match(ana, rival);
+    await report(rival, m, true);
+    await report(ana, m, true);
+  }
+  console.assert((await balance(ana)) === a0 + cap * pts, `sampai batas harian ${await balance(ana)}`);
+  m = await match(ana, citra);
+  await report(citra, m, true);
+  r = await report(ana, m, true);
+  console.assert(r.won && r.points === 0 && r.reason === "daily_cap" && (await balance(ana)) === a0 + cap * pts, `batas harian pemenang ${JSON.stringify(r)}`);
+
+  await as(null);
+  await db.exec(`set role anon`);
+  const anonOpen = await err(`select tennis_match_open()`);
+  const anonRows = await db.query(`select * from tennis_matches`).then((x) => x.rows.length, () => 0);
+  await db.exec(`reset role`);
+  console.assert(anonOpen !== null && anonRows === 0, "anon tidak punya akses pertandingan tenis");
+  console.log("✓ Slay Tennis: pemenang member vs member +1 Slay Point bila kedua laporan sama, tanpa poin bila diperdebatkan / < 60 detik, batas 3 per pasangan & 5 per pemenang per hari");
+}

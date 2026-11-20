@@ -3,7 +3,7 @@ import { AuthStage } from "@/components/auth/AuthStage/AuthStage";
 import { LoginForm } from "@/components/auth/AuthForms/LoginForm";
 import { Footer } from "@/components/layout/Footer/Footer";
 import { Navbar } from "@/components/layout/Navbar/Navbar";
-import { gameAuthCopy, loginPage, withNext } from "@/content/auth";
+import { authCopyFor, loginPage, withNext } from "@/content/auth";
 
 export const metadata: Metadata = {
   title: "Sign In — SOSLAY",
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 export default async function LoginPage({ searchParams }: PageProps<"/masuk">) {
   const raw = (await searchParams).next;
   const next = Array.isArray(raw) ? raw[0] : raw;
-  const copy = next?.startsWith("/game") ? gameAuthCopy.login : loginPage;
+  const copy = authCopyFor(next, "login") ?? loginPage;
   return (
     <>
       <Navbar variant="overlay" />

@@ -1,0 +1,379 @@
+/* Slay Tennis — halaman /gameoncourt. Mobile-first; lapangan selalu muat dalam satu layar. */
+
+.section {
+  padding-top: var(--nav-height);
+  background: var(--color-navy-950);
+}
+
+.court {
+  position: relative;
+  height: calc(100svh - var(--nav-height));
+  min-height: 480px;
+  overflow: hidden;
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* ── HUD ─────────────────────────────────────────────────────── */
+.hud {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 3; /* di atas overlay supaya tombol suara & controller selalu bisa dipakai */
+  padding: var(--space-12) var(--space-16) var(--space-32);
+  background: linear-gradient(color-mix(in srgb, var(--color-navy-950) 78%, transparent), transparent);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-areas: "score buttons" "points buttons";
+  align-items: center;
+  gap: var(--space-4) var(--space-12);
+  color: var(--text-on-inverse);
+  pointer-events: none;
+}
+
+.scoreboard {
+  grid-area: score;
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  min-width: 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: var(--weight-semibold);
+  letter-spacing: var(--tracking-overline);
+  text-transform: uppercase;
+}
+
+.side {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+}
+
+.games {
+  flex: none;
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: var(--weight-extrabold);
+  line-height: 1;
+  letter-spacing: 0;
+  color: var(--color-lime-neon);
+  font-variant-numeric: tabular-nums;
+}
+
+.serveDot {
+  flex: none;
+  width: 9px;
+  height: 9px;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-neon);
+}
+
+.points {
+  grid-area: points;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: var(--weight-bold);
+}
+
+.hudButtons {
+  grid-area: buttons;
+  display: flex;
+  gap: var(--space-8);
+  pointer-events: auto;
+}
+
+.round {
+  position: relative;
+  width: 44px;
+  height: 44px;
+  border: 1px solid rgb(255 255 255 / 0.3);
+  border-radius: var(--radius-full);
+  background: color-mix(in srgb, var(--color-navy-950) 50%, transparent);
+  color: var(--color-white);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.round:focus-visible,
+.textButton:focus-visible {
+  outline: 2px solid var(--color-lime-neon);
+  outline-offset: 2px;
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+}
+
+.padDot {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-neon);
+  border: 2px solid var(--color-navy-950);
+}
+
+/* ── Pesan di tengah lapangan ────────────────────────────────── */
+.flash,
+.hint {
+  position: absolute;
+  left: 50%;
+  top: 96px;
+  z-index: 1;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-12) var(--space-24);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--color-navy-950) 80%, transparent);
+  color: var(--text-on-inverse);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  white-space: nowrap;
+  pointer-events: none;
+  animation: pop var(--duration-base) var(--ease-out);
+}
+
+.hint {
+  /* Di bawah papan skor — tidak menutupi pemain di lapangan. */
+  top: 104px;
+  border-radius: var(--radius-full);
+  padding: var(--space-8) var(--space-16);
+}
+
+.flashNote {
+  font-family: var(--font-display);
+  font-size: 34px;
+  font-weight: var(--weight-extrabold);
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.flashWin .flashNote {
+  color: var(--color-lime-neon);
+}
+
+.flashLose .flashNote {
+  color: var(--color-pink-500);
+}
+
+.help {
+  position: absolute;
+  inset: auto var(--space-16) var(--space-12);
+  pointer-events: none;
+}
+
+/* ── Layar menu / lobby / hasil ──────────────────────────────── */
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: calc(var(--space-24) + 56px) var(--space-24) var(--space-24);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: safe center;
+  gap: var(--space-16);
+  overflow-y: auto;
+  background: color-mix(in srgb, var(--color-navy-950) 82%, transparent);
+  backdrop-filter: blur(6px);
+  animation: fade var(--duration-base) var(--ease-out);
+}
+
+.overlay > * {
+  max-width: 560px;
+}
+
+.padSheet {
+  z-index: 4;
+  background: color-mix(in srgb, var(--color-navy-950) 94%, transparent);
+}
+
+.overline {
+  letter-spacing: var(--tracking-overline);
+  text-transform: uppercase;
+}
+
+.accent {
+  color: var(--color-lime-neon);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-12);
+}
+
+.textButton {
+  border: 0;
+  background: none;
+  color: var(--text-on-inverse);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.85;
+  cursor: pointer;
+  padding: var(--space-8);
+}
+
+.link {
+  max-width: 100%;
+  padding: var(--space-8) var(--space-12);
+  border-radius: var(--radius-md);
+  background: rgb(255 255 255 / 0.08);
+  color: var(--text-on-inverse);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+  text-align: center;
+  user-select: all;
+}
+
+.finalScore {
+  font-family: var(--font-display);
+  font-size: 72px;
+  font-weight: var(--weight-extrabold);
+  line-height: 1;
+  color: var(--color-lime-neon);
+  font-variant-numeric: tabular-nums;
+}
+
+.pointsNote {
+  padding: var(--space-8) var(--space-16);
+  border-radius: var(--radius-xl);
+  background: color-mix(in srgb, var(--color-lime-neon) 14%, transparent);
+  color: var(--color-lime-neon);
+}
+
+/* ── Share ke Instagram Story ────────────────────────────────── */
+.share {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+}
+
+.shareButton {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-8);
+  min-height: 48px;
+  padding: var(--space-12) var(--space-24);
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-pink-500);
+  color: var(--color-navy-950);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: var(--weight-bold);
+  cursor: pointer;
+}
+
+.shareButton:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.shareButton:focus-visible {
+  outline: 2px solid var(--color-lime-neon);
+  outline-offset: 3px;
+}
+
+.qr {
+  width: min(60vw, 220px);
+  aspect-ratio: 1;
+  border-radius: var(--radius-lg);
+  background: var(--color-white);
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.9);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .flash,
+  .hint {
+    animation: none;
+  }
+}
+
+/* ── HP ───────────────────────────────────────────────────────── */
+.rotateHint {
+  display: none;
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+  .rotateHint {
+    display: block;
+  }
+}
+
+/* HP diputar mendatar: navbar disembunyikan dan lapangan memenuhi layar, seperti game konsol genggam.
+   Penandanya (<html data-game-full>) dipasang SlayTennis selama layar pendek & mendatar — tidak memakai
+   position: fixed karena <main> berada di dalam pembungkus ScrollSmoother yang ber-transform. */
+:global(html[data-game-full] header) {
+  display: none;
+}
+
+:global(html[data-game-full]) .section {
+  padding-top: 0;
+}
+
+:global(html[data-game-full]) .court {
+  height: 100dvh;
+  min-height: 0;
+}
+
+:global(html[data-game-full]) .hud {
+  padding: calc(var(--space-8) + env(safe-area-inset-top)) max(var(--space-16), env(safe-area-inset-right)) var(--space-24) max(var(--space-16), env(safe-area-inset-left));
+}
+
+:global(html[data-game-full]) .overlay {
+  padding-top: 64px;
+  gap: var(--space-8);
+}
+
+:global(html[data-game-full]) .flash {
+  top: 60px;
+}
+
+/* Petunjuk servis di bawah-tengah supaya tidak menutupi lawan di seberang net. */
+:global(html[data-game-full]) .hint {
+  top: auto;
+  bottom: calc(var(--space-12) + env(safe-area-inset-bottom));
+}
+
+:global(html[data-game-full]) .flashNote {
+  font-size: 26px;
+}

@@ -77,6 +77,25 @@ export const gameAuthCopy = {
   },
 };
 
+/** Datang dari gerbang game 2 Slay Tennis (/gameoncourt) atau link pertandingan member vs member. */
+export const tennisAuthCopy = {
+  register: {
+    title: "Sign up to keep playing Slay Tennis",
+    description: "Your match is saved. Create a free account to finish it, then challenge other members by link — every win against a member earns a Slay Point.",
+  },
+  login: {
+    title: "Sign in to keep playing Slay Tennis",
+    description: "Your match is saved. Sign in to finish it and to play other members for Slay Points.",
+  },
+};
+
+/** Judul & ajakan halaman Masuk / Daftar menurut asal `?next=` (game) — null = teks biasa. */
+export function authCopyFor(next: string | undefined, page: "register" | "login") {
+  if (next?.startsWith("/gameoncourt")) return tennisAuthCopy[page];
+  if (next === "/game" || next?.startsWith("/game?") || next?.startsWith("/game/")) return gameAuthCopy[page];
+  return null;
+}
+
 /** `?next=` yang dibawa bolak-balik Masuk ↔ Daftar (hanya path internal). */
 export function withNext(href: string, next: string | undefined) {
   return isInternalPath(next) ? `${href}?next=${encodeURIComponent(next)}` : href;
