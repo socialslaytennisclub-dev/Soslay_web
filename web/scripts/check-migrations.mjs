@@ -2308,13 +2308,13 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.log("✓ galeri foto: per activity (album otomatis tayang), hanya admin konten, activity harus sudah berlangsung, tag hanya peserta (tag lama aman saat edit), caption, cover pindah saat dihapus, galeri venue publik");
 }
 
-// ── Slay Rally: sesi game dari server, skor → Slay Point (100 : 1, maks per hari) + leaderboard ──
+// ── Slay Rally: sesi game dari server, leaderboard bulanan, 3 besar tiap bulan → Slay Point ──
 {
   const ts = await readFile(path.resolve(import.meta.dirname, "../src/lib/game.ts"), "utf8");
-  const rate = Number(ts.match(/GAME_POINTS_PER_SLAY_POINT = (\d+)/)?.[1]);
-  const cap = Number(ts.match(/GAME_DAILY_POINT_CAP = (\d+)/)?.[1]);
+  const prizes = ts.match(/GAME_MONTHLY_PRIZES = \[([\d, ]+)\]/)?.[1].split(",").map(Number) ?? [];
+  const settle = (await one(`select prosrc from pg_proc where proname = 'game_settle_months'`)).prosrc;
+  console.assert(prizes.length === 3 && settle.includes(`c_prizes constant integer[] := array[${prizes.join(", ")}];`), "hadiah bulanan sama di SQL & lib/game.ts");
   const fn = (await one(`select prosrc from pg_proc where proname = 'submit_game_score'`)).prosrc;
-  console.assert(fn.includes(`c_cap constant integer := ${cap};`) && fn.includes(`c_rate constant integer := ${rate};`), "konstanta game sama di SQL & lib/game.ts");
   // Batas "masuk akal" di SQL mengikuti engine.ts: skor per ronde ≤ 2 × blok terbanyak + 10 (bonus ronde),
   // dan cadangan skor tamu menutup semua ronde gratis.
   const engine = await readFile(path.resolve(import.meta.dirname, "../src/components/game/SlayRally/engine.ts"), "utf8");
@@ -2358,23 +2358,16 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await err(`select submit_game_score($1, 50, 9)`, [sid]))?.includes("implausible"), "level > 2 + detik/3 ditolak");
   // Ronde 1 cepat (7 detik) dengan Multi-ball tetap sah.
   let r = await submit(await session(7), 70, 2);
-  console.assert(r.points_awarded === 0 && r.carry === 70, `ronde cepat tetap diterima ${JSON.stringify(r)}`);
+  console.assert(r.best === 70 && r.rank === 1 && !("points_awarded" in r), `ronde cepat tetap diterima ${JSON.stringify(r)}`);
   console.assert((await err(`select submit_game_score((select id from game_sessions where member_id = $1 and submitted_at is not null limit 1), 10, 1)`, [gamer]))?.includes("already_submitted"), "satu sesi hanya sekali kirim");
-  // Game berikutnya langsung sesudahnya tetap tersimpan (tidak ada jeda paksa).
+  // Game berikutnya langsung sesudahnya tetap tersimpan (tidak ada jeda paksa); skor tidak lagi jadi Slay Point.
   r = await submit(await session(30), 80, 3);
-  console.assert(r.points_awarded === 1 && r.carry === 50 && r.best === 80 && (await balance(gamer)) === start + 1, `70 + 80 → 1 SP, sisa 50 ${JSON.stringify(r)}`);
   r = await submit(await session(600), 1500, 30);
-  console.assert(r.points_awarded === cap - 1 && r.today_awarded === cap && (await balance(gamer)) === start + cap, `batas harian ${JSON.stringify(r)}`);
-  const note = await one(`select note, reason::text from points_ledger where member_id = $1 order by id desc limit 1`, [gamer]);
-  console.assert(note.reason === "bonus" && note.note === "Slay Rally · skor 1500", `catatan ledger ${JSON.stringify(note)}`);
+  console.assert(r.best === 1500 && r.rank === 1 && (await balance(gamer)) === start, `skor tidak langsung menghasilkan Slay Point ${JSON.stringify(r)}`);
   const dur = await one(`select duration_ms from game_scores where member_id = $1 order by id desc limit 1`, [gamer]);
   console.assert(dur.duration_ms >= 599000 && dur.duration_ms <= 602000, `durasi dari server ${dur.duration_ms}`);
   const old = await session(4 * 3600);
   console.assert((await err(`select submit_game_score($1, 10, 1)`, [old]))?.includes("session_expired"), "sesi > 3 jam kedaluwarsa");
-  // Besok: sisa poin game yang tertahan batas harian dibayar.
-  await db.query(`update game_scores set created_at = created_at - interval '1 day' where member_id = $1`, [gamer]);
-  r = await submit(await session(5), 0, 1);
-  console.assert(r.points_awarded === 6 && r.carry === 50, `hari berikutnya sisa tertahan dibayar (1650 poin → 16 SP total) ${JSON.stringify(r)}`);
 
   await as(rival);
   console.assert((await err(`select submit_game_score($1, 10, 1)`, [sid]))?.includes("invalid_session"), "sesi member lain ditolak");
@@ -2405,7 +2398,31 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.exec(`reset role`);
   console.assert(anonStart !== null && anonSubmit !== null, "anon tidak punya akses RPC game");
   console.assert(anonRows === 0 && anonSessions === 0, "anon tidak bisa membaca tabel game");
-  console.log("✓ Slay Rally: sesi game dicatat server (durasi tidak bisa dipalsukan), batas skor/level, sekali kirim per sesi, kedaluwarsa 3 jam, Slay Point 100:1 + sisa terbawa + batas harian, leaderboard publik");
+  // Hadiah bulanan: mundurkan semua skor ke bulan lalu, tambah 2 member lagi → 3 besar dibayar sekali.
+  const fourth = await mk("Fourth");
+  const tied = await mk("Tied");
+  await db.query(`insert into game_scores (member_id, score, level, duration_ms, created_at) values ($1, 100, 3, 60000, now() - interval '2 hours'), ($2, 300, 5, 60000, clock_timestamp() + interval '1 minute')`, [fourth, tied]);
+  // Rival 300 (lebih dulu) di atas Tied 300; Banned 9999 tidak ikut.
+  await db.query(`update game_scores set created_at = date_trunc('month', now() at time zone 'Asia/Jakarta') at time zone 'Asia/Jakarta' - interval '3 days' + (created_at - now())`);
+  const before = { gamer: await balance(gamer), rival: await balance(rival), tied: await balance(tied), sleepy: await balance(sleepy), fourth: await balance(fourth), banned: await balance(banned) };
+  await as(null);
+  await db.exec(`set role anon`);
+  const fresh = (await db.query(`select * from game_leaderboard(10)`)).rows;
+  await db.exec(`reset role`);
+  console.assert(fresh.length === 0, `leaderboard reset di bulan baru ${JSON.stringify(fresh)}`);
+  const after = { gamer: await balance(gamer), rival: await balance(rival), tied: await balance(tied), sleepy: await balance(sleepy), fourth: await balance(fourth), banned: await balance(banned) };
+  console.assert(after.gamer - before.gamer === prizes[0] && after.rival - before.rival === prizes[1] && after.tied - before.tied === prizes[2] && after.sleepy === before.sleepy && after.fourth === before.fourth && after.banned === before.banned, `juara 1/2/3 dapat ${prizes}, seri → yang lebih dulu, suspended tidak ${JSON.stringify({ before, after })}`);
+  const prizeNote = await one(`select note, reason::text from points_ledger where member_id = $1 order by id desc limit 1`, [gamer]);
+  console.assert(prizeNote.reason === "bonus" && /^Slay Rally · juara 1 · \d{2}\/\d{4}$/.test(prizeNote.note), `catatan ledger hadiah ${JSON.stringify(prizeNote)}`);
+  // Dipanggil lagi (leaderboard / kirim skor) → tidak dibayar dua kali.
+  await as(gamer);
+  r = await submit(await session(30), 90, 3);
+  await db.query(`select * from game_leaderboard(10)`);
+  await db.exec(`reset role`);
+  console.assert(r.rank === 1 && r.best === 90 && (await balance(gamer)) === after.gamer && (await balance(rival)) === after.rival, `hadiah bulanan hanya sekali, bulan baru mulai dari 0 ${JSON.stringify(r)}`);
+  const settled = (await db.query(`select count(*)::int n from game_month_prizes`)).rows[0].n;
+  console.assert(settled === 3, `3 baris hadiah ${settled}`);
+  console.log("✓ Slay Rally: sesi game dicatat server (durasi tidak bisa dipalsukan), batas skor/level, sekali kirim per sesi, kedaluwarsa 3 jam, leaderboard bulanan publik, 3 besar tiap bulan dapat 20/10/5 Slay Point sekali");
 }
 
 // ── Slay Tennis: +1 Slay Point untuk pemenang member vs member (dua laporan harus sama) ──

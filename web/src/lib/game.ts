@@ -1,12 +1,14 @@
 /**
- * Aturan Slay Rally (/game) yang dipakai klien & server. Angka konversi dan batas harian
- * juga ada di RPC submit_game_score (migrasi 20261120000000) — ubah keduanya bersamaan.
+ * Aturan Slay Rally (/game) yang dipakai klien & server. Hadiah bulanan juga ada di RPC
+ * game_settle_months (migrasi 20261121000000) — ubah keduanya bersamaan.
  */
 
-/** Setiap sekian poin game (akumulasi, sisa terbawa) = 1 Slay Point. */
-export const GAME_POINTS_PER_SLAY_POINT = 100;
-/** Maksimal Slay Point dari game per hari (WIB). */
-export const GAME_DAILY_POINT_CAP = 10;
+/** Slay Point untuk juara 1, 2, 3 leaderboard bulanan (bulan kalender WIB, dibayar saat bulan berakhir). */
+export const GAME_MONTHLY_PRIZES = [20, 10, 5] as const;
+/** Hadiah untuk peringkat tertentu (0 bila di luar 3 besar). */
+export const monthlyPrize = (rank: number | null | undefined) => (rank ? (GAME_MONTHLY_PRIZES[rank - 1] ?? 0) : 0);
+/** Nama bulan berjalan (WIB), mis. "November". */
+export const currentMonthName = () => new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "Asia/Jakarta" }).format(new Date());
 /** Ronde terakhir yang boleh dimainkan tanpa akun. */
 export const FREE_ROUNDS = 1;
 /** Simpanan game tamu yang berhenti di gerbang daftar (localStorage, berlaku 24 jam). */
@@ -31,5 +33,6 @@ export type LeaderboardRow = { rank: number; name: string; best: number; isMe: b
 export type StartSessionResult = { ok: true; sessionId: string } | { ok: false; error: string };
 
 export type SubmitScoreResult =
-  | { ok: true; pointsAwarded: number; best: number; carry: number; todayAwarded: number; dailyCap: number; demo?: boolean }
+  /** `best` & `rank` = skor terbaik dan peringkat member di leaderboard bulan ini. */
+  | { ok: true; best: number; rank: number | null; demo?: boolean }
   | { ok: false; error: string };

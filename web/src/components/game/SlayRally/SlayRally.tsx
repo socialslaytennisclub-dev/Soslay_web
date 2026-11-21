@@ -6,11 +6,13 @@ import { useMemberUser } from "@/hooks/useMemberUser";
 import { loginPage, registerPage, withNext } from "@/content/auth";
 import { cx } from "@/lib/cx";
 import {
+  currentMonthName,
   FREE_ROUNDS,
-  GAME_POINTS_PER_SLAY_POINT,
+  GAME_MONTHLY_PRIZES,
   GATE_SAVE_KEY,
   GATE_SAVE_TTL_MS,
   CONNECTION_LOST,
+  monthlyPrize,
   NOT_MEMBER,
   slayPointsLabel,
   type GateSave,
@@ -53,15 +55,18 @@ const SIGN_IN_HREF = withNext(registerPage.switch.href, GAME_PATH);
 
 /** Kalimat hasil simpan skor member di layar game over. */
 function pointsMessage(score: number, result: SubmitScoreResult | null) {
-  if (score === 0) return "Score points to earn Slay Points.";
+  const month = currentMonthName();
+  if (score === 0) return `Finish top 3 in ${month} to win Slay Points.`;
   if (!result) return "Saving your score…";
   if (!result.ok) return result.error;
-  if (result.pointsAwarded > 0)
-    return `+${slayPointsLabel(result.pointsAwarded)} added to your account`;
-  if (result.todayAwarded >= result.dailyCap)
-    return `Daily limit reached (${slayPointsLabel(result.dailyCap)}). Come back tomorrow!`;
-  return `${GAME_POINTS_PER_SLAY_POINT - result.carry} more game points to your next Slay Point`;
+  const prize = monthlyPrize(result.rank);
+  if (prize > 0)
+    return `You're #${result.rank} in ${month}. Hold it to the end of the month to win ${slayPointsLabel(prize)}!`;
+  return `Score saved. Finish top 3 in ${month} to win up to ${slayPointsLabel(GAME_MONTHLY_PRIZES[0])}.`;
 }
+
+/** "20 / 10 / 5 Slay Points" — hadiah juara 1–3 tiap bulan. */
+const PRIZES_TEXT = `${GAME_MONTHLY_PRIZES.join(" / ")} Slay Points`;
 
 const BEST_KEY = "soslay-rally-best";
 
@@ -343,7 +348,7 @@ export function SlayRally() {
     rank: Array.isArray(board)
       ? (board.find((row) => row.isMe)?.rank ?? null)
       : null,
-    points: result?.ok ? result.pointsAwarded : null,
+    month: currentMonthName(),
     link: STORY_LINK,
   });
 
@@ -704,9 +709,8 @@ export function SlayRally() {
               <span className={styles.accent}>unlocked</span>
             </Text>
             <Text variant="body-16" tone="on-inverse" align="center" muted>
-              Your Round 1 score of {saved.score} is saved. Every{" "}
-              {GAME_POINTS_PER_SLAY_POINT} game points now turns into 1 Slay
-              Point.
+              Your Round 1 score of {saved.score} is saved. Finish top 3 on
+              the monthly leaderboard to win {PRIZES_TEXT}.
             </Text>
             <Button variant="arrow" onClick={continueSaved}>
               Continue to Round {saved.level}
@@ -754,11 +758,8 @@ export function SlayRally() {
             {!member && (
               <ul className={styles.perks}>
                 <li>Keep your score and continue right where you stopped</li>
-                <li>
-                  Earn 1 Slay Point for every {GAME_POINTS_PER_SLAY_POINT} game
-                  points
-                </li>
-                <li>Get your name on the Slay Rally leaderboard</li>
+                <li>Get your name on the monthly Slay Rally leaderboard</li>
+                <li>Top 3 each month win {PRIZES_TEXT}</li>
               </ul>
             )}
             {member ? (
@@ -876,7 +877,8 @@ export function SlayRally() {
                 <a className={styles.link} href={SIGN_UP_HREF}>
                   Sign up
                 </a>{" "}
-                to save your score, earn Slay Points and join the leaderboard.
+                to save your score and race for the top 3 — they win{" "}
+                {PRIZES_TEXT} every month.
               </Text>
             )}
 
@@ -887,7 +889,7 @@ export function SlayRally() {
                 tone="accent"
                 className={styles.overline}
               >
-                Leaderboard
+                {currentMonthName()} leaderboard
               </Text>
               {!board ? (
                 <Text variant="body-14" tone="on-inverse" muted>
@@ -920,10 +922,17 @@ export function SlayRally() {
                         {row.isMe && " (you)"}
                       </span>
                       <span className={styles.boardScore}>{row.best}</span>
+                      <span className={styles.boardPrize}>
+                        {monthlyPrize(row.rank) > 0 && `+${monthlyPrize(row.rank)} SP`}
+                      </span>
                     </li>
                   ))}
                 </ol>
               )}
+              <Text variant="body-14" tone="on-inverse" align="center" muted>
+                Top 3 at the end of the month win {PRIZES_TEXT}. Resets on the
+                1st.
+              </Text>
             </div>
 
             <div className={styles.actions}>
