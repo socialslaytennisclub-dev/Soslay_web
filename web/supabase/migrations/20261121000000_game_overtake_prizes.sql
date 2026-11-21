@@ -52,21 +52,25 @@ create trigger game_scores_best after insert on game_scores for each row execute
 
 -- Skor dihapus / dikoreksi → skor terbaik member itu dihitung ulang dari riwayatnya (tanpa skor lagi →
 -- keluar dari leaderboard). Hadiah yang sudah dibayar tidak ditarik.
+create function game_best_refresh(p_member uuid)
+returns void language sql security definer set search_path = public as $$
+  delete from game_best where member_id = p_member;
+  insert into game_best (member_id, score, reached_at)
+  select member_id, score, created_at
+  from game_scores
+  where member_id = p_member and game = 'slay_rally' and score > 0
+  order by score desc, created_at
+  limit 1;
+$$;
+revoke execute on function game_best_refresh(uuid) from public, anon, authenticated;
+
 create function game_best_resync()
 returns trigger language plpgsql security definer set search_path = public as $$
-declare
-  m uuid;
 begin
-  foreach m in array array[old.member_id, case when tg_op = 'UPDATE' and new.member_id <> old.member_id then new.member_id end] loop
-    continue when m is null;
-    delete from game_best where member_id = m;
-    insert into game_best (member_id, score, reached_at)
-    select member_id, score, created_at
-    from game_scores
-    where member_id = m and game = 'slay_rally' and score > 0
-    order by score desc, created_at
-    limit 1;
-  end loop;
+  perform game_best_refresh(old.member_id);
+  if tg_op = 'UPDATE' and new.member_id <> old.member_id then
+    perform game_best_refresh(new.member_id);
+  end if;
   return null;
 end;
 $$;
@@ -84,16 +88,17 @@ create table game_rank_prizes (
 -- Tanpa policy: hanya lewat RPC.
 alter table game_rank_prizes enable row level security;
 
-/** Peringkat (1 = teratas) dari skor terbaik `p_score` yang dicapai pada `p_at`; null bila belum ada skor. */
+/**
+ * Peringkat (1 = teratas) dari skor terbaik `p_score` yang dicapai pada `p_at`, urutan sama dengan
+ * game_leaderboard (skor turun, lalu reached_at, lalu member_id). Skor 0 = di bawah semua pemain.
+ */
 create function game_rank_of(p_member uuid, p_score integer, p_at timestamptz)
 returns integer language sql stable security definer set search_path = public as $$
-  select case when p_score is null then null else 1 + (
-    select count(*)::integer
-    from game_best b
-    join profiles p on p.id = b.member_id and p.status <> 'suspended'
-    where b.member_id <> p_member
-      and (b.score > p_score or (b.score = p_score and (b.reached_at < p_at or (b.reached_at = p_at and b.member_id < p_member))))
-  ) end;
+  select 1 + count(*)::integer
+  from game_best b
+  join profiles p on p.id = b.member_id and p.status <> 'suspended'
+  where b.member_id <> p_member
+    and (b.score > p_score or (b.score = p_score and (b.reached_at, b.member_id) < (p_at, p_member)));
 $$;
 revoke execute on function game_rank_of(uuid, integer, timestamptz) from public, anon, authenticated;
 
@@ -136,23 +141,27 @@ begin
     raise exception 'implausible_score';
   end if;
 
-  -- Baru setelah sesi sah: peringkat saling bergantung antar member → skor sah dikirim berurutan.
-  perform pg_advisory_xact_lock(hashtext('game_scores:board'));
-
   select * into v_old_best from game_best where member_id = v_member;
-  -- Peringkat lama; belum pernah masuk leaderboard → "di bawah semua pemain".
-  v_old := coalesce(game_rank_of(v_member, v_old_best.score, v_old_best.reached_at),
-                    1 + (select count(*)::integer from game_best b join profiles p on p.id = b.member_id and p.status <> 'suspended' where b.member_id <> v_member));
+  -- Hanya skor terbaik baru yang bisa menyalip; peringkat saling bergantung antar member → skor seperti itu
+  -- dikirim berurutan (skor biasa tidak perlu menunggu kunci ini).
+  if p_score > coalesce(v_old_best.score, 0) then
+    perform pg_advisory_xact_lock(hashtext('game_scores:board'));
+    -- Dibaca ulang setelah kunci: kiriman lain member ini bisa baru saja selesai.
+    select * into v_old_best from game_best where member_id = v_member;
+    -- Peringkat lama; belum pernah masuk leaderboard → skor 0 = di bawah semua pemain.
+    v_old := game_rank_of(v_member, coalesce(v_old_best.score, 0), coalesce(v_old_best.reached_at, now()));
+  end if;
 
   update game_sessions set submitted_at = now() where id = v_session.id;
-  insert into game_scores (member_id, session_id, score, level, duration_ms, points_awarded)
-  values (v_member, v_session.id, p_score, p_level, (v_secs * 1000)::integer, 0);
+  -- game_scores.points_awarded (aturan lama 100 : 1) dibiarkan default 0 — baris lama tetap sebagai riwayat.
+  insert into game_scores (member_id, session_id, score, level, duration_ms)
+  values (v_member, v_session.id, p_score, p_level, (v_secs * 1000)::integer);
 
   select * into v_new_best from game_best where member_id = v_member;
-  v_rank := game_rank_of(v_member, v_new_best.score, v_new_best.reached_at);
+  v_rank := case when v_new_best.member_id is not null then game_rank_of(v_member, v_new_best.score, v_new_best.reached_at) end;
 
   -- Menyalip = naik melewati posisi yang tadinya ditempati member lain.
-  if v_rank is not null and v_rank <= array_length(c_prizes, 1) and v_rank < v_old then
+  if v_old is not null and v_rank <= array_length(c_prizes, 1) and v_rank < v_old then
     insert into game_rank_prizes (member_id, rank, score, points)
     values (v_member, v_rank, v_new_best.score, c_prizes[v_rank])
     on conflict do nothing;
@@ -179,15 +188,13 @@ returns table (rank integer, name text, best integer, is_me boolean)
 language sql stable security definer set search_path = public as $$
   with ranked as (
     select b.member_id, b.score,
+           coalesce(nullif(trim(p.display_name), ''), split_part(trim(p.full_name), ' ', 1)) as name,
            (row_number() over (order by b.score desc, b.reached_at, b.member_id))::integer as rk
     from game_best b
     join profiles p on p.id = b.member_id and p.status <> 'suspended'
   )
-  select r.rk,
-         coalesce(nullif(trim(p.display_name), ''), split_part(trim(p.full_name), ' ', 1)),
-         r.score,
-         coalesce(r.member_id = auth.uid(), false)
-  from ranked r join profiles p on p.id = r.member_id
+  select r.rk, r.name, r.score, coalesce(r.member_id = auth.uid(), false)
+  from ranked r
   where r.rk <= least(greatest(coalesce(p_limit, 10), 1), 50) or r.member_id = auth.uid()
   order by r.rk;
 $$;

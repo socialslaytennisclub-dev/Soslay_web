@@ -2431,7 +2431,9 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const boardNow = (await db.query(`select * from game_leaderboard(3)`)).rows;
   console.assert(boardNow.map((x) => x.name).join() === "Gamer,Fourth,Rival", `leaderboard permanen ${JSON.stringify(boardNow)}`);
   // game_best (trigger) sama dengan skor terbaik dari seluruh riwayat, termasuk urutan seri.
-  const drift = (await db.query(`select count(*)::int n from (select distinct on (member_id) member_id, score, created_at from game_scores where score > 0 order by member_id, score desc, created_at) h full join game_best b using (member_id) where h.score is distinct from b.score or h.created_at is distinct from b.reached_at`)).rows[0].n;
+  const bestDrift = async () =>
+    (await db.query(`select count(*)::int n from (select distinct on (member_id) member_id, score, created_at from game_scores where game = 'slay_rally' and score > 0 order by member_id, score desc, created_at) h full join game_best b using (member_id) where h.score is distinct from b.score or h.created_at is distinct from b.reached_at`)).rows[0].n;
+  const drift = await bestDrift();
   console.assert(drift === 0, `game_best sinkron dengan game_scores ${drift}`);
   const claimed = (await db.query(`select count(*)::int n from game_rank_prizes`)).rows[0].n;
   console.assert(claimed === 3, `3 hadiah tercatat ${claimed}`);
@@ -2451,7 +2453,7 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert(tieRanks.map((x) => x.rk).join() === "1,2" && tieBoard.map((x) => x.rank).join() === "1,2", `seri persis: peringkat 1 & 2 ${JSON.stringify({ tieRanks, tieBoard })}`);
   const tieTop = tieBoard[0].name === "Gamer" ? gamer : rival;
   console.assert(tieRanks[0].member_id === tieTop, "pemecah seri sama di peringkat hadiah & leaderboard");
-  const drift2 = (await db.query(`select count(*)::int n from (select distinct on (member_id) member_id, score, created_at from game_scores where score > 0 order by member_id, score desc, created_at) h full join game_best b using (member_id) where h.score is distinct from b.score or h.created_at is distinct from b.reached_at`)).rows[0].n;
+  const drift2 = await bestDrift();
   console.assert(drift2 === 0, `game_best tetap sinkron setelah hapus / koreksi ${drift2}`);
   console.log("✓ Slay Rally: sesi game dicatat server (durasi tidak bisa dipalsukan), batas skor/level, sekali kirim per sesi, kedaluwarsa 3 jam, leaderboard permanen publik, menyalip ke #1/#2/#3 dapat 20/10/5 Slay Point (sekali per peringkat), skor dihapus / dikoreksi ikut leaderboard, seri persis konsisten");
 }

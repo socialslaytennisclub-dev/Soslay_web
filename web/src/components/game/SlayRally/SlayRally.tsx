@@ -59,15 +59,12 @@ function pointsMessage(score: number, result: SubmitScoreResult | null) {
   if (!result.ok) return result.error;
   if (result.prize > 0)
     return `You overtook to #${result.rank}! +${slayPointsLabel(result.prize)} added to your account`;
-  const ahead = nextRankPrize(result.rank, result.claimed);
   if (result.rank === 1) return "You're #1 on the leaderboard. Defend your spot!";
-  if (result.rank && result.rank <= GAME_RANK_PRIZES.length)
-    return ahead > 0
-      ? `You're #${result.rank} on the leaderboard. Climb higher to win up to ${slayPointsLabel(ahead)}.`
-      : `You're #${result.rank} on the leaderboard.`;
-  return ahead > 0
-    ? `Score saved. Overtake a player in the top 3 to win up to ${slayPointsLabel(ahead)}.`
-    : "Score saved. You've already won every leaderboard prize.";
+  const ahead = nextRankPrize(result.rank, result.claimed);
+  const podium = result.rank !== null && result.rank <= GAME_RANK_PRIZES.length;
+  const where = podium ? `You're #${result.rank} on the leaderboard.` : "Score saved.";
+  if (ahead > 0) return `${where} ${podium ? "Climb higher" : "Overtake a player in the top 3"} to win up to ${slayPointsLabel(ahead)}.`;
+  return podium ? where : `${where} You've already won every leaderboard prize.`;
 }
 
 /** "20 / 10 / 5 Slay Points" — hadiah menyalip ke peringkat 1–3. */
@@ -350,10 +347,11 @@ export function SlayRally() {
     score,
     level,
     newBest,
-    // Dari leaderboard bila termuat; kalau gagal, peringkat dari hasil simpan skor.
+    // Peringkat dari hasil simpan skor (sama dengan pesan di layar); tanpa itu, dari leaderboard.
     rank:
+      (result?.ok ? result.rank : null) ??
       (Array.isArray(board) ? board.find((row) => row.isMe)?.rank : null) ??
-      (result?.ok ? result.rank : null),
+      null,
     points: result?.ok ? result.prize : null,
     link: STORY_LINK,
   });
