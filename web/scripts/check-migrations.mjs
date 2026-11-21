@@ -2358,7 +2358,7 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   // Ronde 1 cepat (7 detik) dengan Multi-ball tetap sah.
   let r = await submit(await session(7), 70, 2);
   // Pemain pertama di leaderboard tidak menyalip siapa pun → tanpa hadiah.
-  console.assert(r.best === 70 && r.rank === 1 && r.prize === 0 && r.previous_rank === null && !("points_awarded" in r), `ronde cepat tetap diterima, posisi kosong bukan menyalip ${JSON.stringify(r)}`);
+  console.assert(r.best === 70 && r.rank === 1 && r.prize === 0 && r.claimed.length === 0 && !("points_awarded" in r), `ronde cepat tetap diterima, posisi kosong bukan menyalip ${JSON.stringify(r)}`);
   console.assert((await err(`select submit_game_score((select id from game_sessions where member_id = $1 and submitted_at is not null limit 1), 10, 1)`, [gamer]))?.includes("already_submitted"), "satu sesi hanya sekali kirim");
   // Game berikutnya langsung sesudahnya tetap tersimpan (tidak ada jeda paksa); skor tidak lagi jadi Slay Point.
   r = await submit(await session(30), 80, 3);
@@ -2407,19 +2407,19 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   r = await submit(await session(60), 150, 3);
   console.assert(r.rank === 4 && r.prize === 0, `masuk di luar 3 besar → tanpa hadiah ${JSON.stringify(r)}`);
   r = await submit(await session(60), 250, 5);
-  console.assert(r.rank === 3 && r.previous_rank === 4 && r.prize === prizes[2] && (await balance(fourth)) === b0.fourth + prizes[2], `menyalip ke #3 → +${prizes[2]} ${JSON.stringify(r)}`);
+  console.assert(r.rank === 3 && r.prize === prizes[2] && r.claimed.join() === "3" && (await balance(fourth)) === b0.fourth + prizes[2], `menyalip ke #3 → +${prizes[2]} ${JSON.stringify(r)}`);
   // Skor sama dengan Rival (300) tidak menyalip: yang lebih dulu tetap di atas.
   r = await submit(await session(60), 300, 5);
   console.assert(r.rank === 3 && r.prize === 0, `seri tidak menyalip ${JSON.stringify(r)}`);
   r = await submit(await session(200), 1600, 20);
-  console.assert(r.rank === 1 && r.previous_rank === 3 && r.prize === prizes[0] && (await balance(fourth)) === b0.fourth + prizes[2] + prizes[0], `melompat ke #1 → +${prizes[0]} ${JSON.stringify(r)}`);
+  console.assert(r.rank === 1 && r.prize === prizes[0] && r.claimed.join() === "1,3" && (await balance(fourth)) === b0.fourth + prizes[2] + prizes[0], `melompat ke #1 → +${prizes[0]} ${JSON.stringify(r)}`);
   const prizeNote = await one(`select note, reason::text from points_ledger where member_id = $1 order by id desc limit 1`, [fourth]);
   console.assert(prizeNote.reason === "bonus" && prizeNote.note === "Slay Rally · naik ke #1", `catatan ledger hadiah ${JSON.stringify(prizeNote)}`);
   // Gamer tersalip (#1 → #2) tanpa kehilangan poin, lalu menyalip balik → hadiah #1 untuk Gamer.
   console.assert((await balance(gamer)) === start, "tersalip tidak mengurangi Slay Point");
   await as(gamer);
   r = await submit(await session(300), 1700, 20);
-  console.assert(r.rank === 1 && r.previous_rank === 2 && r.prize === prizes[0], `menyalip balik ke #1 ${JSON.stringify(r)}`);
+  console.assert(r.rank === 1 && r.prize === prizes[0], `menyalip balik ke #1 ${JSON.stringify(r)}`);
   // Saling salip lagi: hadiah #1 sudah pernah diambil → tidak dibayar dua kali.
   await as(fourth);
   r = await submit(await session(300), 1800, 20);
@@ -2430,6 +2430,9 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.exec(`reset role`);
   const boardNow = (await db.query(`select * from game_leaderboard(3)`)).rows;
   console.assert(boardNow.map((x) => x.name).join() === "Gamer,Fourth,Rival", `leaderboard permanen ${JSON.stringify(boardNow)}`);
+  // game_best (trigger) sama dengan skor terbaik dari seluruh riwayat, termasuk urutan seri.
+  const drift = (await db.query(`select count(*)::int n from (select distinct on (member_id) member_id, score, created_at from game_scores where score > 0 order by member_id, score desc, created_at) h full join game_best b using (member_id) where h.score is distinct from b.score or h.created_at is distinct from b.reached_at`)).rows[0].n;
+  console.assert(drift === 0, `game_best sinkron dengan game_scores ${drift}`);
   const claimed = (await db.query(`select count(*)::int n from game_rank_prizes`)).rows[0].n;
   console.assert(claimed === 3, `3 hadiah tercatat ${claimed}`);
   console.log("✓ Slay Rally: sesi game dicatat server (durasi tidak bisa dipalsukan), batas skor/level, sekali kirim per sesi, kedaluwarsa 3 jam, leaderboard permanen publik, menyalip ke #1/#2/#3 dapat 20/10/5 Slay Point (sekali per peringkat)");

@@ -71,7 +71,8 @@ export async function submitGameScore(input: { sessionId: string; score: number;
     if (!(await isDemoMember())) return { ok: false, error: NOT_MEMBER };
     // Tampilan saja: peringkat dihitung dari papan contoh, hadiah seolah belum pernah diambil.
     const rank = DEMO_BOARD.filter((r) => r.best >= score).length + 1;
-    return { ok: true, demo: true, best: score, rank, previousRank: null, prize: rankPrize(rank) };
+    const prize = rankPrize(rank);
+    return { ok: true, demo: true, best: score, rank, prize, claimed: prize > 0 ? [rank] : [] };
   }
 
   const { supabase, user } = await getMemberSession();
@@ -79,9 +80,14 @@ export async function submitGameScore(input: { sessionId: string; score: number;
   if (!/^[0-9a-f-]{36}$/i.test(sessionId)) return { ok: false, error: ERRORS.invalid_session };
   const { data, error } = await supabase.rpc("submit_game_score", { p_session: sessionId, p_score: score, p_level: level });
   if (error || !data) return rpcFailure(error);
-  const r = data as { best: number; rank: number | null; previous_rank: number | null; prize: number };
-  const n = (v: number | null) => (v == null ? null : Number(v));
-  return { ok: true, best: Number(r.best) || 0, rank: n(r.rank), previousRank: n(r.previous_rank), prize: Number(r.prize) || 0 };
+  const r = data as { best: number; rank: number | null; prize: number; claimed: number[] | null };
+  return {
+    ok: true,
+    best: Number(r.best) || 0,
+    rank: r.rank == null ? null : Number(r.rank),
+    prize: Number(r.prize) || 0,
+    claimed: (r.claimed ?? []).map(Number),
+  };
 }
 
 /** Leaderboard permanen: skor terbaik teratas (nama tampilan / nama depan) + baris pemanggil bila di luar daftar itu. */

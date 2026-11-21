@@ -11,6 +11,39 @@
 --  · Tersalip / turun peringkat tidak mengurangi Slay Point. Urutan seri: skor sama → yang lebih dulu
 --    mencapainya di atas. Member suspended tidak ikut.
 --  · Slay Point yang sudah diberikan dengan aturan lama tetap di points_ledger.
+--  · Skor terbaik tiap member disimpan di game_best (diisi trigger dari game_scores) supaya peringkat
+--    cukup dihitung dari satu baris per member lewat indeks, bukan dari seluruh riwayat skor.
+
+create table game_best (
+  member_id   uuid primary key references profiles(id) on delete cascade,
+  score       integer not null check (score > 0),
+  -- Kapan skor terbaik ini PERTAMA dicapai (penentu urutan seri).
+  reached_at  timestamptz not null
+);
+create index game_best_rank_idx on game_best (score desc, reached_at);
+-- Tanpa policy: hanya lewat RPC.
+alter table game_best enable row level security;
+
+insert into game_best (member_id, score, reached_at)
+select distinct on (member_id) member_id, score, created_at
+from game_scores
+where game = 'slay_rally' and score > 0
+order by member_id, score desc, created_at;
+
+create function game_best_track()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if new.game = 'slay_rally' and new.score > 0 then
+    insert into game_best (member_id, score, reached_at)
+    values (new.member_id, new.score, new.created_at)
+    on conflict (member_id) do update
+      set score = excluded.score, reached_at = excluded.reached_at
+      where excluded.score > game_best.score;
+  end if;
+  return new;
+end;
+$$;
+create trigger game_scores_best after insert on game_scores for each row execute function game_best_track();
 
 create table game_rank_prizes (
   member_id   uuid not null references profiles(id) on delete cascade,
@@ -23,21 +56,18 @@ create table game_rank_prizes (
 -- Tanpa policy: hanya lewat RPC.
 alter table game_rank_prizes enable row level security;
 
-/** Peringkat sepanjang masa: skor terbaik per member (tanpa suspended), seri → yang lebih dulu. */
-create function game_ranking()
-returns table (rk integer, member_id uuid, score integer)
-language sql stable security definer set search_path = public as $$
-  with best as (
-    select distinct on (g.member_id) g.member_id, g.score, g.created_at
-    from game_scores g
-    where g.game = 'slay_rally' and g.score > 0
-    order by g.member_id, g.score desc, g.created_at
-  )
-  select (row_number() over (order by b.score desc, b.created_at))::integer, b.member_id, b.score
-  from best b
-  join profiles p on p.id = b.member_id and p.status <> 'suspended';
+/** Peringkat (1 = teratas) dari skor terbaik `p_score` yang dicapai pada `p_at`; null bila belum ada skor. */
+create function game_rank_of(p_member uuid, p_score integer, p_at timestamptz)
+returns integer language sql stable security definer set search_path = public as $$
+  select case when p_score is null then null else 1 + (
+    select count(*)::integer
+    from game_best b
+    join profiles p on p.id = b.member_id and p.status <> 'suspended'
+    where b.member_id <> p_member
+      and (b.score > p_score or (b.score = p_score and b.reached_at < p_at))
+  ) end;
 $$;
-revoke execute on function game_ranking() from public, anon, authenticated;
+revoke execute on function game_rank_of(uuid, integer, timestamptz) from public, anon, authenticated;
 
 -- Kirim skor: validasi sama seperti sebelumnya, tanpa konversi poin. Bila skor ini membuat member
 -- menyalip ke 3 besar, hadiah peringkat itu dibayar (sekali per peringkat).
@@ -48,10 +78,10 @@ declare
   v_member uuid := auth.uid();
   v_session game_sessions%rowtype;
   v_secs numeric;
-  v_before integer;
+  v_old_best game_best%rowtype;
+  v_new_best game_best%rowtype;
   v_old integer;
   v_rank integer;
-  v_best integer;
   v_prize integer := 0;
 begin
   if not game_member_ok(v_member) then
@@ -60,9 +90,8 @@ begin
   if p_score is null or p_level is null or p_score < 0 or p_level < 1 then
     raise exception 'invalid_score';
   end if;
-  -- Peringkat saling bergantung antar member → skor dikirim berurutan (satu leaderboard bersama).
-  perform pg_advisory_xact_lock(hashtext('game_scores:board'));
 
+  -- Kunci baris sesi: satu sesi tidak bisa dikirim dua kali bersamaan.
   select * into v_session from game_sessions where id = p_session and member_id = v_member for update;
   if not found then
     raise exception 'invalid_session';
@@ -79,21 +108,25 @@ begin
     raise exception 'implausible_score';
   end if;
 
-  -- Peringkat sebelum skor ini: milik sendiri (null = belum di leaderboard) & jumlah pemain.
-  select count(*)::integer, max(r.rk) filter (where r.member_id = v_member)
-  into v_before, v_old
-  from game_ranking() r;
+  -- Baru setelah sesi sah: peringkat saling bergantung antar member → skor sah dikirim berurutan.
+  perform pg_advisory_xact_lock(hashtext('game_scores:board'));
+
+  select * into v_old_best from game_best where member_id = v_member;
+  -- Peringkat lama; belum pernah masuk leaderboard → "di bawah semua pemain".
+  v_old := coalesce(game_rank_of(v_member, v_old_best.score, v_old_best.reached_at),
+                    1 + (select count(*)::integer from game_best b join profiles p on p.id = b.member_id and p.status <> 'suspended' where b.member_id <> v_member));
 
   update game_sessions set submitted_at = now() where id = v_session.id;
   insert into game_scores (member_id, session_id, score, level, duration_ms, points_awarded)
   values (v_member, v_session.id, p_score, p_level, (v_secs * 1000)::integer, 0);
 
-  select r.rk, r.score into v_rank, v_best from game_ranking() r where r.member_id = v_member;
+  select * into v_new_best from game_best where member_id = v_member;
+  v_rank := game_rank_of(v_member, v_new_best.score, v_new_best.reached_at);
 
   -- Menyalip = naik melewati posisi yang tadinya ditempati member lain.
-  if v_rank is not null and v_rank <= array_length(c_prizes, 1) and v_rank < coalesce(v_old, v_before + 1) then
+  if v_rank is not null and v_rank <= array_length(c_prizes, 1) and v_rank < v_old then
     insert into game_rank_prizes (member_id, rank, score, points)
-    values (v_member, v_rank, v_best, c_prizes[v_rank])
+    values (v_member, v_rank, v_new_best.score, c_prizes[v_rank])
     on conflict do nothing;
     if found then
       v_prize := c_prizes[v_rank];
@@ -102,20 +135,31 @@ begin
     end if;
   end if;
 
-  return jsonb_build_object('best', coalesce(v_best, p_score), 'rank', v_rank, 'previous_rank', v_old, 'prize', v_prize);
+  return jsonb_build_object(
+    'best', coalesce(v_new_best.score, p_score),
+    'rank', v_rank,
+    'prize', v_prize,
+    -- Peringkat yang hadiahnya sudah pernah diterima member ini (untuk pesan di game).
+    'claimed', coalesce((select jsonb_agg(rank order by rank) from game_rank_prizes where member_id = v_member), '[]'::jsonb)
+  );
 end;
 $$;
 
--- Leaderboard sepanjang masa: top N + baris pemanggil bila di luar top N.
+-- Leaderboard sepanjang masa: top N + baris pemanggil bila di luar top N (satu baris per member).
 create or replace function game_leaderboard(p_limit integer default 10)
 returns table (rank integer, name text, best integer, is_me boolean)
 language sql stable security definer set search_path = public as $$
+  with ranked as (
+    select b.member_id, b.score,
+           (row_number() over (order by b.score desc, b.reached_at))::integer as rk
+    from game_best b
+    join profiles p on p.id = b.member_id and p.status <> 'suspended'
+  )
   select r.rk,
          coalesce(nullif(trim(p.display_name), ''), split_part(trim(p.full_name), ' ', 1)),
          r.score,
          coalesce(r.member_id = auth.uid(), false)
-  from game_ranking() r
-  join profiles p on p.id = r.member_id
+  from ranked r join profiles p on p.id = r.member_id
   where r.rk <= least(greatest(coalesce(p_limit, 10), 1), 50) or r.member_id = auth.uid()
   order by r.rk;
 $$;

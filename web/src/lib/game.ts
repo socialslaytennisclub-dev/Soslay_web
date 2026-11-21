@@ -10,6 +10,13 @@
 export const GAME_RANK_PRIZES = [20, 10, 5] as const;
 /** Hadiah untuk peringkat tertentu (0 bila di luar 3 besar). */
 export const rankPrize = (rank: number | null | undefined) => (rank ? (GAME_RANK_PRIZES[rank - 1] ?? 0) : 0);
+/** Hadiah terbesar yang masih bisa didapat dengan menyalip ke peringkat di atas `rank` (0 bila tidak ada). */
+export function nextRankPrize(rank: number | null, claimed: readonly number[]) {
+  const top = rank ? Math.min(rank - 1, GAME_RANK_PRIZES.length) : GAME_RANK_PRIZES.length;
+  let best = 0;
+  for (let r = 1; r <= top; r++) if (!claimed.includes(r)) best = Math.max(best, rankPrize(r));
+  return best;
+}
 /** Ronde terakhir yang boleh dimainkan tanpa akun. */
 export const FREE_ROUNDS = 1;
 /** Simpanan game tamu yang berhenti di gerbang daftar (localStorage, berlaku 24 jam). */
@@ -34,6 +41,9 @@ export type LeaderboardRow = { rank: number; name: string; best: number; isMe: b
 export type StartSessionResult = { ok: true; sessionId: string } | { ok: false; error: string };
 
 export type SubmitScoreResult =
-  /** Skor terbaik & peringkat member setelah game ini; `prize` = Slay Point dari menyalip (0 bila tidak). */
-  | { ok: true; best: number; rank: number | null; previousRank: number | null; prize: number; demo?: boolean }
+  /**
+   * Skor terbaik & peringkat member setelah game ini; `prize` = Slay Point dari menyalip (0 bila tidak);
+   * `claimed` = peringkat yang hadiahnya sudah pernah diterima (hadiah tiap peringkat hanya sekali).
+   */
+  | { ok: true; best: number; rank: number | null; prize: number; claimed: number[]; demo?: boolean }
   | { ok: false; error: string };

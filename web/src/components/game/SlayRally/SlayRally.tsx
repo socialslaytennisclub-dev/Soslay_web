@@ -11,7 +11,7 @@ import {
   GATE_SAVE_KEY,
   GATE_SAVE_TTL_MS,
   CONNECTION_LOST,
-  rankPrize,
+  nextRankPrize,
   NOT_MEMBER,
   slayPointsLabel,
   type GateSave,
@@ -59,9 +59,15 @@ function pointsMessage(score: number, result: SubmitScoreResult | null) {
   if (!result.ok) return result.error;
   if (result.prize > 0)
     return `You overtook to #${result.rank}! +${slayPointsLabel(result.prize)} added to your account`;
+  const ahead = nextRankPrize(result.rank, result.claimed);
+  if (result.rank === 1) return "You're #1 on the leaderboard. Defend your spot!";
   if (result.rank && result.rank <= GAME_RANK_PRIZES.length)
-    return `You're #${result.rank} on the leaderboard. Overtake the next spot for more Slay Points.`;
-  return `Score saved. Overtake a player in the top 3 to win up to ${slayPointsLabel(GAME_RANK_PRIZES[0])}.`;
+    return ahead > 0
+      ? `You're #${result.rank} on the leaderboard. Climb higher to win up to ${slayPointsLabel(ahead)}.`
+      : `You're #${result.rank} on the leaderboard.`;
+  return ahead > 0
+    ? `Score saved. Overtake a player in the top 3 to win up to ${slayPointsLabel(ahead)}.`
+    : "Score saved. You've already won every leaderboard prize.";
 }
 
 /** "20 / 10 / 5 Slay Points" — hadiah menyalip ke peringkat 1–3. */
@@ -344,9 +350,10 @@ export function SlayRally() {
     score,
     level,
     newBest,
-    rank: Array.isArray(board)
-      ? (board.find((row) => row.isMe)?.rank ?? null)
-      : null,
+    // Dari leaderboard bila termuat; kalau gagal, peringkat dari hasil simpan skor.
+    rank:
+      (Array.isArray(board) ? board.find((row) => row.isMe)?.rank : null) ??
+      (result?.ok ? result.rank : null),
     points: result?.ok ? result.prize : null,
     link: STORY_LINK,
   });
@@ -921,15 +928,12 @@ export function SlayRally() {
                         {row.isMe && " (you)"}
                       </span>
                       <span className={styles.boardScore}>{row.best}</span>
-                      <span className={styles.boardPrize}>
-                        {rankPrize(row.rank) > 0 && `+${rankPrize(row.rank)} SP`}
-                      </span>
                     </li>
                   ))}
                 </ol>
               )}
               <Text variant="body-14" tone="on-inverse" align="center" muted>
-                Overtake a player into #1, #2 or #3 to win {PRIZES_TEXT} (once
+                Overtake a player into #1 / #2 / #3 to win {PRIZES_TEXT} (once
                 per spot).
               </Text>
             </div>

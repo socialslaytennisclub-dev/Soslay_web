@@ -397,7 +397,7 @@
 
 .boardRow {
   display: grid;
-  grid-template-columns: 28px 1fr auto 52px;
+  grid-template-columns: 28px 1fr auto;
   align-items: center;
   gap: var(--space-12);
   padding: var(--space-8) var(--space-12);
@@ -406,14 +406,6 @@
   color: var(--text-on-inverse);
   font-family: var(--font-ui);
   font-size: 15px;
-}
-
-.boardPrize {
-  justify-self: end;
-  color: var(--color-pink-500);
-  font-weight: var(--weight-bold);
-  font-size: 13px;
-  white-space: nowrap;
 }
 
 .boardRank {
