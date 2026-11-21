@@ -2,15 +2,15 @@
 
 import { cookies } from "next/headers";
 import { DEMO_MEMBER_COOKIE, DEMO_MEMBER_NAME } from "@/lib/demo-member";
-import { GAME_DAILY_POINT_CAP, GAME_POINTS_PER_SLAY_POINT, LEADERBOARD_SIZE, NOT_MEMBER, type LeaderboardRow, type StartSessionResult, type SubmitScoreResult } from "@/lib/game";
+import { LEADERBOARD_SIZE, rankPrize, NOT_MEMBER, type LeaderboardRow, type StartSessionResult, type SubmitScoreResult } from "@/lib/game";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getMemberSession } from "@/server/member/user";
 
 /**
  * Slay Rally (/game): buka sesi game member (waktu mulai dicatat server), kirim skor sekali per
- * sesi (→ Slay Point lewat RPC submit_game_score), dan leaderboard publik setelah game over.
- * Aturan & validasi skor ada di migrasi 20261120000000.
+ * sesi, dan leaderboard publik (permanen) setelah game over. Menyalip ke 3 besar memberi Slay Point
+ * (GAME_RANK_PRIZES). Validasi skor di migrasi 20261120000000, hadiah peringkat di 20261121000000.
  */
 
 const DEMO_BOARD: LeaderboardRow[] = [
@@ -69,8 +69,10 @@ export async function submitGameScore(input: { sessionId: string; score: number;
   if (!isSupabaseConfigured) {
     // Mode demo: tidak disimpan — hanya untuk mengecek tampilan.
     if (!(await isDemoMember())) return { ok: false, error: NOT_MEMBER };
-    const pointsAwarded = Math.min(Math.floor(score / GAME_POINTS_PER_SLAY_POINT), GAME_DAILY_POINT_CAP);
-    return { ok: true, demo: true, pointsAwarded, best: score, carry: score % GAME_POINTS_PER_SLAY_POINT, todayAwarded: pointsAwarded, dailyCap: GAME_DAILY_POINT_CAP };
+    // Tampilan saja: peringkat dihitung dari papan contoh, hadiah seolah belum pernah diambil.
+    const rank = DEMO_BOARD.filter((r) => r.best >= score).length + 1;
+    const prize = rankPrize(rank);
+    return { ok: true, demo: true, best: score, rank, prize, claimed: prize > 0 ? [rank] : [] };
   }
 
   const { supabase, user } = await getMemberSession();
@@ -78,11 +80,11 @@ export async function submitGameScore(input: { sessionId: string; score: number;
   if (!/^[0-9a-f-]{36}$/i.test(sessionId)) return { ok: false, error: ERRORS.invalid_session };
   const { data, error } = await supabase.rpc("submit_game_score", { p_session: sessionId, p_score: score, p_level: level });
   if (error || !data) return rpcFailure(error);
-  const r = data as { points_awarded: number; best: number; carry: number; today_awarded: number; daily_cap: number };
-  return { ok: true, pointsAwarded: r.points_awarded, best: r.best, carry: r.carry, todayAwarded: r.today_awarded, dailyCap: r.daily_cap };
+  const { best, rank, prize, claimed } = data as { best: number; rank: number | null; prize: number; claimed: number[] };
+  return { ok: true, best, rank, prize, claimed };
 }
 
-/** Skor terbaik teratas (nama tampilan / nama depan) + baris pemanggil bila di luar daftar itu. */
+/** Leaderboard permanen: skor terbaik teratas (nama tampilan / nama depan) + baris pemanggil bila di luar daftar itu. */
 export async function getGameLeaderboard(myScore?: number): Promise<LeaderboardRow[]> {
   if (!isSupabaseConfigured) {
     if (!myScore || !(await isDemoMember())) return DEMO_BOARD;

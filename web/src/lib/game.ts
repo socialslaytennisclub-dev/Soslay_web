@@ -1,12 +1,20 @@
 /**
- * Aturan Slay Rally (/game) yang dipakai klien & server. Angka konversi dan batas harian
- * juga ada di RPC submit_game_score (migrasi 20261120000000) — ubah keduanya bersamaan.
+ * Aturan Slay Rally (/game) yang dipakai klien & server. Hadiah peringkat juga ada di RPC
+ * submit_game_score (migrasi 20261121000000) — ubah keduanya bersamaan.
  */
 
-/** Setiap sekian poin game (akumulasi, sisa terbawa) = 1 Slay Point. */
-export const GAME_POINTS_PER_SLAY_POINT = 100;
-/** Maksimal Slay Point dari game per hari (WIB). */
-export const GAME_DAILY_POINT_CAP = 10;
+/**
+ * Slay Point saat menyalip ke peringkat 1, 2, 3 leaderboard (permanen, tanpa reset). Tiap peringkat
+ * hanya sekali per member.
+ */
+export const GAME_RANK_PRIZES = [20, 10, 5] as const;
+/** Hadiah untuk peringkat tertentu (0 bila di luar 3 besar). */
+export const rankPrize = (rank: number | null | undefined) => (rank ? (GAME_RANK_PRIZES[rank - 1] ?? 0) : 0);
+/** Hadiah terbesar yang masih bisa didapat dengan menyalip ke peringkat di atas `rank` (0 bila tidak ada). */
+export function nextRankPrize(rank: number | null, claimed: readonly number[]): number {
+  // Hadiah turun per peringkat → yang terbesar = peringkat teratas yang belum diambil.
+  return GAME_RANK_PRIZES.slice(0, rank ? rank - 1 : undefined).find((_, i) => !claimed.includes(i + 1)) ?? 0;
+}
 /** Ronde terakhir yang boleh dimainkan tanpa akun. */
 export const FREE_ROUNDS = 1;
 /** Simpanan game tamu yang berhenti di gerbang daftar (localStorage, berlaku 24 jam). */
@@ -31,5 +39,9 @@ export type LeaderboardRow = { rank: number; name: string; best: number; isMe: b
 export type StartSessionResult = { ok: true; sessionId: string } | { ok: false; error: string };
 
 export type SubmitScoreResult =
-  | { ok: true; pointsAwarded: number; best: number; carry: number; todayAwarded: number; dailyCap: number; demo?: boolean }
+  /**
+   * Skor terbaik & peringkat member setelah game ini; `prize` = Slay Point dari menyalip (0 bila tidak);
+   * `claimed` = peringkat yang hadiahnya sudah pernah diterima (hadiah tiap peringkat hanya sekali).
+   */
+  | { ok: true; best: number; rank: number | null; prize: number; claimed: number[]; demo?: boolean }
   | { ok: false; error: string };

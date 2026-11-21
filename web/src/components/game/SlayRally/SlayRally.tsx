@@ -7,10 +7,11 @@ import { loginPage, registerPage, withNext } from "@/content/auth";
 import { cx } from "@/lib/cx";
 import {
   FREE_ROUNDS,
-  GAME_POINTS_PER_SLAY_POINT,
+  GAME_RANK_PRIZES,
   GATE_SAVE_KEY,
   GATE_SAVE_TTL_MS,
   CONNECTION_LOST,
+  nextRankPrize,
   NOT_MEMBER,
   slayPointsLabel,
   type GateSave,
@@ -53,15 +54,21 @@ const SIGN_IN_HREF = withNext(registerPage.switch.href, GAME_PATH);
 
 /** Kalimat hasil simpan skor member di layar game over. */
 function pointsMessage(score: number, result: SubmitScoreResult | null) {
-  if (score === 0) return "Score points to earn Slay Points.";
+  if (score === 0) return "Overtake a player in the top 3 to win Slay Points.";
   if (!result) return "Saving your score…";
   if (!result.ok) return result.error;
-  if (result.pointsAwarded > 0)
-    return `+${slayPointsLabel(result.pointsAwarded)} added to your account`;
-  if (result.todayAwarded >= result.dailyCap)
-    return `Daily limit reached (${slayPointsLabel(result.dailyCap)}). Come back tomorrow!`;
-  return `${GAME_POINTS_PER_SLAY_POINT - result.carry} more game points to your next Slay Point`;
+  if (result.prize > 0)
+    return `You overtook to #${result.rank}! +${slayPointsLabel(result.prize)} added to your account`;
+  if (result.rank === 1) return "You're #1 on the leaderboard. Defend your spot!";
+  const ahead = nextRankPrize(result.rank, result.claimed);
+  const podium = result.rank !== null && result.rank <= GAME_RANK_PRIZES.length;
+  const where = podium ? `You're #${result.rank} on the leaderboard.` : "Score saved.";
+  if (ahead > 0) return `${where} ${podium ? "Climb higher" : "Overtake a player in the top 3"} to win up to ${slayPointsLabel(ahead)}.`;
+  return podium ? where : `${where} You've already won every leaderboard prize.`;
 }
+
+/** "20 / 10 / 5 Slay Points" — hadiah menyalip ke peringkat 1–3. */
+const PRIZES_TEXT = `${GAME_RANK_PRIZES.join(" / ")} Slay Points`;
 
 const BEST_KEY = "soslay-rally-best";
 
@@ -340,10 +347,12 @@ export function SlayRally() {
     score,
     level,
     newBest,
-    rank: Array.isArray(board)
-      ? (board.find((row) => row.isMe)?.rank ?? null)
-      : null,
-    points: result?.ok ? result.pointsAwarded : null,
+    // Peringkat dari hasil simpan skor (sama dengan pesan di layar); tanpa itu, dari leaderboard.
+    rank:
+      (result?.ok ? result.rank : null) ??
+      (Array.isArray(board) ? board.find((row) => row.isMe)?.rank : null) ??
+      null,
+    points: result?.ok ? result.prize : null,
     link: STORY_LINK,
   });
 
@@ -704,9 +713,8 @@ export function SlayRally() {
               <span className={styles.accent}>unlocked</span>
             </Text>
             <Text variant="body-16" tone="on-inverse" align="center" muted>
-              Your Round 1 score of {saved.score} is saved. Every{" "}
-              {GAME_POINTS_PER_SLAY_POINT} game points now turns into 1 Slay
-              Point.
+              Your Round 1 score of {saved.score} is saved. Overtake a player
+              into #1, #2 or #3 to win {PRIZES_TEXT}.
             </Text>
             <Button variant="arrow" onClick={continueSaved}>
               Continue to Round {saved.level}
@@ -754,11 +762,8 @@ export function SlayRally() {
             {!member && (
               <ul className={styles.perks}>
                 <li>Keep your score and continue right where you stopped</li>
-                <li>
-                  Earn 1 Slay Point for every {GAME_POINTS_PER_SLAY_POINT} game
-                  points
-                </li>
                 <li>Get your name on the Slay Rally leaderboard</li>
+                <li>Overtake into the top 3 to win {PRIZES_TEXT}</li>
               </ul>
             )}
             {member ? (
@@ -876,7 +881,8 @@ export function SlayRally() {
                 <a className={styles.link} href={SIGN_UP_HREF}>
                   Sign up
                 </a>{" "}
-                to save your score, earn Slay Points and join the leaderboard.
+                to save your score — overtake into the top 3 to win{" "}
+                {PRIZES_TEXT}.
               </Text>
             )}
 
@@ -924,6 +930,10 @@ export function SlayRally() {
                   ))}
                 </ol>
               )}
+              <Text variant="body-14" tone="on-inverse" align="center" muted>
+                Overtake a player into #1 / #2 / #3 to win {PRIZES_TEXT} (once
+                per spot).
+              </Text>
             </div>
 
             <div className={styles.actions}>

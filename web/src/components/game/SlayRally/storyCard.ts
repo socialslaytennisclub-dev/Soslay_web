@@ -31,7 +31,7 @@ type StoryData = {
   newBest: boolean;
   /** Peringkat di leaderboard (member); null = tamu / tidak diketahui. */
   rank: number | null;
-  /** Slay Point yang didapat dari game ini (member). */
+  /** Slay Point dari menyalip ke 3 besar di game ini (member). */
   points: number | null;
   /** Domain + path ajakan, mis. "slayclub.id/game". */
   link: string;
