@@ -3,7 +3,7 @@
  * & font situs, lalu dibagikan lewat Web Share API (lembar share HP → Instagram → Story) atau diunduh.
  */
 
-import { monthlyPrize, slayPointsLabel } from "@/lib/game";
+import { slayPointsLabel } from "@/lib/game";
 
 // Isi penting berada di antara y 250–1670: bagian atas & bawah Story tertutup bar profil / kolom balas Instagram.
 export const STORY_W = 1080;
@@ -31,8 +31,8 @@ type StoryData = {
   newBest: boolean;
   /** Peringkat di leaderboard (member); null = tamu / tidak diketahui. */
   rank: number | null;
-  /** Nama bulan leaderboard, mis. "November". */
-  month: string;
+  /** Slay Point dari menyalip ke 3 besar di game ini (member). */
+  points: number | null;
   /** Domain + path ajakan, mis. "slayclub.id/game". */
   link: string;
 };
@@ -387,14 +387,13 @@ export async function renderStoryCard(data: StoryData): Promise<Blob> {
   const chips: { text: string; fill: string; ink: string }[] = [];
   if (data.rank)
     chips.push({
-      text: `#${data.rank} in ${data.month}`,
+      text: `#${data.rank} on the leaderboard`,
       fill: c.lime,
       ink: c.navy950,
     });
-  const prize = monthlyPrize(data.rank);
-  if (prize > 0)
+  if (data.points && data.points > 0)
     chips.push({
-      text: `Racing for ${slayPointsLabel(prize)}`,
+      text: `+${slayPointsLabel(data.points)}`,
       fill: c.pink,
       ink: c.navy950,
     });

@@ -69,11 +69,11 @@ export const RESET_PASSWORD = "/reset-password";
 export const gameAuthCopy = {
   register: {
     title: "Sign up to play Round 2",
-    description: "Your Round 1 score is saved. Create a free account to keep playing, and race for the top 3 on the monthly Slay Rally leaderboard — they win Slay Points.",
+    description: "Your Round 1 score is saved. Create a free account to keep playing, and overtake players on the Slay Rally leaderboard — reaching the top 3 wins Slay Points.",
   },
   login: {
     title: "Sign in to play Round 2",
-    description: "Your Round 1 score is saved. Sign in to keep playing and race for this month's Slay Point prizes.",
+    description: "Your Round 1 score is saved. Sign in to keep playing and overtake players into the top 3 for Slay Points.",
   },
 };
 
