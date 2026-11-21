@@ -12,7 +12,12 @@
 --    mencapainya di atas. Member suspended tidak ikut.
 --  · Slay Point yang sudah diberikan dengan aturan lama tetap di points_ledger.
 --  · Skor terbaik tiap member disimpan di game_best (diisi trigger dari game_scores) supaya peringkat
---    cukup dihitung dari satu baris per member lewat indeks, bukan dari seluruh riwayat skor.
+--    cukup dihitung dari satu baris per member lewat indeks, bukan dari seluruh riwayat skor. Skor yang
+--    dihapus / dikoreksi (mis. skor curang) ikut memperbarui game_best.
+--  · Seri persis (skor & waktu sama): member_id sebagai pemecah terakhir, sama di peringkat & leaderboard.
+
+-- Skor yang tersimpan selama migrasi tidak terlewat di antara isi awal game_best dan trigger-nya.
+lock table game_scores in share row exclusive mode;
 
 create table game_best (
   member_id   uuid primary key references profiles(id) on delete cascade,
@@ -20,7 +25,7 @@ create table game_best (
   -- Kapan skor terbaik ini PERTAMA dicapai (penentu urutan seri).
   reached_at  timestamptz not null
 );
-create index game_best_rank_idx on game_best (score desc, reached_at);
+create index game_best_rank_idx on game_best (score desc, reached_at, member_id);
 -- Tanpa policy: hanya lewat RPC.
 alter table game_best enable row level security;
 
@@ -45,6 +50,29 @@ end;
 $$;
 create trigger game_scores_best after insert on game_scores for each row execute function game_best_track();
 
+-- Skor dihapus / dikoreksi → skor terbaik member itu dihitung ulang dari riwayatnya (tanpa skor lagi →
+-- keluar dari leaderboard). Hadiah yang sudah dibayar tidak ditarik.
+create function game_best_resync()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare
+  m uuid;
+begin
+  foreach m in array array[old.member_id, case when tg_op = 'UPDATE' and new.member_id <> old.member_id then new.member_id end] loop
+    continue when m is null;
+    delete from game_best where member_id = m;
+    insert into game_best (member_id, score, reached_at)
+    select member_id, score, created_at
+    from game_scores
+    where member_id = m and game = 'slay_rally' and score > 0
+    order by score desc, created_at
+    limit 1;
+  end loop;
+  return null;
+end;
+$$;
+create trigger game_scores_best_resync after delete or update of member_id, game, score, created_at on game_scores
+  for each row execute function game_best_resync();
+
 create table game_rank_prizes (
   member_id   uuid not null references profiles(id) on delete cascade,
   rank        smallint not null check (rank between 1 and 3),
@@ -64,7 +92,7 @@ returns integer language sql stable security definer set search_path = public as
     from game_best b
     join profiles p on p.id = b.member_id and p.status <> 'suspended'
     where b.member_id <> p_member
-      and (b.score > p_score or (b.score = p_score and b.reached_at < p_at))
+      and (b.score > p_score or (b.score = p_score and (b.reached_at < p_at or (b.reached_at = p_at and b.member_id < p_member))))
   ) end;
 $$;
 revoke execute on function game_rank_of(uuid, integer, timestamptz) from public, anon, authenticated;
@@ -151,7 +179,7 @@ returns table (rank integer, name text, best integer, is_me boolean)
 language sql stable security definer set search_path = public as $$
   with ranked as (
     select b.member_id, b.score,
-           (row_number() over (order by b.score desc, b.reached_at))::integer as rk
+           (row_number() over (order by b.score desc, b.reached_at, b.member_id))::integer as rk
     from game_best b
     join profiles p on p.id = b.member_id and p.status <> 'suspended'
   )
