@@ -416,11 +416,14 @@
 }
 
 .tripCardItem {
+  min-width: 0;
   list-style: none;
 }
 
+/* minmax(0, 1fr): judul activity (nowrap) tidak boleh melebarkan kartu melewati layar HP. */
 .tripCard {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-12);
   padding: var(--space-14);
   border: 2px solid var(--color-lime-500);
@@ -437,9 +440,11 @@
 
 .tripCardHead > .sessionText {
   flex: 1;
+  min-width: 0;
 }
 
 .tripCardTitle {
+  overflow-wrap: anywhere;
   font-family: var(--font-display);
   font-weight: var(--weight-bold);
   font-size: 16px;
@@ -462,6 +467,8 @@
 
 .tripStats > span {
   display: grid;
+  min-width: 0;
+  overflow-wrap: anywhere;
   gap: 2px;
   padding: var(--space-8) var(--space-10);
   border-radius: var(--radius-md);
@@ -496,6 +503,7 @@
 
 .tripCardList {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   margin: 0;
   padding: 0;
   border: 1px solid var(--color-indigo-border);
@@ -519,6 +527,25 @@
   flex: 1;
 }
 
+.tripCardList li {
+  min-width: 0;
+}
+
+/* Judul activity trip sering hanya beda di ujung ([COURTEHAUS] / [MATCHPOINT]) → turun baris, maks. 3 baris. */
+.tripCardList .sessionTitle {
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.tripCardList .sessionMeta {
+  overflow-wrap: anywhere;
+}
+
 .tripNumber {
   display: grid;
   flex-shrink: 0;
@@ -533,6 +560,7 @@
 }
 
 .tripPill {
+  flex-shrink: 0;
   padding: 2px 8px;
   border-radius: var(--radius-full);
   background: var(--color-indigo-50);
