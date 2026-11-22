@@ -35,6 +35,7 @@ const AREAS: Record<string, string> = {
   Badung: "Kerobokan, Badung, Bali 80361",
 };
 
+const CHANNEL_LABEL: Record<string, OrderDetail["channel"]> = { kuy: "Kuy", reward: "Tukar poin", manual: "Input manual (order lama)", website: "Website" };
 const productBySlug = new Map(products.map((p) => [p.slug, p]));
 const seedOf = (code: string) => Number(code.replace(/\D/g, "")) || 0;
 const monthLabel = (key: string, style: "short" | "long" = "short") =>
@@ -91,7 +92,7 @@ function toItem(d: Dataset, o: DataOrder): OrderListItem {
   return {
     code: o.code,
     memberId: o.memberId,
-    customer: d.memberById.get(o.memberId)?.fullName ?? "—",
+    customer: d.memberById.get(o.memberId)?.fullName ?? (o.buyer?.name || "—"),
     stage: stageOf(o),
     method: o.shop?.method ?? null,
     proofAt: o.shop?.proofAt ?? null,
@@ -115,7 +116,7 @@ export async function listOrders(query: OrdersQuery): Promise<OrdersResult> {
     .filter((o) => inTab(o, tab))
     .filter((o) => !query.payment || o.payment === query.payment)
     .filter((o) => !query.month || monthKey(o.placedAt) === query.month)
-    .filter((o) => !q || o.code.toLowerCase().includes(q) || (memberById.get(o.memberId)?.fullName.toLowerCase().includes(q) ?? false))
+    .filter((o) => !q || o.code.toLowerCase().includes(q) || (memberById.get(o.memberId)?.fullName ?? o.buyer?.name ?? "").toLowerCase().includes(q))
     .slice(0, 80)
     .map((o) => toItem(d, o));
 
@@ -174,9 +175,9 @@ export async function getOrder(code: string): Promise<OrderDetail | null> {
   if (!o) return null;
   const shop = o.shop ? await shopDetail(code) : null;
   const member = d.memberById.get(o.memberId);
-  const previousOrders = d.ordersOf(o.memberId).filter((x) => x.placedAt < o.placedAt).length;
+  const previousOrders = o.memberId ? d.ordersOf(o.memberId).filter((x) => x.placedAt < o.placedAt).length : 0;
   const items = o.items.map((i) => ({ name: i.name, variant: i.variant, image: productBySlug.get(i.productSlug)?.image ?? "", price: i.price, quantity: i.quantity }));
-  const base = { ...toItem(d, o), shop, customerTier: d.stats(o.memberId).tier, customerPhone: member?.phone ?? "", previousOrders, items };
+  const base = { ...toItem(d, o), shop, customerTier: d.stats(o.memberId).tier, customerPhone: member?.phone || o.buyer?.phone || "", previousOrders, items };
   // Order checkout website: angka & alamat dari pesanan itu sendiri (snapshot saat checkout).
   if (shop) {
     return {
@@ -196,7 +197,7 @@ export async function getOrder(code: string): Promise<OrderDetail | null> {
   if (o.detail) {
     return {
       ...base,
-      channel: o.detail.channel === "kuy" ? "Kuy" : o.detail.channel === "reward" ? "Tukar poin" : "Website",
+      channel: CHANNEL_LABEL[o.detail.channel] ?? "Website",
       paymentMethod: o.detail.paymentMethod ?? "—",
       subtotal: o.detail.subtotal,
       shippingCost: o.detail.shippingFee,

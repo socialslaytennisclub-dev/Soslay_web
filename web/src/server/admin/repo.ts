@@ -560,7 +560,7 @@ export async function getOverview(weeks = 12): Promise<OverviewData> {
     })),
     recentOrders: orders.slice(0, 4).map((o) => ({
       code: o.code,
-      customer: memberById.get(o.memberId)?.fullName ?? "—",
+      customer: memberById.get(o.memberId)?.fullName ?? (o.buyer?.name || "—"),
       items: `${o.items[0].name} ×${o.items[0].quantity}`,
       total: o.total,
       payment: o.payment,

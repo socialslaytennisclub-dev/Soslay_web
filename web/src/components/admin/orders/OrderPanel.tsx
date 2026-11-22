@@ -261,12 +261,21 @@ export function OrderPanel({ order, closeHref, bank, jntEta }: { order: OrderDet
         <div className={styles.customer}>
           <MemberAvatar name={order.customer} size={36} />
           <span className={styles.customerText}>
-            <Link href={`/admin/members/${order.memberId}`} className={styles.strongLink}>
-              {order.customer}
-            </Link>
-            <span className={styles.muted}>
-              {TIER_LABEL[order.customerTier]} member · {order.previousOrders ? `${order.previousOrders} order sebelumnya` : "order pertama"}
-            </span>
+            {order.memberId ? (
+              <>
+                <Link href={`/admin/members/${order.memberId}`} className={styles.strongLink}>
+                  {order.customer}
+                </Link>
+                <span className={styles.muted}>
+                  {TIER_LABEL[order.customerTier]} member · {order.previousOrders ? `${order.previousOrders} order sebelumnya` : "order pertama"}
+                </span>
+              </>
+            ) : (
+              <>
+                <strong>{order.customer}</strong>
+                <span className={styles.muted}>Tamu (belum member){order.customerPhone ? ` · ${order.customerPhone}` : ""}</span>
+              </>
+            )}
           </span>
           {chatHref && (
             <a

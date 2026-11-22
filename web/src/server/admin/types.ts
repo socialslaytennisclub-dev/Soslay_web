@@ -420,7 +420,7 @@ export type OrderListItem = {
 export type OrderDetail = OrderListItem & {
   /** Detail checkout website (bukti transfer, sesi pickup, …); null untuk order lama / Kuy. */
   shop: MyOrder | null;
-  channel: "Website" | "Kuy" | "Tukar poin";
+  channel: "Website" | "Kuy" | "Tukar poin" | "Input manual (order lama)";
   paymentMethod: string;
   customerTier: Tier;
   customerPhone: string;

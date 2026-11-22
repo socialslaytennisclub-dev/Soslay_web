@@ -1,14 +1,14 @@
 "use client";
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition, type ReactNode } from "react";
 import { PAYMENT_LABEL } from "@/lib/admin-labels";
 import styles from "../activities/Activities.module.css";
 import { AdminIcon } from "../ui/AdminIcon";
 import { SearchClear } from "../ui/AdminUI";
 
 /** Filter Orders (cari, pembayaran, bulan) — tersimpan di URL. */
-export function OrdersFilters({ months }: { months: { value: string; label: string }[] }) {
+export function OrdersFilters({ months, children }: { months: { value: string; label: string }[]; children?: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
@@ -64,6 +64,7 @@ export function OrdersFilters({ months }: { months: { value: string; label: stri
         </select>
         <AdminIcon name="caret-down" size={14} />
       </label>
+      {children}
     </div>
   );
 }
