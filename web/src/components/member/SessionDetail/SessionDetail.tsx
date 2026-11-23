@@ -42,7 +42,7 @@ export type DetailTab = keyof typeof TAB_LABEL;
  * Ronde; selesai → Hasil · Ronde · Foto · Review · Info (peserta & host sesi bisa memberi review).
  * Host yang tidak ikut main dapat tab Kudos sendiri (BR-23 · K-8); peserta memberi kudos di tab Review.
  */
-export function detailTabs(d: Pick<MemberSessionDetail, "phase" | "canReview" | "isHost" | "ticket" | "plays" | "kudos">): DetailTab[] {
+function detailTabs(d: Pick<MemberSessionDetail, "phase" | "canReview" | "isHost" | "ticket" | "plays" | "kudos">): DetailTab[] {
   if (d.phase !== "done") return ["info", "peserta", "live", "leaderboard", "ronde"];
   const kudosTab = d.kudos && hostOnly(d) ? (["kudos"] as const) : [];
   return ["hasil", "ronde", "foto", ...kudosTab, ...(d.canReview ? (["review"] as const) : []), "info"];

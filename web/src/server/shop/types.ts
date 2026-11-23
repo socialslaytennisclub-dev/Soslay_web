@@ -98,9 +98,9 @@ export type MyOrder = {
   cancelledAt: string | null;
   cancelReason: string | null;
   /** Order lama di luar checkout website (Admin Orders · Input order lama, channel manual) — tanpa pengiriman. */
-  offline?: boolean;
+  offline: boolean;
   /** Metode bayar order lama (mis. "Tunai"); order website memakai transfer bank. */
-  paymentMethod?: string | null;
+  paymentMethod: string | null;
 };
 
 export type MyOrderListItem = Pick<MyOrder, "code" | "placedAt" | "stage" | "method" | "total" | "payDeadline" | "offline"> & { summary: string; image: string };

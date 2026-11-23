@@ -220,9 +220,10 @@ async function loadSpend(d: Dataset, memberId: string): Promise<MemberSpend> {
       supabase.from("bookings").select("session_id, amount, payment_status, status").eq("member_id", memberId),
       supabase
         .from("trip_bookings")
-        .select("id, trip_id, trips(title), trip_payments(kind, amount, received_on, voided_at)")
+        .select("id, trips(title), trip_payments(kind, amount, received_on, voided_at)")
         .eq("member_id", memberId)
-        // Pendaftaran yang dibatalkan (mis. dobel lalu dihapus di tab Peserta) tidak dihitung, sama dengan Keuangan.
+        // Pendaftaran yang dibatalkan (mis. dobel lalu dihapus di tab Peserta) tidak dihitung, sama dengan Keuangan;
+        // sisanya paling banyak satu per trip (index trip_bookings_member_unique).
         .is("cancelled_at", null),
     ]);
     failed = Boolean(participants.error || bookings.error || trips.error);
@@ -249,17 +250,14 @@ async function loadSpend(d: Dataset, memberId: string): Promise<MemberSpend> {
     }
 
     const KIND: Record<string, string> = { dp: "DP", installment: "Cicilan", settlement: "Pelunasan" };
-    const paidTrips = new Set<string>();
     for (const tb of trips.data ?? []) {
       const title = (tb.trips as unknown as { title: string } | null)?.title ?? "Trip";
       const pays = ((tb.trip_payments ?? []) as { kind: string; amount: number; received_on: string; voided_at: string | null }[]).filter((p) => !p.voided_at);
-      if (pays.length) paidTrips.add(tb.trip_id as string);
+      if (pays.length) tripCount++;
       for (const p of pays) {
         items.push({ kind: "trip", title, detail: `${KIND[p.kind] ?? "Pembayaran"} · ${spendDate.format(new Date(`${p.received_on}T12:00:00+07:00`))}`, at: new Date(`${p.received_on}T12:00:00+07:00`).toISOString(), amount: p.amount });
       }
     }
-    // Jumlah trip = trip berbeda yang sudah dibayar (bukan jumlah baris pendaftaran).
-    tripCount = paidTrips.size;
   }
 
   items.sort((a, b) => b.at.localeCompare(a.at));

@@ -213,8 +213,8 @@ export type OrderRow = {
   completed_at: string | null;
   cancelled_at: string | null;
   cancel_reason: string | null;
-  channel?: string;
-  payment_method?: string | null;
+  channel: string;
+  payment_method: string | null;
   pickup: SessionRow | null;
   order_items: { product_name: string; options: Record<string, string> | null; unit_price: number; quantity: number; product_variants: { products: { slug: string } | null } | null }[];
   order_payment_proofs: ProofRow[];

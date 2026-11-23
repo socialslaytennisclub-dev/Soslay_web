@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { checkoutSteps } from "@/content/checkout";
 import { whatsappUrl } from "@/content/social";
-import { fmtDayDate, fmtTime, rp, SHIPPING_LABEL, STAGE, type OrderStage, type ShippingMethod, type StageTone } from "@/lib/checkout";
+import { fmtDayDate, fmtTime, orderMethodLabel, rp, SHIPPING_LABEL, STAGE, type OrderStage, type ShippingMethod, type StageTone } from "@/lib/checkout";
 import { cx } from "@/lib/cx";
 import type { MyOrder } from "@/server/shop/types";
 import styles from "./Checkout.module.css";
@@ -181,7 +181,7 @@ export function OrderSummaryCard({ order, chips }: { order: MyOrder; chips: Reac
       <div className={styles.person}>
         {order.offline ? <Store size={20} /> : <Icon size={20} />}
         <span className={styles.personText}>
-          <span className={styles.strong}>{order.offline ? "Pembelian langsung" : SHIPPING_LABEL[order.method].title}</span>
+          <span className={styles.strong}>{orderMethodLabel(order, "title")}</span>
           <span className={styles.muted}>
             {order.offline
               ? "Di luar checkout website · dicatat admin Soslay"

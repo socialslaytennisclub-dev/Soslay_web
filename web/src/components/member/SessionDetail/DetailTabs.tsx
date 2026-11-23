@@ -27,11 +27,12 @@ export function DetailTabs<T extends string>({
 }) {
   const query = useSearchParams().get("tab");
   const tab = tabs.find((t) => t === query) ?? tabs[0];
-  const hrefOf = (t: T) => (t === tabs[0] ? "?" : `?tab=${t}`);
+  // Tab pertama tanpa ?tab= (URL bersih).
+  const search = (t: T) => (t === tabs[0] ? "" : `?tab=${t}`);
 
   const select = (t: T) => {
     const url = new URL(window.location.href);
-    url.search = t === tabs[0] ? "" : `?tab=${t}`;
+    url.search = search(t);
     window.history.replaceState(null, "", url);
   };
 
@@ -55,7 +56,8 @@ export function DetailTabs<T extends string>({
           {head}
           <nav className={styles.tabs} aria-label="Bagian detail sesi">
             {tabs.map((t) => (
-              <Link key={t} href={hrefOf(t)} scroll={false} replace className={cx(styles.tab, tab === t && styles.tabOn)} aria-current={tab === t ? "page" : undefined}>
+              // Klik biasa ditangani onClickCapture; Link hanya untuk buka di tab baru / tanpa JS.
+              <Link key={t} href={search(t) || "?"} className={cx(styles.tab, tab === t && styles.tabOn)} aria-current={tab === t ? "page" : undefined}>
                 {labels[t]}
               </Link>
             ))}

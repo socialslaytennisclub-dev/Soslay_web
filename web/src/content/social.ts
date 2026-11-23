@@ -6,6 +6,8 @@ const INSTAGRAM_HANDLE = "socialslayclub";
 
 export const WHATSAPP_DISPLAY = displayPhone(WHATSAPP_NUMBER);
 export const whatsappUrl = (text?: string) => `https://wa.me/${WHATSAPP_NUMBER}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
-export const INSTAGRAM_URL = `https://www.instagram.com/${INSTAGRAM_HANDLE}/`;
+/** Link profil Instagram dari username ("nama", tanpa "@"). */
+export const instagramProfileUrl = (handle: string) => `https://www.instagram.com/${handle}/`;
+export const INSTAGRAM_URL = instagramProfileUrl(INSTAGRAM_HANDLE);
 export const THREADS_URL = `https://www.threads.com/@${INSTAGRAM_HANDLE}`;
 export const CONTACT_EMAIL = "hello@slayclub.id";

@@ -109,6 +109,8 @@ async function placeDemoOrder(lines: CheckoutLine[], ship: ShipInput): Promise<S
     completedAt: null,
     cancelledAt: null,
     cancelReason: null,
+    offline: false,
+    paymentMethod: null,
   });
   return { ok: true, data: { code } };
 }
