@@ -647,3 +647,14 @@
   font-size: 12px;
   color: var(--color-indigo-muted);
 }
+
+/* Nilai yang bisa diklik di Tennis profile (Instagram → profil di tab baru). */
+.factLink {
+  color: var(--color-indigo-600);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.factLink:hover {
+  color: var(--color-navy-900);
+}

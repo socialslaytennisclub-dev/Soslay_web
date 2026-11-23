@@ -32,6 +32,10 @@ const SPEND_KIND: Record<MemberSpendItem["kind"], { label: string; icon: AdminIc
 };
 const SPEND_LIMIT = 10;
 
+/** Username Instagram tersimpan ("@nama" / link lama) → "nama" untuk link profil; kosong → "". */
+const instagramHandle = (value: string | null | undefined) =>
+  (value ?? "").trim().replace(/^(https?:\/\/)?(www\.)?instagram\.com\//i, "").replace(/[/?#].*$/, "").replace(/^@+/, "");
+
 /** Total uang yang dibayar member: tiket activity + trip + shop, lalu daftar pembayarannya. */
 function SpendCard({ spend }: { spend: MemberSpend }) {
   const parts = [
@@ -406,7 +410,15 @@ export function MemberDetailView({
               </div>
               <div>
                 <dt>Instagram</dt>
-                <dd>@{member.instagram}</dd>
+                <dd>
+                  {instagramHandle(member.instagram) ? (
+                    <a href={`https://www.instagram.com/${instagramHandle(member.instagram)}/`} target="_blank" rel="noopener noreferrer" className={styles.factLink}>
+                      @{instagramHandle(member.instagram)}
+                    </a>
+                  ) : (
+                    "—"
+                  )}
+                </dd>
               </div>
               <div>
                 <dt>Tanggal lahir</dt>
