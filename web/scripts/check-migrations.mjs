@@ -2780,7 +2780,16 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   // Ganti nomor HP sesudah daftar tidak mengklaim order orang lain.
   await db.query(`update profiles set phone = '81277772222' where id = $1`, [newMember]);
   console.assert((await one(`select member_id from orders where id = $1`, [other.id])).member_id === null, "ganti nomor HP mengklaim order orang lain");
-  console.log("✓ order tamu: tertaut ke akun saat daftar dengan nomor HP sama (format apa pun), tanpa poin & tanpa ubah Keuangan; ganti nomor tidak mengklaim");
+  // Nomor yang sudah dipakai profil lain → akun baru dengan nomor itu tidak mengambil order tamu (ambigu).
+  const { id: lama } = await one(`insert into auth.users default values returning id`);
+  await db.query(`insert into profiles (id, full_name, email, phone) values ($1, 'Pemilik Nomor', 'pemilik-nomor@mail.com', '81277773333')`, [lama]);
+  await as(admin);
+  const shared = await rec({ name: "Tamu Nomor Sama", phone: "0812 7777 3333", paid_on: "2026-11-13", items: [item] });
+  await as(null);
+  const { id: penumpang } = await one(`insert into auth.users default values returning id`);
+  await db.query(`insert into profiles (id, full_name, email, phone) values ($1, 'Nomor Sama', 'nomor-sama@mail.com', '+62 812 7777 3333')`, [penumpang]);
+  console.assert((await one(`select member_id from orders where id = $1`, [shared.id])).member_id === null, "order tamu diklaim akun baru dengan nomor milik profil lain");
+  console.log("✓ order tamu: tertaut ke akun saat daftar dengan nomor HP sama (format apa pun), tanpa poin & tanpa ubah Keuangan; ganti nomor / nomor milik profil lain tidak mengklaim");
 }
 
 // ── Instagram dari impor Kuyy → profil member (cocok nomor HP) ──────────────
@@ -2817,5 +2826,8 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await igOf(calon)) === "calon.member", `Instagram saat daftar: ${await igOf(calon)}`);
   const sendiri = await mk("SendiriIG", "81299990009", "isian.sendiri");
   console.assert((await igOf(sendiri)) === "isian.sendiri", "isian Instagram saat daftar ditimpa impor");
+  // Daftar dengan nomor yang sudah dipakai profil lain → tidak diisi (tidak jelas milik siapa).
+  const ketiga = await mk("KetigaIG", "81299990009");
+  console.assert((await igOf(ketiga)) === null, `Instagram terisi untuk nomor milik profil lain: ${await igOf(ketiga)}`);
   console.log("✓ Instagram impor Kuyy: mengisi profil kosong lewat nomor HP (format apa pun, juga saat daftar), tidak menimpa isian, nomor ganda & isian tidak valid dilewati");
 }

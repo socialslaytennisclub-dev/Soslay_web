@@ -4,6 +4,7 @@
 -- jadi lengkap termasuk pembelian sebelum ia daftar.
 --
 -- · Hanya order 'manual': checkout website selalu atas nama member yang login.
+-- · Hanya bila nomor HP itu milik satu profil saja (nomor dipakai bersama → ambigu, ditautkan admin).
 -- · Hanya saat profil dibuat (nomor HP wajib saat daftar), sama dengan aturan tamu activity & trip. Ganti nomor
 --   HP di profil sesudahnya TIDAK mengklaim order: nomor tidak diverifikasi, jadi member tidak bisa mengambil
 --   riwayat orang lain dengan memasukkan nomornya. Kasus itu ditautkan admin (konfirmasi saat input order).
@@ -15,7 +16,9 @@ language plpgsql security definer set search_path = public as $$
 declare
   v_phone text := normalize_phone(new.phone);
 begin
-  if v_phone is null then
+  -- Nomor yang juga dipakai profil lain → ambigu (nomor saat daftar tidak diverifikasi): tidak ditautkan otomatis,
+  -- sama dengan backfill di bawah; admin tetap bisa menautkan manual.
+  if v_phone is null or exists (select 1 from profiles where id <> new.id and normalize_phone(phone) = v_phone) then
     return new;
   end if;
   update orders set member_id = new.id

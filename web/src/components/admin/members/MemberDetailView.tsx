@@ -3,6 +3,7 @@ import { Avatar } from "@/components/ui";
 import { displayPhone, waNumber } from "@/lib/wa-invite";
 import { LEVEL_LABEL, MEMBER_STATUS_LABEL, formatRupiahPlain, formatRupiahShort, formatShortDate } from "@/lib/admin-labels";
 import { topKudos } from "@/lib/kudos";
+import { instagramUsername } from "@/lib/text";
 import { levelSummary, ntrpText } from "@/lib/player-level";
 import type { MemberRating } from "@/server/admin/player-ratings";
 import type { MemberDetail, MemberKudosSummary, MemberReviewList, MemberSpend, MemberSpendItem, MemberTimelineItem } from "@/server/admin/types";
@@ -31,10 +32,6 @@ const SPEND_KIND: Record<MemberSpendItem["kind"], { label: string; icon: AdminIc
   shop: { label: "Shop", icon: "shopping-bag-open" },
 };
 const SPEND_LIMIT = 10;
-
-/** Username Instagram tersimpan ("@nama" / link lama) → "nama" untuk link profil; kosong → "". */
-const instagramHandle = (value: string | null | undefined) =>
-  (value ?? "").trim().replace(/^(https?:\/\/)?(www\.)?instagram\.com\//i, "").replace(/[/?#].*$/, "").replace(/^@+/, "");
 
 /** Total uang yang dibayar member: tiket activity + trip + shop, lalu daftar pembayarannya. */
 function SpendCard({ spend }: { spend: MemberSpend }) {
@@ -411,12 +408,13 @@ export function MemberDetailView({
               <div>
                 <dt>Instagram</dt>
                 <dd>
-                  {instagramHandle(member.instagram) ? (
-                    <a href={`https://www.instagram.com/${instagramHandle(member.instagram)}/`} target="_blank" rel="noopener noreferrer" className={styles.factLink}>
-                      @{instagramHandle(member.instagram)}
+                  {instagramUsername(member.instagram) ? (
+                    <a href={`https://www.instagram.com/${instagramUsername(member.instagram)}/`} target="_blank" rel="noopener noreferrer" className={styles.factLink}>
+                      @{instagramUsername(member.instagram)}
                     </a>
                   ) : (
-                    "—"
+                    // Isian lama yang bukan username (mis. berspasi) tetap ditampilkan, tanpa link.
+                    member.instagram?.trim() || "—"
                   )}
                 </dd>
               </div>

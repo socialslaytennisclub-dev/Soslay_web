@@ -77,7 +77,7 @@ function calendarUrl(d: MemberSessionDetail) {
 }
 
 /** Halaman detail sesi peserta (Figma UIF-06 · Activity Detail). Tab via ?tab= supaya bisa dibagikan. */
-export function SessionDetail({ detail: d, endedNotice = null }: { detail: MemberSessionDetail; endedNotice?: number | null }) {
+export function SessionDetail({ detail: d }: { detail: MemberSessionDetail }) {
   const tabs = detailTabs(d);
   return (
     <>
@@ -101,7 +101,7 @@ export function SessionDetail({ detail: d, endedNotice = null }: { detail: Membe
             </p>
           </>
         }
-        panels={Object.fromEntries(tabs.map((t) => [t, <TabBody key={t} detail={d} tab={t} endedNotice={endedNotice} />])) as Record<DetailTab, React.ReactNode>}
+        panels={Object.fromEntries(tabs.map((t) => [t, <TabBody key={t} detail={d} tab={t} />])) as Record<DetailTab, React.ReactNode>}
       />
     </>
   );
@@ -111,7 +111,7 @@ export function SessionDetail({ detail: d, endedNotice = null }: { detail: Membe
  * Isi satu tab + kolom samping. Semua tab dirender server sekaligus (data sama); DetailTabs memasang tab aktif
  * saja, jadi pindah tab tidak memuat ulang data sesi dari server.
  */
-function TabBody({ detail: d, tab, endedNotice }: { detail: MemberSessionDetail; tab: DetailTab; endedNotice: number | null }) {
+function TabBody({ detail: d, tab }: { detail: MemberSessionDetail; tab: DetailTab }) {
   // Saat sesi berjalan / selesai, tab Live · Leaderboard · Ronde memakai lebar penuh (Figma UIF-07);
   // hasil sesi tampilan host juga penuh (HL-5b).
   const wide = (d.phase !== "upcoming" && (tab === "live" || tab === "leaderboard" || tab === "ronde")) || (tab === "hasil" && hostOnly(d));
@@ -149,7 +149,7 @@ function TabBody({ detail: d, tab, endedNotice }: { detail: MemberSessionDetail;
                   context="session"
                   href={`/akun/nilai-pemain?sesi=${d.id}&judul=${encodeURIComponent(d.title)}&kembali=${encodeURIComponent(`/akun/aktivitas/${d.slug}?tab=hasil`)}`}
                 />
-                {hostOnly(d) ? <HostResults detail={d} endedNotice={endedNotice} /> : <ResultsTab detail={d} />}
+                {hostOnly(d) ? <HostResults detail={d} /> : <ResultsTab detail={d} />}
               </>
             )}
             {tab === "foto" && <PhotosTab detail={d} />}

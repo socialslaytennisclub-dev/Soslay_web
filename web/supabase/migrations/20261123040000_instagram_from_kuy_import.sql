@@ -6,7 +6,8 @@
 --   profil dilewati (tidak jelas milik siapa).
 -- · Format: "@nama", "nama", atau link instagram.com/nama → "nama"; isian yang bukan username valid dilewati.
 -- · Saat impor (baris peserta baru / Instagram atau nomor HP berubah) → profil member dengan nomor itu diisi.
--- · Saat daftar member baru → diisi dari impor terbaru dengan nomor HP yang sama (tamu yang lalu jadi member).
+-- · Saat daftar member baru → diisi dari impor terbaru dengan nomor HP yang sama (tamu yang lalu jadi member),
+--   kecuali nomornya sudah dipakai profil lain.
 -- · Data yang sudah ada diisi sekali di akhir migrasi ini.
 
 /** Username Instagram dari isian bebas ("@nama", "nama", "instagram.com/nama/") — null bila bukan username valid. */
@@ -52,6 +53,8 @@ declare
   v_phone text := normalize_phone(new.phone);
 begin
   if coalesce(new.instagram::text, '') <> '' or v_phone is null then return new; end if;
+  -- Nomor sudah dipakai profil lain → tidak jelas Instagram milik siapa (aturan sama dengan fill_profile_instagram).
+  if exists (select 1 from profiles where id <> new.id and normalize_phone(phone) = v_phone) then return new; end if;
   select instagram_handle(sp.instagram) into new.instagram
   from session_participants sp
   where sp.instagram is not null and normalize_phone(sp.phone) = v_phone and instagram_handle(sp.instagram) is not null
