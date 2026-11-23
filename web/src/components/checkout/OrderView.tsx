@@ -1,7 +1,7 @@
 import { CircleAlert, CircleCheck, Clock, FileText, Hourglass, Info, PackageCheck, XCircle } from "lucide-react";
 import Link from "next/link";
 import { transferHowTo, verificationSla, type ShopBank } from "@/content/checkout";
-import { fmtDate, fmtDateTime, fmtDayDate, fmtTime, MAX_REJECTIONS, rp, SHIPPING_LABEL } from "@/lib/checkout";
+import { fmtDate, fmtDateTime, fmtDayDate, fmtTime, MAX_REJECTIONS, orderMethodLabel, rp } from "@/lib/checkout";
 import { cx } from "@/lib/cx";
 import type { MyOrder, PickupSession } from "@/server/shop/types";
 import styles from "./Checkout.module.css";
@@ -20,10 +20,9 @@ export function OrderView({ order, pickupSessions, memberName, bank }: { order: 
   const pendingProof = order.proofs.find((p) => p.status === "pending");
   const lastRejected = order.proofs.find((p) => p.status === "rejected");
   const latestProof = order.proofs.find((p) => p.status !== "replaced");
-  const method = SHIPPING_LABEL[order.method];
   const crumbs = [{ label: "Shop", href: "/shop" }, { label: `Order #${order.code}`, href: `/akun/pesanan/${order.code}` }];
   const back = { label: "Order saya", href: "/akun/order#pesanan-saya" };
-  const subtitle = `Pesanan #${order.code} · ${method.short}`;
+  const subtitle = `Pesanan #${order.code} · ${orderMethodLabel(order, "short")}`;
 
   const step = stage === "awaiting_payment" || stage === "reupload" ? 2 : stage === "awaiting_verification" ? 3 : stage === "completed" ? 5 : 4;
   const title = {
@@ -40,7 +39,7 @@ export function OrderView({ order, pickupSessions, memberName, bank }: { order: 
   const summaryChips =
     order.paidAt && stage !== "cancelled" ? (
       <>
-        <Chip tone="lime">Lunas · Transfer {shopBank.short}</Chip>
+        <Chip tone="lime">{order.offline ? offlinePaidLabel(order) : `Lunas · Transfer ${shopBank.short}`}</Chip>
         <StageChip stage={stage} />
       </>
     ) : (
@@ -187,7 +186,12 @@ export function OrderView({ order, pickupSessions, memberName, bank }: { order: 
       title: "Pesanan siap diambil",
       text: `Tunjukkan kode pesanan #${order.code} ke host saat sesi Mabar; boleh diwakilkan.`,
     },
-    completed: { icon: <CircleCheck size={28} />, tone: styles.heroIconGreen, title: "Pesanan selesai", text: "Terima kasih sudah belanja di Soslay Shop!" },
+    completed: {
+      icon: <CircleCheck size={28} />,
+      tone: styles.heroIconGreen,
+      title: "Pesanan selesai",
+      text: order.offline ? "Pembelian langsung di luar website — dicatat admin Soslay di akunmu. Terima kasih sudah belanja merch Soslay!" : "Terima kasih sudah belanja di Soslay Shop!",
+    },
     cancelled: {
       icon: <XCircle size={28} />,
       tone: styles.heroIconRed,
@@ -334,8 +338,19 @@ function PaymentHistory({ order }: { order: MyOrder }) {
   );
 }
 
+/** "Lunas · Tunai" untuk order lama di luar website (metode bayar dicatat admin); tanpa metode → "Lunas". */
+const offlinePaidLabel = (order: MyOrder) => (order.paymentMethod ? `Lunas · ${order.paymentMethod}` : "Lunas");
+
 /** Timeline "Status pesanan" per opsi pengiriman (Figma 06 / 07). */
 function timeline(order: MyOrder): TimelineEntry[] {
+  // Order lama di luar website: dibeli & dibayar langsung, tanpa bukti transfer / pengiriman.
+  if (order.offline) {
+    return [
+      { title: "Dibeli langsung", detail: fmtDate(order.placedAt), state: "done" },
+      { title: offlinePaidLabel(order), detail: order.paidAt ? fmtDate(order.paidAt) : undefined, state: "done" },
+      { title: "Selesai", detail: "Dicatat admin Soslay", state: "done" },
+    ];
+  }
   const latest = order.proofs.find((p) => p.status !== "replaced");
   const paid = Boolean(order.paidAt);
   const shippedLabel = { jnt: "Dikirim via J&T Express", instant: "Diantar kurir Instant", pickup: "Siap diambil di Mabar Session" }[order.method];

@@ -97,9 +97,13 @@ export type MyOrder = {
   completedAt: string | null;
   cancelledAt: string | null;
   cancelReason: string | null;
+  /** Order lama di luar checkout website (Admin Orders · Input order lama, channel manual) — tanpa pengiriman. */
+  offline: boolean;
+  /** Metode bayar order lama (mis. "Tunai"); order website memakai transfer bank. */
+  paymentMethod: string | null;
 };
 
-export type MyOrderListItem = Pick<MyOrder, "code" | "placedAt" | "stage" | "method" | "total" | "payDeadline"> & { summary: string; image: string };
+export type MyOrderListItem = Pick<MyOrder, "code" | "placedAt" | "stage" | "method" | "total" | "payDeadline" | "offline"> & { summary: string; image: string };
 
 export type ShopResult<T = undefined> = ({ ok: true } & (T extends undefined ? object : { data: T })) | { ok: false; error: string };
 

@@ -196,7 +196,8 @@ const spendDate = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "sho
  * Uang yang sudah dibayar member (untuk kartu "Total spent"):
  *  · Activity — per activity satu angka: peserta impor Kuyy / tambahan admin yang lunas (nominal di daftar
  *    peserta) atau booking website yang lunas. Keduanya disamakan trigger, jadi diambil yang terbesar, bukan dijumlah.
- *  · Trip — DP / cicilan / pelunasan paket trip yang tidak dibatalkan (voided).
+ *  · Trip — DP / cicilan / pelunasan paket trip yang tidak dibatalkan (voided), dari pendaftaran yang tidak
+ *    dibatalkan — sama dengan Keuangan (trip_payment_target): pendaftaran batal → pembayarannya tidak dihitung.
  *  · Shop — order lunas (sama dengan member_stats.total_spent).
  * Tidak bergantung pada go-live Keuangan: activity lama yang diimpor tetap terhitung di sini.
  */
@@ -220,7 +221,10 @@ async function loadSpend(d: Dataset, memberId: string): Promise<MemberSpend> {
       supabase
         .from("trip_bookings")
         .select("id, trips(title), trip_payments(kind, amount, received_on, voided_at)")
-        .eq("member_id", memberId),
+        .eq("member_id", memberId)
+        // Pendaftaran yang dibatalkan (mis. dobel lalu dihapus di tab Peserta) tidak dihitung, sama dengan Keuangan;
+        // sisanya paling banyak satu per trip (index trip_bookings_member_unique).
+        .is("cancelled_at", null),
     ]);
     failed = Boolean(participants.error || bookings.error || trips.error);
 

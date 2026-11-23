@@ -2750,3 +2750,84 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(null);
   console.log("✓ penilaian level: hanya host activity selesai, peserta hadir, kelipatan 0.5, satu nilai per host, rata-rata tanpa Tidak tahu, tidak terbaca pemain");
 }
+
+// ── Order tamu (input order lama) tertaut saat pembeli menjadi member ───────
+{
+  const one = async (sql, params) => (await db.query(sql, params)).rows[0];
+  const as = (uid) => db.exec(`select set_config('request.jwt.claim.sub', '${uid ?? ""}', false)`);
+  await as(null);
+  const { id: admin } = await one(`insert into auth.users (email) values ('klaim-order@soslay.test') returning id`);
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Klaim', 'klaim-order@soslay.test', 'active' from roles where name = 'Super Admin'`, [admin]);
+  await as(admin);
+  const item = { product_name: "Destination Series 01: Bali", variant: "S", quantity: 1, unit_price: 220000 };
+  const rec = (p) => db.query(`select admin_record_manual_order($1) r`, [p]).then((x) => x.rows[0].r);
+  const a = await rec({ name: "Tamu Klaim", phone: "0812 7777 1111", paid_on: "2026-11-10", items: [item] });
+  const b = await rec({ name: "Tamu Klaim", phone: "+62 812-7777-1111", paid_on: "2026-11-12", items: [item] });
+  const other = await rec({ name: "Orang Lain", phone: "81277772222", paid_on: "2026-11-12", items: [item] });
+  await as(null);
+  const fin = async () => (await one(`select count(*)::int n, coalesce(sum(amount), 0)::int amt from finance_transactions where source_ref = any($1)`, [[a.id, b.id].map((x) => `ord:${x}`)]));
+  const finBefore = await fin();
+
+  const { id: newMember } = await one(`insert into auth.users default values returning id`);
+  await db.query(`insert into profiles (id, full_name, email, phone) values ($1, 'Tamu Klaim', 'tamu-klaim@mail.com', '81277771111')`, [newMember]);
+  const owners = (await db.query(`select id, member_id from orders where id = any($1)`, [[a.id, b.id, other.id]])).rows;
+  const ownerOf = (id) => owners.find((o) => o.id === id).member_id;
+  console.assert(ownerOf(a.id) === newMember && ownerOf(b.id) === newMember && ownerOf(other.id) === null, `order tamu tertaut saat daftar ${JSON.stringify(owners)}`);
+  const pts = await one(`select coalesce(sum(delta), 0)::int p from points_ledger where member_id = $1 and reason = 'purchase'`, [newMember]);
+  console.assert(pts.p === 0, `order lama memberi poin ${pts.p}`);
+  const finAfter = await fin();
+  console.assert(finAfter.n === finBefore.n && finAfter.amt === finBefore.amt, `Keuangan berubah saat order ditautkan ${JSON.stringify([finBefore, finAfter])}`);
+  // Ganti nomor HP sesudah daftar tidak mengklaim order orang lain.
+  await db.query(`update profiles set phone = '81277772222' where id = $1`, [newMember]);
+  console.assert((await one(`select member_id from orders where id = $1`, [other.id])).member_id === null, "ganti nomor HP mengklaim order orang lain");
+  // Nomor yang sudah dipakai profil lain → akun baru dengan nomor itu tidak mengambil order tamu (ambigu).
+  const { id: lama } = await one(`insert into auth.users default values returning id`);
+  await db.query(`insert into profiles (id, full_name, email, phone) values ($1, 'Pemilik Nomor', 'pemilik-nomor@mail.com', '81277773333')`, [lama]);
+  await as(admin);
+  const shared = await rec({ name: "Tamu Nomor Sama", phone: "0812 7777 3333", paid_on: "2026-11-13", items: [item] });
+  await as(null);
+  const { id: penumpang } = await one(`insert into auth.users default values returning id`);
+  await db.query(`insert into profiles (id, full_name, email, phone) values ($1, 'Nomor Sama', 'nomor-sama@mail.com', '+62 812 7777 3333')`, [penumpang]);
+  console.assert((await one(`select member_id from orders where id = $1`, [shared.id])).member_id === null, "order tamu diklaim akun baru dengan nomor milik profil lain");
+  console.log("✓ order tamu: tertaut ke akun saat daftar dengan nomor HP sama (format apa pun), tanpa poin & tanpa ubah Keuangan; ganti nomor / nomor milik profil lain tidak mengklaim");
+}
+
+// ── Instagram dari impor Kuyy → profil member (cocok nomor HP) ──────────────
+{
+  const one = async (sql, params) => (await db.query(sql, params)).rows[0];
+  const as = (uid) => db.exec(`select set_config('request.jwt.claim.sub', '${uid ?? ""}', false)`);
+  await as(null);
+  const mk = async (name, phone, instagram = null) => {
+    const { id } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email, phone, instagram) values ($1, $2, $3, $4, $5)`, [id, name, `${name.toLowerCase()}@ig.test`, phone, instagram]);
+    return id;
+  };
+  const igOf = async (id) => (await one(`select instagram::text ig from profiles where id = $1`, [id])).ig;
+  const rina = await mk("RinaIG", "81299990001");
+  const budi = await mk("BudiIG", "81299990002", "budi.asli");
+  const kembar1 = await mk("Kembar1", "81299990003");
+  const kembar2 = await mk("Kembar2", "81299990003");
+  const v = (await one(`insert into venues (slug, name, city) values ('ig-v', 'IG Court', 'Jakarta') returning id`)).id;
+  const s = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status) values ('ig-s', 'IG', 'weekly-mabar', $1, now() + interval '1 day', now() + interval '1 day 2 hours', 12, 'published') returning id`, [v])).id;
+  const part = (name, phone, instagram) => db.query(`insert into session_participants (session_id, full_name, phone, instagram) values ($1, $2, $3, $4)`, [s, name, phone, instagram]);
+
+  console.assert((await one(`select instagram_handle('https://www.instagram.com/Rina.Tennis/?hl=id') h`)).h === "rina.tennis", "link Instagram → username");
+  await part("Rina", "0812 9999 0001", "@Rina.Tennis");
+  await part("Budi", "+62 812-9999-0002", "budi.kuyy");
+  await part("Kembar", "81299990003", "kembar");
+  await part("Spasi", "81299990001", "bukan username!");
+  console.assert((await igOf(rina)) === "rina.tennis", `Instagram terisi dari impor: ${await igOf(rina)}`);
+  console.assert((await igOf(budi)) === "budi.asli", "Instagram isian member ditimpa impor");
+  console.assert((await igOf(kembar1)) === null && (await igOf(kembar2)) === null, "nomor milik dua profil ikut diisi");
+
+  // Tamu di impor lalu daftar member dengan nomor yang sama → Instagram terisi saat daftar.
+  await part("Calon", "0812 9999 0009", "calon.member");
+  const calon = await mk("CalonIG", "81299990009");
+  console.assert((await igOf(calon)) === "calon.member", `Instagram saat daftar: ${await igOf(calon)}`);
+  const sendiri = await mk("SendiriIG", "81299990009", "isian.sendiri");
+  console.assert((await igOf(sendiri)) === "isian.sendiri", "isian Instagram saat daftar ditimpa impor");
+  // Daftar dengan nomor yang sudah dipakai profil lain → tidak diisi (tidak jelas milik siapa).
+  const ketiga = await mk("KetigaIG", "81299990009");
+  console.assert((await igOf(ketiga)) === null, `Instagram terisi untuk nomor milik profil lain: ${await igOf(ketiga)}`);
+  console.log("✓ Instagram impor Kuyy: mengisi profil kosong lewat nomor HP (format apa pun, juga saat daftar), tidak menimpa isian, nomor ganda & isian tidak valid dilewati");
+}

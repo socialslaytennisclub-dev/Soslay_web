@@ -177,7 +177,7 @@ export const PROOF_COLUMNS = "id, status, file_name, mime, file_size, sender_nam
 
 export const ORDER_COLUMNS = `code, status, payment_status, placed_at, subtotal, shipping_fee, unique_code, total, pay_deadline, recipient_name, recipient_phone,
   shipping_address, shipping_city, postal_code, shipping_method, shipping_lat, shipping_lng, distance_km, weight_grams, payment_bank, courier, tracking_number, tracking_url, proof_rejections,
-  points_awarded, paid_at, shipped_at, completed_at, cancelled_at, cancel_reason,
+  points_awarded, paid_at, shipped_at, completed_at, cancelled_at, cancel_reason, channel, payment_method,
   pickup:sessions!orders_pickup_session_id_fkey(id, title, starts_at, ends_at, venues(name)),
   order_items(product_name, options, unit_price, quantity, product_variants(products(slug))),
   order_payment_proofs(${PROOF_COLUMNS})`;
@@ -213,6 +213,8 @@ export type OrderRow = {
   completed_at: string | null;
   cancelled_at: string | null;
   cancel_reason: string | null;
+  channel: string;
+  payment_method: string | null;
   pickup: SessionRow | null;
   order_items: { product_name: string; options: Record<string, string> | null; unit_price: number; quantity: number; product_variants: { products: { slug: string } | null } | null }[];
   order_payment_proofs: ProofRow[];
@@ -256,6 +258,8 @@ export async function toMyOrder(o: OrderRow): Promise<MyOrder> {
     completedAt: o.completed_at,
     cancelledAt: o.cancelled_at,
     cancelReason: o.cancel_reason,
+    offline: o.channel === "manual",
+    paymentMethod: o.payment_method ?? null,
   };
 }
 
@@ -279,7 +283,11 @@ export const listMyOrders = cache(async (): Promise<MyOrderListItem[]> => {
     const { supabase, user } = await getMemberSession();
     if (!user) return [];
     await supabase.rpc("expire_shop_orders");
-    const { data } = await supabase.from("orders").select(ORDER_COLUMNS).eq("member_id", user.id).not("shipping_method", "is", null).order("placed_at", { ascending: false }).limit(30);
+    const { data } = await supabase.from("orders").select(ORDER_COLUMNS).eq("member_id", user.id)
+      // Order website (punya opsi pengiriman) + order lama di luar website yang tertaut ke akun ini (channel manual).
+      .or("shipping_method.not.is.null,channel.eq.manual")
+      .order("placed_at", { ascending: false })
+      .limit(30);
     orders = await Promise.all(((data ?? []) as unknown as OrderRow[]).map(toMyOrder));
   }
   return orders
@@ -291,6 +299,7 @@ export const listMyOrders = cache(async (): Promise<MyOrderListItem[]> => {
       method: o.method,
       total: o.total,
       payDeadline: o.payDeadline,
+      offline: o.offline,
       image: o.items[0]?.image ?? "",
       summary: `${o.items[0]?.name ?? ""}${o.items.length > 1 ? ` +${o.items.length - 1} produk` : ""}`,
     }));

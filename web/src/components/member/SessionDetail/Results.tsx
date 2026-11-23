@@ -1,6 +1,7 @@
-import { Camera, Check, ChevronDown, ExternalLink } from "lucide-react";
+import { Camera, ChevronDown, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import { cx } from "@/lib/cx";
+import { EndedToast } from "./EndedToast";
 import { formatAngka, formatTanggalPendek } from "@/lib/format";
 import { isUnstarted, roundList } from "@/lib/rounds";
 import { finalRanks, podiumBonusText, type Ranked, sessionPoints, tieRule } from "@/lib/standings";
@@ -184,7 +185,7 @@ function FinalBoard({ detail: d, ranks }: { detail: MemberSessionDetail; ranks: 
 }
 
 /** Hasil sesi · tampilan host (Figma Simplify HL-5b): peringkat final, Slay Point, Panel Host ditutup. */
-export function HostResults({ detail: d, endedNotice }: { detail: MemberSessionDetail; endedNotice: number | null }) {
+export function HostResults({ detail: d }: { detail: MemberSessionDetail }) {
   const { present, earning, bonus, total } = sessionPoints(d, !!d.ended);
   const plan = planOf(d);
   const played = plan.rounds.filter((r) => !isUnstarted(plan.statusOf(r)) && d.matches.some((m) => m.round === r && m.scoreA !== null));
@@ -193,11 +194,7 @@ export function HostResults({ detail: d, endedNotice }: { detail: MemberSessionD
 
   return (
     <>
-      {endedNotice !== null && (
-        <p className={styles.endedToast} role="status">
-          <Check size={16} aria-hidden /> Activity diakhiri. Hasil sudah tampil untuk {endedNotice} peserta.
-        </p>
-      )}
+      <EndedToast />
       <section className={styles.hostDone} aria-labelledby="host-done-title">
         <header className={styles.liveHead}>
           <span className={styles.eyebrowDark}>

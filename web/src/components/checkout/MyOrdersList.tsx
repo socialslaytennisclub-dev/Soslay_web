@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { fmtDateTime, fmtDayDate, fmtTime, rp, SHIPPING_LABEL } from "@/lib/checkout";
+import { fmtDateTime, fmtDayDate, fmtTime, orderMethodLabel, rp } from "@/lib/checkout";
 import type { MyOrderListItem } from "@/server/shop/types";
 import styles from "./Checkout.module.css";
 import { Card, StageChip } from "./CheckoutParts";
@@ -18,10 +18,10 @@ export function MyOrdersList({ orders }: { orders: MyOrderListItem[] }) {
               <Link href={`/akun/pesanan/${o.code}`} className={styles.itemText}>
                 <span className={styles.itemName}>#{o.code}</span>
                 <span className={styles.itemMeta}>
-                  {o.summary} · {SHIPPING_LABEL[o.method].short}
+                  {o.summary} · {orderMethodLabel(o, "short")}
                 </span>
                 <span className={styles.itemWeight}>
-                  {o.stage === "awaiting_payment" && o.payDeadline ? `Bayar sebelum ${fmtDayDate(o.payDeadline)} · ${fmtTime(o.payDeadline)}` : fmtDateTime(o.placedAt)}
+                  {o.stage === "awaiting_payment" && o.payDeadline ? `Bayar sebelum ${fmtDayDate(o.payDeadline)} · ${fmtTime(o.payDeadline)}` : o.offline ? fmtDayDate(o.placedAt) : fmtDateTime(o.placedAt)}
                 </span>
               </Link>
               <span className={styles.orderRowRight}>

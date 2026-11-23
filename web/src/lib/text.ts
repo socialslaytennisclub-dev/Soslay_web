@@ -11,6 +11,20 @@ export function normalizeHandle(raw: string): string {
   return h ? `@${h}` : "";
 }
 
+/**
+ * Username Instagram dari isian bebas ("@Nama", "nama", "instagram.com/nama/?hl=id") → "nama"; null bila bukan
+ * username valid (mis. berspasi) — aturan sama dengan SQL instagram_handle().
+ */
+export function instagramUsername(raw: string | null | undefined): string | null {
+  const h = (raw ?? "")
+    .trim()
+    .replace(/^(https?:\/\/)?(www\.)?(instagram\.com|instagr\.am)\//i, "")
+    .replace(/[/?#].*$/, "")
+    .replace(/^@+/, "")
+    .toLowerCase();
+  return /^[a-z0-9._]{1,30}$/.test(h) ? h : null;
+}
+
 /** "Faqih Muflihun" → "Faqih". */
 export const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? name;
 

@@ -91,6 +91,10 @@ export const SHIPPING_LABEL: Record<ShippingMethod, { title: string; short: stri
   pickup: { title: "Free Pickup di Mabar Session", short: "Pickup Mabar", summary: "Pickup Mabar" },
 };
 
+/** Label pengiriman sebuah order; order lama di luar website (offline) tidak punya opsi pengiriman. */
+export const orderMethodLabel = (o: { offline: boolean; method: ShippingMethod }, kind: "title" | "short") =>
+  o.offline ? "Pembelian langsung" : SHIPPING_LABEL[o.method][kind];
+
 /**
  * Status pesanan untuk member & admin (aturan §1), diturunkan dari kolom database:
  * order_status + payment_status + ada/tidaknya bukti yang menunggu + jumlah penolakan.

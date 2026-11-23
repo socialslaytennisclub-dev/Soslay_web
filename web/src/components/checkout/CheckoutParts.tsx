@@ -1,10 +1,10 @@
-import { Check, ChevronRight, MessageCircle, Truck, X, Zap, Volleyball, type LucideIcon } from "lucide-react";
+import { Check, ChevronRight, MessageCircle, Store, Truck, X, Zap, Volleyball, type LucideIcon } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { checkoutSteps } from "@/content/checkout";
 import { whatsappUrl } from "@/content/social";
-import { fmtDayDate, fmtTime, rp, SHIPPING_LABEL, STAGE, type OrderStage, type ShippingMethod, type StageTone } from "@/lib/checkout";
+import { fmtDayDate, fmtTime, orderMethodLabel, rp, SHIPPING_LABEL, STAGE, type OrderStage, type ShippingMethod, type StageTone } from "@/lib/checkout";
 import { cx } from "@/lib/cx";
 import type { MyOrder } from "@/server/shop/types";
 import styles from "./Checkout.module.css";
@@ -162,25 +162,32 @@ export function OrderSummaryCard({ order, chips }: { order: MyOrder; chips: Reac
       </div>
       <hr className={styles.divider} />
       <KV
-        rows={[
-          ["Subtotal", rp(order.subtotal)],
-          [shippingLine(order.method, order.distanceKm), order.shippingFee ? rp(order.shippingFee) : <span className={styles.free}>Gratis</span>],
-          ["Kode unik", rp(order.uniqueCode)],
-        ]}
+        rows={
+          // Order lama di luar website: tanpa opsi pengiriman & kode unik.
+          order.offline
+            ? [["Subtotal", rp(order.subtotal)], ...(order.shippingFee ? [["Ongkir", rp(order.shippingFee)] as [string, string]] : [])]
+            : [
+                ["Subtotal", rp(order.subtotal)],
+                [shippingLine(order.method, order.distanceKm), order.shippingFee ? rp(order.shippingFee) : <span className={styles.free}>Gratis</span>],
+                ["Kode unik", rp(order.uniqueCode)],
+              ]
+        }
       />
       <div className={styles.summaryTotal}>
-        <span>Total transfer</span>
+        <span>{order.offline ? "Total" : "Total transfer"}</span>
         <strong>{rp(order.total)}</strong>
       </div>
       <hr className={styles.divider} />
       <div className={styles.person}>
-        <Icon size={20} />
+        {order.offline ? <Store size={20} /> : <Icon size={20} />}
         <span className={styles.personText}>
-          <span className={styles.strong}>{SHIPPING_LABEL[order.method].title}</span>
+          <span className={styles.strong}>{orderMethodLabel(order, "title")}</span>
           <span className={styles.muted}>
-            {order.method === "pickup" && order.pickup
-              ? `${fmtDayDate(order.pickup.startsAt)} · ${fmtTime(order.pickup.startsAt)}–${fmtTime(order.pickup.endsAt)} · ${order.pickup.venue}`
-              : [order.recipient.address, order.recipient.city, order.recipient.postalCode].filter(Boolean).join(", ")}
+            {order.offline
+              ? "Di luar checkout website · dicatat admin Soslay"
+              : order.method === "pickup" && order.pickup
+                ? `${fmtDayDate(order.pickup.startsAt)} · ${fmtTime(order.pickup.startsAt)}–${fmtTime(order.pickup.endsAt)} · ${order.pickup.venue}`
+                : [order.recipient.address, order.recipient.city, order.recipient.postalCode].filter(Boolean).join(", ")}
           </span>
         </span>
       </div>

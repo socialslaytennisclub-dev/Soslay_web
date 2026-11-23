@@ -16,6 +16,7 @@ import { LiveRefresh } from "./LiveRefresh";
 import { maxRound, NOT_IN_LINEUP, perspective, PlayerLiveCard } from "./LiveCards";
 import { ParticipantList } from "./ParticipantList";
 import { QrCheckIn } from "./QrCheckIn";
+import { DetailTabs } from "./DetailTabs";
 import { DoneSide, HostResults, PhotosTab, ResultsTab, ScoreDiff } from "./Results";
 import { KudosSection } from "./KudosSection";
 import { ReviewTab } from "./ReviewForm";
@@ -41,7 +42,7 @@ export type DetailTab = keyof typeof TAB_LABEL;
  * Ronde; selesai → Hasil · Ronde · Foto · Review · Info (peserta & host sesi bisa memberi review).
  * Host yang tidak ikut main dapat tab Kudos sendiri (BR-23 · K-8); peserta memberi kudos di tab Review.
  */
-export function detailTabs(d: Pick<MemberSessionDetail, "phase" | "canReview" | "isHost" | "ticket" | "plays" | "kudos">): DetailTab[] {
+function detailTabs(d: Pick<MemberSessionDetail, "phase" | "canReview" | "isHost" | "ticket" | "plays" | "kudos">): DetailTab[] {
   if (d.phase !== "done") return ["info", "peserta", "live", "leaderboard", "ronde"];
   const kudosTab = d.kudos && hostOnly(d) ? (["kudos"] as const) : [];
   return ["hasil", "ronde", "foto", ...kudosTab, ...(d.canReview ? (["review"] as const) : []), "info"];
@@ -76,8 +77,41 @@ function calendarUrl(d: MemberSessionDetail) {
 }
 
 /** Halaman detail sesi peserta (Figma UIF-06 · Activity Detail). Tab via ?tab= supaya bisa dibagikan. */
-export function SessionDetail({ detail: d, tab, endedNotice = null }: { detail: MemberSessionDetail; tab: DetailTab; endedNotice?: number | null }) {
+export function SessionDetail({ detail: d }: { detail: MemberSessionDetail }) {
   const tabs = detailTabs(d);
+  return (
+    <>
+      {d.phase !== "done" && <LiveRefresh from={d.checkInAt} />}
+      <DetailTabs
+        tabs={tabs}
+        labels={TAB_LABEL}
+        head={
+          <>
+            <p className={styles.back}>
+              <Link href="/akun/aktivitas">
+                <ChevronLeft size={16} aria-hidden />
+                Kembali ke My Activities
+              </Link>
+              <span className={cx(styles.status, styles[`status_${d.phase}`])}>{d.ticket?.status === "attended" ? "Hadir" : STATUS_CHIP[d.phase]}</span>
+              {d.isHost && <span className={styles.hostChip}>Kamu host</span>}
+            </p>
+            <h1 className={styles.title}>{d.title}</h1>
+            <p className={styles.meta}>
+              {formatTanggalPendek(d.startsAt, d.city)} · {formatJamRange(d.start, d.end, "–")} · {d.venue.name}
+            </p>
+          </>
+        }
+        panels={Object.fromEntries(tabs.map((t) => [t, <TabBody key={t} detail={d} tab={t} />])) as Record<DetailTab, React.ReactNode>}
+      />
+    </>
+  );
+}
+
+/**
+ * Isi satu tab + kolom samping. Semua tab dirender server sekaligus (data sama); DetailTabs memasang tab aktif
+ * saja, jadi pindah tab tidak memuat ulang data sesi dari server.
+ */
+function TabBody({ detail: d, tab }: { detail: MemberSessionDetail; tab: DetailTab }) {
   // Saat sesi berjalan / selesai, tab Live · Leaderboard · Ronde memakai lebar penuh (Figma UIF-07);
   // hasil sesi tampilan host juga penuh (HL-5b).
   const wide = (d.phase !== "upcoming" && (tab === "live" || tab === "leaderboard" || tab === "ronde")) || (tab === "hasil" && hostOnly(d));
@@ -86,31 +120,6 @@ export function SessionDetail({ detail: d, tab, endedNotice = null }: { detail: 
 
   return (
     <>
-      {d.phase !== "done" && <LiveRefresh from={d.checkInAt} />}
-      <header className={styles.top}>
-        <Container className={styles.topInner}>
-          <p className={styles.back}>
-            <Link href="/akun/aktivitas">
-              <ChevronLeft size={16} aria-hidden />
-              Kembali ke My Activities
-            </Link>
-            <span className={cx(styles.status, styles[`status_${d.phase}`])}>{d.ticket?.status === "attended" ? "Hadir" : STATUS_CHIP[d.phase]}</span>
-            {d.isHost && <span className={styles.hostChip}>Kamu host</span>}
-          </p>
-          <h1 className={styles.title}>{d.title}</h1>
-          <p className={styles.meta}>
-            {formatTanggalPendek(d.startsAt, d.city)} · {formatJamRange(d.start, d.end, "–")} · {d.venue.name}
-          </p>
-          <nav className={styles.tabs} aria-label="Bagian detail sesi">
-            {tabs.map((t) => (
-              <Link key={t} href={t === tabs[0] ? "?" : `?tab=${t}`} scroll={false} replace className={cx(styles.tab, tab === t && styles.tabOn)} aria-current={tab === t ? "page" : undefined}>
-                {TAB_LABEL[t]}
-              </Link>
-            ))}
-          </nav>
-        </Container>
-      </header>
-
       <div className={styles.body}>
         <Container className={cx(styles.grid, wide && styles.gridWide)}>
           <div className={styles.main}>
@@ -140,7 +149,7 @@ export function SessionDetail({ detail: d, tab, endedNotice = null }: { detail: 
                   context="session"
                   href={`/akun/nilai-pemain?sesi=${d.id}&judul=${encodeURIComponent(d.title)}&kembali=${encodeURIComponent(`/akun/aktivitas/${d.slug}?tab=hasil`)}`}
                 />
-                {hostOnly(d) ? <HostResults detail={d} endedNotice={endedNotice} /> : <ResultsTab detail={d} />}
+                {hostOnly(d) ? <HostResults detail={d} /> : <ResultsTab detail={d} />}
               </>
             )}
             {tab === "foto" && <PhotosTab detail={d} />}
