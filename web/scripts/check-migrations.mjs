@@ -2750,3 +2750,35 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(null);
   console.log("✓ penilaian level: hanya host activity selesai, peserta hadir, kelipatan 0.5, satu nilai per host, rata-rata tanpa Tidak tahu, tidak terbaca pemain");
 }
+
+// ── Order tamu (input order lama) tertaut saat pembeli menjadi member ───────
+{
+  const one = async (sql, params) => (await db.query(sql, params)).rows[0];
+  const as = (uid) => db.exec(`select set_config('request.jwt.claim.sub', '${uid ?? ""}', false)`);
+  await as(null);
+  const { id: admin } = await one(`insert into auth.users (email) values ('klaim-order@soslay.test') returning id`);
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Klaim', 'klaim-order@soslay.test', 'active' from roles where name = 'Super Admin'`, [admin]);
+  await as(admin);
+  const item = { product_name: "Destination Series 01: Bali", variant: "S", quantity: 1, unit_price: 220000 };
+  const rec = (p) => db.query(`select admin_record_manual_order($1) r`, [p]).then((x) => x.rows[0].r);
+  const a = await rec({ name: "Tamu Klaim", phone: "0812 7777 1111", paid_on: "2026-11-10", items: [item] });
+  const b = await rec({ name: "Tamu Klaim", phone: "+62 812-7777-1111", paid_on: "2026-11-12", items: [item] });
+  const other = await rec({ name: "Orang Lain", phone: "81277772222", paid_on: "2026-11-12", items: [item] });
+  await as(null);
+  const fin = async () => (await one(`select count(*)::int n, coalesce(sum(amount), 0)::int amt from finance_transactions where source_ref = any($1)`, [[a.id, b.id].map((x) => `ord:${x}`)]));
+  const finBefore = await fin();
+
+  const { id: newMember } = await one(`insert into auth.users default values returning id`);
+  await db.query(`insert into profiles (id, full_name, email, phone) values ($1, 'Tamu Klaim', 'tamu-klaim@mail.com', '81277771111')`, [newMember]);
+  const owners = (await db.query(`select id, member_id from orders where id = any($1)`, [[a.id, b.id, other.id]])).rows;
+  const ownerOf = (id) => owners.find((o) => o.id === id).member_id;
+  console.assert(ownerOf(a.id) === newMember && ownerOf(b.id) === newMember && ownerOf(other.id) === null, `order tamu tertaut saat daftar ${JSON.stringify(owners)}`);
+  const pts = await one(`select coalesce(sum(delta), 0)::int p from points_ledger where member_id = $1 and reason = 'purchase'`, [newMember]);
+  console.assert(pts.p === 0, `order lama memberi poin ${pts.p}`);
+  const finAfter = await fin();
+  console.assert(finAfter.n === finBefore.n && finAfter.amt === finBefore.amt, `Keuangan berubah saat order ditautkan ${JSON.stringify([finBefore, finAfter])}`);
+  // Ganti nomor HP sesudah daftar tidak mengklaim order orang lain.
+  await db.query(`update profiles set phone = '81277772222' where id = $1`, [newMember]);
+  console.assert((await one(`select member_id from orders where id = $1`, [other.id])).member_id === null, "ganti nomor HP mengklaim order orang lain");
+  console.log("✓ order tamu: tertaut ke akun saat daftar dengan nomor HP sama (format apa pun), tanpa poin & tanpa ubah Keuangan; ganti nomor tidak mengklaim");
+}

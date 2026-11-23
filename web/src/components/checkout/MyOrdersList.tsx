@@ -18,7 +18,7 @@ export function MyOrdersList({ orders }: { orders: MyOrderListItem[] }) {
               <Link href={`/akun/pesanan/${o.code}`} className={styles.itemText}>
                 <span className={styles.itemName}>#{o.code}</span>
                 <span className={styles.itemMeta}>
-                  {o.summary} · {SHIPPING_LABEL[o.method].short}
+                  {o.summary} · {o.offline ? "Pembelian langsung" : SHIPPING_LABEL[o.method].short}
                 </span>
                 <span className={styles.itemWeight}>
                   {o.stage === "awaiting_payment" && o.payDeadline ? `Bayar sebelum ${fmtDayDate(o.payDeadline)} · ${fmtTime(o.payDeadline)}` : fmtDateTime(o.placedAt)}
