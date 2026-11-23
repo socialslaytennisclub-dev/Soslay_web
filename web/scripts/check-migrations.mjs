@@ -293,6 +293,44 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.query(`select start_session_round($1, 3::smallint)`, [s]);
   const jumped = await one(`select current_round, started_rounds from sessions where id = $1`, [s]);
   console.assert(jumped.current_round === 3 && jumped.started_rounds.join() === "2,3", `lompat ronde ${JSON.stringify(jumped)}`);
+  // Ronde berurutan (Figma 1284:6086): tidak bisa melompat; skor court terakhir ronde live → ronde berikutnya live.
+  await db.query(`insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2) values ($1, 4, 1, $2, $3, $4, $5)`, [s, ...ids]);
+  await as(null);
+  await db.query(`update sessions set current_round = 2, started_rounds = '{1,2}', live_started_at = now() where id = $1`, [s]);
+  await as(hostId);
+  const seqHint = await db.query(`select start_session_round($1, 4::smallint)`, [s]).then(() => null, (e) => e.hint);
+  console.assert(seqHint === "round_sequence", `host bisa melompat ke R4 saat R2 live (${seqHint})`);
+  const seqR3 = (await one(`select id from session_matches where session_id = $1 and round_no = 3`, [s])).id;
+  const seqR4 = (await one(`select id from session_matches where session_id = $1 and round_no = 4`, [s])).id;
+  const seqR2 = (await one(`select id from session_matches where session_id = $1 and round_no = 2`, [s])).id;
+  const unstartedHint = await db.query(`select save_match_score($1, 12::smallint, 9::smallint)`, [seqR3]).then(() => null, (e) => e.hint);
+  console.assert(unstartedHint === "round_unstarted", `host bisa input skor R3 yang belum dimulai (${unstartedHint})`);
+  await db.query(`select save_match_score($1, 12::smallint, 9::smallint)`, [seqR2]);
+  const advanced = await one(`select current_round, started_rounds from sessions where id = $1`, [s]);
+  console.assert(advanced.current_round === 3 && advanced.started_rounds.join() === "1,2,3", `pindah otomatis ${JSON.stringify(advanced)}`);
+  // Urungkan skor R2 setelah pindah → ronde tidak mundur; R2 tetap bisa diisi lagi tanpa memindahkan ronde.
+  await db.query(`select clear_match_score($1)`, [seqR2]);
+  await db.query(`select save_match_score($1, 11::smallint, 10::smallint)`, [seqR2]);
+  console.assert((await one(`select current_round from sessions where id = $1`, [s])).current_round === 3, "urungkan / isi ulang ronde lama memindahkan ronde live");
+  // Ronde terakhir lengkap → tetap di ronde itu (diakhiri lewat Akhiri Activity).
+  await db.query(`select save_match_score($1, 12::smallint, 9::smallint)`, [seqR3]);
+  await db.query(`select save_match_score($1, 12::smallint, 9::smallint)`, [seqR4]);
+  console.assert((await one(`select current_round from sessions where id = $1`, [s])).current_round === 4, "ronde terakhir lengkap: ronde live berubah");
+  // Admin tetap bisa input skor ronde mana pun (halaman Activities); pindah otomatis hanya dari ronde live.
+  await db.query(`select clear_match_score($1)`, [seqR4]);
+  await as(null);
+  await db.query(`update sessions set current_round = 2 where id = $1`, [s]);
+  const { id: adminId } = await one(`insert into auth.users (email) values ('admin-ronde@soslay.test') returning id`);
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Ronde', 'admin-ronde@soslay.test', 'active' from roles where name = 'Super Admin'`, [adminId]);
+  await as(adminId);
+  await db.query(`select save_match_score($1, 12::smallint, 9::smallint)`, [seqR4]);
+  console.assert((await one(`select current_round from sessions where id = $1`, [s])).current_round === 2, "skor admin di ronde lain memindahkan ronde live");
+  await as(hostId);
+  await as(null);
+  await db.query(`update sessions set current_round = 3, started_rounds = '{2,3}' where id = $1`, [s]);
+  await db.query(`delete from session_matches where session_id = $1 and round_no = 4`, [s]);
+  await db.query(`update session_matches set score_a = null, score_b = null where session_id = $1 and round_no in (2, 3)`, [s]);
+  await as(hostId);
   // Mulai Activity (S1-H): sesi yang sudah live tidak berubah rondenya; dari awal → ronde pertama live.
   await db.query(`select start_session_activity($1)`, [s]);
   console.assert((await one(`select current_round from sessions where id = $1`, [s])).current_round === 3, "Mulai Activity mengubah ronde live!");

@@ -125,13 +125,14 @@ export async function submitHostScore(matchId: string, scoreA: number, scoreB: n
     if (/Hanya admin atau host/.test(error.message)) return { ok: false, error: "Hanya host sesi ini yang bisa input skor." };
     if (error.hint === "score_total") return { ok: false, error: error.message.replace("Total poin harus", "Total skor kedua tim harus") + " poin." };
     if (error.hint === "score_zero") return { ok: false, error: "Skor masih 0–0 — isi skor kedua tim." };
+    if (error.hint === "round_unstarted") return { ok: false, error: `${error.message} — skor bisa diisi setelah ronde ini live.` };
     if (/terkunci/.test(error.message)) return { ok: false, error: "Sesi sudah diakhiri — skor terkunci." };
     return { ok: false, error: "Skor gagal disimpan. Coba lagi." };
   }
   return { ok: true };
 }
 
-/** "Mulai Ronde" dari Panel Host (Figma UIF-13): ronde terpilih jadi live; hak host dicek di database. */
+/** "Lanjut ke Ronde N" dari Panel Host: hanya ronde tepat setelah ronde live (berurutan); hak host dicek di database. */
 export async function startHostRound(sessionId: string, round: number): Promise<HostScoreResult> {
   const supabase = await createSupabaseServerClient("member");
   const { error } = await supabase.rpc("start_session_round", { p_session: sessionId, p_round: round });
@@ -140,6 +141,7 @@ export async function startHostRound(sessionId: string, round: number): Promise<
     if (/Hanya admin atau host/.test(error.message)) return { ok: false, error: "Hanya host sesi ini yang bisa memulai ronde." };
     if (/diakhiri/.test(error.message)) return { ok: false, error: "Sesi sudah diakhiri." };
     if (/belum dimulai/.test(error.message)) return { ok: false, error: "Sesi belum dimulai — ronde bisa dimulai saat sesi berjalan." };
+    if (error.hint === "round_sequence") return { ok: false, error: `${error.message.replace("—", "·")}. Muat ulang halaman.` };
     if (/line-up/.test(error.message)) return { ok: false, error: `Ronde ${round} belum ada di line-up.` };
     return { ok: false, error: "Ronde gagal dimulai. Coba lagi." };
   }

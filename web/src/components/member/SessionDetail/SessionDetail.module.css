@@ -3183,3 +3183,117 @@ button.link {
 .reviewItemHead small {
   margin-left: auto;
 }
+
+/* Panel Host · bar status ronde yang dilihat (Figma Soslay Development 1284:6086). */
+.roundBar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+  padding: var(--space-12) var(--space-16);
+  border-radius: var(--radius-lg);
+  background: #f4f5ff;
+}
+
+.roundBarMain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-12);
+}
+
+.roundBarInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.roundBarInfo small {
+  font-size: 12px;
+  color: var(--color-indigo-muted, #5b5891);
+}
+
+.roundBarInfo strong {
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--color-navy-900);
+}
+
+.roundBarState {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-6, 6px);
+  min-height: 40px;
+  padding: 0 var(--space-16);
+  border-radius: var(--radius-full);
+  font-weight: var(--weight-semibold);
+  font-size: 13px;
+}
+
+.roundBarLive {
+  border: 1px solid #f3c2c3;
+  background: #fff;
+  color: #c5282e;
+}
+
+.roundBarWarn {
+  border: 1.2px dashed #f5a524;
+  background: #fff8ec;
+  color: #8a5a00;
+}
+
+.roundBarDone {
+  background: #e6e6ee;
+  color: #7a789c;
+}
+
+.roundBarHint {
+  font-size: 12px;
+  color: var(--color-indigo-muted, #5b5891);
+}
+
+.chipLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-12);
+  margin: 0;
+  font-size: 11px;
+  color: var(--color-indigo-muted, #5b5891);
+}
+
+.chipLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.chipLegend span::before {
+  content: "";
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.chipLegendDone::before {
+  background: #e3f5c8;
+  box-shadow: inset 0 0 0 1px #9ccf6a;
+}
+
+.chipLegendLive::before {
+  background: #fff;
+  box-shadow: inset 0 0 0 1.5px #e5484d;
+}
+
+.chipLegendWarn::before {
+  background: #fff8ec;
+  box-shadow: inset 0 0 0 1.2px #f5a524;
+}
+
+.chipLegendLater::before {
+  background: #f4f5ff;
+  box-shadow: inset 0 0 0 1px #c9c8e6;
+}
+
+.roundBarLink {
+  font-size: 13px;
+}

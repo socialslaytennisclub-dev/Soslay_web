@@ -46,7 +46,8 @@ export function EndActivityDialog({
   const unscored = d.matches.filter((m) => m.scoreA === null && !unstarted.includes(m.round));
   const unscoredRounds = [...new Set(unscored.map((m) => m.round))];
   const { present, earning, total } = sessionPoints(d);
-  const firstUnstarted = unstarted[0];
+  // Ronde berurutan: yang bisa dimulai hanya ronde tepat setelah ronde live (ronde "Dilewati" lama tidak bisa).
+  const nextRound = d.currentRound !== null ? (plan.rounds.find((r) => r > d.currentRound!) ?? null) : null;
 
   const confirm = () =>
     startBusy(async () => {
@@ -78,9 +79,11 @@ export function EndActivityDialog({
             <span>
               <strong>Ronde {rangeLabel(unstarted)} belum dimulai</strong>
               {lostMatches} match di R{rangeLabel(unstarted)} tidak masuk hasil. Peringkat final &amp; Slay Point dihitung dari ronde yang sudah dimainkan. Kamu tetap bisa mengakhiri activity.
-              <button type="button" className={styles.linkBtn} onClick={() => onStartRound(firstUnstarted)} disabled={starting}>
-                Mulai Ronde {firstUnstarted} dulu →
-              </button>
+              {nextRound !== null && unstarted.includes(nextRound) && (
+                <button type="button" className={styles.linkBtn} onClick={() => onStartRound(nextRound)} disabled={starting}>
+                  Lanjut ke Ronde {nextRound} dulu →
+                </button>
+              )}
             </span>
           </div>
         )}
