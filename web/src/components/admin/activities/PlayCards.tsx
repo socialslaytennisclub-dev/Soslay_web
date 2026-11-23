@@ -6,7 +6,8 @@ import { generateLineup, hasTargetTotal, lineupStats, playableCourts, type Level
 import { cx } from "@/lib/cx";
 import { useScoreDraft } from "@/hooks/useScoreDraft";
 import { correctSessionResult, saveLineup, saveMatchScore } from "@/server/admin/actions/play";
-import type { MatchFormat, SessionMatch, SessionParticipant, TennisLevel } from "@/server/admin/types";
+import { lineupNtrp } from "@/lib/player-level";
+import type { MatchFormat, SessionMatch, SessionParticipant } from "@/server/admin/types";
 import { FormCard, SingleChips, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge, MemberAvatar } from "../ui/AdminUI";
@@ -39,8 +40,6 @@ const FORMATS: { value: MatchFormat; label: string; ready: boolean; hint?: strin
   { value: "knockout", label: "Knockout", ready: false },
 ];
 
-/** Bobot level untuk menyeimbangkan tim Rotating Partner (level kosong = tengah). */
-const LEVEL_WEIGHT: Record<TennisLevel, number> = { beginner: 1, beginner_intermediate: 2, intermediate: 3, intermediate_advanced: 4, advanced: 5 };
 
 const digits = (v: string) => v.replace(/\D/g, "").slice(0, 2);
 
@@ -234,7 +233,8 @@ export function LineupCard({
   const ids = useMemo(() => players.map((p) => p.id), [players]);
   const names = useMemo(() => shortNames(players), [players]);
   const levels = useMemo<LevelWeights | undefined>(
-    () => (balanceLevels ? Object.fromEntries(players.map((p) => [p.id, p.level ? LEVEL_WEIGHT[p.level] : 3])) : undefined),
+    // NTRP: nilai host (rata-rata) → level profil → 3.0.
+    () => (balanceLevels ? Object.fromEntries(players.map((p) => [p.id, lineupNtrp(p.ratedNtrp, p.level)])) : undefined),
     [balanceLevels, players],
   );
   const router = useRouter();
@@ -437,7 +437,7 @@ export function LineupCard({
           </span>
         )}
         {matches.length > 0 && levels && (
-          <span className={cx(styles.chip, stats.maxLevelGap > 1 ? styles.chipWarn : styles.chipGood)} title="Selisih total level dua tim di satu court (Beginner = 1 … Advanced = 5)">
+          <span className={cx(styles.chip, stats.maxLevelGap > 1 ? styles.chipWarn : styles.chipGood)} title="Selisih total level NTRP dua tim di satu court (nilai host, atau level profil bila belum dinilai)">
             Selisih level tim maks {stats.maxLevelGap}
           </span>
         )}

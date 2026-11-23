@@ -2675,3 +2675,61 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(null);
   console.log("✓ order lama: hanya admin Orders, format tanggal/jumlah divalidasi, selesai & lunas, Keuangan ikut go-live");
 }
+
+// ── Penilaian level pemain oleh host (player_ratings) ───────────────────────
+{
+  const one = async (sql, params) => (await db.query(sql, params)).rows[0];
+  const as = (uid) => db.exec(`select set_config('request.jwt.claim.sub', '${uid ?? ""}', false)`);
+  const err = (sql, params) => db.query(sql, params).then(() => null, (e) => e.message);
+  await as(null);
+  const mk = async (name) => {
+    const { id } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, name, `${name.toLowerCase()}@rating.test`]);
+    return id;
+  };
+  const [H1, H2, P1, P2, P3, X] = await Promise.all(["HostSatu", "HostDua", "Rina", "Budi", "Citra", "Orang"].map(mk));
+  const v = (await one(`insert into venues (slug, name, city) values ('rt-v', 'Rating Court', 'Jakarta') returning id`)).id;
+  const sess = async (slug, endedAgo, status = "completed") =>
+    (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, ended_at)
+      values ($1, $1, 'weekly-mabar', $2, now() - $3::interval - interval '2 hours', now() - $3::interval, 12, $4::session_status, case when $4::text = 'completed' then now() - $3::interval end) returning id`, [slug, v, endedAgo, status])).id;
+  const s1 = await sess("rt-1", "1 day");
+  const s2 = await sess("rt-2", "3 days");
+  const live = await sess("rt-live", "-1 day", "published"); // belum selesai
+  for (const [s, h] of [[s1, H1], [s1, H2], [s2, H1], [live, H1]]) await db.query(`insert into session_hosts (session_id, member_id) values ($1, $2)`, [s, h]);
+  for (const [s, m] of [[s1, P1], [s1, P2], [s2, P1], [live, P3]]) await db.query(`insert into bookings (session_id, member_id, status) values ($1, $2, 'attended')`, [s, m]);
+  await db.query(`insert into bookings (session_id, member_id, status) values ($1, $2, 'registered')`, [s2, P3]); // tidak hadir
+
+  await as(H1);
+  const q = (await one(`select host_rating_queue() q`)).q;
+  console.assert(q.length === 2 && q[0].member_id === P1 && q[0].times === 2 && q[0].due && q[0].cohosts[0] === "HostDua" && q[1].member_id === P2 && q[1].times === 1,
+    `antrean host ${JSON.stringify(q.map((r) => [r.name, r.times, r.due, r.cohosts]))}`);
+  console.assert((await err(`select rate_player($1, 3.5)`, [P3]))?.includes("Hanya pemain"), "menilai peserta sesi yang belum selesai / tidak hadir");
+  console.assert((await err(`select rate_player($1, 3.5)`, [H1]))?.includes("diri sendiri"), "menilai diri sendiri");
+  console.assert((await err(`select rate_player($1, 3.3)`, [P1])) === "Level tidak valid", "level bukan kelipatan 0.5");
+  console.assert((await err(`select rate_player($1, 3.5)`, [P1])) === null && (await err(`select rate_player($1, 4.0)`, [P1])) === null, "simpan / ganti nilai");
+  console.assert((await err(`select rate_player($1, null)`, [P2])) === null, "Tidak tahu");
+  const q2 = (await one(`select host_rating_queue() q`)).q;
+  console.assert(q2.every((r) => !r.due) && Number(q2.find((r) => r.member_id === P1).ntrp) === 4, `antrean sesudah dinilai ${JSON.stringify(q2)}`);
+  const qs = (await one(`select host_rating_queue($1) q`, [s2])).q;
+  console.assert(qs.length === 1 && qs[0].member_id === P1, `antrean per sesi ${JSON.stringify(qs)}`);
+  console.assert((await one(`select host_rating_queue($1) q`, [live])).q.length === 0, "antrean sesi yang belum selesai");
+  // Seperti Supabase: authenticated punya hak select tabel; yang membatasi RLS.
+  await db.exec(`grant select on player_ratings to authenticated`);
+  const readAll = async () => { await db.exec(`set role authenticated`); const n = await db.query(`select * from player_ratings`).then((x) => x.rows.length, () => 0); await db.exec(`reset role`); return n; };
+  console.assert((await readAll()) === 0, "host membaca tabel nilai langsung");
+
+  await as(H2);
+  console.assert((await err(`select rate_player($1, 3.0)`, [P1])) === null, "co-host menilai");
+  console.assert((await one(`select count(*)::int n from session_player_levels($1)`, [s1])).n === 1, "co-host membaca level peserta activity-nya");
+  await as(X);
+  console.assert((await err(`select rate_player($1, 3.0)`, [P1]))?.includes("Hanya pemain"), "bukan host menilai");
+  console.assert((await one(`select count(*)::int n from session_player_levels($1)`, [s1])).n === 0, "pemain lain membaca level");
+  console.assert((await one(`select host_rating_queue() q`)).q.length === 0, "antrean bukan host");
+  await as(P1);
+  console.assert((await readAll()) === 0, "pemain membaca nilainya sendiri");
+  await as(H1);
+  const lv = (await db.query(`select member_id, ntrp::float n, raters from session_player_levels($1)`, [s1])).rows;
+  console.assert(lv.length === 1 && lv[0].member_id === P1 && lv[0].n === 3.5 && lv[0].raters === 2, `rata-rata level ${JSON.stringify(lv)}`);
+  await as(null);
+  console.log("✓ penilaian level: hanya host activity selesai, peserta hadir, kelipatan 0.5, satu nilai per host, rata-rata tanpa Tidak tahu, tidak terbaca pemain");
+}

@@ -247,6 +247,16 @@ export async function giveKudos(sessionId: string, receiverId: string, category:
   return error ? { ok: false, error: kudosError(error) } : { ok: true };
 }
 
+/** Host menilai level pemain (NTRP 1.0–6.0, null = Tidak tahu). Hak & kelipatan 0.5 dicek di database. */
+export async function ratePlayer(memberId: string, ntrp: number | null): Promise<HostScoreResult> {
+  if (!isSupabaseConfigured) return { ok: true };
+  const supabase = await createSupabaseServerClient("member");
+  const { error } = await supabase.rpc("rate_player", { p_member: memberId, p_ntrp: ntrp });
+  if (!error) return { ok: true };
+  if (/Hanya pemain|diri sendiri|Level tidak valid|Masuk dulu/.test(error.message)) return { ok: false, error: `${error.message}.` };
+  return { ok: false, error: "Penilaian gagal disimpan. Coba lagi." };
+}
+
 /** Batalkan kudos saya ke penerima ini (Slay Point −1). */
 export async function cancelKudos(sessionId: string, receiverId: string): Promise<HostScoreResult> {
   const supabase = await createSupabaseServerClient("member");

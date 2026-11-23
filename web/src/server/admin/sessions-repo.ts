@@ -160,11 +160,13 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
       };
     });
   const finished = isFinished(s, new Date());
-  const [{ play, roster, hosts, matches, photos }, reviewRows, kudosRows, kudosTop] = await Promise.all([
+  const [{ play, roster, hosts, matches, photos }, reviewRows, kudosRows, kudosTop, ratedLevels] = await Promise.all([
     loadSessionPlay(s, d.live),
     loadSessionReviews(s.id, d.live && finished),
     loadSessionKudosAdmin(s.id, d.live && finished),
     d.live ? createSupabaseServerClient().then((client) => loadKudosTop(client, s.id)) : new Map<string, KudosTop>(),
+    // Penilaian level oleh host (beta): rata-rata NTRP per member → bobot acak Rotating Partner.
+    d.live ? loadRatedLevels(s.id) : new Map<string, number>(),
   ]);
   const hostIds = new Set(hosts.filter((h) => h.role === "host").map((h) => h.memberId));
   const reviews = reviewRows.map((r) => ({ ...r, isHost: hostIds.has(r.memberId) }));
@@ -174,6 +176,7 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
   const participants = (roster ? [...roster, ...fromBookings.filter((p) => !inRoster.has(p.memberId))] : fromBookings).map((p, i) => ({
     ...p,
     kudosTop: p.memberId ? (d.live ? (kudosTop.get(p.memberId) ?? null) : demoKudosTop(i)) : null,
+    ratedNtrp: p.memberId ? (ratedLevels.get(p.memberId) ?? null) : null,
   }));
   if (!d.live && usesLineup(play.matchFormat)) matches.push(...demoLineup(id, participants, play));
   const seed = Number(id.replace(/\D/g, "")) || 0;
@@ -315,4 +318,11 @@ export async function getSessionDraft(fromId?: string): Promise<SessionDetail> {
 
 export function activityTypeOptions() {
   return Object.entries(activityTypeLabels).map(([slug, label]) => ({ slug, label }));
+}
+
+/** Level gabungan penilaian host per member peserta (RPC session_player_levels: admin Activities / host). */
+async function loadRatedLevels(sessionId: string): Promise<Map<string, number>> {
+  const client = await createSupabaseServerClient();
+  const { data } = await client.rpc("session_player_levels", { p_session: sessionId });
+  return new Map(((data ?? []) as { member_id: string; ntrp: number | string }[]).map((r) => [r.member_id, Number(r.ntrp)]));
 }

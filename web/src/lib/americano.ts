@@ -30,7 +30,7 @@ export type LineupMatch = { round: number; court: number; a: [string, string]; b
 
 export type LineupConfig = { players: string[]; courts: number; rounds: number };
 
-/** Bobot level per pemain (1 = beginner … 5 = advanced) — diisi untuk Rotating Partner. */
+/** Bobot level per pemain dalam NTRP (1.0–6.0; lib/player-level lineupNtrp: nilai host → level profil → 3.0) — diisi untuk Rotating Partner. */
 export type LevelWeights = Record<string, number>;
 
 const pairKey = (x: string, y: string) => (x < y ? `${x}|${y}` : `${y}|${x}`);

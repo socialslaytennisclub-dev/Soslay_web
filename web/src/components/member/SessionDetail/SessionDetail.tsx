@@ -8,6 +8,7 @@ import { finalRanks, tieRule } from "@/lib/standings";
 import { initials, teamName } from "@/lib/text";
 import type { DetailMatch, MemberSessionDetail } from "@/server/member/session-detail";
 import { SelfCheckIn } from "@/components/member/CheckIn/SelfCheckIn";
+import { RatingInvite } from "@/components/member/PlayerRating/RatingInvite";
 import { Countdown } from "./Countdown";
 import { HostLive } from "./HostPanel";
 import { HostStartCard } from "./HostStart";
@@ -132,7 +133,16 @@ export function SessionDetail({ detail: d, tab, endedNotice = null }: { detail: 
             {tab === "live" && <LiveTab detail={d} />}
             {tab === "leaderboard" && <LeaderboardTab detail={d} />}
             {tab === "ronde" && <RoundsTab detail={d} />}
-            {tab === "hasil" && (hostOnly(d) ? <HostResults detail={d} endedNotice={endedNotice} /> : <ResultsTab detail={d} />)}
+            {tab === "hasil" && (
+              <>
+                <RatingInvite
+                  count={d.ratePending}
+                  context="session"
+                  href={`/akun/nilai-pemain?sesi=${d.id}&judul=${encodeURIComponent(d.title)}&kembali=${encodeURIComponent(`/akun/aktivitas/${d.slug}?tab=hasil`)}`}
+                />
+                {hostOnly(d) ? <HostResults detail={d} endedNotice={endedNotice} /> : <ResultsTab detail={d} />}
+              </>
+            )}
             {tab === "foto" && <PhotosTab detail={d} />}
             {tab === "review" && (
               <>

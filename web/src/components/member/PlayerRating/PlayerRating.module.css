@@ -1,0 +1,520 @@
+/* Penilaian level pemain oleh host (beta) — intro, kartu per pemain, selesai. */
+
+.page {
+  max-width: 560px;
+  padding-top: calc(var(--nav-height) + var(--space-24));
+  padding-bottom: var(--space-48);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+  padding: var(--space-24);
+  border-radius: var(--radius-xl);
+  background: #fff;
+  box-shadow: var(--shadow-card);
+  font-family: var(--font-ui);
+  color: var(--color-navy-900);
+}
+
+.center {
+  align-items: center;
+  text-align: center;
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  min-height: 44px;
+}
+
+.iconBtn {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-50);
+  color: var(--color-navy-900);
+  cursor: pointer;
+}
+
+.beta {
+  margin-left: auto;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  background: var(--color-navy-900);
+  font-size: 12px;
+  font-weight: var(--weight-semibold);
+  color: var(--color-lime-500);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: clamp(28px, 6vw, 36px);
+  font-weight: var(--weight-extrabold);
+  line-height: 1.1;
+}
+
+.lead {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--color-navy-800);
+}
+
+/* ── Intro ── */
+
+.legend {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.legend > strong {
+  font-family: var(--font-display);
+  font-size: 16px;
+}
+
+.scaleBar {
+  display: grid;
+  grid-template-columns: repeat(11, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.scaleBar > span {
+  height: 12px;
+  border-radius: var(--radius-full);
+}
+
+.legendLabels {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-8);
+  font-size: 12px;
+  color: var(--color-indigo-muted);
+}
+
+.legendLabels > span {
+  display: flex;
+  flex-direction: column;
+}
+
+.legendLabels b {
+  font-size: 13px;
+  color: var(--color-navy-900);
+}
+
+.legendLabels > span:last-child {
+  text-align: right;
+}
+
+.guideToggle {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  color: var(--color-indigo-600);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.flip {
+  transform: rotate(180deg);
+}
+
+.guide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+  margin: 0;
+  padding: var(--space-16);
+  border-radius: var(--radius-lg);
+  background: var(--color-indigo-50);
+  list-style: none;
+}
+
+.guide li {
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  column-gap: var(--space-10);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.guide li > span:last-child {
+  grid-column: 2;
+  color: var(--color-navy-800);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: var(--radius-full);
+}
+
+.facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-16);
+  margin: 0;
+  padding: var(--space-20);
+  border-radius: var(--radius-lg);
+  background: var(--color-indigo-50);
+  list-style: none;
+  font-size: 15px;
+  line-height: 1.45;
+  color: var(--color-navy-800);
+}
+
+.facts li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+}
+
+.factIcon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: var(--color-lime-100);
+  color: var(--color-navy-900);
+}
+
+.introActions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-16);
+}
+
+.introActions .btnPrimary {
+  width: 100%;
+}
+
+/* ── Kartu pemain ── */
+
+.progress {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--space-12);
+  font-size: 13px;
+  font-weight: var(--weight-semibold);
+  color: var(--color-indigo-muted);
+  white-space: nowrap;
+}
+
+.progressBar {
+  flex: 1;
+  height: 6px;
+  overflow: hidden;
+  border-radius: var(--radius-full);
+  background: var(--color-indigo-border);
+}
+
+.progressBar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--color-lime-500);
+  transition: width 0.25s ease;
+}
+
+.person {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-8);
+  text-align: center;
+}
+
+.personName {
+  margin: var(--space-4) 0 0;
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: var(--weight-extrabold);
+}
+
+.context {
+  margin: 0;
+  max-width: 420px;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--color-navy-800);
+}
+
+.scale {
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-12);
+  border: 1px solid var(--color-indigo-border);
+  border-radius: var(--radius-lg);
+}
+
+.scaleHead {
+  display: flex;
+  justify-content: space-between;
+  margin: 0 0 var(--space-8);
+  padding: 0 var(--space-8);
+  font-size: 12px;
+  font-weight: var(--weight-bold);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-indigo-muted);
+}
+
+.level {
+  display: grid;
+  grid-template-columns: 8px 1fr auto;
+  align-items: center;
+  gap: var(--space-12);
+  min-height: 44px;
+  padding: 0 var(--space-12) 0 var(--space-8);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: none;
+  font: inherit;
+  font-size: 16px;
+  text-align: left;
+  color: var(--color-indigo-muted);
+  cursor: pointer;
+}
+
+.level:hover {
+  background: var(--color-indigo-50);
+}
+
+.levelOn,
+.levelOn:hover {
+  background: var(--color-navy-900);
+  color: #fff;
+}
+
+.levelBar {
+  align-self: stretch;
+  border-radius: var(--radius-full);
+}
+
+.levelOn .levelName,
+.levelOn .levelNum {
+  font-weight: var(--weight-bold);
+}
+
+.levelNum {
+  font-variant-numeric: tabular-nums;
+}
+
+.chosen {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 64px;
+  margin: 0;
+  padding: var(--space-12) var(--space-16);
+  border-radius: var(--radius-md);
+  background: var(--color-lime-50);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--color-navy-800);
+}
+
+.chosen strong {
+  font-size: 15px;
+  color: var(--color-navy-900);
+}
+
+.error {
+  margin: 0;
+  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  color: var(--color-pink-500);
+}
+
+.actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-12);
+  width: 100%;
+}
+
+.btnPrimary,
+.btnOutline {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  padding: 0 var(--space-20);
+  border-radius: var(--radius-full);
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: var(--weight-semibold);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.btnPrimary {
+  border: 0;
+  background: var(--color-lime-500);
+  color: var(--color-navy-900);
+}
+
+.btnOutline {
+  border: 1.5px solid var(--color-navy-900);
+  background: #fff;
+  color: var(--color-navy-900);
+}
+
+.btnPrimary:disabled,
+.btnOutline:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.linkBtn {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 15px;
+  font-weight: var(--weight-semibold);
+  color: var(--color-navy-900);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+/* ── Selesai & daftar ── */
+
+.doneIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-500);
+  color: var(--color-navy-900);
+}
+
+.ratedList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ratedList li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-12);
+  padding: var(--space-12) 0;
+  border-top: 1px solid var(--color-indigo-border);
+}
+
+.ratedName {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  font-weight: var(--weight-semibold);
+}
+
+.ratedName small {
+  font-size: 13px;
+  font-weight: var(--weight-regular);
+  color: var(--color-indigo-muted);
+}
+
+.empty {
+  margin: 0;
+  color: var(--color-indigo-muted);
+}
+
+/* ── Warna grup level ── */
+
+.g_newbie { background: #8fe3cf; }
+.g_beginner { background: #f7c948; }
+.g_intermediate { background: #f58b3c; }
+.g_advanced { background: #6b5cff; }
+.g_pro { background: var(--color-navy-900); }
+.g_unknown { background: var(--color-indigo-border); }
+
+.levelOn .g_pro { box-shadow: 0 0 0 1.5px #fff; }
+
+/* ── Kartu undangan (dashboard member & tab Hasil) ── */
+
+.invite {
+  display: flex;
+  align-items: center;
+  gap: var(--space-16);
+  padding: var(--space-16) var(--space-20);
+  border-radius: var(--radius-lg);
+  background: var(--color-navy-900);
+  font-family: var(--font-ui);
+  color: #fff;
+  text-decoration: none;
+}
+
+.inviteText {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.inviteText strong {
+  font-family: var(--font-display);
+  font-size: 16px;
+}
+
+.inviteText span {
+  font-size: 14px;
+  color: var(--color-indigo-150);
+}
+
+.inviteCta {
+  flex: 0 0 auto;
+  padding: 10px 18px;
+  border-radius: var(--radius-full);
+  background: var(--color-lime-500);
+  font-size: 14px;
+  font-weight: var(--weight-semibold);
+  color: var(--color-navy-900);
+  white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+  .card {
+    padding: var(--space-20) var(--space-16);
+  }
+
+  .invite {
+    flex-wrap: wrap;
+  }
+
+  .inviteCta {
+    width: 100%;
+    text-align: center;
+  }
+}
