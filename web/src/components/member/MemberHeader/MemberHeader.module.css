@@ -163,3 +163,25 @@
     height: 300px;
   }
 }
+
+/*
+ * Nama & aksi muncul dengan animasi CSS (langsung saat HTML tampil), bukan data-anim GSAP: data-anim
+ * menyembunyikan isi sampai JS selesai dimuat (di HP bisa beberapa detik) → header terlihat kosong.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  .info,
+  .actions {
+    animation: header-in var(--duration-slow) var(--ease-out) both;
+  }
+
+  .actions {
+    animation-delay: 80ms;
+  }
+}
+
+@keyframes header-in {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
