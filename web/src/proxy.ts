@@ -76,6 +76,9 @@ export const config = {
     "/reset-password",
     "/auth/:path*",
     "/absensi/:path*",
+    // Order Now: status login menentukan form (akun baru vs langsung order) → sesi harus segar.
+    "/ordernow",
+    "/ordernow/:path*",
     // Link email Supabase yang gagal (?error_code=…) bisa kembali ke halaman mana pun.
     {
       source: "/((?!_next/static|_next/image|favicon.ico|images|icons|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif)$).*)",

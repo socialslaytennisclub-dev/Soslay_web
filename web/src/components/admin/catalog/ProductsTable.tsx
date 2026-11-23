@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
+import { PUBLIC_SITE_URL } from "@/lib/wa-invite";
 import { setProductVisible } from "@/server/admin/actions/catalog";
 import type { AdminProduct } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
@@ -33,6 +34,23 @@ export function ProductsTable({ initial, categories, lowStock, initialNotice }: 
       toast.result(result);
     });
   };
+
+  /** Link Order Now per produk (bio IG / broadcast WA): produk langsung terbuka di /ordernow. */
+  const copyOrderNow = async (p: AdminProduct) => {
+    const url = `${PUBLIC_SITE_URL}/ordernow?produk=${encodeURIComponent(p.slug)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(p.visible ? `Link Order Now ${p.name} tersalin.` : `Link tersalin — ${p.name} masih nonaktif, aktifkan dulu supaya bisa dipesan.`);
+    } catch {
+      toast.error(`Tidak bisa menyalin otomatis. Link: ${url}`);
+    }
+  };
+  const orderNowButton = (p: AdminProduct, withText = false) => (
+    <button type="button" className={cx(styles.iconLink, withText && styles.textLink)} onClick={() => copyOrderNow(p)} aria-label={`Salin link Order Now ${p.name}`} title="Salin link Order Now">
+      <AdminIcon name="link-simple" size={16} />
+      {withText && <span aria-hidden>Salin link</span>}
+    </button>
+  );
 
   const needle = q.trim().toLowerCase();
   const shown = items
@@ -168,6 +186,7 @@ export function ProductsTable({ initial, categories, lowStock, initialNotice }: 
                     { label: "Harga", value: price(p) },
                     { label: "Stok", value: stockBadge(p) },
                     { label: "Terjual", value: p.sold },
+                    { label: "Order Now", value: orderNowButton(p, true) },
                   ]}
                 />
               ))}
@@ -210,6 +229,7 @@ export function ProductsTable({ initial, categories, lowStock, initialNotice }: 
                           <Link href={`/admin/products/${p.slug}`} className={styles.iconLink} aria-label={`Edit ${p.name}`}>
                             <AdminIcon name="pencil-simple" size={16} />
                           </Link>
+                          {orderNowButton(p)}
                           <Link href={`/shop/${p.slug}`} target="_blank" className={styles.iconLink} aria-label={`Buka ${p.name} di Shop`}>
                             <AdminIcon name="arrow-up-right" size={16} />
                           </Link>

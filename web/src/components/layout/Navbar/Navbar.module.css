@@ -182,7 +182,9 @@
   background: rgb(255 255 255 / 0.4);
 }
 
-.login {
+/* Mobile: Sign In ada di menu ☰. Disembunyikan lewat pembungkus (bukan kelas di Button) — display Button
+   (inline-flex) tidak bisa menimpanya, apa pun urutan CSS-nya. */
+.loginSlot {
   display: none;
 }
 
@@ -389,7 +391,7 @@
 /* ── ≥ 768px: navigasi inline ────────────────────────────── */
 @media (min-width: 768px) {
   .desktopNav,
-  .login,
+  .loginSlot,
   .account {
     display: inline-flex;
   }

@@ -23,7 +23,8 @@ await db.exec(`
   -- (revoke "from public" saja tidak cukup).
   alter default privileges in schema public grant execute on functions to anon, authenticated;
   create schema auth;
-  create table auth.users (id uuid primary key default gen_random_uuid(), email text, raw_user_meta_data jsonb);
+  -- email_confirmed_at: akun uji dianggap sudah verifikasi kecuali diisi null (Order Now).
+  create table auth.users (id uuid primary key default gen_random_uuid(), email text, raw_user_meta_data jsonb, email_confirmed_at timestamptz default now());
   create function auth.uid() returns uuid language sql stable as
     $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
 `);
@@ -2830,4 +2831,82 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const ketiga = await mk("KetigaIG", "81299990009");
   console.assert((await igOf(ketiga)) === null, `Instagram terisi untuk nomor milik profil lain: ${await igOf(ketiga)}`);
   console.log("✓ Instagram impor Kuyy: mengisi profil kosong lewat nomor HP (format apa pun, juga saat daftar), tidak menimpa isian, nomor ganda & isian tidak valid dilewati");
+}
+
+// ── Order Now: order atas nama akun baru (belum verifikasi email) lewat service role ─────────────
+{
+  const one = async (sql, params) => (await db.query(sql, params)).rows[0];
+  const as = (uid) => db.exec(`select set_config('request.jwt.claim.sub', '${uid ?? ""}', false)`);
+  const err = async (sql, params) => db.query(sql, params).then(() => null, (e) => e.message);
+  await as(null);
+  const guest = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into profiles (id, full_name, email, phone) values ($1, 'Tamu Order Now', 'tamu.ordernow@mail.com', '81299990077')`, [guest]);
+  const other = (await one(`insert into auth.users default values returning id`)).id;
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Member Lain', 'lain.ordernow@mail.com')`, [other]);
+  const prod = (await one(`insert into products (slug, sku, name, category, price, status, weight_grams) values ('order-now-tee', 'SOS-ON-1', 'Order Now Tee', 'apparel', 150000, 'active', 300) returning id`)).id;
+  await db.query(`insert into product_variants (product_id, sku, options, stock) values ($1, 'SOS-ON-1-M', '{"size":"M"}', 10)`, [prod]);
+  const items = JSON.stringify([{ slug: "order-now-tee", options: { size: "M" }, quantity: 1 }]);
+  const jnt = JSON.stringify({ method: "jnt", name: "Tamu", phone: "081299990077", address: "Jl. Kemang Raya No. 1", city: "Kota Jakarta Selatan", postal_code: "12730" });
+
+  // Server (tanpa sesi login) membuat order atas nama akun baru.
+  const code = (await one(`select place_shop_order_for($1, $2, $3) c`, [guest, items, jnt])).c;
+  const o = await one(`select id, member_id, channel, subtotal, status from orders where code = $1`, [code]);
+  console.assert(o.member_id === guest && o.channel === "website" && o.subtotal === 150000 && o.status === "pending", `order atas nama akun baru ${JSON.stringify(o)}`);
+  console.assert((await err(`select place_shop_order_for($1, $2, $3)`, ["00000000-0000-0000-0000-000000000000", items, jnt]))?.includes("Masuk dulu"), "akun yang tidak ada ditolak");
+  // Member biasa tidak bisa memanggil varian *_for (membuat order / bukti atas nama orang lain).
+  await db.exec(`grant usage on schema public to authenticated`);
+  await as(other);
+  await db.exec(`set role authenticated`);
+  const denied = await err(`select place_shop_order_for($1, $2, $3)`, [other, items, jnt]);
+  await db.exec(`reset role`);
+  await as(null);
+  console.assert(/permission denied/i.test(denied ?? ""), `place_shop_order_for terbuka untuk member: ${denied}`);
+
+  // Versi member tetap jalan lewat wrapper (auth.uid()).
+  await as(guest);
+  const code2 = (await one(`select place_shop_order($1, $2) c`, [items, jnt])).c;
+  await as(null);
+  console.assert((await one(`select member_id from orders where code = $1`, [code2])).member_id === guest, "place_shop_order member tetap memakai akun login");
+  // Uji pesanan sebelum akun dibuat: tidak menyimpan apa pun, alasan gagal dikembalikan.
+  const counts = async () => one(`select (select count(*)::int from orders) o, (select stock from product_variants where sku = 'SOS-ON-1-M') s`);
+  const before = await counts();
+  console.assert((await one(`select check_shop_order($1, $2) r`, [items, jnt])).r === null, "uji pesanan valid ditolak");
+  const after = await counts();
+  console.assert(after.o === before.o && after.s === before.s, `uji pesanan menyimpan data ${JSON.stringify([before, after])}`);
+  const tooMany = JSON.stringify([{ slug: "order-now-tee", options: { size: "M" }, quantity: 50 }]);
+  console.assert((await one(`select check_shop_order($1, $2) r`, [tooMany, jnt])).r?.includes("Stok"), "uji pesanan stok kurang tidak ditolak");
+  console.assert((await one(`select check_shop_order($1, $2) r`, [items, JSON.stringify({ ...JSON.parse(jnt), city: "Kota Medan" })])).r?.includes("belum tersedia"), "uji pesanan kota J&T tidak ada");
+  console.assert((await err(`select place_shop_order_for(null, $1, $2)`, [items, jnt]))?.includes("Masuk dulu"), "order tanpa akun di luar uji coba lolos");
+  await as(other);
+  await db.exec(`set role authenticated`);
+  const deniedCheck = await err(`select check_shop_order($1, $2)`, [items, jnt]);
+  await db.exec(`reset role`);
+  await as(null);
+  console.assert(/permission denied/i.test(deniedCheck ?? ""), `check_shop_order terbuka untuk member: ${deniedCheck}`);
+  // Akun belum verifikasi email: order batal setelah 1 jam, stok kembali; akun terverifikasi tidak.
+  const unverified = (await one(`insert into auth.users (email_confirmed_at) values (null) returning id`)).id;
+  await db.query(`insert into profiles (id, full_name, email) values ($1, 'Belum Verifikasi', 'belum.verif@mail.com')`, [unverified]);
+  const stockNow = async () => (await one(`select stock from product_variants where sku = 'SOS-ON-1-M'`)).stock;
+  const s0 = await stockNow();
+  const cu = (await one(`select place_shop_order_for($1, $2, $3) c`, [unverified, items, jnt])).c;
+  const cv = (await one(`select place_shop_order_for($1, $2, $3) c`, [guest, items, jnt])).c;
+  console.assert((await stockNow()) === s0 - 2, "stok dipegang order baru");
+  await db.query(`select expire_shop_orders()`);
+  console.assert((await one(`select status from orders where code = $1`, [cu])).status === "pending", "order belum verifikasi batal sebelum 1 jam");
+  await db.query(`update orders set placed_at = now() - interval '61 minutes' where code = any($1)`, [[cu, cv]]);
+  await db.query(`select expire_shop_orders()`);
+  const ou = await one(`select status, cancel_reason from orders where code = $1`, [cu]);
+  console.assert(ou.status === "cancelled" && ou.cancel_reason.includes("tidak diverifikasi"), `order belum verifikasi tidak batal ${JSON.stringify(ou)}`);
+  console.assert((await one(`select status from orders where code = $1`, [cv])).status === "pending", "order akun terverifikasi ikut batal");
+  console.assert((await stockNow()) === s0 - 1, "stok order batal tidak kembali");
+  // Kirim ulang Order Now: pesanan lama yang belum dibayar dibatalkan & diganti, stok tidak dobel.
+  const s1 = await stockNow();
+  const n0 = (await one(`select count(*)::int n from orders where member_id = $1 and status = 'pending' and payment_status = 'pending'`, [guest])).n;
+  const r1 = (await one(`select place_shop_order_for($1, $2, $3, true) c`, [guest, items, jnt])).c;
+  const r2 = (await one(`select place_shop_order_for($1, $2, $3, true) c`, [guest, items, jnt])).c;
+  const pend = (await db.query(`select code from orders where member_id = $1 and status = 'pending'`, [guest])).rows.map((r) => r.code);
+  console.assert(pend.length === 1 && pend[0] === r2, `pesanan lama tidak diganti ${JSON.stringify(pend)}`);
+  console.assert((await one(`select cancel_reason from orders where code = $1`, [r1])).cancel_reason.includes("Diganti"), "alasan batal pesanan lama");
+  console.assert((await stockNow()) === s1 + n0 - 1, `stok setelah ganti pesanan ${await stockNow()} vs ${s1 + n0 - 1}`);
+  console.log("✓ Order Now: order atas nama akun baru hanya lewat service role, wrapper member tetap sama, uji pesanan tanpa menyimpan, belum verifikasi 1 jam → batal & stok kembali, kirim ulang mengganti pesanan lama");
 }

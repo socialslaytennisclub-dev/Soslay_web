@@ -10,6 +10,7 @@ import { getShopCatalog } from "@/server/public/products";
 import { removePrivateFile, uploadPrivateFile } from "@/server/storage";
 import { demoOrders, demoProofFiles, nextDemoCode } from "./demo-store";
 import { notifyAdminOrder } from "./notify";
+import { placeOrderWith } from "./place-order";
 import { getCheckoutContext, PROOF_BUCKET } from "./orders";
 import { getShopBank } from "./settings";
 import type { CheckoutLine, ShipInput, ShopResult } from "./types";
@@ -25,26 +26,7 @@ export async function placeOrder(lines: CheckoutLine[], ship: ShipInput): Promis
   if (!lines.length) return { ok: false, error: "Belum ada produk dipilih." };
   if (!isSupabaseConfigured) return placeDemoOrder(lines, ship);
 
-  const supabase = await createSupabaseServerClient("member");
-  const { data, error } = await supabase.rpc("place_shop_order", {
-    p_items: lines.map((l) => ({ slug: l.slug, options: l.options, quantity: l.quantity })),
-    p_ship: {
-      method: ship.method,
-      name: ship.name,
-      phone: ship.phone,
-      address: ship.address ?? null,
-      city: ship.city ?? null,
-      postal_code: ship.postalCode ?? null,
-      lat: ship.method === "instant" ? ship.lat : null,
-      lng: ship.method === "instant" ? ship.lng : null,
-      session_id: ship.method === "pickup" ? ship.sessionId : null,
-    },
-  });
-  if (error) return { ok: false, error: error.code === "42501" ? "Sesi kamu berakhir — masuk lagi untuk checkout." : error.message };
-  refresh();
-  // Email ke admin setelah respons terkirim — tidak memperlambat checkout.
-  after(() => notifyAdminOrder("placed", data as string));
-  return { ok: true, data: { code: data as string } };
+  return placeOrderWith(await createSupabaseServerClient("member"), lines, ship);
 }
 
 async function placeDemoOrder(lines: CheckoutLine[], ship: ShipInput): Promise<ShopResult<{ code: string }>> {

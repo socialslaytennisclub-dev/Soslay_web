@@ -453,8 +453,22 @@
   place-items: center;
   width: 30px;
   height: 30px;
+  padding: 0;
+  border: 0;
   border-radius: var(--radius-md);
+  background: none;
   color: var(--color-indigo-600);
+  cursor: pointer;
+}
+
+.textLink {
+  display: inline-flex;
+  gap: 6px;
+  width: auto;
+  padding: 0 10px 0 6px;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: var(--weight-semibold);
 }
 
 .iconLink:hover {

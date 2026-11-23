@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { DEMO_MEMBER_COOKIE, DEMO_MEMBER_NAME } from "@/lib/demo-member";
 import { isSupabaseConfigured, supabaseUrl } from "@/lib/supabase/env";
 
-export type MemberUser = { name: string; photo?: string | null };
+/** `email` hanya dari cookie sesi (tidak dari data server) — mis. Order Now mencocokkan akun pemesan. */
+export type MemberUser = { name: string; photo?: string | null; email?: string };
 
 /**
  * Sesi member dibaca langsung dari cookie Supabase (`sb-<project>-auth-token`, bisa dipecah
@@ -39,7 +40,7 @@ function readMemberCookie(): MemberUser | null {
     const session = JSON.parse(json) as { user?: { email?: string; user_metadata?: { display_name?: string; full_name?: string } } };
     const user = session.user;
     if (!user) return null;
-    return { name: user.user_metadata?.display_name || user.user_metadata?.full_name || user.email || "Member" };
+    return { name: user.user_metadata?.display_name || user.user_metadata?.full_name || user.email || "Member", email: user.email };
   } catch {
     return null;
   }

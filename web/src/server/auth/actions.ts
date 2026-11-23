@@ -1,8 +1,8 @@
 "use server";
 
-import { cookies, headers } from "next/headers";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { ADMIN_LOGIN, AFTER_AUTH, AFTER_CONFIRM_COOKIE, registerPage, RESET_PASSWORD } from "@/content/auth";
+import { ADMIN_LOGIN, AFTER_AUTH, registerPage, RESET_PASSWORD } from "@/content/auth";
 import { compact, normalizeKuyId, required, todayIso, validateBirthDate, validateGender, validateEmail, validateKuyId, validateNewEmail, validatePassword, validatePhone, type FieldErrors } from "@/lib/auth";
 import { createClient } from "@supabase/supabase-js";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
@@ -11,7 +11,8 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { localPhone } from "@/lib/wa-invite";
 import { allowAttempt, clientIp } from "@/server/rate-limit";
 import { DEMO_MEMBER_COOKIE } from "@/lib/demo-member";
-import { isInternalPath, safeNext as safePath } from "@/lib/safe-path";
+import { safeNext as safePath } from "@/lib/safe-path";
+import { rememberAfterConfirm, requestOrigin, signupRedirect } from "./redirect";
 
 /** Hanya path internal ("/admin", "/akun?x=1") — cegah open redirect lewat ?next=. */
 function safeNext(next: string | undefined) {
@@ -24,16 +25,17 @@ async function enterDemo(next: string | undefined): Promise<never> {
   redirect(safeNext(next));
 }
 
-export type SignInResult = { error: string; code: "invalid_credentials" | "failed" } | undefined;
+export type SignInResult = { error: string; code: "invalid_credentials" | "email_not_confirmed" | "failed" } | undefined;
 
 export async function signIn(email: string, password: string, next?: string): Promise<SignInResult> {
   if (!isSupabaseConfigured) await enterDemo(next);
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
-    return error.code === "invalid_credentials"
-      ? { error: "Incorrect email or password.", code: "invalid_credentials" }
-      : { error: "Couldn't sign in. Please try again in a moment.", code: "failed" };
+    if (error.code === "invalid_credentials") return { error: "Incorrect email or password.", code: "invalid_credentials" };
+    // Password benar tapi email belum diverifikasi (mis. daftar lewat Order Now) → jelaskan + tawarkan kirim ulang.
+    if (error.code === "email_not_confirmed") return { error: "Your email isn't verified yet. Open the verification link we emailed you (check Spam / Promotions too).", code: "email_not_confirmed" };
+    return { error: "Couldn't sign in. Please try again in a moment.", code: "failed" };
   }
   // Staf undangan jadi aktif di login pertama + catat "terakhir aktif" (diabaikan untuk non-staf).
   await supabase.rpc("touch_staff_login");
@@ -115,25 +117,6 @@ export async function signUp(input: SignUpInput, next?: string): Promise<SignUpR
   if (data.user && data.user.identities?.length === 0) return { fieldErrors: { email: "This email is already registered — sign in instead" } };
   if (!data.session) return { confirmEmail: values.email.toLowerCase() };
   redirect(safeNext(next));
-}
-
-/** Link di email konfirmasi signup — tujuan sama dengan signUp (`next`, mis. /game, atau /akun). */
-async function signupRedirect(next?: string) {
-  return `${await requestOrigin()}/auth/confirm?next=${encodeURIComponent(safeNext(next))}`;
-}
-
-/**
- * Template email Supabase menulis `next=/akun` sendiri (tidak memakai emailRedirectTo), jadi tujuan
- * khusus setelah verifikasi (mis. /game) dititipkan di cookie — dibaca /auth/confirm di browser yang
- * sama. Dipanggil setiap kali link konfirmasi dikirim.
- */
-async function rememberAfterConfirm(next?: string) {
-  const jar = await cookies();
-  if (isInternalPath(next) && next !== AFTER_AUTH) {
-    jar.set(AFTER_CONFIRM_COOKIE, next, { path: "/", httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", maxAge: 60 * 60 * 24 });
-  } else {
-    jar.delete(AFTER_CONFIRM_COOKIE);
-  }
 }
 
 /** Klien anon tanpa cookie — cek password tanpa membuat / menimpa sesi login di browser. */
@@ -287,13 +270,6 @@ export async function updatePassword(password: string): Promise<UpdatePasswordRe
   if (error?.code === "weak_password") return { fieldError: "Password is too weak — try a longer one" };
   if (error) return { error: "Couldn't save your password. Please try again in a moment." };
   redirect(AFTER_AUTH);
-}
-
-/** Origin absolut untuk link di email: Origin dari browser, cadangan Host (+ proto dari proxy Vercel). */
-async function requestOrigin() {
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  return h.get("origin") ?? (host ? `${h.get("x-forwarded-proto") ?? "https"}://${host}` : "");
 }
 
 /**

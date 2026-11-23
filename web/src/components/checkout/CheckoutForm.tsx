@@ -20,10 +20,11 @@ import {
   variantLabel,
   type ShippingMethod,
 } from "@/lib/checkout";
-import { cartItemKey, clearCheckoutSelection, readCart, readCheckoutSelection, removeFromCart, type CheckoutSelection } from "@/lib/cart";
+import { cartItemKey, clearCheckoutSelection, readCart, readCheckoutSelection, removeFromCart, type CartItem, type CheckoutSelection } from "@/lib/cart";
 import { cx } from "@/lib/cx";
+import { orderPayHref } from "@/lib/order-now";
 import { placeOrder } from "@/server/shop/actions";
-import type { CheckoutContext, Recipient } from "@/server/shop/types";
+import type { CheckoutContext, CheckoutLine, Recipient, ShipInput } from "@/server/shop/types";
 import { Card, Chip, KV, METHOD_ICON, ProductLine, shippingLine } from "./CheckoutParts";
 import styles from "./Checkout.module.css";
 import { StickyBar } from "./StickyBar";
@@ -37,11 +38,30 @@ const kgText = (grams: number) => `${(grams / 1000).toLocaleString("id-ID", { ma
  * Checkout (Figma 04a J&T · 04b Instant · 04c Free Pickup Mabar; mobile MOB-05).
  * Ongkir di sini hanya pratinjau — angka resmi dihitung ulang server saat "Buat pesanan & bayar".
  */
-export function CheckoutForm({ ctx }: { ctx: CheckoutContext }) {
+export function CheckoutForm({
+  ctx,
+  items: itemsProp,
+  header,
+  extraCheck,
+  fallbackRecipient,
+  place,
+}: {
+  ctx: CheckoutContext;
+  /** Produk dari luar (Order Now) — bukan dari Keranjang / Buy Now; kartu produk diganti `header`. */
+  items?: CartItem[];
+  /** Isi di atas opsi pengiriman (Order Now: pilih produk & data akun). */
+  header?: ReactNode;
+  /** Cek tambahan sebelum membuat pesanan (Order Now: data akun) — pesan = gagal. */
+  extraCheck?: () => string | undefined;
+  /** Nama & HP penerima bila dikosongkan (Order Now: dari data akun). */
+  fallbackRecipient?: { name: string; phone: string };
+  /** Pembuat pesanan lain (Order Now) → href halaman pesanan. Bawaan: placeOrder → /akun/pesanan/KODE. */
+  place?: (lines: CheckoutLine[], ship: ShipInput) => Promise<{ ok: true; href: string } | { ok: false; error: string }>;
+}) {
   const router = useRouter();
   const snapshot = useSyncExternalStore(noopSubscribe, readSelection, () => "null");
   const selection = JSON.parse(snapshot) as CheckoutSelection | null;
-  const items = selection?.items ?? [];
+  const items = itemsProp ?? selection?.items ?? [];
 
   const [method, setMethod] = useState<ShippingMethod>("jnt");
   // Nama kota lama (sebelum daftar resmi Kemendagri) tidak dikenali → member diminta memilih ulang.
@@ -74,13 +94,27 @@ export function CheckoutForm({ ctx }: { ctx: CheckoutContext }) {
     pickup: ctx.pickupSessions.length === 0 ? "Belum ada sesi Mabar 14 hari ke depan." : undefined,
   };
 
+  // Penerima: isian form, atau data akun (Order Now) bila dikosongkan.
+  const who = { name: recipient.name.trim() || fallbackRecipient?.name.trim() || "", phone: recipient.phone.trim() || fallbackRecipient?.phone.trim() || "" };
+
   const validate = (): string | undefined => {
     if (!items.length) return "Belum ada produk dipilih.";
-    if (!recipient.name.trim() || !recipient.phone.trim()) return method === "pickup" ? "Isi nama & nomor HP pengambil." : "Isi nama & nomor HP penerima.";
+    const extra = extraCheck?.();
+    if (extra) return extra;
+    if (!who.name || !who.phone) return method === "pickup" ? "Isi nama & nomor HP pengambil." : "Isi nama & nomor HP penerima.";
     if (method !== "pickup" && (!recipient.address.trim() || !recipient.city || !recipient.postalCode.trim())) return "Lengkapi alamat, kota & kode pos.";
     if (method === "instant" && !pin) return "Atur titik lokasi di peta dulu.";
     if (method === "pickup" && !session) return "Pilih sesi Mabar untuk mengambil pesanan.";
     if (disabled[method] || fee === null) return disabled[method] ?? "Opsi pengiriman ini belum bisa dipakai.";
+  };
+
+  // Bawaan: checkout Keranjang / Buy Now — produk yang dipesan dilepas dari keranjang.
+  const placeFromCart = async (lines: CheckoutLine[], ship: ShipInput) => {
+    const result = await placeOrder(lines, ship);
+    if (!result.ok) return result;
+    if (selection?.source === "cart") removeFromCart(items.map(cartItemKey));
+    clearCheckoutSelection();
+    return { ok: true as const, href: orderPayHref(result.data.code) };
   };
 
   const submit = () => {
@@ -92,18 +126,15 @@ export function CheckoutForm({ ctx }: { ctx: CheckoutContext }) {
     }
     setError(undefined);
     start(async () => {
-      const result = await placeOrder(
-        items.map((i) => ({ slug: i.productSlug, options: i.options, quantity: i.quantity })),
-        { method, name: recipient.name, phone: recipient.phone, address: recipient.address, city: recipient.city, postalCode: recipient.postalCode, lat: pin?.lat, lng: pin?.lng, sessionId },
-      );
+      const lines = items.map((i) => ({ slug: i.productSlug, options: i.options, quantity: i.quantity }));
+      const ship: ShipInput = { method, name: who.name, phone: who.phone, address: recipient.address, city: recipient.city, postalCode: recipient.postalCode, lat: pin?.lat, lng: pin?.lng, sessionId };
+      const result = await (place ?? placeFromCart)(lines, ship);
       if (!result.ok) return setError(result.error);
-      if (selection?.source === "cart") removeFromCart(items.map(cartItemKey));
-      clearCheckoutSelection();
-      router.push(`/akun/pesanan/${result.data.code}`);
+      router.push(result.href);
     });
   };
 
-  if (snapshot !== "null" && items.length === 0) {
+  if (!itemsProp && snapshot !== "null" && items.length === 0) {
     return (
       <div className={styles.body}>
         <Card title="Belum ada produk dipilih">
@@ -147,8 +178,8 @@ export function CheckoutForm({ ctx }: { ctx: CheckoutContext }) {
       <Card title="Data pengambil" aside={!editing && <button type="button" className={styles.pillButton} onClick={() => setEditing(true)}>Ubah</button>}>
         {editing ? (
           <div className={styles.fields}>
-            <Field label="Nama pengambil" value={recipient.name} onChange={(name) => setRecipient({ ...recipient, name })} autoComplete="name" />
-            <Field label="No. HP" value={recipient.phone} onChange={(phone) => setRecipient({ ...recipient, phone })} type="tel" autoComplete="tel" />
+            <Field label="Nama pengambil" value={recipient.name} onChange={(name) => setRecipient({ ...recipient, name })} autoComplete="name" placeholder={fallbackRecipient?.name || undefined} />
+            <Field label="No. HP" value={recipient.phone} onChange={(phone) => setRecipient({ ...recipient, phone })} type="tel" autoComplete="tel" placeholder={fallbackRecipient?.phone || undefined} />
           </div>
         ) : (
           <div className={styles.person}>
@@ -164,8 +195,8 @@ export function CheckoutForm({ ctx }: { ctx: CheckoutContext }) {
       <Card title="Alamat pengiriman" aside={!editing && <button type="button" className={styles.pillButton} onClick={() => setEditing(true)}>Ganti alamat</button>}>
         {editing ? (
           <div className={styles.fields}>
-            <Field label="Nama penerima" value={recipient.name} onChange={(name) => setRecipient({ ...recipient, name })} autoComplete="name" />
-            <Field label="No. HP" value={recipient.phone} onChange={(phone) => setRecipient({ ...recipient, phone })} type="tel" autoComplete="tel" />
+            <Field label="Nama penerima" value={recipient.name} onChange={(name) => setRecipient({ ...recipient, name })} autoComplete="name" placeholder={fallbackRecipient?.name || undefined} />
+            <Field label="No. HP" value={recipient.phone} onChange={(phone) => setRecipient({ ...recipient, phone })} type="tel" autoComplete="tel" placeholder={fallbackRecipient?.phone || undefined} />
             <label className={cx(styles.field, styles.fieldFull)}>
               <span className={styles.label}>Alamat lengkap</span>
               <textarea className={styles.input} value={recipient.address} onChange={(e) => setRecipient({ ...recipient, address: e.target.value })} autoComplete="street-address" placeholder="Nama jalan, nomor, RT/RW, kelurahan, kecamatan" />
@@ -313,6 +344,7 @@ export function CheckoutForm({ ctx }: { ctx: CheckoutContext }) {
   return (
     <div className={styles.body}>
       <div className={styles.main}>
+        {header}
         <Card title="Opsi pengiriman" aside={<span className={styles.cardAside}>Pilih salah satu</span>}>
           <div className={styles.options} role="radiogroup" aria-label="Opsi pengiriman">
             {option("jnt", `Estimasi ${rate?.eta ?? "2–3"} hari kerja · seluruh Indonesia`, fees.jnt !== null ? rp(fees.jnt) : "—", jntDetail)}
@@ -323,13 +355,15 @@ export function CheckoutForm({ ctx }: { ctx: CheckoutContext }) {
 
         {addressCard}
 
-        <Card title={`Produk dipesan (${items.length})`}>
-          <div className={styles.items}>
-            {items.map((i) => (
-              <ProductLine key={cartItemKey(i)} name={i.name} variant={variantLabel(i.productSlug, i.options)} image={i.image} price={i.price} quantity={i.quantity} weight={`Berat ${kgText((ctx.weights[i.productSlug] ?? 300) * i.quantity)}`} />
-            ))}
-          </div>
-        </Card>
+        {!itemsProp && (
+          <Card title={`Produk dipesan (${items.length})`}>
+            <div className={styles.items}>
+              {items.map((i) => (
+                <ProductLine key={cartItemKey(i)} name={i.name} variant={variantLabel(i.productSlug, i.options)} image={i.image} price={i.price} quantity={i.quantity} weight={`Berat ${kgText((ctx.weights[i.productSlug] ?? 300) * i.quantity)}`} />
+              ))}
+            </div>
+          </Card>
+        )}
 
         <Card title="Metode pembayaran">
           <div className={cx(styles.option, styles.optionSelected)}>
