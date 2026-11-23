@@ -35,8 +35,8 @@ const RANKINGS = [
 const FORMATS: { value: MatchFormat; label: string; ready: boolean; hint?: string }[] = [
   { value: "none", label: "Tanpa skor", ready: true },
   { value: "round_robin", label: "Round robin", ready: false },
-  { value: "americano", label: "Americano", ready: true, hint: "Partner berganti tiap ronde; tiap pemain main sama banyak & tidak berpasangan dengan orang yang sama dua kali. Tim di tiap court diseimbangkan per level (penilaian host, atau level profil)." },
-  { value: "rotating", label: "Rotating Partner", ready: true, hint: "Seperti Americano (tim diseimbangkan per level), tapi skor bebas tanpa target poin — mis. 6–4." },
+  { value: "americano", label: "Americano", ready: true, hint: "Partner berganti tiap ronde; tiap pemain main sama banyak & tidak berpasangan dengan orang yang sama dua kali. Bila ada beberapa pilihan yang sama adil, dipilih tim dengan level paling seimbang." },
+  { value: "rotating", label: "Rotating Partner", ready: true, hint: "Aturan acak sama dengan Americano (partner tidak berulang, level sebagai penentu seri), tapi skor bebas tanpa target poin — mis. 6–4." },
   { value: "knockout", label: "Knockout", ready: false },
 ];
 
@@ -221,7 +221,8 @@ export function LineupCard({
   rounds: number;
   /** null = tanpa target poin (Rotating Partner): skor bebas. */
   targetPoints: number | null;
-  /** Tim di tiap court diseimbangkan per level (Americano & Rotating Partner). */
+  /** Level jadi penentu seri saat acak (Americano & Rotating Partner). */
+  /** Acak line-up memakai level sebagai penentu seri (partner tidak berulang tetap utama). */
   balanceLevels: boolean;
   initial: SessionMatch[];
   /** Activity sudah berakhir → hasil terkunci; admin bisa masuk mode "Koreksi hasil". */

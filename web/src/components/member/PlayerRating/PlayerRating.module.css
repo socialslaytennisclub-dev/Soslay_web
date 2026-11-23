@@ -212,9 +212,10 @@
 
 /* ── Kartu pemain ── */
 
+/* Progres kartu: bar dari Kudos.module.css (.progress / .progressBar); di sini hanya tata letak sebaris. */
 .progress {
-  display: flex;
   flex: 1;
+  flex-direction: row;
   align-items: center;
   gap: var(--space-12);
   font-size: 13px;
@@ -223,20 +224,8 @@
   white-space: nowrap;
 }
 
-.progressBar {
+.progress > span:last-child {
   flex: 1;
-  height: 6px;
-  overflow: hidden;
-  border-radius: var(--radius-full);
-  background: var(--color-indigo-border);
-}
-
-.progressBar > span {
-  display: block;
-  height: 100%;
-  border-radius: inherit;
-  background: var(--color-lime-500);
-  transition: width 0.25s ease;
 }
 
 .person {

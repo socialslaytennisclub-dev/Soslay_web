@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { genderOptions, handOptions, playingFormatOptions, playingFrequencyOptions, type MemberProfile } from "@/content/member";
 import { levelFromLabel } from "@/lib/levels";
+import { lineupNtrp } from "@/lib/player-level";
+import type { TennisLevel } from "@/server/admin/types";
 import { normalizeKuyId } from "@/lib/auth";
 import { validateProfile } from "@/lib/profile";
 import type { KudosTop, PersonCard } from "@/lib/kudos";
@@ -255,6 +257,31 @@ export async function ratePlayer(memberId: string, ntrp: number | null): Promise
   if (!error) return { ok: true };
   if (/Hanya pemain|diri sendiri|Level tidak valid|Masuk dulu/.test(error.message)) return { ok: false, error: `${error.message}.` };
   return { ok: false, error: "Penilaian gagal disimpan. Coba lagi." };
+}
+
+/**
+ * Bobot level untuk acak line-up host (NTRP per id roster): nilai host → level profil → 3.0. Diambil saat host
+ * menekan acak (tidak ikut di data halaman). Host sendiri selalu memakai level profilnya, supaya host yang ikut
+ * main tidak bisa melihat levelnya. Hak host / admin dicek RPC (selain itu nilai host kosong).
+ */
+export async function getHostLineupLevels(sessionId: string): Promise<Record<string, number>> {
+  if (!isSupabaseConfigured) return {};
+  const supabase = await createSupabaseServerClient("member");
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return {};
+  const [{ data: roster }, { data: rated }] = await Promise.all([
+    supabase.rpc("session_roster", { p_session: sessionId }),
+    supabase.rpc("session_player_levels", { p_session: sessionId }),
+  ]);
+  const ratedBy = new Map(((rated ?? []) as { member_id: string; ntrp: number | string }[]).map((r) => [r.member_id, Number(r.ntrp)]));
+  return Object.fromEntries(
+    ((roster ?? []) as { id: string; member_id: string | null; tennis_level: TennisLevel | null }[]).map((p) => [
+      p.id,
+      lineupNtrp(p.member_id && p.member_id !== user.id ? ratedBy.get(p.member_id) : null, p.tennis_level),
+    ]),
+  );
 }
 
 /** Batalkan kudos saya ke penerima ini (Slay Point −1). */

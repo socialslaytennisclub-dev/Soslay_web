@@ -77,20 +77,23 @@ begin
         p.member_id,
         (select count(distinct x.session_id) from played x where x.member_id = p.member_id) as times,
         last.session_id as last_session, last.title as last_title, last.starts_at as last_at, last.venue_id,
-        r.ntrp, r.rated_at, r.host_id is not null as rated
+        r.ntrp, r.rated_at, r.host_id is not null as rated,
+        -- Perlu dinilai: belum pernah, atau nilai > 90 hari dan sejak itu main bareng lagi (tanpa main bareng
+        -- 90 hari terakhir → last_at null → false, bukan null).
+        r.host_id is null or (r.rated_at < now() - interval '90 days' and coalesce(last.starts_at > r.rated_at, false)) as due
       from pool p
       left join lateral (select * from played x where x.member_id = p.member_id order by x.starts_at desc limit 1) last on true
       left join player_ratings r on r.host_id = v_me and r.member_id = p.member_id
     )
     select jsonb_agg(jsonb_build_object(
              'member_id', x.member_id, 'name', pr.full_name, 'avatar', pr.avatar_path,
-             'times', x.times, 'last_title', x.last_title, 'last_at', x.last_at, 'venue', v.name,
+             'times', x.times, 'last_title', x.last_title, 'last_at', x.last_at, 'venue', v.name, 'city', v.city,
              'cohosts', coalesce((
                select jsonb_agg(cp.full_name order by cp.full_name) from session_hosts ch join profiles cp on cp.id = ch.member_id
                where ch.session_id = x.last_session and ch.role = 'host' and ch.member_id <> v_me), '[]'::jsonb),
              'ntrp', x.ntrp, 'rated', x.rated, 'rated_at', x.rated_at,
-             'due', not x.rated or (x.rated_at < now() - interval '90 days' and x.last_at > x.rated_at))
-           order by (not x.rated or (x.rated_at < now() - interval '90 days' and x.last_at > x.rated_at)) desc,
+             'due', x.due)
+           order by x.due desc,
                     x.times desc, x.last_at desc nulls last, pr.full_name)
     from items x
     join profiles pr on pr.id = x.member_id

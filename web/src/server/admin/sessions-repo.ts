@@ -1,4 +1,5 @@
 import "server-only";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateLineup, usesLineup, scoreTarget } from "@/lib/americano";
 import { sessionClosesAt } from "@/lib/session-close";
 import { defaultSessionVenue, venueChoices } from "./catalog-repo";
@@ -160,13 +161,16 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
       };
     });
   const finished = isFinished(s, new Date());
-  const [{ play, roster, hosts, matches, photos }, reviewRows, kudosRows, kudosTop, ratedLevels] = await Promise.all([
-    loadSessionPlay(s, d.live),
+  const client = d.live ? await createSupabaseServerClient() : null;
+  const [{ play, roster, hosts, matches, photos, ratedLevels }, reviewRows, kudosRows, kudosTop] = await Promise.all([
+    // Penilaian level oleh host (beta): rata-rata NTRP per member → bobot acak line-up, hanya format ber-line-up.
+    loadSessionPlay(s, d.live).then(async (data) => ({
+      ...data,
+      ratedLevels: client && usesLineup(data.play.matchFormat) ? await loadRatedLevels(client, s.id) : new Map<string, number>(),
+    })),
     loadSessionReviews(s.id, d.live && finished),
     loadSessionKudosAdmin(s.id, d.live && finished),
-    d.live ? createSupabaseServerClient().then((client) => loadKudosTop(client, s.id)) : new Map<string, KudosTop>(),
-    // Penilaian level oleh host (beta): rata-rata NTRP per member → bobot acak line-up.
-    d.live ? loadRatedLevels(s.id) : new Map<string, number>(),
+    client ? loadKudosTop(client, s.id) : new Map<string, KudosTop>(),
   ]);
   const hostIds = new Set(hosts.filter((h) => h.role === "host").map((h) => h.memberId));
   const reviews = reviewRows.map((r) => ({ ...r, isHost: hostIds.has(r.memberId) }));
@@ -321,8 +325,7 @@ export function activityTypeOptions() {
 }
 
 /** Level gabungan penilaian host per member peserta (RPC session_player_levels: admin Activities / host). */
-async function loadRatedLevels(sessionId: string): Promise<Map<string, number>> {
-  const client = await createSupabaseServerClient();
+async function loadRatedLevels(client: SupabaseClient, sessionId: string): Promise<Map<string, number>> {
   const { data } = await client.rpc("session_player_levels", { p_session: sessionId });
   return new Map(((data ?? []) as { member_id: string; ntrp: number | string }[]).map((r) => [r.member_id, Number(r.ntrp)]));
 }

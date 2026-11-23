@@ -2717,6 +2717,17 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.exec(`grant select on player_ratings to authenticated`);
   const readAll = async () => { await db.exec(`set role authenticated`); const n = await db.query(`select * from player_ratings`).then((x) => x.rows.length, () => 0); await db.exec(`reset role`); return n; };
   console.assert((await readAll()) === 0, "host membaca tabel nilai langsung");
+  // Tanya ulang: nilai > 90 hari & sejak itu main bareng lagi → due (paling atas). Pemain yang hanya ada karena
+  // nilai lama (tanpa main bareng 90 hari) → due false, bukan null.
+  const sOld = await sess("rt-old", "120 days");
+  await db.query(`insert into session_hosts (session_id, member_id) values ($1, $2)`, [sOld, H1]);
+  await db.query(`insert into bookings (session_id, member_id, status) values ($1, $2, 'attended')`, [sOld, P3]);
+  console.assert((await err(`select rate_player($1, 2.5)`, [P3])) === null, "menilai pemain activity lama");
+  await db.query(`update player_ratings set rated_at = now() - interval '200 days' where host_id = $1 and member_id = $2`, [H1, P3]);
+  await db.query(`update player_ratings set rated_at = now() - interval '100 days' where host_id = $1 and member_id = $2`, [H1, P1]);
+  const q3 = (await one(`select host_rating_queue() q`)).q;
+  const due = Object.fromEntries(q3.map((r) => [r.name, r.due]));
+  console.assert(q3[0].member_id === P1 && due.Rina === true && due.Budi === false && due.Citra === false && q3.length === 3, `tanya ulang 90 hari ${JSON.stringify(due)}`);
 
   await as(H2);
   console.assert((await err(`select rate_player($1, 3.0)`, [P1])) === null, "co-host menilai");

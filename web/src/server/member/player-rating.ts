@@ -17,6 +17,7 @@ type QueueRow = {
   last_title: string | null;
   last_at: string | null;
   venue: string | null;
+  city: string | null;
   cohosts: string[];
   ntrp: number | string | null;
   rated: boolean;
@@ -36,6 +37,7 @@ function demoQueue(sessionId?: string): RatingQueueItem[] {
     lastTitle: i % 2 ? "Weekly Mabar" : "Match Day Americano",
     lastAt: new Date(Date.now() - (i + 1) * 3 * day).toISOString(),
     venue: i % 3 ? "The Citadel" : "Common Grounds",
+    city: "Jakarta",
     cohosts: i % 4 === 1 ? ["Dimas"] : [],
     ntrp: i === 6 ? 3.5 : null,
     rated: i >= 6,
@@ -53,6 +55,7 @@ const toItem = (r: QueueRow): RatingQueueItem => ({
   lastTitle: r.last_title,
   lastAt: r.last_at,
   venue: r.venue,
+  city: r.city,
   cohosts: r.cohosts ?? [],
   ntrp: r.ntrp === null ? null : Number(r.ntrp),
   rated: r.rated,

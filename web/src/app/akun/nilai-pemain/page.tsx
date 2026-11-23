@@ -16,8 +16,8 @@ export default async function PlayerRatingPage({ searchParams }: PageProps<"/aku
   const sessionId = typeof sesi === "string" && /^[0-9a-f-]{36}$/.test(sesi) ? sesi : undefined;
   const items = await getMyRatingQueue(sessionId);
   if (!items) redirect("/masuk?next=/akun/nilai-pemain");
-  // Kembali hanya ke halaman sendiri (path relatif), bukan URL luar.
-  const back = typeof kembali === "string" && kembali.startsWith("/") && !kembali.startsWith("//") ? kembali : "/akun";
+  // Kembali hanya ke halaman sendiri: path "/…" tanpa "//" dan tanpa backslash (browser membaca "/\evil.com" sebagai URL luar).
+  const back = typeof kembali === "string" && /^\/(?![/\\])[^\\]*$/.test(kembali) ? kembali : "/akun";
   return (
     <Container className={styles.page}>
       <PlayerRating items={items} sessionTitle={sessionId && typeof judul === "string" ? judul.slice(0, 80) : null} backHref={back} />

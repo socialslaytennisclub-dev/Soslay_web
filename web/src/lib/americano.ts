@@ -4,8 +4,9 @@
  * yang sama tidak main bareng lagi, pemain yang baru bertemu (teman / lawan) tidak langsung bertemu
  * lagi di ronde berikutnya, dan tidak ada yang rest dua ronde berturut-turut kalau bisa dihindari.
  *
- * Tim di tiap court diseimbangkan per level (opsi `levels`, NTRP) — Americano & Rotating Partner; beda keduanya
- * hanya skor: Americano memakai target total poin, Rotating Partner skor bebas.
+ * Level (opsi `levels`, NTRP) hanya penentu di antara pilihan yang sama baiknya: partner tidak berulang tetap
+ * aturan utama (Americano & Rotating Partner sama). Beda kedua format hanya skor: Americano target total poin,
+ * Rotating Partner bebas.
  *
  * Generator acak + skor penalti: beberapa percobaan, ambil jadwal dengan penalti terkecil.
  * Murni (tanpa I/O) — dipakai di admin (client) dan server.
@@ -94,10 +95,21 @@ function record(h: History, matches: LineupMatch[], players: string[]) {
   h.lastMeet = met;
 }
 
-// Bobot penalti: kelompok 4 orang yang sama >> selisih level tim (Rotating) ≈ partner berulang >
+// Bobot penalti: kelompok 4 orang yang sama >> partner berulang >
 // rest dua kali berturut-turut > bertemu lagi di ronde berikutnya > lawan berulang. 1–2 orang bertemu
-// lagi masih wajar (penalti kecil); rest dua kali lebih mahal dari satu pertemuan ulang.
-const COST = { sameGroup: 60, partner: 10, level: 10, restTwice: 8, metLastRound: 4, opponent: 1 };
+// lagi masih wajar (penalti kecil); rest dua kali lebih mahal dari satu pertemuan ulang. Selisih level tim (LEVEL) paling kecil.
+const COST = { sameGroup: 60, partner: 10, restTwice: 8, metLastRound: 4, opponent: 1 };
+/**
+ * Penalti selisih level tim: 2 per poin NTRP, maks. 3 per court — selalu di bawah partner berulang (10), bertemu
+ * lagi (4) & kelompok sama (60), jadi level hanya memilih di antara jadwal yang sama adilnya.
+ */
+const LEVEL = { perPoint: 2, max: 3 };
+
+function levelPenalty(levels: LevelWeights | undefined, a1: string, a2: string, b1: string, b2: string) {
+  if (!levels) return 0;
+  const gap = Math.abs((levels[a1] ?? 3) + (levels[a2] ?? 3) - (levels[b1] ?? 3) - (levels[b2] ?? 3));
+  return Math.min(LEVEL.max, LEVEL.perPoint * gap);
+}
 
 /** Bagian penalti court yang sama untuk ketiga pembagian tim + ke-6 kunci pasangannya. */
 type CourtBase = { k12: string; k13: string; k14: string; k23: string; k24: string; k34: string; group: number; allOpp: number };
@@ -121,10 +133,10 @@ function courtBase(h: History, p1: string, p2: string, p3: string, p4: string): 
 /**
  * Penalti court untuk pembagian [a1, a2] vs [b1, b2] (partner `ka`/`kb`) — satu-satunya rumus penalti
  * court (planRound memilih, lineupCost menilai): kelompok + partner berulang + lawan berulang + selisih
- * level tim (Rotating).
+ * level tim (penentu seri).
  */
 function splitCost(h: History, base: CourtBase, a1: string, a2: string, b1: string, b2: string, ka: string, kb: string, levels?: LevelWeights) {
-  const level = levels ? COST.level * Math.abs((levels[a1] ?? 3) + (levels[a2] ?? 3) - (levels[b1] ?? 3) - (levels[b2] ?? 3)) : 0;
+  const level = levelPenalty(levels, a1, a2, b1, b2);
   const partners = (h.partners.get(ka) ?? 0) + (h.partners.get(kb) ?? 0);
   const opponents = base.allOpp - (h.opponents.get(ka) ?? 0) - (h.opponents.get(kb) ?? 0);
   return base.group + COST.partner * partners + COST.opponent * opponents + level;
@@ -255,7 +267,7 @@ export function lineupStats(matches: LineupMatch[], players: string[], levels?: 
     bump(partners, pairKey(...m.b));
   }
   const counts = [...games.values()];
-  // Selisih level tim terbesar di satu court (hanya bermakna untuk Rotating Partner).
+  // Selisih level tim terbesar di satu court (bila acak memakai level).
   const strength = (t: [string, string]) => (levels?.[t[0]] ?? 3) + (levels?.[t[1]] ?? 3);
   const maxLevelGap = levels ? Math.max(0, ...matches.map((m) => Math.abs(strength(m.a) - strength(m.b)))) : 0;
   return {

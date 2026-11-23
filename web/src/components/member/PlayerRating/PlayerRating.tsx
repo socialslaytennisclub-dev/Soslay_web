@@ -6,21 +6,22 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { Avatar } from "@/components/ui";
 import { cx } from "@/lib/cx";
+import { cityOf, formatTanggalPendek } from "@/lib/format";
 import { GROUP_LABEL, NTRP_LEVELS, UNKNOWN_LEVEL, ntrpText, type LevelGroup, type RatingQueueItem } from "@/lib/player-level";
 import { firstName } from "@/lib/text";
 import { ratePlayer } from "@/server/member/actions";
+import kudos from "../SessionDetail/Kudos.module.css";
 import styles from "./PlayerRating.module.css";
 
 const GROUPS: LevelGroup[] = ["newbie", "beginner", "intermediate", "advanced", "pro"];
-const dayFmt = new Intl.DateTimeFormat("id-ID", { weekday: "long", day: "numeric", month: "short", timeZone: "Asia/Jakarta" });
 
-/** "Kamu host Rina di Weekly Mabar (The Citadel), Sabtu 22 Nov bersama Dimas — 4× dalam 90 hari terakhir." */
+/** "Kamu host Rina di Weekly Mabar (The Citadel), Sab, 22 Nov 2026 bersama Dimas — 4× dalam 90 hari terakhir." */
 function contextLine(p: RatingQueueItem) {
   if (!p.lastAt) return `Kamu pernah menilai ${firstName(p.name)} sebelumnya.`;
   const where = [p.lastTitle, p.venue && `(${p.venue})`].filter(Boolean).join(" ");
   const withCo = p.cohosts.length ? ` bersama ${p.cohosts.map(firstName).join(" & ")}` : "";
   const often = p.times > 1 ? `, dan ${p.times}× dalam 90 hari terakhir` : "";
-  return `Kamu host ${firstName(p.name)} di ${where}, ${dayFmt.format(new Date(p.lastAt))}${withCo}${often}.`;
+  return `Kamu host ${firstName(p.name)} di ${where}, ${formatTanggalPendek(p.lastAt, cityOf(p.city ?? ""))}${withCo}${often}.`;
 }
 
 /** Skala NTRP bergaris warna per grup (Newbie → Pro). */
@@ -85,13 +86,15 @@ export function PlayerRating({ items, sessionTitle = null, backHref }: { items: 
   };
 
   const go = (v: Extract<View, { kind: "rate" }>, step: number) => {
+    // Ubah satu pemain dari daftar: Batal / kembali selalu ke daftar, bukan ke pemain sebelumnya.
+    if (v.single) return setView({ kind: "list" });
     const next = v.index + step;
-    if (next < 0) return setView(v.single ? { kind: "list" } : { kind: "intro" });
+    if (next < 0) return setView({ kind: "intro" });
     if (next >= v.ids.length) {
       router.refresh();
-      return setView(v.single ? { kind: "list" } : { kind: "done", count: v.ids.filter((id) => answers.has(id)).length });
+      return setView({ kind: "done", count: v.ids.filter((id) => answers.has(id)).length });
     }
-    open(v.ids, next, v.single);
+    open(v.ids, next);
   };
 
   const save = (v: Extract<View, { kind: "rate" }>) => {
@@ -124,11 +127,11 @@ export function PlayerRating({ items, sessionTitle = null, backHref }: { items: 
             <ArrowLeft size={20} />
           </button>
           {!view.single && (
-            <div className={styles.progress}>
+            <div className={cx(kudos.progress, styles.progress)}>
               <span>
                 {view.index + 1} / {view.ids.length}
               </span>
-              <span className={styles.progressBar}>
+              <span className={kudos.progressBar}>
                 <span style={{ width: `${((view.index + 1) / view.ids.length) * 100}%` }} />
               </span>
             </div>
@@ -237,7 +240,6 @@ export function PlayerRating({ items, sessionTitle = null, backHref }: { items: 
   }
 
   if (view.kind === "list") {
-    const ids = rated.map((p) => p.memberId);
     return (
       <section className={styles.card} aria-labelledby="rated-title">
         <header className={styles.cardHead}>
@@ -251,14 +253,14 @@ export function PlayerRating({ items, sessionTitle = null, backHref }: { items: 
         <p className={styles.lead}>Nilai bisa diubah kapan saja — yang dihitung selalu nilai terbaru.</p>
         {rated.length ? (
           <ul className={styles.ratedList}>
-            {rated.map((p, i) => (
+            {rated.map((p) => (
               <li key={p.memberId}>
                 <Avatar name={p.name} src={p.avatar} size={40} />
                 <span className={styles.ratedName}>
                   {p.name}
                   <small>{ntrpText(answers.get(p.memberId) ?? null)}</small>
                 </span>
-                <button type="button" className={styles.linkBtn} onClick={() => open(ids, i, true)}>
+                <button type="button" className={styles.linkBtn} onClick={() => open([p.memberId], 0, true)}>
                   Ubah
                 </button>
               </li>

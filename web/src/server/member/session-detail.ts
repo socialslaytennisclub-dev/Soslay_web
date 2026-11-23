@@ -17,7 +17,6 @@ import { checkInOpensAt } from "./check-in";
 import { demoKudosSection } from "../kudos-demo";
 import { loadSessionKudos } from "./kudos";
 import { getMyRatingQueue } from "./player-rating";
-import { lineupNtrp } from "@/lib/player-level";
 import { getMemberSession } from "./user";
 import { KUYY_PROFILE_URL } from "@/lib/kuyy";
 
@@ -30,7 +29,7 @@ import { KUYY_PROFILE_URL } from "@/lib/kuyy";
 
 export type DetailPhase = "upcoming" | "live" | "done";
 
-export type DetailPerson = { id: string; name: string; level: string; source: string; me: boolean; checkedIn: boolean; /** Punya akun Soslay → dapat Slay Point. */ member: boolean; /** Bobot acak line-up (NTRP: nilai host → level profil → 3.0); Americano & Rotating Partner. */ ntrp?: number };
+export type DetailPerson = { id: string; name: string; level: string; source: string; me: boolean; checkedIn: boolean; /** Punya akun Soslay → dapat Slay Point. */ member: boolean; };
 
 export type DetailMatch = {
   /** null di mode demo. */
@@ -68,7 +67,7 @@ export type MemberSessionDetail = {
   checkInAt: string;
   phase: DetailPhase;
   venue: { name: string; address: string; mapsUrl: string | null };
-  format: { label: string; /** null = tanpa target poin (Rotating Partner): skor bebas. */ targetPoints: number | null; courts: number; rounds: number; lineup: boolean; /** Acak line-up menyeimbangkan level tim (Americano & Rotating Partner). */ balance: boolean; leaderboardMode: "points" | "wins"; attendancePoints: number; /** Slay Point juara 1 / 2 / 3 activity ini. */ podiumBonus: PodiumBonus };
+  format: { label: string; /** null = tanpa target poin (Rotating Partner): skor bebas. */ targetPoints: number | null; courts: number; rounds: number; lineup: boolean; /** Acak line-up memakai level sebagai penentu seri; bobotnya diambil saat acak (getHostLineupLevels). */ balance: boolean; leaderboardMode: "points" | "wins"; attendancePoints: number; /** Slay Point juara 1 / 2 / 3 activity ini. */ podiumBonus: PodiumBonus };
   capacity: number;
   levels: string[];
   /** null = host yang tidak ikut main (tanpa booking) — tanpa e-ticket & info pendaftaran. */
@@ -283,7 +282,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
   const fetchedAt = Date.now();
   const done = phaseOf(session, fetchedAt) === "done";
   const canReview = done && (Boolean(booking) || assigned === true);
-  const [{ data: myRows }, { data: roster }, { data: matches }, { data: canScore }, qr, { data: review }, { data: ledger }, { data: reviewPoints }, { data: allReviews }, kudos, rateQueue, { data: ratedLevels }] = await Promise.all([
+  const [{ data: myRows }, { data: roster }, { data: matches }, { data: canScore }, qr, { data: review }, { data: ledger }, { data: reviewPoints }, { data: allReviews }, kudos, rateQueue] = await Promise.all([
     // Baris peserta milik sendiri (RLS) — untuk no. registrasi Kuyy & jumlah bayar. Bisa lebih dari
     // satu (impor Kuyy + tambahan manual admin), jadi ambil semua: yang pertama untuk data daftar.
     supabase.from("session_participants").select("id, full_name, kuy_reg_no, checked_in_at, amount").eq("session_id", session.id).eq("member_id", user.id).order("imported_at"),
@@ -315,10 +314,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     done ? loadSessionKudos(supabase, session.id) : null,
     // Penilaian level (beta): peserta yang belum dinilai host ini — RPC mengembalikan kosong untuk non-host.
     done && assigned === true ? getMyRatingQueue(session.id) : null,
-    // Americano & Rotating Partner: level gabungan dari host untuk acak line-up (hanya host & admin yang menerima isinya).
-    usesLineup(session.match_format) && assigned === true && !done ? supabase.rpc("session_player_levels", { p_session: session.id }) : { data: [] },
   ]);
-  const ratedBy = new Map(((ratedLevels ?? []) as { member_id: string; ntrp: number | string }[]).map((r) => [r.member_id, Number(r.ntrp)]));
 
   // Member tampil dengan nama Soslay (RPC sudah memilih nama profil bila terhubung).
   const people: DetailPerson[] = ((roster ?? []) as RosterRow[])
@@ -330,7 +326,6 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
       me: p.member_id === user.id,
       checkedIn: p.checked_in,
       member: p.member_id !== null,
-      ntrp: usesLineup(session.match_format) ? lineupNtrp(p.member_id ? ratedBy.get(p.member_id) : null, p.tennis_level) : undefined,
     }))
     .sort((x, y) => Number(y.me) - Number(x.me));
 
@@ -483,7 +478,7 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     checkInAt: checkInOpensAt(startsAt, null),
     phase: s.status === "done" ? "done" : "upcoming",
     venue: { name: s.venue, address: s.city, mapsUrl: null },
-    format: { label: "Americano Doubles", targetPoints: 21, courts: 2, rounds: 7, lineup: true, balance: false, leaderboardMode: "points", attendancePoints: 50, podiumBonus: [...DEFAULT_PODIUM_BONUS] },
+    format: { label: "Americano Doubles", targetPoints: 21, courts: 2, rounds: 7, lineup: true, balance: true, leaderboardMode: "points", attendancePoints: 50, podiumBonus: [...DEFAULT_PODIUM_BONUS] },
     capacity: 8,
     levels: ["Beginner", "Intermediate"],
     ticket: { code: bookingCode("9f2a1c00", s.date), qrSvg: await qrSvg(`soslay:booking:demo-${s.slug}`), holder: names[0], type: "Player", status: s.status === "done" ? "attended" : "registered", checkedInAt: null },

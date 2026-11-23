@@ -9,7 +9,7 @@ import { cx } from "@/lib/cx";
 import { isUnstarted, type RoundPlan } from "@/lib/rounds";
 import { firstName, teamName } from "@/lib/text";
 import type { MemberSessionDetail } from "@/server/member/session-detail";
-import { saveHostLineup, type HostLineupMatch } from "@/server/member/actions";
+import { getHostLineupLevels, saveHostLineup, type HostLineupMatch } from "@/server/member/actions";
 import styles from "./SessionDetail.module.css";
 
 type Slot = "a1" | "a2" | "b1" | "b2";
@@ -39,7 +39,7 @@ const toDraft = (d: MemberSessionDetail): Draft[] => {
  * partner tidak berulang. Ronde ≥ `fromRound` yang sudah pernah dimulai (data lama dari lompat ronde)
  * tidak diacak — court tanpa skornya dikirim apa adanya supaya tidak terhapus. null = pemain hadir kurang dari 4.
  */
-export function shuffleFromRound(d: MemberSessionDetail, fromRound: number, plan?: RoundPlan): HostLineupMatch[] | null {
+export function shuffleFromRound(d: MemberSessionDetail, fromRound: number, plan?: RoundPlan, levels?: LevelWeights): HostLineupMatch[] | null {
   const players = d.people.filter((p) => p.checkedIn).map((p) => p.id);
   // Hanya ronde di format sesi (line-up lama di luar format tidak diisi ulang).
   const rounds = d.format.rounds;
@@ -52,8 +52,7 @@ export function shuffleFromRound(d: MemberSessionDetail, fromRound: number, plan
   const fixed: LineupMatch[] = d.matches
     .filter((m) => begun(m.round))
     .map((m) => ({ round: m.round, court: m.court, a: [m.playerIds[0], m.playerIds[1]], b: [m.playerIds[2], m.playerIds[3]] }));
-  // Tim tiap court diseimbangkan per level (nilai host, cadangan level profil).
-  const levels: LevelWeights | undefined = d.format.balance ? Object.fromEntries(d.people.map((p) => [p.id, p.ntrp ?? 3])) : undefined;
+  // Tim tiap court diseimbangkan per level (getHostLineupLevels: nilai host, cadangan level profil).
   const generated = generateLineup({ players, courts: d.format.courts, rounds }, { fromRound, history, fixed, levels })
     .map((m) => ({ round_no: m.round, court_no: m.court, a1: m.a[0], a2: m.a[1], b1: m.b[0], b2: m.b[1] }));
   const kept = d.matches
@@ -89,11 +88,13 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
     showDialog();
   };
 
-  const reshuffle = () => {
-    const result = shuffleFromRound(d, shuffleFrom, plan);
-    setShuffled(result);
-    setError(result ? null : "Minimal 4 peserta harus sudah check-in untuk mengacak ulang.");
-  };
+  const reshuffle = () =>
+    startBusy(async () => {
+      const levels = d.format.balance ? await getHostLineupLevels(d.id) : undefined;
+      const result = shuffleFromRound(d, shuffleFrom, plan, levels);
+      setShuffled(result);
+      setError(result ? null : "Minimal 4 peserta harus sudah check-in untuk mengacak ulang.");
+    });
 
   const persist = (fromRound: number, matches: HostLineupMatch[]) =>
     startBusy(async () => {
@@ -291,7 +292,7 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
               </>
             ) : (
               <>
-                <button type="button" className={styles.btnOutline} onClick={reshuffle}>
+                <button type="button" className={styles.btnOutline} onClick={reshuffle} disabled={busy}>
                   Acak lagi
                 </button>
                 <button type="button" className={styles.btnLime} onClick={() => shuffled && persist(shuffleFrom, shuffled)} disabled={busy || !shuffled}>

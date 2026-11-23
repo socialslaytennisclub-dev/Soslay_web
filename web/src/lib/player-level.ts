@@ -79,6 +79,8 @@ export type RatingQueueItem = {
   lastTitle: string | null;
   lastAt: string | null;
   venue: string | null;
+  /** Kota venue activity terakhir (zona waktu tanggal di kartu). */
+  city: string | null;
   cohosts: string[];
   /** Nilai saya; null = belum dinilai atau "Tidak tahu" (lihat `rated`). */
   ntrp: number | null;
