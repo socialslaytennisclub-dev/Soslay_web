@@ -67,7 +67,7 @@ export type MemberSessionDetail = {
   checkInAt: string;
   phase: DetailPhase;
   venue: { name: string; address: string; mapsUrl: string | null };
-  format: { label: string; /** null = tanpa target poin (Rotating Partner): skor bebas. */ targetPoints: number | null; courts: number; rounds: number; lineup: boolean; /** Acak line-up memakai level sebagai penentu seri; bobotnya diambil saat acak (getHostLineupLevels). */ balance: boolean; leaderboardMode: "points" | "wins"; attendancePoints: number; /** Slay Point juara 1 / 2 / 3 activity ini. */ podiumBonus: PodiumBonus };
+  format: { label: string; /** null = tanpa target poin (Rotating Partner): skor bebas. */ targetPoints: number | null; courts: number; rounds: number; lineup: boolean; leaderboardMode: "points" | "wins"; attendancePoints: number; /** Slay Point juara 1 / 2 / 3 activity ini. */ podiumBonus: PodiumBonus };
   capacity: number;
   levels: string[];
   /** null = host yang tidak ikut main (tanpa booking) — tanpa e-ticket & info pendaftaran. */
@@ -359,7 +359,6 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
       courts: session.court_count,
       rounds: session.round_count,
       lineup: usesLineup(session.match_format),
-      balance: usesLineup(session.match_format),
       leaderboardMode: session.leaderboard_mode,
       attendancePoints: session.points_per_attendance,
       podiumBonus: effectivePodiumBonus(toPodiumBonus(session.podium_bonus)),
@@ -478,7 +477,7 @@ async function demoDetail(slug: string): Promise<MemberSessionDetail | null> {
     checkInAt: checkInOpensAt(startsAt, null),
     phase: s.status === "done" ? "done" : "upcoming",
     venue: { name: s.venue, address: s.city, mapsUrl: null },
-    format: { label: "Americano Doubles", targetPoints: 21, courts: 2, rounds: 7, lineup: true, balance: true, leaderboardMode: "points", attendancePoints: 50, podiumBonus: [...DEFAULT_PODIUM_BONUS] },
+    format: { label: "Americano Doubles", targetPoints: 21, courts: 2, rounds: 7, lineup: true, leaderboardMode: "points", attendancePoints: 50, podiumBonus: [...DEFAULT_PODIUM_BONUS] },
     capacity: 8,
     levels: ["Beginner", "Intermediate"],
     ticket: { code: bookingCode("9f2a1c00", s.date), qrSvg: await qrSvg(`soslay:booking:demo-${s.slug}`), holder: names[0], type: "Player", status: s.status === "done" ? "attended" : "registered", checkedInAt: null },

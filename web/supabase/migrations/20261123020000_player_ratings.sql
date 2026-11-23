@@ -126,21 +126,19 @@ revoke execute on function rate_player(uuid, numeric) from public, anon;
 grant execute on function rate_player(uuid, numeric) to authenticated;
 
 /**
- * Level gabungan (rata-rata nilai host, tanpa "Tidak tahu") peserta member sebuah activity — untuk acak line-up.
- * Hanya host yang ditunjuk & admin Activities; selain itu kosong (pemain tidak pernah melihat levelnya).
+ * Level gabungan (rata-rata nilai host, tanpa "Tidak tahu") peserta sebuah activity — untuk acak line-up, per baris
+ * roster (`id` = id di session_roster / line-up) + member_id. Hanya host yang ditunjuk & admin Activities; selain itu
+ * kosong. Pemanggil sendiri tidak pernah ikut (host yang ikut main tidak bisa melihat levelnya, juga lewat PostgREST).
  */
 create function session_player_levels(p_session uuid)
-returns table (member_id uuid, ntrp numeric, raters integer)
+returns table (id uuid, member_id uuid, ntrp numeric, raters integer)
 language sql stable security definer set search_path = public as $$
-  select r.member_id, round(avg(r.ntrp), 2), count(*)::int
-  from player_ratings r
-  where r.ntrp is not null
-    and r.member_id in (
-      select p.member_id from session_participants p where p.session_id = p_session and p.member_id is not null
-      union
-      select b.member_id from bookings b where b.session_id = p_session and b.status <> 'cancelled')
+  select r.id, r.member_id, round(avg(pr.ntrp), 2), count(*)::int
+  from session_roster(p_session) r
+  join player_ratings pr on pr.member_id = r.member_id and pr.ntrp is not null
+  where r.member_id is distinct from auth.uid()
     and (select is_assigned_host(p_session) or has_permission('activities'))
-  group by r.member_id;
+  group by r.id, r.member_id;
 $$;
 revoke execute on function session_player_levels(uuid) from public, anon;
 grant execute on function session_player_levels(uuid) to authenticated;

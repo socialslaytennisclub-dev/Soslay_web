@@ -212,8 +212,9 @@
 
 /* ── Kartu pemain ── */
 
-/* Progres kartu: bar dari Kudos.module.css (.progress / .progressBar); di sini hanya tata letak sebaris. */
-.progress {
+/* Progres kartu: bar dari Kudos.module.css (.progress / .progressBar); di sini hanya tata letak sebaris. Selektor
+   2 kelas (.cardHead .progress) supaya menang dari .progress Kudos (flex-direction: column) apa pun urutan CSS-nya. */
+.cardHead .progress {
   flex: 1;
   flex-direction: row;
   align-items: center;
@@ -224,7 +225,7 @@
   white-space: nowrap;
 }
 
-.progress > span:last-child {
+.cardHead .progress > span:last-child {
   flex: 1;
 }
 

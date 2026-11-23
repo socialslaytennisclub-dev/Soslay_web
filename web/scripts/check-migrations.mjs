@@ -2738,9 +2738,15 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await one(`select host_rating_queue() q`)).q.length === 0, "antrean bukan host");
   await as(P1);
   console.assert((await readAll()) === 0, "pemain membaca nilainya sendiri");
+  // Host yang ikut main tidak menerima levelnya sendiri (juga lewat RPC langsung).
+  await db.query(`insert into bookings (session_id, member_id, status) values ($1, $2, 'attended')`, [s1, H2]);
   await as(H1);
-  const lv = (await db.query(`select member_id, ntrp::float n, raters from session_player_levels($1)`, [s1])).rows;
-  console.assert(lv.length === 1 && lv[0].member_id === P1 && lv[0].n === 3.5 && lv[0].raters === 2, `rata-rata level ${JSON.stringify(lv)}`);
+  console.assert((await err(`select rate_player($1, 4.5)`, [H2])) === null, "host menilai co-host yang ikut main");
+  await as(H2);
+  console.assert(!(await db.query(`select member_id from session_player_levels($1)`, [s1])).rows.some((r) => r.member_id === H2), "host melihat levelnya sendiri");
+  await as(H1);
+  const lv = (await db.query(`select id, member_id, ntrp::float n, raters from session_player_levels($1) where member_id = $2`, [s1, P1])).rows;
+  console.assert(lv.length === 1 && lv[0].id === P1 && lv[0].n === 3.5 && lv[0].raters === 2, `rata-rata level ${JSON.stringify(lv)}`);
   await as(null);
   console.log("✓ penilaian level: hanya host activity selesai, peserta hadir, kelipatan 0.5, satu nilai per host, rata-rata tanpa Tidak tahu, tidak terbaca pemain");
 }

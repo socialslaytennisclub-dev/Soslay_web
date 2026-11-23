@@ -210,7 +210,6 @@ export function LineupCard({
   courts,
   rounds,
   targetPoints,
-  balanceLevels,
   initial,
   ended = false,
   disabledReason,
@@ -222,8 +221,6 @@ export function LineupCard({
   /** null = tanpa target poin (Rotating Partner): skor bebas. */
   targetPoints: number | null;
   /** Level jadi penentu seri saat acak (Americano & Rotating Partner). */
-  /** Acak line-up memakai level sebagai penentu seri (partner tidak berulang tetap utama). */
-  balanceLevels: boolean;
   initial: SessionMatch[];
   /** Activity sudah berakhir → hasil terkunci; admin bisa masuk mode "Koreksi hasil". */
   ended?: boolean;
@@ -233,11 +230,8 @@ export function LineupCard({
   const players = useMemo(() => participants.filter((p) => p.status !== "waitlisted"), [participants]);
   const ids = useMemo(() => players.map((p) => p.id), [players]);
   const names = useMemo(() => shortNames(players), [players]);
-  const levels = useMemo<LevelWeights | undefined>(
-    // NTRP: nilai host (rata-rata) → level profil → 3.0.
-    () => (balanceLevels ? Object.fromEntries(players.map((p) => [p.id, lineupNtrp(p.ratedNtrp, p.level)])) : undefined),
-    [balanceLevels, players],
-  );
+  // Level jadi penentu seri saat acak (partner tidak berulang tetap utama): nilai host → level profil → 3.0.
+  const levels = useMemo<LevelWeights>(() => Object.fromEntries(players.map((p) => [p.id, lineupNtrp(p.ratedNtrp, p.level)])), [players]);
   const router = useRouter();
   const [scoring, setScoring] = useState<string | null>(null);
   const [correcting, setCorrecting] = useState(false);
@@ -437,7 +431,7 @@ export function LineupCard({
             ].join(" · ")}
           </span>
         )}
-        {matches.length > 0 && levels && (
+        {matches.length > 0 && (
           <span className={cx(styles.chip, stats.maxLevelGap > 1 ? styles.chipWarn : styles.chipGood)} title="Selisih total level NTRP dua tim di satu court (nilai host, atau level profil bila belum dinilai)">
             Selisih level tim maks {stats.maxLevelGap}
           </span>

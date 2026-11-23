@@ -6,6 +6,8 @@ import { useState, useTransition } from "react";
 import { useDialog } from "@/hooks/useDialog";
 import { generateLineup, playableCourts, type LevelWeights, type LineupMatch } from "@/lib/americano";
 import { cx } from "@/lib/cx";
+import { levelFromLabel } from "@/lib/levels";
+import { lineupNtrp } from "@/lib/player-level";
 import { isUnstarted, type RoundPlan } from "@/lib/rounds";
 import { firstName, teamName } from "@/lib/text";
 import type { MemberSessionDetail } from "@/server/member/session-detail";
@@ -61,6 +63,15 @@ export function shuffleFromRound(d: MemberSessionDetail, fromRound: number, plan
   return [...generated, ...kept];
 }
 
+/**
+ * Bobot level acak line-up per peserta: level gabungan dari host (getHostLineupLevels) → level profil → 3.0.
+ * Gagal mengambil (mis. sinyal lapangan lemah) → acak tetap jalan dengan level profil saja.
+ */
+export async function lineupWeights(d: MemberSessionDetail): Promise<LevelWeights> {
+  const rated = await getHostLineupLevels(d.id).catch(() => ({}) as Record<string, number>);
+  return Object.fromEntries(d.people.map((p) => [p.id, lineupNtrp(rated[p.id], levelFromLabel(p.level))]));
+}
+
 /** "Atur line-up" di Panel Host (HL-1d) + "Acak ulang · prioritaskan yang hadir" (HL-1e). */
 export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail; plan: RoundPlan }) {
   const router = useRouter();
@@ -90,8 +101,7 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
 
   const reshuffle = () =>
     startBusy(async () => {
-      const levels = d.format.balance ? await getHostLineupLevels(d.id) : undefined;
-      const result = shuffleFromRound(d, shuffleFrom, plan, levels);
+      const result = shuffleFromRound(d, shuffleFrom, plan, await lineupWeights(d));
       setShuffled(result);
       setError(result ? null : "Minimal 4 peserta harus sudah check-in untuk mengacak ulang.");
     });

@@ -8,9 +8,9 @@ import { useDialog } from "@/hooks/useDialog";
 import { cx } from "@/lib/cx";
 import { formatTanggalPendek } from "@/lib/format";
 import type { MemberSessionDetail } from "@/server/member/session-detail";
-import { getHostLineupLevels, saveHostLineup, startHostActivity } from "@/server/member/actions";
+import { saveHostLineup, startHostActivity } from "@/server/member/actions";
 import { Countdown } from "./Countdown";
-import { shuffleFromRound } from "./HostLineup";
+import { lineupWeights, shuffleFromRound } from "./HostLineup";
 import styles from "./SessionDetail.module.css";
 
 /**
@@ -46,7 +46,7 @@ export function HostStartCard({ detail: d }: { detail: MemberSessionDetail }) {
   const start = () =>
     startBusy(async () => {
       const reshuffle = mode === "present" && d.matches.length > 0;
-      const lineup = reshuffle ? shuffleFromRound(d, 1, undefined, d.format.balance ? await getHostLineupLevels(d.id) : undefined) : null;
+      const lineup = reshuffle ? shuffleFromRound(d, 1, undefined, await lineupWeights(d)) : null;
       if (reshuffle && !lineup) {
         return setError("Minimal 4 peserta harus sudah check-in untuk mengacak line-up. Pilih line-up awal atau check-in peserta dulu.");
       }
