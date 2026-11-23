@@ -527,7 +527,7 @@ export const participantGuides: ParticipantGuide[] = [
     theme: { panel: "#e86324", ink: "#c84b1a" },
     outfit: {
       title: "What should I wear?",
-      body: "Bold burnt-orange walls and a slate-teal court — the venue already brings the colour. Keep your fit clean: white and cream glow against the orange, black and navy look sharp on the court. Skip orange, rust and teal.",
+      body: "Bold burnt-orange walls and a slate-teal court — the venue already brings the colour. Keep your fit clean: white and cream glow against the orange, black and navy look sharp on the court. Skip orange and rust.",
       palette: [
         { name: "Optic White", role: "Your base", hex: "#ffffff" },
         { name: "Jet Black", role: "Contrast", hex: "#161616" },
@@ -540,7 +540,7 @@ export const participantGuides: ParticipantGuide[] = [
         { name: "Peach", hex: "#f2a27a" },
       ],
       avoidNote:
-        "Orange and rust melt into the walls, teal into the court — you'll disappear in photos. Love colour? The walls already bring the orange — keep your fit clean and let the venue do the shouting.",
+        "Orange and rust melt into the walls — you'll disappear in photos. Love colour? The walls already bring the orange — keep your fit clean and let the venue do the shouting.",
       looks: [
         { title: "White tennis dress", caption: "White sleeveless dress, white sneakers", photo: { src: `${CIT}/outfit-white.webp`, alt: "Member in a white sleeveless tennis dress on the teal court" } },
         { title: "Cream + black skirt", caption: "Butter-cream tank, black skirt, white socks", photo: { src: `${CIT}/outfit-cream.webp`, alt: "Member in a butter-cream tank and black skirt" } },
@@ -603,7 +603,7 @@ export const participantGuides: ParticipantGuide[] = [
     tips: {
       title: "Before you come.",
       items: [
-        { title: "Come photo-ready", body: "White, black, navy or cream. Skip orange and teal." },
+        { title: "Come photo-ready", body: "White, black, navy, cream or teal. Skip orange." },
         { title: "Non-marking only", body: "Indoor hard courts — check your soles before you come." },
         { title: "Hydrate early", body: "Indoor play still works up a sweat. Bring a full bottle." },
         { title: "Respect the venue", body: "It's a shared space — keep the lounge tidy and the vibe friendly." },
