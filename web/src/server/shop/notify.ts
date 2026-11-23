@@ -1,6 +1,6 @@
 import "server-only";
 import nodemailer, { type Transporter } from "nodemailer";
-import { rp, SHIPPING_LABEL, type ShippingMethod } from "@/lib/checkout";
+import { rp, SHIPPING_LABEL, variantLabel, type ShippingMethod } from "@/lib/checkout";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { PUBLIC_SITE_URL } from "@/lib/wa-invite";
 
@@ -17,13 +17,17 @@ export type OrderNotice = "placed" | "proof";
 
 export type NoticeOrder = {
   code: string;
+  /** 'reward' = order ongkir dari tukar Slay Point. */
+  channel: string;
   total: number;
   shipping_method: ShippingMethod | null;
   recipient_name: string;
   recipient_phone: string;
   shipping_city: string | null;
   member: { full_name: string | null } | null;
-  order_items: { product_name: string; options: Record<string, string> | null; quantity: number; unit_price: number }[];
+  order_items: { product_name: string; options: Record<string, string> | null; quantity: number; unit_price: number; product_variants: { products: { slug: string } | null } | null }[];
+  /** Bukti sebelumnya yang diganti (status 'replaced') → email bukti ditandai "pengganti". */
+  order_payment_proofs: { status: string }[];
 };
 
 let transport: Transporter | null = null;
@@ -32,7 +36,8 @@ function mailer() {
   const user = process.env.GMAIL_USER;
   const pass = process.env.GMAIL_APP_PASSWORD?.replace(/\s+/g, "");
   if (!user || !pass) return null;
-  transport ??= nodemailer.createTransport({ service: "gmail", auth: { user, pass } });
+  // Batas waktu pendek: SMTP yang macet tidak menahan fungsi server sampai batas durasinya.
+  transport ??= nodemailer.createTransport({ service: "gmail", auth: { user, pass }, connectionTimeout: 10_000, greetingTimeout: 10_000, socketTimeout: 20_000 });
   return { transport, from: user, to: process.env.ORDER_NOTIFY_TO || user };
 }
 
@@ -43,11 +48,16 @@ export function buildOrderEmail(kind: OrderNotice, o: NoticeOrder) {
   const buyer = o.member?.full_name || o.recipient_name;
   const method = o.shipping_method ? SHIPPING_LABEL[o.shipping_method].short : "—";
   const items = o.order_items.map((i) => {
-    const variant = Object.values(i.options ?? {}).filter(Boolean).join(" · ");
+    const variant = variantLabel(i.product_variants?.products?.slug ?? "", i.options ?? {});
     return `${i.quantity}× ${i.product_name}${variant ? ` (${variant})` : ""} — ${rp(i.unit_price * i.quantity)}`;
   });
   const link = `${PUBLIC_SITE_URL}/admin/orders?order=${encodeURIComponent(o.code)}`;
-  const headline = kind === "placed" ? `Order baru #${o.code} — menunggu pembayaran` : `Bukti transfer masuk #${o.code} — perlu diverifikasi`;
+  const reward = o.channel === "reward";
+  const replaced = o.order_payment_proofs.some((p) => p.status === "replaced");
+  const headline =
+    kind === "placed"
+      ? `${reward ? "Order tukar Slay Point" : "Order baru"} #${o.code} — menunggu pembayaran${reward ? " ongkir" : ""}`
+      : `${replaced ? "Bukti transfer pengganti" : "Bukti transfer masuk"} #${o.code} — perlu diverifikasi`;
   const rows: [string, string][] = [
     ["Pembeli", buyer],
     ["Penerima", `${o.recipient_name} · ${o.recipient_phone}`],
@@ -55,7 +65,7 @@ export function buildOrderEmail(kind: OrderNotice, o: NoticeOrder) {
     ["Total", rp(o.total)],
   ];
   return {
-    subject: `${kind === "placed" ? "🛍️ Order baru" : "💸 Bukti transfer"} #${o.code} · ${rp(o.total)} · ${buyer}`,
+    subject: `${kind === "placed" ? (reward ? "🎁 Tukar poin" : "🛍️ Order baru") : replaced ? "💸 Bukti pengganti" : "💸 Bukti transfer"} #${o.code} · ${rp(o.total)} · ${buyer}`,
     text: [headline, "", ...rows.map(([k, v]) => `${k}: ${v}`), "", "Produk:", ...items.map((i) => `- ${i}`), "", `Buka di admin: ${link}`].join("\n"),
     html: `<div style="font-family:Arial,sans-serif;font-size:14px;color:#1b1a55">
 <h2 style="margin:0 0 12px">${esc(headline)}</h2>
@@ -71,10 +81,12 @@ export async function notifyAdminOrder(kind: OrderNotice, code: string) {
   if (!mail) return;
   try {
     const admin = createSupabaseAdminClient();
-    if (!admin) return;
+    if (!admin) throw new Error("SUPABASE_SERVICE_ROLE_KEY belum dipasang di server — detail order tidak bisa dibaca");
     const { data, error } = await admin
       .from("orders")
-      .select("code, total, shipping_method, recipient_name, recipient_phone, shipping_city, member:profiles!orders_member_id_fkey(full_name), order_items(product_name, options, quantity, unit_price)")
+      .select(
+        "code, channel, total, shipping_method, recipient_name, recipient_phone, shipping_city, member:profiles!orders_member_id_fkey(full_name), order_items(product_name, options, quantity, unit_price, product_variants(products(slug))), order_payment_proofs(status)",
+      )
       .eq("code", code)
       .maybeSingle();
     if (error || !data) throw new Error(error?.message ?? `order ${code} tidak ditemukan`);
