@@ -73,12 +73,13 @@ ol {
 
 /*
  * Gate animasi GSAP: elemen [data-anim] disembunyikan sebelum JS jalan supaya tidak "berkedip".
- * GSAP memunculkannya (autoAlpha). Fallback: kalau JS gagal, tetap muncul setelah 4 detik.
+ * GSAP memunculkannya (autoAlpha). Fallback: kalau JS lambat (HP, jaringan pelan) atau gagal, konten tetap
+ * muncul setelah 1,5 detik — GSAP yang siap sesudahnya tidak menyembunyikannya lagi (lihat animations/reveals.ts).
  */
 @media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
   [data-anim] {
     visibility: hidden;
-    animation: anim-fallback 0s 4s forwards;
+    animation: anim-fallback 0s 1.5s forwards;
   }
 }
 

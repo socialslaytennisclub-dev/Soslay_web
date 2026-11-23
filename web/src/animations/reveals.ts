@@ -18,8 +18,17 @@ import { gsap, SplitText } from "@/lib/gsap";
 // Mulai sedikit lebih awal supaya konten sudah muncul saat terlihat, tidak "menunggu".
 const IN_VIEW = "top 90%";
 
+/**
+ * Elemen [data-anim] yang belum dianimasikan: GSAP siap setelah fallback CSS (base.css, 1,5 detik) memunculkan
+ * elemen yang sudah terlihat di layar → dibiarkan tampil, tidak disembunyikan lalu dianimasikan ulang (berkedip).
+ * Elemen di bawah layar tetap dianimasikan saat di-scroll.
+ */
 function byAnim(scope: HTMLElement, name: string) {
-  return gsap.utils.toArray<HTMLElement>(scope.querySelectorAll(`[data-anim='${name}']`));
+  return gsap.utils.toArray<HTMLElement>(scope.querySelectorAll(`[data-anim='${name}']`)).filter((el) => {
+    const shownInView = getComputedStyle(el).visibility === "visible" && el.getBoundingClientRect().top < window.innerHeight;
+    if (shownInView) gsap.set(el, { autoAlpha: 1 });
+    return !shownInView;
+  });
 }
 
 export function splitReveal(scope: HTMLElement) {
