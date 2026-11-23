@@ -196,7 +196,8 @@ const spendDate = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "sho
  * Uang yang sudah dibayar member (untuk kartu "Total spent"):
  *  · Activity — per activity satu angka: peserta impor Kuyy / tambahan admin yang lunas (nominal di daftar
  *    peserta) atau booking website yang lunas. Keduanya disamakan trigger, jadi diambil yang terbesar, bukan dijumlah.
- *  · Trip — DP / cicilan / pelunasan paket trip yang tidak dibatalkan (voided).
+ *  · Trip — DP / cicilan / pelunasan paket trip yang tidak dibatalkan (voided), dari pendaftaran yang tidak
+ *    dibatalkan — sama dengan Keuangan (trip_payment_target): pendaftaran batal → pembayarannya tidak dihitung.
  *  · Shop — order lunas (sama dengan member_stats.total_spent).
  * Tidak bergantung pada go-live Keuangan: activity lama yang diimpor tetap terhitung di sini.
  */
@@ -219,8 +220,10 @@ async function loadSpend(d: Dataset, memberId: string): Promise<MemberSpend> {
       supabase.from("bookings").select("session_id, amount, payment_status, status").eq("member_id", memberId),
       supabase
         .from("trip_bookings")
-        .select("id, trips(title), trip_payments(kind, amount, received_on, voided_at)")
-        .eq("member_id", memberId),
+        .select("id, trip_id, trips(title), trip_payments(kind, amount, received_on, voided_at)")
+        .eq("member_id", memberId)
+        // Pendaftaran yang dibatalkan (mis. dobel lalu dihapus di tab Peserta) tidak dihitung, sama dengan Keuangan.
+        .is("cancelled_at", null),
     ]);
     failed = Boolean(participants.error || bookings.error || trips.error);
 
@@ -246,14 +249,17 @@ async function loadSpend(d: Dataset, memberId: string): Promise<MemberSpend> {
     }
 
     const KIND: Record<string, string> = { dp: "DP", installment: "Cicilan", settlement: "Pelunasan" };
+    const paidTrips = new Set<string>();
     for (const tb of trips.data ?? []) {
       const title = (tb.trips as unknown as { title: string } | null)?.title ?? "Trip";
       const pays = ((tb.trip_payments ?? []) as { kind: string; amount: number; received_on: string; voided_at: string | null }[]).filter((p) => !p.voided_at);
-      if (pays.length) tripCount++;
+      if (pays.length) paidTrips.add(tb.trip_id as string);
       for (const p of pays) {
         items.push({ kind: "trip", title, detail: `${KIND[p.kind] ?? "Pembayaran"} · ${spendDate.format(new Date(`${p.received_on}T12:00:00+07:00`))}`, at: new Date(`${p.received_on}T12:00:00+07:00`).toISOString(), amount: p.amount });
       }
     }
+    // Jumlah trip = trip berbeda yang sudah dibayar (bukan jumlah baris pendaftaran).
+    tripCount = paidTrips.size;
   }
 
   items.sort((a, b) => b.at.localeCompare(a.at));
