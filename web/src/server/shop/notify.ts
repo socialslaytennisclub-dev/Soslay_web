@@ -10,7 +10,8 @@ import { PUBLIC_SITE_URL } from "@/lib/wa-invite";
  *   GMAIL_USER          akun pengirim, mis. akun Gmail Soslay
  *   GMAIL_APP_PASSWORD  App Password 16 huruf dari Google Account (bukan password biasa)
  *   ORDER_NOTIFY_TO     penerima (opsional, pisahkan koma); default = GMAIL_USER
- * Tanpa env → tidak mengirim apa pun. Dipanggil lewat after(): gagal kirim tidak pernah menggagalkan checkout.
+ * Tanpa env → tidak mengirim apa pun. Dipanggil lewat after(): gagal kirim tidak pernah menggagalkan checkout;
+ * gagal sesaat dicoba sekali lagi, gagal lagi → tercatat di log server ("[order-email]").
  */
 
 export type OrderNotice = "placed" | "proof";
@@ -90,7 +91,13 @@ export async function notifyAdminOrder(kind: OrderNotice, code: string) {
       .eq("code", code)
       .maybeSingle();
     if (error || !data) throw new Error(error?.message ?? `order ${code} tidak ditemukan`);
-    await mail.transport.sendMail({ from: `"Soslay Shop" <${mail.from}>`, to: mail.to, ...buildOrderEmail(kind, data as unknown as NoticeOrder) });
+    const message = { from: `"Soslay Shop" <${mail.from}>`, to: mail.to, ...buildOrderEmail(kind, data as unknown as NoticeOrder) };
+    // Gmail kadang menolak sesaat (batas login / koneksi) → coba sekali lagi setelah 3 detik.
+    await mail.transport.sendMail(message).catch(async (first: unknown) => {
+      console.warn(`[order-email] ${kind} #${code}: percobaan pertama gagal (${first instanceof Error ? first.message : String(first)}), coba lagi`);
+      await new Promise((r) => setTimeout(r, 3000));
+      return mail.transport.sendMail(message);
+    });
   } catch (e) {
     console.error(`[order-email] ${kind} #${code}: ${e instanceof Error ? e.message : String(e)}`);
   }
