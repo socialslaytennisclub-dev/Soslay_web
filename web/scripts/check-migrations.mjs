@@ -2667,11 +2667,11 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   const o = await one(`select code, status, payment_status, channel, total, member_id, recipient_phone, paid_at::date::text d from orders where id = $1`, [before.id]);
   console.assert(o.code === before.code && o.status === "completed" && o.payment_status === "paid" && o.channel === "manual" && o.total === 458000 && o.member_id === null && o.d === "2026-10-15", `order lama ${JSON.stringify(o)}`);
   const finBefore = await one(`select count(*)::int n from finance_transactions where source_ref = $1`, [`ord:${before.id}`]);
-  console.assert(finBefore.n === 0, "order sebelum go-live masuk Keuangan");
+  console.assert(finBefore.n === 0 && before.finance === false, "order sebelum go-live masuk Keuangan");
   // Sejak go-live → Pemasukan penjualan merchandise sebesar total.
   const after = await rec({ name: "Tamu Baru", paid_on: "2026-11-05", items: [item] });
   const fin = await one(`select coalesce(sum(amount), 0)::int amt from finance_transactions where source_ref = $1 and deleted_at is null`, [`ord:${after.id}`]);
-  console.assert(fin.amt === 440000, `order sejak go-live tidak masuk Keuangan ${JSON.stringify(fin)}`);
+  console.assert(fin.amt === 440000 && after.finance === true, `order sejak go-live tidak masuk Keuangan ${JSON.stringify({ fin, after })}`);
   await as(null);
   console.log("✓ order lama: hanya admin Orders, format tanggal/jumlah divalidasi, selesai & lunas, Keuangan ikut go-live");
 }

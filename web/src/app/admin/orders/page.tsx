@@ -10,8 +10,7 @@ import overviewStyles from "@/components/admin/overview/Overview.module.css";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { formatRupiahShort, PAYMENT_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
-import { productChoices } from "@/server/admin/catalog-repo";
-import { getOrder, listOrders, shopFinanceSettings } from "@/server/admin/orders-repo";
+import { getOrder, listOrders } from "@/server/admin/orders-repo";
 import { getShopSettings } from "@/server/shop/settings";
 import type { OrdersQuery, OrdersTab, PaymentStatus } from "@/server/admin/types";
 import { one } from "@/server/admin/query";
@@ -51,7 +50,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
     month: month && /^\d{4}-\d{2}$/.test(month) ? month : undefined,
     order: one(raw.order),
   };
-  const [result, productOptions, { goLive }] = await Promise.all([listOrders(query), productChoices(), shopFinanceSettings()]);
+  const result = await listOrders(query);
   // Tanpa ?order= panel menampilkan order teratas, tapi hanya di desktop.
   const selectedCode = query.order ?? result.items[0]?.code;
   const order = selectedCode ? await getOrder(selectedCode) : null;
@@ -89,7 +88,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
               ))}
             </nav>
             <OrdersFilters months={result.months}>
-              <ManualOrderButton products={productOptions} goLive={goLive} />
+              <ManualOrderButton />
             </OrdersFilters>
             <OrdersTable items={result.items} selected={selectedCode} auto={!query.order} hrefFor={(code) => href(query, { order: code })} />
           </section>

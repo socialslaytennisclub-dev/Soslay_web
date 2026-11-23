@@ -53,6 +53,10 @@ export const DEFAULT_LINEUP_NTRP = 3.0;
 export const lineupNtrp = (rated: number | null | undefined, self: TennisLevel | null | undefined) =>
   rated ?? (self ? SELF_LEVEL_NTRP[self] : DEFAULT_LINEUP_NTRP);
 
+/** Hasil RPC session_player_levels → member_id → rata-rata NTRP penilaian host. */
+export const ratedLevelMap = (rows: unknown) =>
+  new Map(((rows ?? []) as { member_id: string; ntrp: number | string }[]).map((r) => [r.member_id, Number(r.ntrp)]));
+
 /** Ringkasan level gabungan dari nilai beberapa host (Tidak tahu = null, tidak dihitung). */
 export function levelSummary(values: (number | null)[]) {
   const known = values.filter((v): v is number => v !== null);

@@ -6,7 +6,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { demoOrders } from "@/server/shop/demo-store";
 import { demoView, ORDER_COLUMNS, toMyOrder, type OrderRow } from "@/server/shop/orders";
-import { getDataset, invalidateDataset, type DataOrder, type Dataset } from "./dataset";
+import { getDataset, invalidateDataset, orderCustomer, type DataOrder, type Dataset } from "./dataset";
 import { DAY, monthKey, pctDelta, WIB } from "./time";
 import type { OrderDetail, OrderListItem, OrdersQuery, OrdersResult, OrdersTab } from "./types";
 
@@ -93,7 +93,7 @@ function toItem(d: Dataset, o: DataOrder): OrderListItem {
   return {
     code: o.code,
     memberId: o.memberId,
-    customer: d.memberById.get(o.memberId)?.fullName ?? (o.buyer?.name || "—"),
+    customer: orderCustomer(d, o),
     stage: stageOf(o),
     method: o.shop?.method ?? null,
     proofAt: o.shop?.proofAt ?? null,
@@ -110,14 +110,14 @@ function toItem(d: Dataset, o: DataOrder): OrderListItem {
 
 export async function listOrders(query: OrdersQuery): Promise<OrdersResult> {
   const { d, orders } = await loadOrders();
-  const { memberById, now } = d;
+  const { now } = d;
   const tab = query.tab ?? "all";
   const q = query.q?.trim().toLowerCase().replace(/^#/, "");
   const items = orders
     .filter((o) => inTab(o, tab))
     .filter((o) => !query.payment || o.payment === query.payment)
     .filter((o) => !query.month || monthKey(o.placedAt) === query.month)
-    .filter((o) => !q || o.code.toLowerCase().includes(q) || (memberById.get(o.memberId)?.fullName ?? o.buyer?.name ?? "").toLowerCase().includes(q))
+    .filter((o) => !q || o.code.toLowerCase().includes(q) || orderCustomer(d, o).toLowerCase().includes(q))
     .slice(0, 80)
     .map((o) => toItem(d, o));
 

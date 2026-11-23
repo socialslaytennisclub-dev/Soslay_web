@@ -1,6 +1,6 @@
 import "server-only";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import { generateLineup, usesLineup, scoreTarget } from "@/lib/americano";
+import { ratedLevelMap } from "@/lib/player-level";
 import { sessionClosesAt } from "@/lib/session-close";
 import { defaultSessionVenue, venueChoices } from "./catalog-repo";
 import { getDataset, type DataSession } from "./dataset";
@@ -162,16 +162,16 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
     });
   const finished = isFinished(s, new Date());
   const client = d.live ? await createSupabaseServerClient() : null;
-  const [{ play, roster, hosts, matches, photos, ratedLevels }, reviewRows, kudosRows, kudosTop] = await Promise.all([
-    // Penilaian level oleh host (beta): rata-rata NTRP per member → bobot acak line-up, hanya format ber-line-up.
-    loadSessionPlay(s, d.live).then(async (data) => ({
-      ...data,
-      ratedLevels: client && usesLineup(data.play.matchFormat) ? await loadRatedLevels(client, s.id) : new Map<string, number>(),
-    })),
+  const [{ play, roster, hosts, matches, photos }, ratedAll, reviewRows, kudosRows, kudosTop] = await Promise.all([
+    loadSessionPlay(s, d.live),
+    // Penilaian level oleh host (beta): rata-rata NTRP per member → bobot acak line-up. Dimuat paralel;
+    // dipakai hanya untuk format ber-line-up (dicek di bawah).
+    client ? client.rpc("session_player_levels", { p_session: s.id }).then(({ data }) => ratedLevelMap(data)) : new Map<string, number>(),
     loadSessionReviews(s.id, d.live && finished),
     loadSessionKudosAdmin(s.id, d.live && finished),
     client ? loadKudosTop(client, s.id) : new Map<string, KudosTop>(),
   ]);
+  const ratedLevels = usesLineup(play.matchFormat) ? ratedAll : new Map<string, number>();
   const hostIds = new Set(hosts.filter((h) => h.role === "host").map((h) => h.memberId));
   const reviews = reviewRows.map((r) => ({ ...r, isHost: hostIds.has(r.memberId) }));
   // Daftar peserta (impor Kuyy) menggantikan daftar booking begitu ada; booking yang member-nya belum ada di
@@ -324,8 +324,3 @@ export function activityTypeOptions() {
   return Object.entries(activityTypeLabels).map(([slug, label]) => ({ slug, label }));
 }
 
-/** Level gabungan penilaian host per member peserta (RPC session_player_levels: admin Activities / host). */
-async function loadRatedLevels(client: SupabaseClient, sessionId: string): Promise<Map<string, number>> {
-  const { data } = await client.rpc("session_player_levels", { p_session: sessionId });
-  return new Map(((data ?? []) as { member_id: string; ntrp: number | string }[]).map((r) => [r.member_id, Number(r.ntrp)]));
-}

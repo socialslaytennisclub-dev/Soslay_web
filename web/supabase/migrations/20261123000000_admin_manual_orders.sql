@@ -7,7 +7,7 @@
 -- sebelum go-live → tidak dicatat; sejak go-live → Pemasukan · Penjualan merchandise · akun bank default.
 -- Stok tidak dipotong (barang lama sudah keluar sebelum stok di admin dihitung) & Slay Point tidak diberikan.
 
--- Hasil: {"id": uuid, "code": "SOS-…"}.
+-- Hasil: {"id": uuid, "code": "SOS-…", "finance": boolean}.
 create function admin_record_manual_order(p jsonb)
 returns jsonb language plpgsql security definer set search_path = public as $$
 declare
@@ -74,7 +74,10 @@ begin
       case when coalesce(trim(it->>'variant'), '') = '' then '{}'::jsonb else jsonb_build_object('label', left(trim(it->>'variant'), 60)) end,
       (it->>'unit_price')::int, (it->>'quantity')::int);
   end loop;
-  return jsonb_build_object('id', v_order.id, 'code', v_order.code);
+  -- finance: true bila trigger orders_finance mencatat pemasukannya (aturan go-live & otomatis Shop di
+  -- Pengaturan Keuangan) — aplikasi tidak perlu menebak ulang aturannya.
+  return jsonb_build_object('id', v_order.id, 'code', v_order.code,
+    'finance', exists (select 1 from finance_transactions where source = 'shop_order_verified' and source_ref = 'ord:' || v_order.id and deleted_at is null));
 end $$;
 revoke all on function admin_record_manual_order(jsonb) from public, anon;
 grant execute on function admin_record_manual_order(jsonb) to authenticated;

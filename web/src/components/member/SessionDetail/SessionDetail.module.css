@@ -1107,8 +1107,6 @@ button.link {
 
 /* Modal input skor host */
 
-
-
 .stepRow {
   display: flex;
   align-items: center;
@@ -1809,22 +1807,6 @@ button.link {
   display: block;
   font-size: 15px;
   color: var(--color-navy-900);
-}
-
-.skipBanner {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: var(--space-10) var(--space-16);
-  border-radius: var(--radius-md);
-  background: #fff8e1;
-  font-size: 13px;
-  color: var(--color-indigo-muted);
-}
-
-.skipBanner strong {
-  font-size: 14px;
-  color: #6b4a00;
 }
 
 .hostSaved {

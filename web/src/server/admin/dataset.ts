@@ -445,4 +445,7 @@ async function cachedLive(): Promise<Dataset> {
 export const getDataset = cache(async (): Promise<Dataset> => (isSupabaseConfigured ? cachedLive() : (demoDataset ??= buildDemoDataset())));
 
 /** "Sekarang" versi admin tanpa memuat data: tanggal demo, atau jam asli saat live. */
+/** Nama pembeli order: profil member bila tertaut, kalau tidak nama di order (tamu / order lama yang diinput admin). */
+export const orderCustomer = (d: Pick<Dataset, "memberById">, o: DataOrder) => d.memberById.get(o.memberId)?.fullName || o.buyer?.name || "—";
+
 export const adminNow = () => (isSupabaseConfigured ? new Date() : demo.DEMO_NOW);

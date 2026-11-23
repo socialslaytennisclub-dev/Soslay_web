@@ -12,6 +12,8 @@
  * Murni (tanpa I/O) — dipakai di admin (client) dan server.
  */
 
+import { DEFAULT_LINEUP_NTRP } from "./player-level";
+
 /** Format yang memakai line-up per ronde & court (lihat MatchFormat). */
 export const usesLineup = (format: string) => format === "americano" || format === "rotating";
 
@@ -107,7 +109,7 @@ const LEVEL = { perPoint: 2, max: 3 };
 
 function levelPenalty(levels: LevelWeights | undefined, a1: string, a2: string, b1: string, b2: string) {
   if (!levels) return 0;
-  const gap = Math.abs((levels[a1] ?? 3) + (levels[a2] ?? 3) - (levels[b1] ?? 3) - (levels[b2] ?? 3));
+  const gap = Math.abs((levels[a1] ?? DEFAULT_LINEUP_NTRP) + (levels[a2] ?? DEFAULT_LINEUP_NTRP) - (levels[b1] ?? DEFAULT_LINEUP_NTRP) - (levels[b2] ?? DEFAULT_LINEUP_NTRP));
   return Math.min(LEVEL.max, LEVEL.perPoint * gap);
 }
 
@@ -268,7 +270,7 @@ export function lineupStats(matches: LineupMatch[], players: string[], levels?: 
   }
   const counts = [...games.values()];
   // Selisih level tim terbesar di satu court (bila acak memakai level).
-  const strength = (t: [string, string]) => (levels?.[t[0]] ?? 3) + (levels?.[t[1]] ?? 3);
+  const strength = (t: [string, string]) => (levels?.[t[0]] ?? DEFAULT_LINEUP_NTRP) + (levels?.[t[1]] ?? DEFAULT_LINEUP_NTRP);
   const maxLevelGap = levels ? Math.max(0, ...matches.map((m) => Math.abs(strength(m.a) - strength(m.b)))) : 0;
   return {
     maxLevelGap,

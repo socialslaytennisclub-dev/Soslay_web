@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { genderOptions, handOptions, playingFormatOptions, playingFrequencyOptions, type MemberProfile } from "@/content/member";
 import { levelFromLabel } from "@/lib/levels";
-import { lineupNtrp } from "@/lib/player-level";
+import { lineupNtrp, ratedLevelMap } from "@/lib/player-level";
 import type { TennisLevel } from "@/server/admin/types";
 import { normalizeKuyId } from "@/lib/auth";
 import { validateProfile } from "@/lib/profile";
@@ -275,7 +275,7 @@ export async function getHostLineupLevels(sessionId: string): Promise<Record<str
     supabase.rpc("session_roster", { p_session: sessionId }),
     supabase.rpc("session_player_levels", { p_session: sessionId }),
   ]);
-  const ratedBy = new Map(((rated ?? []) as { member_id: string; ntrp: number | string }[]).map((r) => [r.member_id, Number(r.ntrp)]));
+  const ratedBy = ratedLevelMap(rated);
   return Object.fromEntries(
     ((roster ?? []) as { id: string; member_id: string | null; tennis_level: TennisLevel | null }[]).map((p) => [
       p.id,

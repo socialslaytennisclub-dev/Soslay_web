@@ -5,7 +5,7 @@ import { useRef, useState, useTransition } from "react";
 import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { amountDigits, amountDisplay, dateLabel, todayWib } from "@/lib/finance/format";
-import { recordManualOrder, searchOrderMembers, type OrderMemberOption } from "@/server/admin/actions/orders";
+import { getManualOrderOptions, recordManualOrder, searchOrderMembers, type OrderMemberOption } from "@/server/admin/actions/orders";
 import { withMemberLinkConfirm } from "../activities/confirm-member-link";
 import editor from "../activities/SessionEditor.module.css";
 import picker from "../activities/TripPayments.module.css";
@@ -27,9 +27,20 @@ const PAYMENT_METHODS = ["Transfer BCA", "Tunai", "QRIS", "Lainnya"];
  * Pembeli = member Soslay (dicari nama / ID / nomor HP) atau tamu (nama + nomor HP). Masuk Keuangan hanya bila
  * tanggal bayar ≥ go-live di Pengaturan Keuangan (aturan yang sama dengan pencatatan otomatis lain).
  */
-export function ManualOrderButton({ products, goLive }: { products: ManualOrderProduct[]; goLive: string | null }) {
+export function ManualOrderButton() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  // Katalog & aturan Keuangan dimuat saat dialog pertama kali dibuka (bukan tiap buka halaman Orders).
+  const [options, setOptions] = useState<{ products: ManualOrderProduct[]; goLive: string | null; autoShop: boolean } | null>(null);
+  const products = options?.products ?? [];
+  const goLive = options?.goLive ?? null;
+  const openDialog = () => {
+    setOpen(true);
+    if (options) return;
+    getManualOrderOptions()
+      .then((r) => (r.ok ? setOptions(r) : toast.error(r.error)))
+      .catch(() => toast.error("Gagal memuat katalog produk — coba buka lagi."));
+  };
   const [busy, start] = useTransition();
   const seq = useRef(1);
   const newRow = (): Row => ({ key: seq.current++, productName: "", variant: "", quantity: "1", unitPrice: "" });
@@ -127,7 +138,7 @@ export function ManualOrderButton({ products, goLive }: { products: ManualOrderP
 
   return (
     <>
-      <AdminButton size="sm" icon="plus-bold" onClick={() => setOpen(true)}>
+      <AdminButton size="sm" icon="plus-bold" onClick={openDialog}>
         Input order lama
       </AdminButton>
       <FinanceModal
@@ -322,7 +333,9 @@ export function ManualOrderButton({ products, goLive }: { products: ManualOrderP
             ? `Keuangan: tanggal bayar sejak go-live${goLive ? ` (${dateLabel(goLive)})` : ""} tercatat otomatis sebagai Pemasukan · Penjualan merchandise; sebelum itu tidak dicatat.`
             : beforeGoLive
               ? `Tanggal bayar sebelum go-live Keuangan (${dateLabel(goLive!)}) — order tersimpan, tapi tidak masuk Keuangan.`
-              : `Masuk Keuangan otomatis: Pemasukan · Penjualan merchandise · ${formatRupiahPlain(total)} · tanggal ${dateLabel(paidOn)}.`}
+              : options && !options.autoShop
+                ? "Pencatatan otomatis Shop di Keuangan sedang nonaktif — order tersimpan, tapi tidak masuk Keuangan."
+                : `Masuk Keuangan otomatis: Pemasukan · Penjualan merchandise · ${formatRupiahPlain(total)} · tanggal ${dateLabel(paidOn)}.`}
         </p>
       </FinanceModal>
     </>

@@ -5,6 +5,7 @@ import { MAX_REJECTIONS, REJECT_REASONS, trackingUrlError } from "@/lib/checkout
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { demoOrders } from "@/server/shop/demo-store";
+import { productChoices } from "../catalog-repo";
 import { findMemberByPhone, normalizeIndoPhone, searchMembers, type MemberIdentity } from "../identity";
 import { shopFinanceSettings } from "../orders-repo";
 import { audit, confirmLinkResult, done, fail, refreshPaths, requireEditor, type ActionResult, type ConfirmLinkResult } from "./common";
@@ -176,16 +177,13 @@ export type ManualOrderInput = {
  * trigger orders_finance: hanya bila tanggal bayar ≥ go-live di Pengaturan Keuangan. Stok & Slay Point tidak berubah.
  */
 export async function recordManualOrder(input: ManualOrderInput): Promise<ActionResult | ConfirmLinkResult> {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.paidOn)) return fail("Isi tanggal bayar.");
-  const items = input.items.filter((i) => i.productName.trim());
-  if (!items.length) return fail("Tambahkan minimal satu produk.");
-  if (items.some((i) => !Number.isInteger(i.quantity) || i.quantity <= 0 || !Number.isInteger(i.unitPrice) || i.unitPrice < 0)) return fail("Jumlah & harga tiap produk harus angka.");
-  if (!input.memberId && !input.name?.trim()) return fail("Pilih member atau isi nama pembeli.");
-  const phone = input.phone?.trim() ? normalizeIndoPhone(input.phone) : null;
-  if (input.phone?.trim() && !phone) return fail("Nomor HP tidak valid.");
-
   const auth = await requireEditor("orders");
   if ("error" in auth) return fail(auth.error);
+  // Tanggal, produk, jumlah, harga & pembeli divalidasi RPC admin_record_manual_order (pesannya sudah jelas);
+  // di sini hanya nomor HP, yang dipakai untuk menautkan ke member.
+  const items = input.items.filter((i) => i.productName.trim());
+  const phone = input.phone?.trim() ? normalizeIndoPhone(input.phone) : null;
+  if (input.phone?.trim() && !phone) return fail("Nomor HP tidak valid.");
 
   let memberId = input.memberId ?? null;
   let linked: string | null = null;
@@ -214,19 +212,21 @@ export async function recordManualOrder(input: ManualOrderInput): Promise<Action
     },
   });
   if (error) return fail(`Gagal menyimpan: ${error.message}`);
-  const { id, code } = data as { id: string; code: string };
-
-  // Dibaca lewat service role: staf Orders tanpa akses Keuangan tidak bisa membaca finance_settings (RLS).
-  const settings = await shopFinanceSettings();
-  const finance =
-    settings.goLive === null
-      ? "Masuk Keuangan hanya bila tanggal bayar sejak go-live di Pengaturan Keuangan."
-      : input.paidOn < settings.goLive
-        ? "Tanggal bayar sebelum go-live Keuangan — tidak dicatat di Keuangan."
-        : !settings.autoShop
-          ? "Pencatatan otomatis Shop di Keuangan sedang nonaktif."
-          : "Pemasukan tercatat di Keuangan.";
+  // finance = hasil trigger orders_finance (go-live & otomatis Shop di Pengaturan Keuangan), bukan tebakan di sini.
+  const { id, code, finance } = data as { id: string; code: string; finance: boolean };
   await audit(auth.userId, `mencatat order lama #${code}`, "order", id);
   refreshOrder(code);
-  return done(`#${code} tersimpan sebagai order selesai${linked ? ` · ditautkan ke member ${linked}` : ""}. ${finance}`);
+  const financeNote = finance ? "Pemasukan tercatat di Keuangan." : "Tidak dicatat di Keuangan (tanggal bayar sebelum go-live atau pencatatan otomatis Shop nonaktif).";
+  return done(`#${code} tersimpan sebagai order selesai${linked ? ` · ditautkan ke member ${linked}` : ""}. ${financeNote}`);
+}
+
+/** Pilihan produk & aturan Keuangan untuk dialog "Input order lama" — dimuat saat dialog dibuka, bukan tiap buka halaman Orders. */
+export async function getManualOrderOptions(): Promise<{ ok: true; products: Awaited<ReturnType<typeof productChoices>>; goLive: string | null; autoShop: boolean } | { ok: false; error: string }> {
+  // Hanya baca: mode demo tetap boleh melihat katalog (menyimpan tetap ditolak requireEditor di recordManualOrder).
+  if (isSupabaseConfigured) {
+    const auth = await requireEditor("orders");
+    if ("error" in auth) return { ok: false, error: auth.error };
+  }
+  const [products, finance] = await Promise.all([productChoices(), shopFinanceSettings()]);
+  return { ok: true, products, ...finance };
 }
