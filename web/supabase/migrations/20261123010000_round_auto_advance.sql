@@ -3,13 +3,14 @@
 -- · Skor court terakhir ronde live masuk (host atau admin) → ronde berikutnya otomatis live. Ronde terakhir
 --   tidak pindah ke mana-mana; activity tetap diakhiri lewat "Akhiri Activity".
 -- · "Mulai Ronde" hanya ke ronde tepat setelah ronde live (Lanjut saat ada court yang macet) — tidak bisa
---   melompat lagi, jadi tidak ada ronde "Dilewati" baru.
+--   melompat lagi, jadi tidak ada ronde "Dilewati" baru. Ronde yang dulu sudah terlanjur dilewati (sebelum
+--   aturan ini) tetap bisa dimulai supaya masuk hasil.
 -- · Urungkan / ubah skor tidak memundurkan ronde: ronde lama jadi "belum lengkap" dan tetap bisa diisi
 --   (masuk leaderboard selama activity belum diakhiri).
 -- · Host tidak bisa input skor ronde yang belum dimulai (admin tetap bisa dari halaman Activities).
 
 -- Ronde live efektif: current_round, atau — bila belum pernah diisi (sesi live otomatis di jam jadwal) —
--- sama dengan currentRoundOf di web/src/server/member/session-detail.ts.
+-- sama dengan currentRoundOf di web/src/lib/rounds.ts (dicek di check-migrations).
 create function session_live_round(p_session uuid)
 returns smallint language plpgsql stable security definer set search_path = public as $$
 declare
@@ -59,8 +60,10 @@ begin
   if not can_run_session(v_session) then raise exception 'Hanya admin atau host sesi ini'; end if;
   if v_ended then raise exception 'Sesi sudah diakhiri — skor terkunci. Admin: pakai "Koreksi hasil".'; end if;
   -- Kunci sesi: dua court terakhir yang disimpan bersamaan diproses bergantian, jadi yang kedua melihat
-  -- court pertama sudah berskor dan ronde tetap pindah otomatis.
-  perform 1 from sessions where id = v_session for update;
+  -- court pertama sudah berskor dan ronde tetap pindah otomatis. Status ronde & sesi dibaca ulang setelah
+  -- kunci (ronde bisa baru saja pindah / "Lanjut" dari perangkat lain).
+  select s.started_rounds, session_is_finished(s) into v_started, v_ended from sessions s where s.id = v_session for update;
+  if v_ended then raise exception 'Sesi sudah diakhiri — skor terkunci. Admin: pakai "Koreksi hasil".'; end if;
   if p_score_a is null or p_score_b is null or p_score_a < 0 or p_score_b < 0 then
     raise exception 'Skor tidak valid';
   end if;
@@ -115,8 +118,11 @@ begin
   end if;
 
   v_cur := session_live_round(p_session);
-  -- Ronde live itu sendiri (dicatat ulang, idempoten) atau ronde tepat sesudahnya.
-  if p_round is distinct from v_cur and p_round is distinct from session_next_round(p_session, v_cur) then
+  -- Ronde live itu sendiri (dicatat ulang, idempoten), ronde tepat sesudahnya, atau ronde lama yang dulu
+  -- dilompati (sebelum ronde live, belum pernah dimulai & belum ada skor) supaya tetap bisa dimainkan.
+  if p_round is distinct from v_cur and p_round is distinct from session_next_round(p_session, v_cur)
+     and not (p_round < v_cur and not (p_round = any (coalesce(v_s.started_rounds, '{}')))
+              and not exists (select 1 from session_matches where session_id = p_session and round_no = p_round and score_a is not null)) then
     raise exception 'Ronde berjalan berurutan — ronde berikutnya: %', session_next_round(p_session, v_cur) using hint = 'round_sequence';
   end if;
 

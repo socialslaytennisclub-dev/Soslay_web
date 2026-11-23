@@ -5,6 +5,7 @@ import QRCode from "qrcode";
 import { memberSessions, splitSessions } from "@/content/member";
 import { LEVEL_LABEL, PARTICIPANT_SOURCE_LABEL } from "@/lib/admin-labels";
 import { cityOf, cityOffset, type City } from "@/lib/format";
+import { currentRoundOf } from "@/lib/rounds";
 import { sessionClosesAt } from "@/lib/session-close";
 import { compareStandings, DEFAULT_PODIUM_BONUS, DEFAULT_REVIEW_POINTS, effectivePodiumBonus, toPodiumBonus, type PodiumBonus } from "@/lib/standings";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -215,21 +216,6 @@ function phaseOf(s: Pick<SessionRow, "status" | "starts_at" | "ends_at" | "live_
   if (s.status === "completed" || s.ended_at || sessionClosesAt(s.ends_at) < now) return "done";
   if (s.live_started_at || new Date(s.starts_at).getTime() <= now) return "live";
   return "upcoming";
-}
-
-/**
- * Ronde yang sedang dimainkan bila host/admin tidak mengisi `current_round`: ronde berskor
- * terakhir — atau ronde setelahnya yang masih kosong bila ronde itu sudah lengkap. Court yang
- * terlewat di ronde awal tidak menahan Live di ronde itu. null = belum ada line-up.
- */
-function currentRoundOf(matches: MatchRow[]): number | null {
-  if (!matches.length) return null;
-  const scored = matches.filter((m) => m.score_a !== null);
-  if (!scored.length) return Math.min(...matches.map((m) => m.round_no));
-  const last = Math.max(...scored.map((m) => m.round_no));
-  if (matches.some((m) => m.round_no === last && m.score_a === null)) return last;
-  const upcoming = matches.filter((m) => m.round_no > last && m.score_a === null).map((m) => m.round_no);
-  return upcoming.length ? Math.min(...upcoming) : last;
 }
 
 /** Leaderboard dari skor yang sudah masuk: poin = skor tim di tiap match yang dimainkan, diff = selisih skornya. */

@@ -17,7 +17,7 @@ declare
   v_date     date;
   v_at       timestamptz;
   v_ship     integer;
-  v_subtotal integer;
+  v_subtotal bigint;
   v_order    orders;
   it         jsonb;
 begin
@@ -54,6 +54,10 @@ begin
     raise exception 'Lengkapi nama produk, jumlah & harga tiap baris.' using errcode = '22023';
   end if;
   select sum((i->>'unit_price')::bigint * (i->>'quantity')::int) into v_subtotal from jsonb_array_elements(p->'items') i;
+  -- Kolom orders berupa integer: salah ketik nol berlebih → pesan jelas, bukan "integer out of range".
+  if v_subtotal + v_ship > 2147483647 then
+    raise exception 'Total order terlalu besar — cek lagi jumlah & harga.' using errcode = '22023';
+  end if;
 
   -- Jam 12.00 WIB: tanggal WIB tetap sama di semua tampilan & di Keuangan.
   v_at := (v_date + time '12:00') at time zone 'Asia/Jakarta';

@@ -325,6 +325,32 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await as(adminId);
   await db.query(`select save_match_score($1, 12::smallint, 9::smallint)`, [seqR4]);
   console.assert((await one(`select current_round from sessions where id = $1`, [s])).current_round === 2, "skor admin di ronde lain memindahkan ronde live");
+  // Ronde yang dulu terlanjur dilewati (sebelum aturan berurutan, tanpa skor) tetap bisa dimulai;
+  // ronde lama yang sudah dimainkan tidak.
+  await as(null);
+  await db.query(`update session_matches set score_a = null, score_b = null where session_id = $1 and round_no = 3`, [s]);
+  await db.query(`update sessions set current_round = 4, started_rounds = '{1,2,4}' where id = $1`, [s]);
+  await as(hostId);
+  await db.query(`select start_session_round($1, 3::smallint)`, [s]);
+  console.assert((await one(`select current_round from sessions where id = $1`, [s])).current_round === 3, "ronde lama yang dilewati tidak bisa dimulai");
+  console.assert((await db.query(`select start_session_round($1, 1::smallint)`, [s]).then(() => null, (e) => e.hint)) === "round_sequence", "ronde lama yang sudah dimainkan bisa dimulai lagi");
+  // Ronde live tanpa current_round: SQL session_live_round = currentRoundOf di lib/rounds.ts, untuk semua
+  // kombinasi court berskor / kosong.
+  await as(null);
+  const { tsImport } = await import("tsx/esm/api");
+  const { currentRoundOf } = await tsImport("../src/lib/rounds.ts", import.meta.url);
+  const roundMatches = (await db.query(`select id, round_no from session_matches where session_id = $1 order by round_no, court_no`, [s])).rows;
+  let roundDrift = 0;
+  for (let mask = 0; mask < 1 << roundMatches.length; mask++) {
+    const scored = roundMatches.filter((_, i) => mask & (1 << i)).map((m) => m.id);
+    await db.query(`update session_matches set score_a = case when id = any($2) then 12 end, score_b = case when id = any($2) then 9 end where session_id = $1`, [s, scored]);
+    await db.query(`update sessions set current_round = null where id = $1`, [s]);
+    const sqlRound = (await one(`select session_live_round($1) r`, [s])).r;
+    const tsRound = currentRoundOf(roundMatches.map((m) => ({ round_no: m.round_no, score_a: scored.includes(m.id) ? 12 : null })));
+    if (sqlRound !== tsRound) roundDrift++;
+  }
+  console.assert(roundDrift === 0, `ronde live SQL & lib/rounds.ts berbeda di ${roundDrift} kombinasi`);
+  await db.query(`update session_matches set score_a = 12, score_b = 9 where session_id = $1`, [s]);
   await as(hostId);
   await as(null);
   await db.query(`update sessions set current_round = 3, started_rounds = '{2,3}' where id = $1`, [s]);
@@ -2634,6 +2660,7 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await err(`select admin_record_manual_order($1)`, [{ name: "Tamu", paid_on: "kemarin", items: [item] }])) === "Isi tanggal bayar.", "tanggal salah format → pesan jelas");
   console.assert((await err(`select admin_record_manual_order($1)`, [{ name: "Tamu", paid_on: "2026-10-15", items: [{ ...item, quantity: "dua" }] }]))?.startsWith("Lengkapi"), "jumlah bukan angka → pesan jelas");
   console.assert((await err(`select admin_record_manual_order($1)`, [{ name: "Tamu", paid_on: "2999-01-01", items: [item] }]))?.includes("masa depan"), "tanggal masa depan diterima");
+  console.assert((await err(`select admin_record_manual_order($1)`, [{ name: "Tamu", paid_on: "2026-10-15", items: [{ ...item, quantity: 99999, unit_price: 999999999 }] }]))?.includes("terlalu besar"), "total melebihi batas → pesan jelas");
 
   // Sebelum go-live → tersimpan selesai & lunas, tanpa transaksi Keuangan.
   const before = await rec({ name: "Tamu Lama", phone: "81234567890", paid_on: "2026-10-15", payment_method: "Tunai", shipping_fee: 18000, items: [item] });
