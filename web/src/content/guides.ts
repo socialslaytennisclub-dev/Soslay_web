@@ -8,6 +8,7 @@ const RANA = "/images/guide/rana-grounds";
 const VALE = "/images/guide/vale-racquet";
 const TEMPLE = "/images/guide/racquette-temple";
 const OFF = "/images/guide/off-court";
+const CIT = "/images/guide/the-citadel";
 
 export type GuidePhoto = { src: string; alt: string; position?: string };
 
@@ -515,6 +516,97 @@ export const participantGuides: ParticipantGuide[] = [
         { title: "Shaded, not sealed", body: "Covered court, open sides — it can get warm and humid." },
         { title: "Hydrate early", body: "Humid air works up a sweat. Bring a full bottle." },
         { title: "Respect the venue", body: "It's a shared space — keep the court tidy and the vibe friendly." },
+        { title: "Meet someone new", body: "Come for the tennis, stay for the people. Have fun!" },
+      ],
+    },
+  },
+  {
+    venueSlug: "the-citadel",
+    intro: "Everything you need to know before you step on court — what to wear, what to bring, and what the venue feels like.",
+    hero: { src: `${CIT}/hero.webp`, alt: "Soslay members jumping with their rackets on the slate-teal court in front of The Citadel's orange walls", position: "50% 70%" },
+    theme: { panel: "#e86324", ink: "#c84b1a" },
+    outfit: {
+      title: "What should I wear?",
+      body: "Bold burnt-orange walls and a slate-teal court — the venue already brings the colour. Keep your fit clean: white and cream glow against the orange, black and navy look sharp on the court. Skip orange and rust.",
+      palette: [
+        { name: "Optic White", role: "Your base", hex: "#ffffff" },
+        { name: "Jet Black", role: "Contrast", hex: "#161616" },
+        { name: "Teal Blue", role: "Pop", hex: "#63989e" },
+        { name: "Butter Cream", role: "Soft glow", hex: "#f3e3b8" },
+      ],
+      avoid: [
+        { name: "Orange", hex: "#e0571e" },
+        { name: "Terracotta", hex: "#b8502a" },
+        { name: "Peach", hex: "#f2a27a" },
+      ],
+      avoidNote:
+        "Orange and rust melt into the walls — you'll disappear in photos. Love colour? The walls already bring the orange — keep your fit clean and let the venue do the shouting.",
+      looks: [
+        { title: "White tennis dress", caption: "White sleeveless dress, white sneakers", photo: { src: `${CIT}/outfit-white.webp`, alt: "Member in a white sleeveless tennis dress on the teal court" } },
+        { title: "Cream + black skirt", caption: "Butter-cream tank, black skirt, white socks", photo: { src: `${CIT}/outfit-cream.webp`, alt: "Member in a butter-cream tank and black skirt" } },
+        { title: "Black & white polo", caption: "Colour-block polo, black shorts", photo: { src: `${CIT}/outfit-polo.webp`, alt: "Member in a black and white colour-block polo and black shorts" } },
+        { title: "Teal blue + white", caption: "Blue top with white shorts & white socks", photo: { src: `${CIT}/outfit-teal.webp`, alt: "Member in a teal blue top, white shorts and white socks" } },
+      ],
+    },
+    bring: {
+      title: "What should I bring?",
+      body: "Bring the essentials — we'll take care of the rest. It's an indoor court, so no sun or rain to worry about — just bring your game.",
+      items: [
+        { name: "Racket", note: "Bring a spare if you have one" },
+        { name: "Tennis shoes", note: "Non-marking soles — required indoors" },
+        { name: "White socks", note: "Keeps the look clean" },
+        { name: "Water bottle", note: "Indoor play still works up a sweat" },
+        { name: "Small towel", note: "For between games" },
+        { name: "Headband / wristband", note: "Keeps sweat out of your eyes" },
+        { name: "Extra overgrip", note: "Hard courts are grippy, your handle should be too" },
+        { name: "Light layer", note: "For hanging out in the lounge after", optional: true },
+        { name: "Spare tee", note: "For hanging out after", optional: true },
+      ],
+    },
+    photoReference: {
+      title: ["The mood we're", "shooting for."],
+      body: "This isn't a shot list of specific photos — it's the kind of photography and visual mood we go for at Social Slay sessions: real moments, bright even light, clean outfits against bold orange.",
+      columns: [
+        [
+          { label: "In action", photo: { src: `${CIT}/ref-in-action.webp`, alt: "A member mid-swing on the teal court in front of the orange wall", position: "50% 51%" } },
+          { label: "The little details", photo: { src: `${CIT}/ref-details.webp`, alt: "Close-up detail on the slate-teal court", position: "50% 51%" } },
+        ],
+        [
+          { label: "With your people", photo: { src: `${CIT}/ref-people.webp`, alt: "Members together on court", position: "50% 63%" } },
+          { label: "Portrait", photo: { src: `${CIT}/ref-portrait.webp`, alt: "Portrait of a member against the orange wall", position: "50% 100%" } },
+        ],
+        [
+          { label: "Blur in motion", photo: { src: `${CIT}/ref-motion.webp`, alt: "Motion-blurred player hitting a shot on the teal court", position: "50% 91%" } },
+          { label: "Candid moments", photo: { src: `${CIT}/ref-candid.webp`, alt: "Members sharing a candid moment by the court", position: "50% 50%" } },
+        ],
+      ],
+    },
+    courtVibe: {
+      title: "A glimpse of where you'll be playing.",
+      body: "An indoor hall with bold burnt-orange walls, slate-teal courts and navy court banners — plus a cosy orange lounge nook at the end. Bright, even light, rain or shine.",
+      palette: [
+        { name: "Citadel orange", hex: "#e0571e", dark: true },
+        { name: "Court teal", hex: "#6e9aa2", dark: true },
+        { name: "Banner navy", hex: "#1f2b4d", dark: true },
+        { name: "Roof white", hex: "#eeedea" },
+        { name: "White lines", hex: "#ffffff" },
+      ],
+      note: "bold walls, all-weather ↗",
+      feature: { src: `${CIT}/court-main.webp`, alt: "The slate-teal court and burnt-orange walls of The Citadel's indoor hall" },
+      side: [
+        { src: `${CIT}/court-side-1.webp`, alt: "Navy court banner against the orange wall" },
+        { src: `${CIT}/court-side-2.webp`, alt: "Net over the slate-teal hard court" },
+        { src: `${CIT}/court-wide.webp`, alt: "Wide view of the indoor hall towards the orange lounge nook", position: "50% 71%" },
+      ],
+      strip: [],
+    },
+    tips: {
+      title: "Before you come.",
+      items: [
+        { title: "Come photo-ready", body: "White, black, navy, cream or teal. Skip orange." },
+        { title: "Non-marking only", body: "Indoor hard courts — check your soles before you come." },
+        { title: "Hydrate early", body: "Indoor play still works up a sweat. Bring a full bottle." },
+        { title: "Respect the venue", body: "It's a shared space — keep the lounge tidy and the vibe friendly." },
         { title: "Meet someone new", body: "Come for the tennis, stay for the people. Have fun!" },
       ],
     },

@@ -293,6 +293,70 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.query(`select start_session_round($1, 3::smallint)`, [s]);
   const jumped = await one(`select current_round, started_rounds from sessions where id = $1`, [s]);
   console.assert(jumped.current_round === 3 && jumped.started_rounds.join() === "2,3", `lompat ronde ${JSON.stringify(jumped)}`);
+  // Ronde berurutan (Figma 1284:6086): tidak bisa melompat; skor court terakhir ronde live → ronde berikutnya live.
+  await db.query(`insert into session_matches (session_id, round_no, court_no, a1, a2, b1, b2) values ($1, 4, 1, $2, $3, $4, $5)`, [s, ...ids]);
+  await as(null);
+  await db.query(`update sessions set current_round = 2, started_rounds = '{1,2}', live_started_at = now() where id = $1`, [s]);
+  await as(hostId);
+  const seqHint = await db.query(`select start_session_round($1, 4::smallint)`, [s]).then(() => null, (e) => e.hint);
+  console.assert(seqHint === "round_sequence", `host bisa melompat ke R4 saat R2 live (${seqHint})`);
+  const seqR3 = (await one(`select id from session_matches where session_id = $1 and round_no = 3`, [s])).id;
+  const seqR4 = (await one(`select id from session_matches where session_id = $1 and round_no = 4`, [s])).id;
+  const seqR2 = (await one(`select id from session_matches where session_id = $1 and round_no = 2`, [s])).id;
+  const unstartedHint = await db.query(`select save_match_score($1, 12::smallint, 9::smallint)`, [seqR3]).then(() => null, (e) => e.hint);
+  console.assert(unstartedHint === "round_unstarted", `host bisa input skor R3 yang belum dimulai (${unstartedHint})`);
+  await db.query(`select save_match_score($1, 12::smallint, 9::smallint)`, [seqR2]);
+  const advanced = await one(`select current_round, started_rounds from sessions where id = $1`, [s]);
+  console.assert(advanced.current_round === 3 && advanced.started_rounds.join() === "1,2,3", `pindah otomatis ${JSON.stringify(advanced)}`);
+  // Urungkan skor R2 setelah pindah → ronde tidak mundur; R2 tetap bisa diisi lagi tanpa memindahkan ronde.
+  await db.query(`select clear_match_score($1)`, [seqR2]);
+  await db.query(`select save_match_score($1, 11::smallint, 10::smallint)`, [seqR2]);
+  console.assert((await one(`select current_round from sessions where id = $1`, [s])).current_round === 3, "urungkan / isi ulang ronde lama memindahkan ronde live");
+  // Ronde terakhir lengkap → tetap di ronde itu (diakhiri lewat Akhiri Activity).
+  await db.query(`select save_match_score($1, 12::smallint, 9::smallint)`, [seqR3]);
+  await db.query(`select save_match_score($1, 12::smallint, 9::smallint)`, [seqR4]);
+  console.assert((await one(`select current_round from sessions where id = $1`, [s])).current_round === 4, "ronde terakhir lengkap: ronde live berubah");
+  // Admin tetap bisa input skor ronde mana pun (halaman Activities); pindah otomatis hanya dari ronde live.
+  await db.query(`select clear_match_score($1)`, [seqR4]);
+  await as(null);
+  await db.query(`update sessions set current_round = 2 where id = $1`, [s]);
+  const { id: adminId } = await one(`insert into auth.users (email) values ('admin-ronde@soslay.test') returning id`);
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Ronde', 'admin-ronde@soslay.test', 'active' from roles where name = 'Super Admin'`, [adminId]);
+  await as(adminId);
+  await db.query(`select save_match_score($1, 12::smallint, 9::smallint)`, [seqR4]);
+  console.assert((await one(`select current_round from sessions where id = $1`, [s])).current_round === 2, "skor admin di ronde lain memindahkan ronde live");
+  // Ronde yang dulu terlanjur dilewati (sebelum aturan berurutan, tanpa skor) tetap bisa dimulai;
+  // ronde lama yang sudah dimainkan tidak.
+  await as(null);
+  await db.query(`update session_matches set score_a = null, score_b = null where session_id = $1 and round_no = 3`, [s]);
+  await db.query(`update sessions set current_round = 4, started_rounds = '{1,2,4}' where id = $1`, [s]);
+  await as(hostId);
+  await db.query(`select start_session_round($1, 3::smallint)`, [s]);
+  console.assert((await one(`select current_round from sessions where id = $1`, [s])).current_round === 3, "ronde lama yang dilewati tidak bisa dimulai");
+  console.assert((await db.query(`select start_session_round($1, 1::smallint)`, [s]).then(() => null, (e) => e.hint)) === "round_sequence", "ronde lama yang sudah dimainkan bisa dimulai lagi");
+  // Ronde live tanpa current_round: SQL session_live_round = currentRoundOf di lib/rounds.ts, untuk semua
+  // kombinasi court berskor / kosong.
+  await as(null);
+  const { tsImport } = await import("tsx/esm/api");
+  const { currentRoundOf } = await tsImport("../src/lib/rounds.ts", import.meta.url);
+  const roundMatches = (await db.query(`select id, round_no from session_matches where session_id = $1 order by round_no, court_no`, [s])).rows;
+  let roundDrift = 0;
+  for (let mask = 0; mask < 1 << roundMatches.length; mask++) {
+    const scored = roundMatches.filter((_, i) => mask & (1 << i)).map((m) => m.id);
+    await db.query(`update session_matches set score_a = case when id = any($2) then 12 end, score_b = case when id = any($2) then 9 end where session_id = $1`, [s, scored]);
+    await db.query(`update sessions set current_round = null where id = $1`, [s]);
+    const sqlRound = (await one(`select session_live_round($1) r`, [s])).r;
+    const tsRound = currentRoundOf(roundMatches.map((m) => ({ round_no: m.round_no, score_a: scored.includes(m.id) ? 12 : null })));
+    if (sqlRound !== tsRound) roundDrift++;
+  }
+  console.assert(roundDrift === 0, `ronde live SQL & lib/rounds.ts berbeda di ${roundDrift} kombinasi`);
+  await db.query(`update session_matches set score_a = 12, score_b = 9 where session_id = $1`, [s]);
+  await as(hostId);
+  await as(null);
+  await db.query(`update sessions set current_round = 3, started_rounds = '{2,3}' where id = $1`, [s]);
+  await db.query(`delete from session_matches where session_id = $1 and round_no = 4`, [s]);
+  await db.query(`update session_matches set score_a = null, score_b = null where session_id = $1 and round_no in (2, 3)`, [s]);
+  await as(hostId);
   // Mulai Activity (S1-H): sesi yang sudah live tidak berubah rondenya; dari awal → ronde pertama live.
   await db.query(`select start_session_activity($1)`, [s]);
   console.assert((await one(`select current_round from sessions where id = $1`, [s])).current_round === 3, "Mulai Activity mengubah ronde live!");
@@ -2577,4 +2641,112 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await err(`select tennis_match_open()`))?.includes("too_many_matches"), "catatan pertandingan dibatasi per 10 menit");
   await db.exec(`reset role`);
   console.log("✓ Slay Tennis: pemenang member vs member +1 Slay Point bila kedua laporan sama, tanpa poin bila diperdebatkan / < 30 detik, batas 3 per pasangan & 5 per pemenang per hari");
+}
+
+// ── Orders · input order lama (admin_record_manual_order) ────────────────────
+{
+  const one = async (sql, params) => (await db.query(sql, params)).rows[0];
+  const as = (uid) => db.exec(`select set_config('request.jwt.claim.sub', '${uid ?? ""}', false)`);
+  const err = (sql, params) => db.query(sql, params).then(() => null, (e) => e.message);
+  await as(null);
+  const { id: admin } = await one(`insert into auth.users (email) values ('order-lama@soslay.test') returning id`);
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Order', 'order-lama@soslay.test', 'active' from roles where name = 'Super Admin'`, [admin]);
+  await db.query(`update finance_settings set go_live_date = '2026-11-01', auto_shop = true where true`);
+  const item = { product_name: "A Piece of Bali", variant: "S", quantity: 2, unit_price: 220000 };
+  const rec = (p) => db.query(`select admin_record_manual_order($1) r`, [p]).then((x) => x.rows[0].r);
+
+  console.assert((await err(`select admin_record_manual_order($1)`, [{ name: "Tamu", paid_on: "2026-10-15", items: [item] }]))?.includes("izin"), "non-admin bisa input order lama");
+  await as(admin);
+  console.assert((await err(`select admin_record_manual_order($1)`, [{ name: "Tamu", paid_on: "kemarin", items: [item] }])) === "Isi tanggal bayar.", "tanggal salah format → pesan jelas");
+  console.assert((await err(`select admin_record_manual_order($1)`, [{ name: "Tamu", paid_on: "2026-10-15", items: [{ ...item, quantity: "dua" }] }]))?.startsWith("Lengkapi"), "jumlah bukan angka → pesan jelas");
+  console.assert((await err(`select admin_record_manual_order($1)`, [{ name: "Tamu", paid_on: "2999-01-01", items: [item] }]))?.includes("masa depan"), "tanggal masa depan diterima");
+  console.assert((await err(`select admin_record_manual_order($1)`, [{ name: "Tamu", paid_on: "2026-10-15", items: [{ ...item, quantity: 99999, unit_price: 999999999 }] }]))?.includes("terlalu besar"), "total melebihi batas → pesan jelas");
+
+  // Sebelum go-live → tersimpan selesai & lunas, tanpa transaksi Keuangan.
+  const before = await rec({ name: "Tamu Lama", phone: "81234567890", paid_on: "2026-10-15", payment_method: "Tunai", shipping_fee: 18000, items: [item] });
+  const o = await one(`select code, status, payment_status, channel, total, member_id, recipient_phone, paid_at::date::text d from orders where id = $1`, [before.id]);
+  console.assert(o.code === before.code && o.status === "completed" && o.payment_status === "paid" && o.channel === "manual" && o.total === 458000 && o.member_id === null && o.d === "2026-10-15", `order lama ${JSON.stringify(o)}`);
+  const finBefore = await one(`select count(*)::int n from finance_transactions where source_ref = $1`, [`ord:${before.id}`]);
+  console.assert(finBefore.n === 0 && before.finance === false, "order sebelum go-live masuk Keuangan");
+  // Sejak go-live → Pemasukan penjualan merchandise sebesar total.
+  const after = await rec({ name: "Tamu Baru", paid_on: "2026-11-05", items: [item] });
+  const fin = await one(`select coalesce(sum(amount), 0)::int amt from finance_transactions where source_ref = $1 and deleted_at is null`, [`ord:${after.id}`]);
+  console.assert(fin.amt === 440000 && after.finance === true, `order sejak go-live tidak masuk Keuangan ${JSON.stringify({ fin, after })}`);
+  await as(null);
+  console.log("✓ order lama: hanya admin Orders, format tanggal/jumlah divalidasi, selesai & lunas, Keuangan ikut go-live");
+}
+
+// ── Penilaian level pemain oleh host (player_ratings) ───────────────────────
+{
+  const one = async (sql, params) => (await db.query(sql, params)).rows[0];
+  const as = (uid) => db.exec(`select set_config('request.jwt.claim.sub', '${uid ?? ""}', false)`);
+  const err = (sql, params) => db.query(sql, params).then(() => null, (e) => e.message);
+  await as(null);
+  const mk = async (name) => {
+    const { id } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, name, `${name.toLowerCase()}@rating.test`]);
+    return id;
+  };
+  const [H1, H2, P1, P2, P3, X] = await Promise.all(["HostSatu", "HostDua", "Rina", "Budi", "Citra", "Orang"].map(mk));
+  const v = (await one(`insert into venues (slug, name, city) values ('rt-v', 'Rating Court', 'Jakarta') returning id`)).id;
+  const sess = async (slug, endedAgo, status = "completed") =>
+    (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, ended_at)
+      values ($1, $1, 'weekly-mabar', $2, now() - $3::interval - interval '2 hours', now() - $3::interval, 12, $4::session_status, case when $4::text = 'completed' then now() - $3::interval end) returning id`, [slug, v, endedAgo, status])).id;
+  const s1 = await sess("rt-1", "1 day");
+  const s2 = await sess("rt-2", "3 days");
+  const live = await sess("rt-live", "-1 day", "published"); // belum selesai
+  for (const [s, h] of [[s1, H1], [s1, H2], [s2, H1], [live, H1]]) await db.query(`insert into session_hosts (session_id, member_id) values ($1, $2)`, [s, h]);
+  for (const [s, m] of [[s1, P1], [s1, P2], [s2, P1], [live, P3]]) await db.query(`insert into bookings (session_id, member_id, status) values ($1, $2, 'attended')`, [s, m]);
+  await db.query(`insert into bookings (session_id, member_id, status) values ($1, $2, 'registered')`, [s2, P3]); // tidak hadir
+
+  await as(H1);
+  const q = (await one(`select host_rating_queue() q`)).q;
+  console.assert(q.length === 2 && q[0].member_id === P1 && q[0].times === 2 && q[0].due && q[0].cohosts[0] === "HostDua" && q[1].member_id === P2 && q[1].times === 1,
+    `antrean host ${JSON.stringify(q.map((r) => [r.name, r.times, r.due, r.cohosts]))}`);
+  console.assert((await err(`select rate_player($1, 3.5)`, [P3]))?.includes("Hanya pemain"), "menilai peserta sesi yang belum selesai / tidak hadir");
+  console.assert((await err(`select rate_player($1, 3.5)`, [H1]))?.includes("diri sendiri"), "menilai diri sendiri");
+  console.assert((await err(`select rate_player($1, 3.3)`, [P1])) === "Level tidak valid", "level bukan kelipatan 0.5");
+  console.assert((await err(`select rate_player($1, 3.5)`, [P1])) === null && (await err(`select rate_player($1, 4.0)`, [P1])) === null, "simpan / ganti nilai");
+  console.assert((await err(`select rate_player($1, null)`, [P2])) === null, "Tidak tahu");
+  const q2 = (await one(`select host_rating_queue() q`)).q;
+  console.assert(q2.every((r) => !r.due) && Number(q2.find((r) => r.member_id === P1).ntrp) === 4, `antrean sesudah dinilai ${JSON.stringify(q2)}`);
+  const qs = (await one(`select host_rating_queue($1) q`, [s2])).q;
+  console.assert(qs.length === 1 && qs[0].member_id === P1, `antrean per sesi ${JSON.stringify(qs)}`);
+  console.assert((await one(`select host_rating_queue($1) q`, [live])).q.length === 0, "antrean sesi yang belum selesai");
+  // Seperti Supabase: authenticated punya hak select tabel; yang membatasi RLS.
+  await db.exec(`grant select on player_ratings to authenticated`);
+  const readAll = async () => { await db.exec(`set role authenticated`); const n = await db.query(`select * from player_ratings`).then((x) => x.rows.length, () => 0); await db.exec(`reset role`); return n; };
+  console.assert((await readAll()) === 0, "host membaca tabel nilai langsung");
+  // Tanya ulang: nilai > 90 hari & sejak itu main bareng lagi → due (paling atas). Pemain yang hanya ada karena
+  // nilai lama (tanpa main bareng 90 hari) → due false, bukan null.
+  const sOld = await sess("rt-old", "120 days");
+  await db.query(`insert into session_hosts (session_id, member_id) values ($1, $2)`, [sOld, H1]);
+  await db.query(`insert into bookings (session_id, member_id, status) values ($1, $2, 'attended')`, [sOld, P3]);
+  console.assert((await err(`select rate_player($1, 2.5)`, [P3])) === null, "menilai pemain activity lama");
+  await db.query(`update player_ratings set rated_at = now() - interval '200 days' where host_id = $1 and member_id = $2`, [H1, P3]);
+  await db.query(`update player_ratings set rated_at = now() - interval '100 days' where host_id = $1 and member_id = $2`, [H1, P1]);
+  const q3 = (await one(`select host_rating_queue() q`)).q;
+  const due = Object.fromEntries(q3.map((r) => [r.name, r.due]));
+  console.assert(q3[0].member_id === P1 && due.Rina === true && due.Budi === false && due.Citra === false && q3.length === 3, `tanya ulang 90 hari ${JSON.stringify(due)}`);
+
+  await as(H2);
+  console.assert((await err(`select rate_player($1, 3.0)`, [P1])) === null, "co-host menilai");
+  console.assert((await one(`select count(*)::int n from session_player_levels($1)`, [s1])).n === 1, "co-host membaca level peserta activity-nya");
+  await as(X);
+  console.assert((await err(`select rate_player($1, 3.0)`, [P1]))?.includes("Hanya pemain"), "bukan host menilai");
+  console.assert((await one(`select count(*)::int n from session_player_levels($1)`, [s1])).n === 0, "pemain lain membaca level");
+  console.assert((await one(`select host_rating_queue() q`)).q.length === 0, "antrean bukan host");
+  await as(P1);
+  console.assert((await readAll()) === 0, "pemain membaca nilainya sendiri");
+  // Host yang ikut main tidak menerima levelnya sendiri (juga lewat RPC langsung).
+  await db.query(`insert into bookings (session_id, member_id, status) values ($1, $2, 'attended')`, [s1, H2]);
+  await as(H1);
+  console.assert((await err(`select rate_player($1, 4.5)`, [H2])) === null, "host menilai co-host yang ikut main");
+  await as(H2);
+  console.assert(!(await db.query(`select member_id from session_player_levels($1)`, [s1])).rows.some((r) => r.member_id === H2), "host melihat levelnya sendiri");
+  await as(H1);
+  const lv = (await db.query(`select id, member_id, ntrp::float n, raters from session_player_levels($1) where member_id = $2`, [s1, P1])).rows;
+  console.assert(lv.length === 1 && lv[0].id === P1 && lv[0].n === 3.5 && lv[0].raters === 2, `rata-rata level ${JSON.stringify(lv)}`);
+  await as(null);
+  console.log("✓ penilaian level: hanya host activity selesai, peserta hadir, kelipatan 0.5, satu nilai per host, rata-rata tanpa Tidak tahu, tidak terbaca pemain");
 }

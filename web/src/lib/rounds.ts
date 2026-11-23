@@ -73,3 +73,18 @@ export const roundList = (rounds: number[]) => rounds.map((r) => `R${r}`).join("
 
 /** "R8 dilewati" / "R4 & R8 dilewati" — null bila tidak ada. */
 export const skippedLabel = (skipped: number[]) => (skipped.length ? `${roundList(skipped)} dilewati` : null);
+
+/**
+ * Ronde live bila sesi belum punya current_round (live otomatis di jam jadwal): ronde terakhir yang sudah
+ * ada skornya bila masih ada court kosong, kalau tidak ronde berikutnya yang belum berskor. Sama persis
+ * dengan SQL session_live_round (migrasi 20261123010000) — dicek di check-migrations.
+ */
+export function currentRoundOf(matches: { round_no: number; score_a: number | null }[]): number | null {
+  if (!matches.length) return null;
+  const scored = matches.filter((m) => m.score_a !== null);
+  if (!scored.length) return Math.min(...matches.map((m) => m.round_no));
+  const last = Math.max(...scored.map((m) => m.round_no));
+  if (matches.some((m) => m.round_no === last && m.score_a === null)) return last;
+  const upcoming = matches.filter((m) => m.round_no > last && m.score_a === null).map((m) => m.round_no);
+  return upcoming.length ? Math.min(...upcoming) : last;
+}

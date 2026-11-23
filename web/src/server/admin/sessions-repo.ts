@@ -1,5 +1,6 @@
 import "server-only";
 import { generateLineup, usesLineup, scoreTarget } from "@/lib/americano";
+import { ratedLevelMap } from "@/lib/player-level";
 import { sessionClosesAt } from "@/lib/session-close";
 import { defaultSessionVenue, venueChoices } from "./catalog-repo";
 import { getDataset, type DataSession } from "./dataset";
@@ -160,12 +161,17 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
       };
     });
   const finished = isFinished(s, new Date());
-  const [{ play, roster, hosts, matches, photos }, reviewRows, kudosRows, kudosTop] = await Promise.all([
+  const client = d.live ? await createSupabaseServerClient() : null;
+  const [{ play, roster, hosts, matches, photos }, ratedAll, reviewRows, kudosRows, kudosTop] = await Promise.all([
     loadSessionPlay(s, d.live),
+    // Penilaian level oleh host (beta): rata-rata NTRP per member → bobot acak line-up. Dimuat paralel;
+    // dipakai hanya untuk format ber-line-up (dicek di bawah).
+    client ? client.rpc("session_player_levels", { p_session: s.id }).then(({ data }) => ratedLevelMap(data)) : new Map<string, number>(),
     loadSessionReviews(s.id, d.live && finished),
     loadSessionKudosAdmin(s.id, d.live && finished),
-    d.live ? createSupabaseServerClient().then((client) => loadKudosTop(client, s.id)) : new Map<string, KudosTop>(),
+    client ? loadKudosTop(client, s.id) : new Map<string, KudosTop>(),
   ]);
+  const ratedLevels = usesLineup(play.matchFormat) ? ratedAll : new Map<string, number>();
   const hostIds = new Set(hosts.filter((h) => h.role === "host").map((h) => h.memberId));
   const reviews = reviewRows.map((r) => ({ ...r, isHost: hostIds.has(r.memberId) }));
   // Daftar peserta (impor Kuyy) menggantikan daftar booking begitu ada; booking yang member-nya belum ada di
@@ -174,6 +180,7 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
   const participants = (roster ? [...roster, ...fromBookings.filter((p) => !inRoster.has(p.memberId))] : fromBookings).map((p, i) => ({
     ...p,
     kudosTop: p.memberId ? (d.live ? (kudosTop.get(p.memberId) ?? null) : demoKudosTop(i)) : null,
+    ratedNtrp: p.memberId ? (ratedLevels.get(p.memberId) ?? null) : null,
   }));
   if (!d.live && usesLineup(play.matchFormat)) matches.push(...demoLineup(id, participants, play));
   const seed = Number(id.replace(/\D/g, "")) || 0;
@@ -316,3 +323,4 @@ export async function getSessionDraft(fromId?: string): Promise<SessionDetail> {
 export function activityTypeOptions() {
   return Object.entries(activityTypeLabels).map(([slug, label]) => ({ slug, label }));
 }
+

@@ -2,10 +2,11 @@ import "server-only";
 import { products } from "@/content/products";
 import { orderStage, SHIPPING_LABEL } from "@/lib/checkout";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { demoOrders } from "@/server/shop/demo-store";
 import { demoView, ORDER_COLUMNS, toMyOrder, type OrderRow } from "@/server/shop/orders";
-import { getDataset, invalidateDataset, type DataOrder, type Dataset } from "./dataset";
+import { getDataset, invalidateDataset, orderCustomer, type DataOrder, type Dataset } from "./dataset";
 import { DAY, monthKey, pctDelta, WIB } from "./time";
 import type { OrderDetail, OrderListItem, OrdersQuery, OrdersResult, OrdersTab } from "./types";
 
@@ -35,6 +36,7 @@ const AREAS: Record<string, string> = {
   Badung: "Kerobokan, Badung, Bali 80361",
 };
 
+const CHANNEL_LABEL: Record<string, OrderDetail["channel"]> = { kuy: "Kuy", reward: "Tukar poin", manual: "Input manual (order lama)", website: "Website" };
 const productBySlug = new Map(products.map((p) => [p.slug, p]));
 const seedOf = (code: string) => Number(code.replace(/\D/g, "")) || 0;
 const monthLabel = (key: string, style: "short" | "long" = "short") =>
@@ -91,7 +93,7 @@ function toItem(d: Dataset, o: DataOrder): OrderListItem {
   return {
     code: o.code,
     memberId: o.memberId,
-    customer: d.memberById.get(o.memberId)?.fullName ?? "—",
+    customer: orderCustomer(d, o),
     stage: stageOf(o),
     method: o.shop?.method ?? null,
     proofAt: o.shop?.proofAt ?? null,
@@ -108,14 +110,14 @@ function toItem(d: Dataset, o: DataOrder): OrderListItem {
 
 export async function listOrders(query: OrdersQuery): Promise<OrdersResult> {
   const { d, orders } = await loadOrders();
-  const { memberById, now } = d;
+  const { now } = d;
   const tab = query.tab ?? "all";
   const q = query.q?.trim().toLowerCase().replace(/^#/, "");
   const items = orders
     .filter((o) => inTab(o, tab))
     .filter((o) => !query.payment || o.payment === query.payment)
     .filter((o) => !query.month || monthKey(o.placedAt) === query.month)
-    .filter((o) => !q || o.code.toLowerCase().includes(q) || (memberById.get(o.memberId)?.fullName.toLowerCase().includes(q) ?? false))
+    .filter((o) => !q || o.code.toLowerCase().includes(q) || orderCustomer(d, o).toLowerCase().includes(q))
     .slice(0, 80)
     .map((o) => toItem(d, o));
 
@@ -174,9 +176,9 @@ export async function getOrder(code: string): Promise<OrderDetail | null> {
   if (!o) return null;
   const shop = o.shop ? await shopDetail(code) : null;
   const member = d.memberById.get(o.memberId);
-  const previousOrders = d.ordersOf(o.memberId).filter((x) => x.placedAt < o.placedAt).length;
+  const previousOrders = o.memberId ? d.ordersOf(o.memberId).filter((x) => x.placedAt < o.placedAt).length : 0;
   const items = o.items.map((i) => ({ name: i.name, variant: i.variant, image: productBySlug.get(i.productSlug)?.image ?? "", price: i.price, quantity: i.quantity }));
-  const base = { ...toItem(d, o), shop, customerTier: d.stats(o.memberId).tier, customerPhone: member?.phone ?? "", previousOrders, items };
+  const base = { ...toItem(d, o), shop, customerTier: d.stats(o.memberId).tier, customerPhone: member?.phone || o.buyer?.phone || "", previousOrders, items };
   // Order checkout website: angka & alamat dari pesanan itu sendiri (snapshot saat checkout).
   if (shop) {
     return {
@@ -196,7 +198,7 @@ export async function getOrder(code: string): Promise<OrderDetail | null> {
   if (o.detail) {
     return {
       ...base,
-      channel: o.detail.channel === "kuy" ? "Kuy" : o.detail.channel === "reward" ? "Tukar poin" : "Website",
+      channel: CHANNEL_LABEL[o.detail.channel] ?? "Website",
       paymentMethod: o.detail.paymentMethod ?? "—",
       subtotal: o.detail.subtotal,
       shippingCost: o.detail.shippingFee,
@@ -223,4 +225,16 @@ export async function getOrder(code: string): Promise<OrderDetail | null> {
     courier: courier.name,
     trackingNumber: o.status === "shipped" || o.status === "completed" ? `${courier.prefix}${String(seed * 7919).padStart(10, "0")}` : null,
   };
+}
+
+/**
+ * Tanggal go-live & pencatatan otomatis Shop di Keuangan — untuk "Input order lama". Dibaca lewat service role
+ * (finance_settings hanya terbaca anggota Keuangan, RLS); tanpa service role → klien staf (bisa null).
+ * goLive null = tidak terbaca.
+ */
+export async function shopFinanceSettings(): Promise<{ goLive: string | null; autoShop: boolean }> {
+  if (!isSupabaseConfigured) return { goLive: "2026-12-01", autoShop: true };
+  const client = createSupabaseAdminClient() ?? (await createSupabaseServerClient());
+  const { data } = await client.from("finance_settings").select("go_live_date, auto_shop").maybeSingle();
+  return { goLive: (data?.go_live_date as string | undefined) ?? null, autoShop: data?.auto_shop !== false };
 }

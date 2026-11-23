@@ -694,7 +694,6 @@ export function SessionEditor({ session, types, venues, mode, initialNotice, poi
               courts={Number(play.courtCount) || 1}
               rounds={Number(play.roundCount) || 1}
               targetPoints={scoreTarget(session.play.matchFormat, session.play.targetPoints)}
-              balanceLevels={play.matchFormat === "rotating"}
               initial={session.matches}
               ended={isSessionEnded({ status: session.status, endedAt: session.play.endedAt })}
               disabledReason={

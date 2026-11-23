@@ -1,0 +1,67 @@
+/* "Input order lama" (admin Orders). Field & picker memakai SessionEditor / TripPayments. */
+.heading {
+  margin: var(--space-8) 0 0;
+  font-family: var(--font-ui);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--color-indigo-muted);
+}
+
+.items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-12);
+}
+
+.item {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) 72px minmax(0, 1.3fr) 40px;
+  align-items: end;
+  gap: var(--space-10, 10px);
+}
+
+.remove {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 44px;
+  border-radius: var(--radius-lg);
+  color: var(--color-indigo-muted);
+}
+
+.remove:hover:not(:disabled) {
+  background: var(--color-pink-50, #fdf0f5);
+  color: var(--color-pink-500);
+}
+
+.remove:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.addRow {
+  align-self: flex-start;
+}
+
+.noteOff {
+  background: var(--color-neutral-100, #f3f3f6);
+}
+
+@media (max-width: 640px) {
+  .item {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    padding-bottom: var(--space-12);
+    border-bottom: 1px solid var(--color-indigo-border);
+  }
+
+  .product {
+    grid-column: 1 / -1;
+  }
+
+  .remove {
+    justify-self: end;
+    grid-column: 2;
+  }
+}

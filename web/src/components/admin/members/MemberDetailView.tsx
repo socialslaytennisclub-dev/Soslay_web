@@ -3,6 +3,8 @@ import { Avatar } from "@/components/ui";
 import { displayPhone, waNumber } from "@/lib/wa-invite";
 import { LEVEL_LABEL, MEMBER_STATUS_LABEL, formatRupiahPlain, formatRupiahShort, formatShortDate } from "@/lib/admin-labels";
 import { topKudos } from "@/lib/kudos";
+import { levelSummary, ntrpText } from "@/lib/player-level";
+import type { MemberRating } from "@/server/admin/player-ratings";
 import type { MemberDetail, MemberKudosSummary, MemberReviewList, MemberSpend, MemberSpendItem, MemberTimelineItem } from "@/server/admin/types";
 import { AdminIcon, type AdminIconName } from "../ui/AdminIcon";
 import { AdminButton, Badge, BookingBadge, Card, desktopOnlyClass, MobileCard, MobileCardList, PaymentBadge, TierBadge } from "../ui/AdminUI";
@@ -122,6 +124,48 @@ function KudosCard({ kudos }: { kudos: MemberKudosSummary }) {
   );
 }
 
+/**
+ * Level dari penilaian host (beta, skala NTRP): rata-rata semua host (tanpa "Tidak tahu"), dibulatkan 0.5.
+ * Resmi mulai 2 host; beda ≥ 1.0 antar host ditandai. Hanya admin — member tidak melihat levelnya.
+ */
+function RatingCard({ ratings }: { ratings: MemberRating[] | null }) {
+  const summary = ratings ? levelSummary(ratings.map((r) => r.ntrp)) : null;
+  return (
+    <Card title="Level dari host" subtitle="Penilaian anonim host setelah activity (beta) · tidak terlihat oleh member">
+      {!ratings ? (
+        <p className={styles.emptyNote}>Penilaian level gagal dimuat. Muat ulang halaman.</p>
+      ) : !ratings.length ? (
+        <p className={styles.emptyNote}>Belum dinilai host.</p>
+      ) : (
+        <>
+          <p className={styles.ratingHead}>
+            <strong>{summary ? `${summary.level.label} · ${summary.level.name}` : "Tidak tahu"}</strong>
+            {summary && (
+              <span>
+                rata-rata {summary.avg.toFixed(2).replace(".", ",")} dari {summary.raters} host{summary.provisional ? " · perkiraan awal" : ""}
+              </span>
+            )}
+          </p>
+          {summary && summary.spread >= 1 && (
+            <Badge tone="pink" dot>
+              Beda pendapat host {summary.spread.toFixed(1).replace(".", ",")} — perlu dicek
+            </Badge>
+          )}
+          <ul className={styles.ratingList}>
+            {ratings.map((r) => (
+              <li key={r.hostId}>
+                <span>{r.hostName}</span>
+                <span>{ntrpText(r.ntrp)}</span>
+                <small>{formatShortDate(r.ratedAt)}</small>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Card>
+  );
+}
+
 /** Semua review yang pernah diberikan member, satu per activity (terbaru dulu). */
 function ReviewsCard({ list }: { list: MemberReviewList }) {
   const reviews = list.items;
@@ -202,6 +246,7 @@ export function MemberDetailView({
   tab = "ringkasan",
   kudos = null,
   reviews = null,
+  ratings = null,
   loginEmail,
 }: {
   member: MemberDetail;
@@ -211,6 +256,8 @@ export function MemberDetailView({
   kudos?: MemberKudosSummary | null;
   /** Hanya dimuat untuk tab Review. */
   reviews?: MemberReviewList | null;
+  /** Penilaian level oleh host — hanya tab Ringkasan. */
+  ratings?: MemberRating[] | null;
   /** Diisi hanya untuk staf dengan izin members edit → tombol "Ganti email login". `undefined` = tombol disembunyikan. */
   loginEmail?: { status: LoginEmailStatus };
 }) {
@@ -305,6 +352,7 @@ export function MemberDetailView({
       {tab === "ringkasan" && (
         <div className={styles.summaryGrid}>
           {kudos && <KudosCard kudos={kudos} />}
+          {tab === "ringkasan" && <RatingCard ratings={ratings} />}
 
           <Card title="Tennis profile">
             <dl className={styles.facts}>

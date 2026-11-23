@@ -4,6 +4,7 @@ import { MEMBER_TABS, MemberDetailView, type MemberTab } from "@/components/admi
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { getLoginEmailStatus } from "@/server/admin/login-email";
+import { getMemberRatings } from "@/server/admin/player-ratings";
 import { bookableSessions, getMember, getMemberKudos, getMemberReviews } from "@/server/admin/repo";
 import { canAccess, getAdminSession } from "@/server/admin/session";
 import pageStyles from "../../page.module.css";
@@ -22,11 +23,12 @@ export default async function AdminMemberPage({ params, searchParams }: PageProp
   // Sesi admin sudah di-cache layout → murah. Status email login (panggilan Auth) hanya untuk staf dengan
   // izin members edit (aksi server mengecek izin ulang); kudos & review hanya dimuat di tab yang menampilkannya.
   const canEditLogin = canAccess(await getAdminSession(), "members", "edit");
-  const [bookable, kudos, reviews, loginStatus] = await Promise.all([
+  const [bookable, kudos, reviews, loginStatus, ratings] = await Promise.all([
     bookableSessions(member.id),
     tab === "ringkasan" ? getMemberKudos(member.id) : null,
     tab === "review" ? getMemberReviews(member.id) : null,
     canEditLogin && isSupabaseConfigured ? getLoginEmailStatus(member.id) : null,
+    tab === "ringkasan" ? getMemberRatings(member.id) : null,
   ]);
   const loginEmail = canEditLogin ? { status: loginStatus } : undefined;
 
@@ -34,7 +36,7 @@ export default async function AdminMemberPage({ params, searchParams }: PageProp
     <>
       <AdminTopbar breadcrumb={`CRM / Members / ${member.fullName}`} title="Detail member" />
       <div className={pageStyles.content}>
-        <MemberDetailView member={member} bookable={bookable} tab={tab} kudos={kudos} reviews={reviews} loginEmail={loginEmail} />
+        <MemberDetailView member={member} bookable={bookable} tab={tab} kudos={kudos} reviews={reviews} ratings={ratings} loginEmail={loginEmail} />
       </div>
     </>
   );

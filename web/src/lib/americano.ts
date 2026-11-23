@@ -4,11 +4,15 @@
  * yang sama tidak main bareng lagi, pemain yang baru bertemu (teman / lawan) tidak langsung bertemu
  * lagi di ronde berikutnya, dan tidak ada yang rest dua ronde berturut-turut kalau bisa dihindari.
  *
- * Rotating Partner = aturan yang sama + tim di tiap court diseimbangkan per level (opsi `levels`).
+ * Level (opsi `levels`, NTRP) hanya penentu di antara pilihan yang sama baiknya: partner tidak berulang tetap
+ * aturan utama (Americano & Rotating Partner sama). Beda kedua format hanya skor: Americano target total poin,
+ * Rotating Partner bebas.
  *
  * Generator acak + skor penalti: beberapa percobaan, ambil jadwal dengan penalti terkecil.
  * Murni (tanpa I/O) — dipakai di admin (client) dan server.
  */
+
+import { DEFAULT_LINEUP_NTRP } from "./player-level";
 
 /** Format yang memakai line-up per ronde & court (lihat MatchFormat). */
 export const usesLineup = (format: string) => format === "americano" || format === "rotating";
@@ -30,7 +34,7 @@ export type LineupMatch = { round: number; court: number; a: [string, string]; b
 
 export type LineupConfig = { players: string[]; courts: number; rounds: number };
 
-/** Bobot level per pemain (1 = beginner … 5 = advanced) — diisi untuk Rotating Partner. */
+/** Bobot level per pemain dalam NTRP (1.0–6.0; lib/player-level lineupNtrp: nilai host → level profil → 3.0) — diisi untuk Americano & Rotating Partner. */
 export type LevelWeights = Record<string, number>;
 
 const pairKey = (x: string, y: string) => (x < y ? `${x}|${y}` : `${y}|${x}`);
@@ -93,10 +97,30 @@ function record(h: History, matches: LineupMatch[], players: string[]) {
   h.lastMeet = met;
 }
 
-// Bobot penalti: kelompok 4 orang yang sama >> selisih level tim (Rotating) ≈ partner berulang >
+// Bobot penalti: kelompok 4 orang yang sama >> partner berulang >
 // rest dua kali berturut-turut > bertemu lagi di ronde berikutnya > lawan berulang. 1–2 orang bertemu
-// lagi masih wajar (penalti kecil); rest dua kali lebih mahal dari satu pertemuan ulang.
-const COST = { sameGroup: 60, partner: 10, level: 10, restTwice: 8, metLastRound: 4, opponent: 1 };
+// lagi masih wajar (penalti kecil); rest dua kali lebih mahal dari satu pertemuan ulang. Selisih level tim hanya penentu seri (LEVEL_WEIGHT).
+const COST = { sameGroup: 60, partner: 10, restTwice: 8, metLastRound: 4, opponent: 1 };
+/**
+ * Penalti selisih level tim per court: weight · gap / (gap + 1) — naik terus (selisih 5 tetap lebih buruk dari 2)
+ * tapi < weight. Level tidak pernah ditukar dengan aturan utama (partner berulang, kelompok sama, rest dua kali):
+ *  · Saat menyusun satu ronde (planRound): weight = LEVEL_ROUND_BUDGET / court, jadi total level satu ronde < 7 —
+ *    di bawah rest dua kali (8), partner berulang (10) & kelompok sama (60); level hanya boleh mengalahkan bertemu
+ *    lagi (4) / lawan berulang (1).
+ *  · Saat memilih jadwal terbaik dari beberapa percobaan (lineupCost): weight LEVEL_TIEBREAK — total satu jadwal
+ *    jauh di bawah 1, jadi hanya penentu seri antar jadwal yang sama adilnya.
+ */
+const LEVEL_ROUND_BUDGET = 7;
+const LEVEL_TIEBREAK = 0.001;
+
+function levelPenalty(levels: LevelWeights | undefined, weight: number, a1: string, a2: string, b1: string, b2: string) {
+  if (!levels) return 0;
+  const gap = Math.abs((levels[a1] ?? DEFAULT_LINEUP_NTRP) + (levels[a2] ?? DEFAULT_LINEUP_NTRP) - (levels[b1] ?? DEFAULT_LINEUP_NTRP) - (levels[b2] ?? DEFAULT_LINEUP_NTRP));
+  return (weight * gap) / (gap + 1);
+}
+
+/** Bobot level + berat penaltinya untuk satu perhitungan (undefined = tanpa level). */
+type LevelCost = { levels: LevelWeights; weight: number };
 
 /** Bagian penalti court yang sama untuk ketiga pembagian tim + ke-6 kunci pasangannya. */
 type CourtBase = { k12: string; k13: string; k14: string; k23: string; k24: string; k34: string; group: number; allOpp: number };
@@ -120,33 +144,34 @@ function courtBase(h: History, p1: string, p2: string, p3: string, p4: string): 
 /**
  * Penalti court untuk pembagian [a1, a2] vs [b1, b2] (partner `ka`/`kb`) — satu-satunya rumus penalti
  * court (planRound memilih, lineupCost menilai): kelompok + partner berulang + lawan berulang + selisih
- * level tim (Rotating).
+ * level tim (penentu seri).
  */
-function splitCost(h: History, base: CourtBase, a1: string, a2: string, b1: string, b2: string, ka: string, kb: string, levels?: LevelWeights) {
-  const level = levels ? COST.level * Math.abs((levels[a1] ?? 3) + (levels[a2] ?? 3) - (levels[b1] ?? 3) - (levels[b2] ?? 3)) : 0;
+function splitCost(h: History, base: CourtBase, a1: string, a2: string, b1: string, b2: string, ka: string, kb: string, lv?: LevelCost) {
+  const level = levelPenalty(lv?.levels, lv?.weight ?? 0, a1, a2, b1, b2);
   const partners = (h.partners.get(ka) ?? 0) + (h.partners.get(kb) ?? 0);
   const opponents = base.allOpp - (h.opponents.get(ka) ?? 0) - (h.opponents.get(kb) ?? 0);
   return base.group + COST.partner * partners + COST.opponent * opponents + level;
 }
 
 /** Penalti court untuk pembagian tim yang sudah ditentukan. */
-function courtCost(h: History, [a1, a2]: [string, string], [b1, b2]: [string, string], levels?: LevelWeights) {
+function courtCost(h: History, [a1, a2]: [string, string], [b1, b2]: [string, string], lv?: LevelCost) {
   const base = courtBase(h, a1, a2, b1, b2);
-  return splitCost(h, base, a1, a2, b1, b2, base.k12, base.k34, levels);
+  return splitCost(h, base, a1, a2, b1, b2, base.k12, base.k34, lv);
 }
 
 /** Pembagian tim termurah untuk 4 pemain di satu court + penaltinya (seri → pembagian pertama). */
-function bestCourt(h: History, p1: string, p2: string, p3: string, p4: string, levels?: LevelWeights): { a: [string, string]; b: [string, string]; cost: number } {
+function bestCourt(h: History, p1: string, p2: string, p3: string, p4: string, lv?: LevelCost): { a: [string, string]; b: [string, string]; cost: number } {
   const base = courtBase(h, p1, p2, p3, p4);
-  const c0 = splitCost(h, base, p1, p2, p3, p4, base.k12, base.k34, levels);
-  const c1 = splitCost(h, base, p1, p3, p2, p4, base.k13, base.k24, levels);
-  const c2 = splitCost(h, base, p1, p4, p2, p3, base.k14, base.k23, levels);
+  const c0 = splitCost(h, base, p1, p2, p3, p4, base.k12, base.k34, lv);
+  const c1 = splitCost(h, base, p1, p3, p2, p4, base.k13, base.k24, lv);
+  const c2 = splitCost(h, base, p1, p4, p2, p3, base.k14, base.k23, lv);
   if (c0 <= c1 && c0 <= c2) return { a: [p1, p2], b: [p3, p4], cost: c0 };
   if (c1 <= c2) return { a: [p1, p3], b: [p2, p4], cost: c1 };
   return { a: [p1, p4], b: [p2, p3], cost: c2 };
 }
 
 function planRound(h: History, players: string[], courts: number, round: number, rand: () => number, levels?: LevelWeights): LineupMatch[] {
+  const lv: LevelCost | undefined = levels && { levels, weight: LEVEL_ROUND_BUDGET / courts };
   // Jumlah main tetap serata mungkin: yang paling sedikit main pasti main; dari yang seri di batas
   // (mis. 8 pemain 1 court: semua seri) dipilih kombinasi dengan penalti terkecil — bukan selalu yang
   // baru rest, karena itu membuat kelompok 4 orang yang sama terus bertemu bergantian.
@@ -168,7 +193,7 @@ function planRound(h: History, players: string[], courts: number, round: number,
     const matches: LineupMatch[] = [];
     let cost = COST.restTwice * (aboveRestTwice + sp.slice(take).reduce((n, p) => n + restedAgain(p), 0));
     for (let c = 0; c < courts; c++) {
-      const { a, b, cost: cc } = bestCourt(h, s[c * 4], s[c * 4 + 1], s[c * 4 + 2], s[c * 4 + 3], levels);
+      const { a, b, cost: cc } = bestCourt(h, s[c * 4], s[c * 4 + 1], s[c * 4 + 2], s[c * 4 + 3], lv);
       matches.push({ round, court: c + 1, a, b });
       cost += cc;
     }
@@ -180,13 +205,14 @@ function planRound(h: History, players: string[], courts: number, round: number,
 
 /** Penalti total jadwal — makin kecil makin seimbang. */
 export function lineupCost(matches: LineupMatch[], players: string[], levels?: LevelWeights): number {
+  const lv: LevelCost | undefined = levels && { levels, weight: LEVEL_TIEBREAK };
   const h = emptyHistory(players);
   let cost = 0;
   let restStreak = 0;
   const rounds = [...new Set(matches.map((m) => m.round))].sort((x, y) => x - y);
   for (const r of rounds) {
     const round = matches.filter((m) => m.round === r);
-    for (const m of round) cost += courtCost(h, m.a, m.b, levels);
+    for (const m of round) cost += courtCost(h, m.a, m.b, lv);
     const prevRest = h.lastRest;
     record(h, round, players);
     for (const p of h.lastRest) if (prevRest.has(p)) restStreak++;
@@ -198,12 +224,14 @@ export function lineupCost(matches: LineupMatch[], players: string[], levels?: L
 /**
  * Buat jadwal ronde `fromRound`..`rounds`. `history` = match ronde sebelumnya yang dipertahankan
  * (dipakai saat acak ulang setelah ada yang absen) supaya keseimbangan dihitung dari awal sesi.
+ * `fixed` = match ronde ≥ `fromRound` yang tidak boleh diubah (ronde yang sudah dimulai): ronde itu
+ * dilewati, tapi ikut dihitung riwayatnya. Hasil hanya berisi ronde yang diacak.
  */
 export function generateLineup(
   { players, courts, rounds }: LineupConfig,
-  options: { fromRound?: number; history?: LineupMatch[]; attempts?: number; rand?: () => number; levels?: LevelWeights } = {},
+  options: { fromRound?: number; history?: LineupMatch[]; fixed?: LineupMatch[]; attempts?: number; rand?: () => number; levels?: LevelWeights } = {},
 ): LineupMatch[] {
-  const { fromRound = 1, history = [], attempts = 40, rand = Math.random, levels } = options;
+  const { fromRound = 1, history = [], fixed = [], attempts = 40, rand = Math.random, levels } = options;
   const playable = playableCourts(players.length, courts);
   if (!playable || fromRound > rounds) return [];
 
@@ -226,11 +254,17 @@ export function generateLineup(
     };
     const plan: LineupMatch[] = [];
     for (let r = fromRound; r <= rounds; r++) {
+      // Ronde tetap (sudah dimulai, tidak diacak): dicatat ke riwayat supaya ronde sesudahnya tidak mengulang partner.
+      const pinned = fixed.filter((m) => m.round === r);
+      if (pinned.length) {
+        record(h, pinned, players);
+        continue;
+      }
       const round = planRound(h, players, playable, r, rand, levels);
       record(h, round, players);
       plan.push(...round);
     }
-    const cost = lineupCost([...keep, ...plan], players, levels);
+    const cost = lineupCost([...keep, ...fixed.filter((m) => m.round >= fromRound), ...plan], players, levels);
     if (cost < bestCost) [best, bestCost] = [plan, cost];
   }
   return best;
@@ -246,8 +280,8 @@ export function lineupStats(matches: LineupMatch[], players: string[], levels?: 
     bump(partners, pairKey(...m.b));
   }
   const counts = [...games.values()];
-  // Selisih level tim terbesar di satu court (hanya bermakna untuk Rotating Partner).
-  const strength = (t: [string, string]) => (levels?.[t[0]] ?? 3) + (levels?.[t[1]] ?? 3);
+  // Selisih level tim terbesar di satu court (bila acak memakai level).
+  const strength = (t: [string, string]) => (levels?.[t[0]] ?? DEFAULT_LINEUP_NTRP) + (levels?.[t[1]] ?? DEFAULT_LINEUP_NTRP);
   const maxLevelGap = levels ? Math.max(0, ...matches.map((m) => Math.abs(strength(m.a) - strength(m.b)))) : 0;
   return {
     maxLevelGap,

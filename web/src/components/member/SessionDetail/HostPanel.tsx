@@ -1,8 +1,8 @@
 "use client";
 
-import { Minus, Play, Plus, ShieldCheck, X } from "lucide-react";
+import { Lock, Minus, Play, Plus, ShieldCheck, X } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useDialog } from "@/hooks/useDialog";
 import { useScoreDraft } from "@/hooks/useScoreDraft";
 import { cx } from "@/lib/cx";
@@ -40,12 +40,39 @@ export function HostLive({ detail: d }: { detail: MemberSessionDetail }) {
   const selected = valid ?? d.currentRound ?? plan.rounds[0];
   const isPlayer = d.plays;
   const total = maxRound(d);
+  // Kartu atas selalu ronde live (Figma 1284:6086); chip hanya mengganti ronde yang dilihat di Panel Host.
+  const cardRound = d.phase === "live" && d.currentRound !== null ? d.currentRound : selected;
+  const notice = useRoundChangeNotice(d);
   return (
     <>
-      {isPlayer ? <PlayerLiveCard detail={d} round={selected} plan={plan} total={total} /> : <HostLiveCard detail={d} round={selected} plan={plan} total={total} />}
-      <HostPanel detail={d} plan={plan} total={total} selected={selected} onPick={(round) => setPicked({ round, at: d.currentRound })} isPlayer={isPlayer} />
+      {isPlayer ? <PlayerLiveCard detail={d} round={cardRound} plan={plan} total={total} /> : <HostLiveCard detail={d} round={cardRound} plan={plan} total={total} />}
+      <HostPanel detail={d} plan={plan} total={total} selected={selected} onPick={(round) => setPicked({ round, at: d.currentRound })} isPlayer={isPlayer} notice={notice} />
     </>
   );
+}
+
+/**
+ * Ronde live berganti (skor court terakhir masuk → pindah otomatis, atau "Lanjut") → pemberitahuan singkat.
+ * Tidak muncul saat halaman pertama kali dibuka.
+ */
+function useRoundChangeNotice(d: MemberSessionDetail): string | null {
+  const previous = useRef(d.currentRound);
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    const from = previous.current;
+    previous.current = d.currentRound;
+    if (from === null || d.currentRound === null || d.currentRound <= from || d.phase !== "live") return;
+    const complete = d.matches.filter((m) => m.round === from).every((m) => m.scoreA !== null);
+    setNotice(`${complete ? `Skor R${from} lengkap ✓ · ` : ""}Ronde ${d.currentRound} dimulai — peserta melihat line-up barunya.`);
+  }, [d.currentRound, d.phase, d.matches]);
+  // Timer terpisah: refresh berkala (LiveRefresh) mengganti d.matches dan menjalankan ulang efek di atas —
+  // timer di sana akan ikut dibatalkan sehingga pemberitahuan tidak pernah hilang.
+  useEffect(() => {
+    if (!notice) return;
+    const timer = window.setTimeout(() => setNotice(null), 8000);
+    return () => window.clearTimeout(timer);
+  }, [notice]);
+  return notice;
 }
 
 /**
@@ -54,12 +81,29 @@ export function HostLive({ detail: d }: { detail: MemberSessionDetail }) {
  * belum dimulai), "Input skor" lewat modal + Urungkan, Atur line-up / Acak ulang, dan Akhiri
  * Activity. Hanya satu ronde live; hak host & total = target dicek ulang di database.
  */
-function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { detail: MemberSessionDetail; plan: RoundPlan; total: number; selected: number; onPick: (round: number) => void; isPlayer: boolean }) {
+function HostPanel({
+  detail: d,
+  plan,
+  total,
+  selected,
+  onPick,
+  isPlayer,
+  notice,
+}: {
+  detail: MemberSessionDetail;
+  plan: RoundPlan;
+  total: number;
+  selected: number;
+  onPick: (round: number) => void;
+  isPlayer: boolean;
+  notice: string | null;
+}) {
   const { matches, currentRound, canScore } = d;
   const target = d.format.targetPoints;
   const router = useRouter();
   const { dialogRef: scoreRef, open: openScore, close: closeScore, onBackdropClick: onScoreBackdrop } = useDialog();
   const { dialogRef: endRef, open: openEnd, close: closeEnd, onBackdropClick: onEndBackdrop } = useDialog();
+  const { dialogRef: nextRef, open: openNext, close: closeNext, onBackdropClick: onNextBackdrop } = useDialog();
   const [editing, setEditing] = useState<DetailMatch | null>(null);
   // Tanpa target (Rotating Partner): skor tim B diisi sendiri, tidak dihitung dari target.
   const { a: scoreA, b: scoreB, max, valid, setA: setScoreA, setB: setScoreB, reset: resetScore } = useScoreDraft(target);
@@ -69,9 +113,11 @@ function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { det
 
   const live = canScore && d.phase === "live";
   const viewingUnstarted = isUnstarted(plan.statusOf(selected));
-  const next = plan.rounds.includes(selected + 1) && isUnstarted(plan.statusOf(selected + 1)) ? selected + 1 : null;
-  const last = selected === plan.rounds.at(-1);
+  // Ronde berurutan: satu-satunya ronde yang bisa dimulai = ronde tepat setelah ronde live.
+  const nextRound = currentRound !== null ? (plan.rounds.find((r) => r > currentRound) ?? null) : null;
   const courts = matches.filter((m) => m.round === selected);
+  const liveCourts = matches.filter((m) => m.round === currentRound);
+  const liveUnscored = liveCourts.filter((m) => m.scoreA === null);
 
   const startRound = (round: number) =>
     startBusy(async () => {
@@ -79,6 +125,7 @@ function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { det
       if (!result.ok) return setError(result.error);
       setError(null);
       closeEnd();
+      closeNext();
       router.refresh();
     });
 
@@ -131,36 +178,26 @@ function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { det
           <p className={styles.muted}>
             {isPlayer ? "Kamu host sesi ini dan juga bermain" : "Kamu host sesi ini dan tidak ikut bermain"} · {status}
           </p>
-          {selected !== currentRound && (
-            // Di HP kartu atas berada jauh di atas chip — beri tahu & bawa ke sana.
-            <button type="button" className={styles.linkBtn} onClick={() => document.getElementById("live-title")?.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth", block: "center" })}>
-              Kartu di atas menampilkan Ronde {selected} ↑
-            </button>
-          )}
         </div>
         {live && (
           <div className={styles.hostActions}>
             <LineupButton detail={d} plan={plan} />
-            {next ? (
-              <button type="button" className={styles.btnStart} onClick={() => startRound(next)} disabled={busy}>
-                <Play size={14} aria-hidden fill="currentColor" />
-                {busy ? "Memulai…" : `Mulai Ronde ${next}`}
-              </button>
-            ) : (
-              last && (
-                <button type="button" className={styles.btnStart} onClick={openEnd}>
-                  <Play size={14} aria-hidden fill="currentColor" />
-                  Akhiri Activity
-                </button>
-              )
-            )}
           </div>
         )}
       </header>
 
-      {plan.rounds.length > 1 && <RoundChips plan={plan} selected={selected} onPick={onPick} />}
+      {plan.rounds.length > 1 && (
+        <>
+          <RoundChips plan={plan} selected={selected} onPick={onPick} />
+          <ChipLegend />
+        </>
+      )}
 
-      {live && plan.skipped.length > 0 && <SkippedBanner skipped={plan.skipped} />}
+      {notice && (
+        <p className={styles.hostSaved} role="status">
+          <span>{notice}</span>
+        </p>
+      )}
 
       {saved && (
         <p className={styles.hostSaved} role="status">
@@ -218,6 +255,18 @@ function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { det
       </p>
 
       {live && (
+        <RoundBar
+          plan={plan}
+          round={selected}
+          courts={courts}
+          isLive={selected === currentRound}
+          nextRound={nextRound}
+          busy={busy}
+          onContinue={() => (liveUnscored.length ? openNext() : nextRound !== null && startRound(nextRound))}
+        />
+      )}
+
+      {live && (
         <div className={styles.endRow}>
           <span>
             <strong>Selesai bermain?</strong>
@@ -228,6 +277,41 @@ function HostPanel({ detail: d, plan, total, selected, onPick, isPlayer }: { det
           </button>
         </div>
       )}
+
+      <dialog ref={nextRef} className={styles.qrDialog} aria-labelledby="next-round-title" onClick={onNextBackdrop}>
+        {nextRound !== null && (
+          <div className={styles.qrPanel}>
+            <header className={styles.qrHead}>
+              <div>
+                <h2 id="next-round-title">Lanjut ke Ronde {nextRound}?</h2>
+                <span className={styles.muted}>
+                  Ronde {currentRound} masih {liveUnscored.length} court belum ada skor ({liveUnscored.map((m) => `Court ${m.court}`).join(", ")}).
+                </span>
+              </div>
+              <button type="button" className={styles.qrClose} onClick={closeNext} aria-label="Tutup">
+                <X size={18} />
+              </button>
+            </header>
+            <p className={styles.small}>
+              Ronde {currentRound} jadi &quot;belum lengkap&quot; (chip oranye). Skornya masih bisa diisi nanti lewat chip R{currentRound} selama activity belum diakhiri.
+            </p>
+            {error && (
+              <p className={styles.formError} role="alert">
+                {error}
+              </p>
+            )}
+            <div className={styles.qrActions}>
+              <button type="button" className={styles.btnOutline} onClick={closeNext}>
+                Batal
+              </button>
+              <button type="button" className={styles.btnLime} onClick={() => startRound(nextRound)} disabled={busy}>
+                <Play size={14} aria-hidden fill="currentColor" />
+                {busy ? "Memulai…" : `Ya, lanjut ke R${nextRound}`}
+              </button>
+            </div>
+          </div>
+        )}
+      </dialog>
 
       <EndActivityDialog detail={d} plan={plan} dialogRef={endRef} onClose={closeEnd} onBackdropClick={onEndBackdrop} onStartRound={startRound} busy={busy} />
 
@@ -317,13 +401,94 @@ function RoundChips({ plan, selected, onPick }: { plan: RoundPlan; selected: num
   );
 }
 
-/** Ronde yang dilompati (HL-1c): cara memainkannya + peringatan saat Akhiri Activity. */
-function SkippedBanner({ skipped }: { skipped: number[] }) {
-  const [first] = skipped;
+/** Keterangan warna chip ronde. */
+function ChipLegend() {
   return (
-    <p className={styles.skipBanner}>
-      <strong>Ronde {skipped.join(" & ")} belum dimulai</strong>
-      Untuk memainkannya: pilih chip {first > 1 ? `R${first - 1}` : "ronde sebelumnya"} lalu &quot;Mulai Ronde {first}&quot;. Kalau langsung Akhiri Activity, {roundList(skipped)} tidak masuk hasil.
+    <p className={styles.chipLegend}>
+      <span className={styles.chipLegendDone}>Selesai</span>
+      <span className={styles.chipLegendLive}>Live</span>
+      <span className={styles.chipLegendWarn}>Belum lengkap</span>
+      <span className={styles.chipLegendLater}>Belum dimulai</span>
     </p>
+  );
+}
+
+/**
+ * Bar status ronde yang sedang dilihat (Figma 1284:6086): ringkasan court + status / aksi. Ronde berjalan
+ * berurutan dan pindah otomatis saat skor court terakhir masuk; "Lanjut ke Ronde N" hanya untuk ronde live
+ * yang macet (ada court tanpa skor). Ronde terakhir lengkap → diakhiri lewat tombol Akhiri Activity.
+ */
+function RoundBar({
+  plan,
+  round,
+  courts,
+  isLive,
+  nextRound,
+  busy,
+  onContinue,
+}: {
+  plan: RoundPlan;
+  round: number;
+  courts: DetailMatch[];
+  isLive: boolean;
+  nextRound: number | null;
+  busy: boolean;
+  onContinue: () => void;
+}) {
+  const status = plan.statusOf(round);
+  const unscored = courts.filter((m) => m.scoreA === null).length;
+  const summary = isUnstarted(status)
+    ? `${courts.length} court belum dimulai`
+    : unscored
+      ? `${unscored} court belum ada skor`
+      : `${courts.length} court selesai`;
+
+  let state: React.ReactNode;
+  if (isLive && !unscored) {
+    state =
+      nextRound !== null ? (
+        <button type="button" className={styles.btnStart} onClick={onContinue} disabled={busy}>
+          <Play size={14} aria-hidden fill="currentColor" />
+          {busy ? "Memulai…" : `Lanjut ke Ronde ${nextRound}`}
+        </button>
+      ) : (
+        <span className={cx(styles.roundBarState, styles.roundBarDone)}>
+          <Lock size={14} aria-hidden /> Semua ronde selesai
+        </span>
+      );
+  } else if (isLive) {
+    state = (
+      <span className={cx(styles.roundBarState, styles.roundBarLive)}>
+        <span className={styles.chipDot} aria-hidden /> Sedang berlangsung
+      </span>
+    );
+  } else if (isUnstarted(status)) {
+    state = <span className={cx(styles.roundBarState, styles.roundBarDone)}>Belum dimulai</span>;
+  } else if (unscored) {
+    state = <span className={cx(styles.roundBarState, styles.roundBarWarn)}>Belum lengkap · isi skor</span>;
+  } else {
+    state = (
+      <span className={cx(styles.roundBarState, styles.roundBarDone)}>
+        <Lock size={14} aria-hidden /> Ronde selesai
+      </span>
+    );
+  }
+
+  return (
+    <div className={styles.roundBar}>
+      <div className={styles.roundBarMain}>
+        <span className={styles.roundBarInfo}>
+          <small>{summary}</small>
+          <strong>Ronde {round}</strong>
+        </span>
+        {state}
+      </div>
+      {isLive && unscored > 0 && nextRound !== null && (
+        <button type="button" className={cx(styles.linkBtn, styles.roundBarLink)} onClick={onContinue} disabled={busy}>
+          Court macet? Lanjut ke Ronde {nextRound} tanpa menunggu skor →
+        </button>
+      )}
+      {isLive && !unscored && nextRound === null && <small className={styles.roundBarHint}>Tekan &quot;Akhiri Activity&quot; di bawah untuk menutup sesi &amp; melihat hasil.</small>}
+    </div>
   );
 }

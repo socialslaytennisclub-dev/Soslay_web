@@ -237,6 +237,13 @@ export async function listProducts(): Promise<AdminProduct[]> {
   });
 }
 
+/** Pilihan produk "Input order lama" (Orders): nama, varian & harga — tanpa hitung terjual dari semua order. */
+export async function productChoices(): Promise<{ name: string; variants: string[]; price: number }[]> {
+  return (await loadProductForms())
+    .filter((p) => p.status !== "archived")
+    .map((p) => ({ name: p.name, variants: p.optionKey ? p.variants.map((v) => v.value) : [], price: p.price }));
+}
+
 export async function getProductForm(slug: string): Promise<ProductForm | null> {
   return (await loadProductForms()).find((p) => p.slug === slug) ?? null;
 }

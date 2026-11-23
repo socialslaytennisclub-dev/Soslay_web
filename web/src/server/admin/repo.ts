@@ -6,7 +6,7 @@ import { DEMO_MEMBER_KUDOS } from "../kudos-demo";
 import { LEVEL_LABEL } from "@/lib/admin-labels";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { getDataset, type DataMember, type Dataset } from "./dataset";
+import { getDataset, orderCustomer, type DataMember, type Dataset } from "./dataset";
 import { displayStatus } from "./session-rows";
 import { countSegmentsLive, listMembersLive, sidebarCountsLive } from "./member-list";
 import { jakartaWeekStart, TIERS } from "./demo-data";
@@ -455,7 +455,7 @@ export async function getSidebarCounts() {
 
 export async function getOverview(weeks = 12): Promise<OverviewData> {
   const d = await getDataset();
-  const { bookings, sessions, orders, sessionById, memberById } = d;
+  const { bookings, sessions, orders, sessionById } = d;
   const everyone = allMembers(d);
   const now = d.now.getTime();
   const thisWeek = weekStart(d.now).getTime();
@@ -560,7 +560,7 @@ export async function getOverview(weeks = 12): Promise<OverviewData> {
     })),
     recentOrders: orders.slice(0, 4).map((o) => ({
       code: o.code,
-      customer: memberById.get(o.memberId)?.fullName ?? "—",
+      customer: orderCustomer(d, o),
       items: `${o.items[0].name} ×${o.items[0].quantity}`,
       total: o.total,
       payment: o.payment,

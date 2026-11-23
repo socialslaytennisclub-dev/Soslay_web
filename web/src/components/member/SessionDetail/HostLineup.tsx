@@ -4,12 +4,14 @@ import { Check, Lock, RefreshCw, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { useDialog } from "@/hooks/useDialog";
-import { generateLineup, playableCourts, type LineupMatch } from "@/lib/americano";
+import { generateLineup, playableCourts, type LevelWeights, type LineupMatch } from "@/lib/americano";
 import { cx } from "@/lib/cx";
+import { levelFromLabel } from "@/lib/levels";
+import { lineupNtrp } from "@/lib/player-level";
 import { isUnstarted, type RoundPlan } from "@/lib/rounds";
 import { firstName, teamName } from "@/lib/text";
 import type { MemberSessionDetail } from "@/server/member/session-detail";
-import { saveHostLineup, type HostLineupMatch } from "@/server/member/actions";
+import { getHostLineupLevels, saveHostLineup, type HostLineupMatch } from "@/server/member/actions";
 import styles from "./SessionDetail.module.css";
 
 type Slot = "a1" | "a2" | "b1" | "b2";
@@ -36,24 +38,38 @@ const toDraft = (d: MemberSessionDetail): Draft[] => {
 /**
  * Acak ulang · prioritaskan yang hadir (Figma Simplify HL-1e): ronde `fromRound`…terakhir diisi
  * ulang hanya dengan peserta yang sudah check-in; ronde sebelumnya tetap & ikut dihitung supaya
- * partner tidak berulang. null = pemain hadir kurang dari 4.
+ * partner tidak berulang. Ronde ≥ `fromRound` yang sudah pernah dimulai (data lama dari lompat ronde)
+ * tidak diacak — court tanpa skornya dikirim apa adanya supaya tidak terhapus. null = pemain hadir kurang dari 4.
  */
-export function shuffleFromRound(d: MemberSessionDetail, fromRound: number): HostLineupMatch[] | null {
+export function shuffleFromRound(d: MemberSessionDetail, fromRound: number, plan?: RoundPlan, levels?: LevelWeights): HostLineupMatch[] | null {
   const players = d.people.filter((p) => p.checkedIn).map((p) => p.id);
   // Hanya ronde di format sesi (line-up lama di luar format tidak diisi ulang).
   const rounds = d.format.rounds;
   if (!playableCourts(players.length, d.format.courts)) return null;
+  const begun = (round: number) => plan !== undefined && round >= fromRound && !isUnstarted(plan.statusOf(round)) && d.matches.some((m) => m.round === round);
   const history: LineupMatch[] = d.matches
     .filter((m) => m.round < fromRound)
     .map((m) => ({ round: m.round, court: m.court, a: [m.playerIds[0], m.playerIds[1]], b: [m.playerIds[2], m.playerIds[3]] }));
-  return generateLineup({ players, courts: d.format.courts, rounds }, { fromRound, history }).map((m) => ({
-    round_no: m.round,
-    court_no: m.court,
-    a1: m.a[0],
-    a2: m.a[1],
-    b1: m.b[0],
-    b2: m.b[1],
-  }));
+  // Ronde yang sudah dimulai tetap (termasuk court berskornya) & ikut dihitung supaya partner tidak berulang.
+  const fixed: LineupMatch[] = d.matches
+    .filter((m) => begun(m.round))
+    .map((m) => ({ round: m.round, court: m.court, a: [m.playerIds[0], m.playerIds[1]], b: [m.playerIds[2], m.playerIds[3]] }));
+  // Tim tiap court diseimbangkan per level (getHostLineupLevels: nilai host, cadangan level profil).
+  const generated = generateLineup({ players, courts: d.format.courts, rounds }, { fromRound, history, fixed, levels })
+    .map((m) => ({ round_no: m.round, court_no: m.court, a1: m.a[0], a2: m.a[1], b1: m.b[0], b2: m.b[1] }));
+  const kept = d.matches
+    .filter((m) => begun(m.round) && m.scoreA === null && m.playerIds.length === 4 && m.playerIds.every(Boolean))
+    .map((m) => ({ round_no: m.round, court_no: m.court, a1: m.playerIds[0], a2: m.playerIds[1], b1: m.playerIds[2], b2: m.playerIds[3] }));
+  return [...generated, ...kept];
+}
+
+/**
+ * Bobot level acak line-up per peserta: level gabungan dari host (getHostLineupLevels) → level profil → 3.0.
+ * Gagal mengambil (mis. sinyal lapangan lemah) → acak tetap jalan dengan level profil saja.
+ */
+export async function lineupWeights(d: MemberSessionDetail): Promise<LevelWeights> {
+  const rated = await getHostLineupLevels(d.id).catch(() => ({}) as Record<string, number>);
+  return Object.fromEntries(d.people.map((p) => [p.id, lineupNtrp(rated[p.id], levelFromLabel(p.level))]));
 }
 
 /** "Atur line-up" di Panel Host (HL-1d) + "Acak ulang · prioritaskan yang hadir" (HL-1e). */
@@ -83,11 +99,12 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
     showDialog();
   };
 
-  const reshuffle = () => {
-    const result = shuffleFromRound(d, shuffleFrom);
-    setShuffled(result);
-    setError(result ? null : "Minimal 4 peserta harus sudah check-in untuk mengacak ulang.");
-  };
+  const reshuffle = () =>
+    startBusy(async () => {
+      const result = shuffleFromRound(d, shuffleFrom, plan, await lineupWeights(d));
+      setShuffled(result);
+      setError(result ? null : "Minimal 4 peserta harus sudah check-in untuk mengacak ulang.");
+    });
 
   const persist = (fromRound: number, matches: HostLineupMatch[]) =>
     startBusy(async () => {
@@ -103,7 +120,7 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
     const from = Math.min(...open);
     // Court yang belum diisi sama sekali dilewati; yang terisi sebagian harus dilengkapi dulu.
     const partial = draft.find((m) => !m.locked && SLOTS.some((k) => m[k]) && SLOTS.some((k) => !m[k]));
-    if (partial) return setError(`Lengkapi 4 pemain di Ronde ${partial.round_no} · Court ${partial.court_no}.`);
+    if (partial) return setError(`Lengkapi 4 pemain di Ronde ${partial.round_no} · Court ${partial.court_no} — atau kosongkan keempatnya untuk meniadakan court.`);
     const filled = draft.filter((m) => SLOTS.every((k) => m[k]));
     for (const r of new Set(filled.map((m) => m.round_no))) {
       const ids = filled.filter((m) => m.round_no === r).flatMap((m) => SLOTS.map((k) => m[k]));
@@ -135,7 +152,7 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
               <header className={styles.qrHead}>
                 <div>
                   <h2 id="lineup-title">Atur line-up</h2>
-                  <span className={styles.muted}>Bisa diubah untuk court yang belum ada skornya dan ronde berikutnya.</span>
+                  <span className={styles.muted}>Bisa diubah untuk court yang belum ada skornya dan ronde berikutnya. Kosongkan keempat pemain untuk meniadakan court.</span>
                 </div>
                 <button type="button" className={styles.qrClose} onClick={close} aria-label="Tutup">
                   <X size={18} />
@@ -185,7 +202,8 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
                         <span key={slot} className={styles.lineupSlot}>
                           {i === 2 && <b className={styles.lineupVs}>vs</b>}
                           <select aria-label={`Court ${m.court_no} · pemain ${i + 1}`} value={m[slot]} onChange={(e) => setSlot(m.court_no, slot, e.target.value)}>
-                            {!m[slot] && <option value="">Pilih pemain…</option>}
+                            {/* Kosongkan: pemain pulang / court ditiadakan — court yang kosong semua dilewati saat disimpan. */}
+                            <option value="">{m[slot] ? "— Kosongkan —" : "Pilih pemain…"}</option>
                             {d.people.map((p) => (
                               <option key={p.id} value={p.id}>
                                 {p.name}
@@ -284,7 +302,7 @@ export function LineupButton({ detail: d, plan }: { detail: MemberSessionDetail;
               </>
             ) : (
               <>
-                <button type="button" className={styles.btnOutline} onClick={reshuffle}>
+                <button type="button" className={styles.btnOutline} onClick={reshuffle} disabled={busy}>
                   Acak lagi
                 </button>
                 <button type="button" className={styles.btnLime} onClick={() => shuffled && persist(shuffleFrom, shuffled)} disabled={busy || !shuffled}>

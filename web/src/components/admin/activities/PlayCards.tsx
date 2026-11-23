@@ -6,7 +6,8 @@ import { generateLineup, hasTargetTotal, lineupStats, playableCourts, type Level
 import { cx } from "@/lib/cx";
 import { useScoreDraft } from "@/hooks/useScoreDraft";
 import { correctSessionResult, saveLineup, saveMatchScore } from "@/server/admin/actions/play";
-import type { MatchFormat, SessionMatch, SessionParticipant, TennisLevel } from "@/server/admin/types";
+import { lineupNtrp } from "@/lib/player-level";
+import type { MatchFormat, SessionMatch, SessionParticipant } from "@/server/admin/types";
 import { FormCard, SingleChips, Toggle } from "../ui/AdminForm";
 import { AdminIcon } from "../ui/AdminIcon";
 import { AdminButton, Badge, MemberAvatar } from "../ui/AdminUI";
@@ -34,13 +35,11 @@ const RANKINGS = [
 const FORMATS: { value: MatchFormat; label: string; ready: boolean; hint?: string }[] = [
   { value: "none", label: "Tanpa skor", ready: true },
   { value: "round_robin", label: "Round robin", ready: false },
-  { value: "americano", label: "Americano", ready: true, hint: "Partner berganti tiap ronde; tiap pemain main sama banyak & tidak berpasangan dengan orang yang sama dua kali." },
-  { value: "rotating", label: "Rotating Partner", ready: true, hint: "Seperti Americano, tapi tim di tiap court diseimbangkan berdasarkan level tenis — cocok untuk mabar campur level." },
+  { value: "americano", label: "Americano", ready: true, hint: "Partner berganti tiap ronde; tiap pemain main sama banyak & tidak berpasangan dengan orang yang sama dua kali. Bila ada beberapa pilihan yang sama adil, dipilih tim dengan level paling seimbang." },
+  { value: "rotating", label: "Rotating Partner", ready: true, hint: "Aturan acak sama dengan Americano (partner tidak berulang, level sebagai penentu seri), tapi skor bebas tanpa target poin — mis. 6–4." },
   { value: "knockout", label: "Knockout", ready: false },
 ];
 
-/** Bobot level untuk menyeimbangkan tim Rotating Partner (level kosong = tengah). */
-const LEVEL_WEIGHT: Record<TennisLevel, number> = { beginner: 1, beginner_intermediate: 2, intermediate: 3, intermediate_advanced: 4, advanced: 5 };
 
 const digits = (v: string) => v.replace(/\D/g, "").slice(0, 2);
 
@@ -211,7 +210,6 @@ export function LineupCard({
   courts,
   rounds,
   targetPoints,
-  balanceLevels,
   initial,
   ended = false,
   disabledReason,
@@ -222,8 +220,7 @@ export function LineupCard({
   rounds: number;
   /** null = tanpa target poin (Rotating Partner): skor bebas. */
   targetPoints: number | null;
-  /** Rotating Partner: tim di tiap court diseimbangkan per level. */
-  balanceLevels: boolean;
+  /** Level jadi penentu seri saat acak (Americano & Rotating Partner). */
   initial: SessionMatch[];
   /** Activity sudah berakhir → hasil terkunci; admin bisa masuk mode "Koreksi hasil". */
   ended?: boolean;
@@ -233,10 +230,8 @@ export function LineupCard({
   const players = useMemo(() => participants.filter((p) => p.status !== "waitlisted"), [participants]);
   const ids = useMemo(() => players.map((p) => p.id), [players]);
   const names = useMemo(() => shortNames(players), [players]);
-  const levels = useMemo<LevelWeights | undefined>(
-    () => (balanceLevels ? Object.fromEntries(players.map((p) => [p.id, p.level ? LEVEL_WEIGHT[p.level] : 3])) : undefined),
-    [balanceLevels, players],
-  );
+  // Level jadi penentu seri saat acak (partner tidak berulang tetap utama): nilai host → level profil → 3.0.
+  const levels = useMemo<LevelWeights>(() => Object.fromEntries(players.map((p) => [p.id, lineupNtrp(p.ratedNtrp, p.level)])), [players]);
   const router = useRouter();
   const [scoring, setScoring] = useState<string | null>(null);
   const [correcting, setCorrecting] = useState(false);
@@ -436,8 +431,8 @@ export function LineupCard({
             ].join(" · ")}
           </span>
         )}
-        {matches.length > 0 && levels && (
-          <span className={cx(styles.chip, stats.maxLevelGap > 1 ? styles.chipWarn : styles.chipGood)} title="Selisih total level dua tim di satu court (Beginner = 1 … Advanced = 5)">
+        {matches.length > 0 && (
+          <span className={cx(styles.chip, stats.maxLevelGap > 1 ? styles.chipWarn : styles.chipGood)} title="Selisih total level NTRP dua tim di satu court (nilai host, atau level profil bila belum dinilai)">
             Selisih level tim maks {stats.maxLevelGap}
           </span>
         )}

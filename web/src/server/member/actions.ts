@@ -125,13 +125,14 @@ export async function submitHostScore(matchId: string, scoreA: number, scoreB: n
     if (/Hanya admin atau host/.test(error.message)) return { ok: false, error: "Hanya host sesi ini yang bisa input skor." };
     if (error.hint === "score_total") return { ok: false, error: error.message.replace("Total poin harus", "Total skor kedua tim harus") + " poin." };
     if (error.hint === "score_zero") return { ok: false, error: "Skor masih 0–0 — isi skor kedua tim." };
+    if (error.hint === "round_unstarted") return { ok: false, error: `${error.message} — skor bisa diisi setelah ronde ini live.` };
     if (/terkunci/.test(error.message)) return { ok: false, error: "Sesi sudah diakhiri — skor terkunci." };
     return { ok: false, error: "Skor gagal disimpan. Coba lagi." };
   }
   return { ok: true };
 }
 
-/** "Mulai Ronde" dari Panel Host (Figma UIF-13): ronde terpilih jadi live; hak host dicek di database. */
+/** "Lanjut ke Ronde N" dari Panel Host: hanya ronde tepat setelah ronde live (berurutan); hak host dicek di database. */
 export async function startHostRound(sessionId: string, round: number): Promise<HostScoreResult> {
   const supabase = await createSupabaseServerClient("member");
   const { error } = await supabase.rpc("start_session_round", { p_session: sessionId, p_round: round });
@@ -140,6 +141,7 @@ export async function startHostRound(sessionId: string, round: number): Promise<
     if (/Hanya admin atau host/.test(error.message)) return { ok: false, error: "Hanya host sesi ini yang bisa memulai ronde." };
     if (/diakhiri/.test(error.message)) return { ok: false, error: "Sesi sudah diakhiri." };
     if (/belum dimulai/.test(error.message)) return { ok: false, error: "Sesi belum dimulai — ronde bisa dimulai saat sesi berjalan." };
+    if (error.hint === "round_sequence") return { ok: false, error: `${error.message.replace("—", "·")}. Muat ulang halaman.` };
     if (/line-up/.test(error.message)) return { ok: false, error: `Ronde ${round} belum ada di line-up.` };
     return { ok: false, error: "Ronde gagal dimulai. Coba lagi." };
   }
@@ -243,6 +245,28 @@ export async function giveKudos(sessionId: string, receiverId: string, category:
   const supabase = await createSupabaseServerClient("member");
   const { error } = await supabase.rpc("give_kudos", { p_session: sessionId, p_receiver: receiverId, p_category: category });
   return error ? { ok: false, error: kudosError(error) } : { ok: true };
+}
+
+/** Host menilai level pemain (NTRP 1.0–6.0, null = Tidak tahu). Hak & kelipatan 0.5 dicek di database. */
+export async function ratePlayer(memberId: string, ntrp: number | null): Promise<HostScoreResult> {
+  if (!isSupabaseConfigured) return { ok: true };
+  const supabase = await createSupabaseServerClient("member");
+  const { error } = await supabase.rpc("rate_player", { p_member: memberId, p_ntrp: ntrp });
+  if (!error) return { ok: true };
+  if (/Hanya pemain|diri sendiri|Level tidak valid|Masuk dulu/.test(error.message)) return { ok: false, error: `${error.message}.` };
+  return { ok: false, error: "Penilaian gagal disimpan. Coba lagi." };
+}
+
+/**
+ * Level gabungan dari host untuk acak line-up (NTRP per id roster), hanya peserta yang sudah dinilai. Diambil saat
+ * host menekan acak (tidak ikut di data halaman); RPC tidak pernah mengembalikan level pemanggil sendiri & mengecek
+ * hak host / admin. Cadangan (level profil → 3.0) dihitung di klien (lineupWeights).
+ */
+export async function getHostLineupLevels(sessionId: string): Promise<Record<string, number>> {
+  if (!isSupabaseConfigured) return {};
+  const supabase = await createSupabaseServerClient("member");
+  const { data } = await supabase.rpc("session_player_levels", { p_session: sessionId });
+  return Object.fromEntries(((data ?? []) as { id: string; ntrp: number | string }[]).map((r) => [r.id, Number(r.ntrp)]));
 }
 
 /** Batalkan kudos saya ke penerima ini (Slay Point −1). */

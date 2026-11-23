@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { ManualOrderButton } from "@/components/admin/orders/ManualOrder";
 import { OrderPanel } from "@/components/admin/orders/OrderPanel";
 import styles from "@/components/admin/orders/Orders.module.css";
 import { OrdersFilters } from "@/components/admin/orders/OrdersFilters";
@@ -86,7 +87,9 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
                 </Link>
               ))}
             </nav>
-            <OrdersFilters months={result.months} />
+            <OrdersFilters months={result.months}>
+              <ManualOrderButton />
+            </OrdersFilters>
             <OrdersTable items={result.items} selected={selectedCode} auto={!query.order} hrefFor={(code) => href(query, { order: code })} />
           </section>
 

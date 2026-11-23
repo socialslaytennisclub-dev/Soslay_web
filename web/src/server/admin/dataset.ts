@@ -36,6 +36,8 @@ export type DataSession = demo.DemoSession & {
 };
 export type DataBooking = demo.DemoBooking & { source?: "website" | "kuy" | "admin"; guests?: number; checkedIn?: boolean };
 export type DataOrder = demo.DemoOrder & {
+  /** Nama & nomor pembeli di order (dipakai bila order tidak tertaut member — mis. order lama yang diinput admin). */
+  buyer?: { name: string; phone: string };
   detail?: {
     paymentMethod: string | null;
     channel: string;
@@ -211,7 +213,7 @@ type BookingRow = { session_id: string; member_id: string; status: BookingStatus
 type OrderRowDb = {
   code: string; member_id: string | null; status: OrderStatus; payment_status: PaymentStatus; payment_method: string | null; channel: string;
   subtotal: number; shipping_fee: number; discount: number; total: number; shipping_address: string; courier: string | null; tracking_number: string | null;
-  placed_at: string; order_items: { product_name: string; options: { label?: string } & Record<string, string>; unit_price: number; quantity: number }[];
+  recipient_name: string; recipient_phone: string; placed_at: string; order_items: { product_name: string; options: { label?: string } & Record<string, string>; unit_price: number; quantity: number }[];
   shipping_method: ShippingMethod | null; proof_rejections: number; order_payment_proofs: { status: string; uploaded_at: string }[];
 };
 
@@ -231,7 +233,7 @@ async function loadLive(): Promise<Dataset> {
     fetchAll<OrderRowDb>(
       client,
       "orders",
-      "code, member_id, status, payment_status, payment_method, channel, subtotal, shipping_fee, discount, total, shipping_address, courier, tracking_number, placed_at, shipping_method, proof_rejections, order_items(product_name, options, unit_price, quantity), order_payment_proofs(status, uploaded_at)",
+      "code, member_id, status, payment_status, payment_method, channel, subtotal, shipping_fee, discount, total, shipping_address, courier, tracking_number, recipient_name, recipient_phone, placed_at, shipping_method, proof_rejections, order_items(product_name, options, unit_price, quantity), order_payment_proofs(status, uploaded_at)",
       "placed_at",
     ),
     fetchFillCounts(client),
@@ -312,11 +314,12 @@ async function loadLive(): Promise<Dataset> {
     checkedIn: Boolean(b.checked_in_at),
   }));
 
+  // Order tanpa member (tamu, mis. order lama yang diinput admin) ikut tampil dengan nama pembeli di order.
   const orders: DataOrder[] = orderRows
-    .filter((o) => o.member_id)
     .map((o) => ({
       code: o.code,
-      memberId: o.member_id!,
+      memberId: o.member_id ?? "",
+      buyer: { name: o.recipient_name, phone: o.recipient_phone },
       items: o.order_items.map((it) => ({
         productSlug: slugByProductName.get(it.product_name) ?? "",
         name: it.product_name,
@@ -442,4 +445,7 @@ async function cachedLive(): Promise<Dataset> {
 export const getDataset = cache(async (): Promise<Dataset> => (isSupabaseConfigured ? cachedLive() : (demoDataset ??= buildDemoDataset())));
 
 /** "Sekarang" versi admin tanpa memuat data: tanggal demo, atau jam asli saat live. */
+/** Nama pembeli order: profil member bila tertaut, kalau tidak nama di order (tamu / order lama yang diinput admin). */
+export const orderCustomer = (d: Pick<Dataset, "memberById">, o: DataOrder) => d.memberById.get(o.memberId)?.fullName || o.buyer?.name || "—";
+
 export const adminNow = () => (isSupabaseConfigured ? new Date() : demo.DEMO_NOW);

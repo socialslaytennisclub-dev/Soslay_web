@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { formatRupiahPlain, TIER_LABEL } from "@/lib/admin-labels";
 import { fmtDate, fmtDayDate, fmtTime, isJntCourier, JNT_TRACK_URL, MAX_REJECTIONS, REJECT_REASONS, SHIPPING_LABEL, STAGE, trackingUrlError, type StageTone } from "@/lib/checkout";
-import { orderCompletedMessage, orderPaymentReminderMessage, orderProcessingMessage, orderShippedMessage, waLink, waNumber } from "@/lib/wa-invite";
+import { displayPhone, orderCompletedMessage, orderPaymentReminderMessage, orderProcessingMessage, orderShippedMessage, waLink, waNumber } from "@/lib/wa-invite";
 import type { ShopBank } from "@/content/checkout";
 import { reviewPayment, updateOrder, type OrderUpdate } from "@/server/admin/actions/orders";
 import type { OrderDetail } from "@/server/admin/types";
@@ -261,12 +261,21 @@ export function OrderPanel({ order, closeHref, bank, jntEta }: { order: OrderDet
         <div className={styles.customer}>
           <MemberAvatar name={order.customer} size={36} />
           <span className={styles.customerText}>
-            <Link href={`/admin/members/${order.memberId}`} className={styles.strongLink}>
-              {order.customer}
-            </Link>
-            <span className={styles.muted}>
-              {TIER_LABEL[order.customerTier]} member · {order.previousOrders ? `${order.previousOrders} order sebelumnya` : "order pertama"}
-            </span>
+            {order.memberId ? (
+              <>
+                <Link href={`/admin/members/${order.memberId}`} className={styles.strongLink}>
+                  {order.customer}
+                </Link>
+                <span className={styles.muted}>
+                  {TIER_LABEL[order.customerTier]} member · {order.previousOrders ? `${order.previousOrders} order sebelumnya` : "order pertama"}
+                </span>
+              </>
+            ) : (
+              <>
+                <strong>{order.customer}</strong>
+                <span className={styles.muted}>Tamu (belum member){order.customerPhone ? ` · ${displayPhone(order.customerPhone)}` : ""}</span>
+              </>
+            )}
           </span>
           {chatHref && (
             <a
