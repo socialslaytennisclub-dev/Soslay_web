@@ -7,7 +7,7 @@
 -- · Satu nilai aktif per host–pemain (simpan ulang = ganti). Host tidak bisa menilai dirinya sendiri.
 -- · Level gabungan = rata-rata nilai semua host (bukan jumlah). Pemain TIDAK bisa membaca levelnya: tabel
 --   tanpa policy member; host hanya membaca nilainya sendiri lewat RPC; admin Members membaca semua.
--- · Line-up: session_player_levels → bobot level untuk acak Rotating Partner (host & admin).
+-- · Line-up: session_player_levels → bobot level untuk acak Americano & Rotating Partner (host & admin).
 
 create table player_ratings (
   host_id   uuid not null references profiles(id) on delete cascade,

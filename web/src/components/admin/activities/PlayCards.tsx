@@ -35,8 +35,8 @@ const RANKINGS = [
 const FORMATS: { value: MatchFormat; label: string; ready: boolean; hint?: string }[] = [
   { value: "none", label: "Tanpa skor", ready: true },
   { value: "round_robin", label: "Round robin", ready: false },
-  { value: "americano", label: "Americano", ready: true, hint: "Partner berganti tiap ronde; tiap pemain main sama banyak & tidak berpasangan dengan orang yang sama dua kali." },
-  { value: "rotating", label: "Rotating Partner", ready: true, hint: "Seperti Americano, tapi tim di tiap court diseimbangkan berdasarkan level tenis — cocok untuk mabar campur level." },
+  { value: "americano", label: "Americano", ready: true, hint: "Partner berganti tiap ronde; tiap pemain main sama banyak & tidak berpasangan dengan orang yang sama dua kali. Tim di tiap court diseimbangkan per level (penilaian host, atau level profil)." },
+  { value: "rotating", label: "Rotating Partner", ready: true, hint: "Seperti Americano (tim diseimbangkan per level), tapi skor bebas tanpa target poin — mis. 6–4." },
   { value: "knockout", label: "Knockout", ready: false },
 ];
 
@@ -221,7 +221,7 @@ export function LineupCard({
   rounds: number;
   /** null = tanpa target poin (Rotating Partner): skor bebas. */
   targetPoints: number | null;
-  /** Rotating Partner: tim di tiap court diseimbangkan per level. */
+  /** Tim di tiap court diseimbangkan per level (Americano & Rotating Partner). */
   balanceLevels: boolean;
   initial: SessionMatch[];
   /** Activity sudah berakhir → hasil terkunci; admin bisa masuk mode "Koreksi hasil". */

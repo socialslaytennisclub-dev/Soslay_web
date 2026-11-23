@@ -165,7 +165,7 @@ export async function getSession(id: string): Promise<SessionDetail | null> {
     loadSessionReviews(s.id, d.live && finished),
     loadSessionKudosAdmin(s.id, d.live && finished),
     d.live ? createSupabaseServerClient().then((client) => loadKudosTop(client, s.id)) : new Map<string, KudosTop>(),
-    // Penilaian level oleh host (beta): rata-rata NTRP per member → bobot acak Rotating Partner.
+    // Penilaian level oleh host (beta): rata-rata NTRP per member → bobot acak line-up.
     d.live ? loadRatedLevels(s.id) : new Map<string, number>(),
   ]);
   const hostIds = new Set(hosts.filter((h) => h.role === "host").map((h) => h.memberId));

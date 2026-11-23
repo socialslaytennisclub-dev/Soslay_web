@@ -1,5 +1,5 @@
 import "server-only";
-import { scoreTarget } from "@/lib/americano";
+import { scoreTarget, usesLineup } from "@/lib/americano";
 import { cache } from "react";
 import QRCode from "qrcode";
 import { memberSessions, splitSessions } from "@/content/member";
@@ -30,7 +30,7 @@ import { KUYY_PROFILE_URL } from "@/lib/kuyy";
 
 export type DetailPhase = "upcoming" | "live" | "done";
 
-export type DetailPerson = { id: string; name: string; level: string; source: string; me: boolean; checkedIn: boolean; /** Punya akun Soslay → dapat Slay Point. */ member: boolean; /** Bobot acak line-up (NTRP: nilai host → level profil → 3.0); hanya Rotating Partner. */ ntrp?: number };
+export type DetailPerson = { id: string; name: string; level: string; source: string; me: boolean; checkedIn: boolean; /** Punya akun Soslay → dapat Slay Point. */ member: boolean; /** Bobot acak line-up (NTRP: nilai host → level profil → 3.0); Americano & Rotating Partner. */ ntrp?: number };
 
 export type DetailMatch = {
   /** null di mode demo. */
@@ -68,7 +68,7 @@ export type MemberSessionDetail = {
   checkInAt: string;
   phase: DetailPhase;
   venue: { name: string; address: string; mapsUrl: string | null };
-  format: { label: string; /** null = tanpa target poin (Rotating Partner): skor bebas. */ targetPoints: number | null; courts: number; rounds: number; lineup: boolean; /** Rotating Partner: acak line-up menyeimbangkan level tim. */ balance: boolean; leaderboardMode: "points" | "wins"; attendancePoints: number; /** Slay Point juara 1 / 2 / 3 activity ini. */ podiumBonus: PodiumBonus };
+  format: { label: string; /** null = tanpa target poin (Rotating Partner): skor bebas. */ targetPoints: number | null; courts: number; rounds: number; lineup: boolean; /** Acak line-up menyeimbangkan level tim (Americano & Rotating Partner). */ balance: boolean; leaderboardMode: "points" | "wins"; attendancePoints: number; /** Slay Point juara 1 / 2 / 3 activity ini. */ podiumBonus: PodiumBonus };
   capacity: number;
   levels: string[];
   /** null = host yang tidak ikut main (tanpa booking) — tanpa e-ticket & info pendaftaran. */
@@ -315,8 +315,8 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
     done ? loadSessionKudos(supabase, session.id) : null,
     // Penilaian level (beta): peserta yang belum dinilai host ini — RPC mengembalikan kosong untuk non-host.
     done && assigned === true ? getMyRatingQueue(session.id) : null,
-    // Rotating Partner: level gabungan dari host untuk acak line-up (hanya host & admin yang menerima isinya).
-    session.match_format === "rotating" && assigned === true && !done ? supabase.rpc("session_player_levels", { p_session: session.id }) : { data: [] },
+    // Americano & Rotating Partner: level gabungan dari host untuk acak line-up (hanya host & admin yang menerima isinya).
+    usesLineup(session.match_format) && assigned === true && !done ? supabase.rpc("session_player_levels", { p_session: session.id }) : { data: [] },
   ]);
   const ratedBy = new Map(((ratedLevels ?? []) as { member_id: string; ntrp: number | string }[]).map((r) => [r.member_id, Number(r.ntrp)]));
 
@@ -330,7 +330,7 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
       me: p.member_id === user.id,
       checkedIn: p.checked_in,
       member: p.member_id !== null,
-      ntrp: session.match_format === "rotating" ? lineupNtrp(p.member_id ? ratedBy.get(p.member_id) : null, p.tennis_level) : undefined,
+      ntrp: usesLineup(session.match_format) ? lineupNtrp(p.member_id ? ratedBy.get(p.member_id) : null, p.tennis_level) : undefined,
     }))
     .sort((x, y) => Number(y.me) - Number(x.me));
 
@@ -363,8 +363,8 @@ export const getMySessionDetail = cache(async (slug: string): Promise<MemberSess
       targetPoints: scoreTarget(session.match_format, session.target_points),
       courts: session.court_count,
       rounds: session.round_count,
-      lineup: session.match_format === "americano" || session.match_format === "rotating",
-      balance: session.match_format === "rotating",
+      lineup: usesLineup(session.match_format),
+      balance: usesLineup(session.match_format),
       leaderboardMode: session.leaderboard_mode,
       attendancePoints: session.points_per_attendance,
       podiumBonus: effectivePodiumBonus(toPodiumBonus(session.podium_bonus)),

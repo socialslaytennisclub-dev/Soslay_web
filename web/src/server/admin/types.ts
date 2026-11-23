@@ -251,7 +251,7 @@ export type SessionParticipant = {
   /** Nomor WhatsApp tanpa +62/0 (dari Kuyy / profil) — untuk undangan daftar member. */
   phone: string;
   level: TennisLevel | null;
-  /** Level gabungan dari penilaian host (NTRP, rata-rata) — untuk acak Rotating Partner; null = belum dinilai. */
+  /** Level gabungan dari penilaian host (NTRP, rata-rata) — untuk acak line-up (Americano & Rotating Partner); null = belum dinilai. */
   ratedNtrp?: number | null;
   payment: PaymentStatus;
   /**

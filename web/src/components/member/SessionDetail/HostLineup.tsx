@@ -52,7 +52,7 @@ export function shuffleFromRound(d: MemberSessionDetail, fromRound: number, plan
   const fixed: LineupMatch[] = d.matches
     .filter((m) => begun(m.round))
     .map((m) => ({ round: m.round, court: m.court, a: [m.playerIds[0], m.playerIds[1]], b: [m.playerIds[2], m.playerIds[3]] }));
-  // Rotating Partner: tim tiap court diseimbangkan per level (nilai host, cadangan level profil).
+  // Tim tiap court diseimbangkan per level (nilai host, cadangan level profil).
   const levels: LevelWeights | undefined = d.format.balance ? Object.fromEntries(d.people.map((p) => [p.id, p.ntrp ?? 3])) : undefined;
   const generated = generateLineup({ players, courts: d.format.courts, rounds }, { fromRound, history, fixed, levels })
     .map((m) => ({ round_no: m.round, court_no: m.court, a1: m.a[0], a2: m.a[1], b1: m.b[0], b2: m.b[1] }));

@@ -4,7 +4,8 @@
  * yang sama tidak main bareng lagi, pemain yang baru bertemu (teman / lawan) tidak langsung bertemu
  * lagi di ronde berikutnya, dan tidak ada yang rest dua ronde berturut-turut kalau bisa dihindari.
  *
- * Rotating Partner = aturan yang sama + tim di tiap court diseimbangkan per level (opsi `levels`).
+ * Tim di tiap court diseimbangkan per level (opsi `levels`, NTRP) — Americano & Rotating Partner; beda keduanya
+ * hanya skor: Americano memakai target total poin, Rotating Partner skor bebas.
  *
  * Generator acak + skor penalti: beberapa percobaan, ambil jadwal dengan penalti terkecil.
  * Murni (tanpa I/O) — dipakai di admin (client) dan server.
@@ -30,7 +31,7 @@ export type LineupMatch = { round: number; court: number; a: [string, string]; b
 
 export type LineupConfig = { players: string[]; courts: number; rounds: number };
 
-/** Bobot level per pemain dalam NTRP (1.0–6.0; lib/player-level lineupNtrp: nilai host → level profil → 3.0) — diisi untuk Rotating Partner. */
+/** Bobot level per pemain dalam NTRP (1.0–6.0; lib/player-level lineupNtrp: nilai host → level profil → 3.0) — diisi untuk Americano & Rotating Partner. */
 export type LevelWeights = Record<string, number>;
 
 const pairKey = (x: string, y: string) => (x < y ? `${x}|${y}` : `${y}|${x}`);
