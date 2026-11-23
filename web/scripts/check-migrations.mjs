@@ -2782,3 +2782,40 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await one(`select member_id from orders where id = $1`, [other.id])).member_id === null, "ganti nomor HP mengklaim order orang lain");
   console.log("✓ order tamu: tertaut ke akun saat daftar dengan nomor HP sama (format apa pun), tanpa poin & tanpa ubah Keuangan; ganti nomor tidak mengklaim");
 }
+
+// ── Instagram dari impor Kuyy → profil member (cocok nomor HP) ──────────────
+{
+  const one = async (sql, params) => (await db.query(sql, params)).rows[0];
+  const as = (uid) => db.exec(`select set_config('request.jwt.claim.sub', '${uid ?? ""}', false)`);
+  await as(null);
+  const mk = async (name, phone, instagram = null) => {
+    const { id } = await one(`insert into auth.users default values returning id`);
+    await db.query(`insert into profiles (id, full_name, email, phone, instagram) values ($1, $2, $3, $4, $5)`, [id, name, `${name.toLowerCase()}@ig.test`, phone, instagram]);
+    return id;
+  };
+  const igOf = async (id) => (await one(`select instagram::text ig from profiles where id = $1`, [id])).ig;
+  const rina = await mk("RinaIG", "81299990001");
+  const budi = await mk("BudiIG", "81299990002", "budi.asli");
+  const kembar1 = await mk("Kembar1", "81299990003");
+  const kembar2 = await mk("Kembar2", "81299990003");
+  const v = (await one(`insert into venues (slug, name, city) values ('ig-v', 'IG Court', 'Jakarta') returning id`)).id;
+  const s = (await one(`insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status) values ('ig-s', 'IG', 'weekly-mabar', $1, now() + interval '1 day', now() + interval '1 day 2 hours', 12, 'published') returning id`, [v])).id;
+  const part = (name, phone, instagram) => db.query(`insert into session_participants (session_id, full_name, phone, instagram) values ($1, $2, $3, $4)`, [s, name, phone, instagram]);
+
+  console.assert((await one(`select instagram_handle('https://www.instagram.com/Rina.Tennis/?hl=id') h`)).h === "rina.tennis", "link Instagram → username");
+  await part("Rina", "0812 9999 0001", "@Rina.Tennis");
+  await part("Budi", "+62 812-9999-0002", "budi.kuyy");
+  await part("Kembar", "81299990003", "kembar");
+  await part("Spasi", "81299990001", "bukan username!");
+  console.assert((await igOf(rina)) === "rina.tennis", `Instagram terisi dari impor: ${await igOf(rina)}`);
+  console.assert((await igOf(budi)) === "budi.asli", "Instagram isian member ditimpa impor");
+  console.assert((await igOf(kembar1)) === null && (await igOf(kembar2)) === null, "nomor milik dua profil ikut diisi");
+
+  // Tamu di impor lalu daftar member dengan nomor yang sama → Instagram terisi saat daftar.
+  await part("Calon", "0812 9999 0009", "calon.member");
+  const calon = await mk("CalonIG", "81299990009");
+  console.assert((await igOf(calon)) === "calon.member", `Instagram saat daftar: ${await igOf(calon)}`);
+  const sendiri = await mk("SendiriIG", "81299990009", "isian.sendiri");
+  console.assert((await igOf(sendiri)) === "isian.sendiri", "isian Instagram saat daftar ditimpa impor");
+  console.log("✓ Instagram impor Kuyy: mengisi profil kosong lewat nomor HP (format apa pun, juga saat daftar), tidak menimpa isian, nomor ganda & isian tidak valid dilewati");
+}
