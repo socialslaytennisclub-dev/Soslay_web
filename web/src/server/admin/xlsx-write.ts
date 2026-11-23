@@ -1,5 +1,6 @@
 import "server-only";
 import { crc32, deflateRawSync } from "node:zlib";
+import { escapeHtml } from "@/lib/text";
 
 /**
  * Penulis XLSX minimal tanpa dependensi (pasangan xlsx.ts): beberapa sheet berisi teks & angka,
@@ -9,7 +10,7 @@ import { crc32, deflateRawSync } from "node:zlib";
 export type Cell = string | number | null | undefined;
 export type Sheet = { name: string; rows: Cell[][]; widths?: number[] };
 
-const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const esc = escapeHtml;
 const colName = (i: number) => {
   let s = "";
   for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s;

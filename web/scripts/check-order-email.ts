@@ -2,18 +2,9 @@
  * Uji isi email pemberitahuan order ke admin (server/shop/notify · buildOrderEmail) — tanpa Supabase / SMTP.
  *
  *   npm run email:check
- *
- * Subjek per jenis (order baru, tukar poin, bukti, bukti pengganti), isi HTML di-escape, link ke Admin Orders.
  */
 import { buildOrderEmail, type NoticeOrder } from "../src/server/shop/notify";
-
-let failed = 0;
-const check = (ok: boolean, msg: string) => {
-  if (!ok) {
-    failed++;
-    console.error(`✗ ${msg}`);
-  }
-};
+import { check, done } from "./_check";
 
 const base: NoticeOrder = {
   code: "SOS-1234",
@@ -46,5 +37,4 @@ check(again.subject.startsWith("💸 Bukti pengganti #SOS-1234") && again.text.i
 const pickup = buildOrderEmail("placed", { ...base, shipping_method: null, member: null });
 check(pickup.text.includes("Pengiriman: —") && pickup.subject.endsWith(base.recipient_name), "tanpa metode kirim & tanpa member");
 
-if (failed) process.exit(1);
-console.log("✓ email order admin: subjek per jenis (order baru, tukar poin, bukti, bukti pengganti), produk, link admin, HTML di-escape");
+done("✓ email order admin: subjek per jenis (order baru, tukar poin, bukti, bukti pengganti), produk, link admin, HTML di-escape");

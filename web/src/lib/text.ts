@@ -48,3 +48,6 @@ export const slugify = (s: string) => s.toLowerCase().normalize("NFKD").replace(
 
 /** Escape karakter wildcard LIKE/ILIKE (\ % _) supaya isian dicari apa adanya. */
 export const likeEscape = (value: string) => value.replace(/[\\%_]/g, "\\$&");
+
+/** Teks aman untuk HTML / XML (isi elemen & atribut). */
+export const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);

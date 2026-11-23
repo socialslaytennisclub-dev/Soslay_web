@@ -7,17 +7,11 @@
  * banyak dari tanpa level, jumlah main tetap serata tanpa level, dan selisih level tim rata-rata turun.
  */
 import { generateLineup, lineupStats, type LineupMatch } from "../src/lib/americano";
+import { check, done } from "./_check";
 
 const seeded = (seed: number) => () => ((seed = (seed * 1664525 + 1013904223) >>> 0) / 2 ** 32);
 const LEVELS = [1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6];
 const groupKey = (m: LineupMatch) => [...m.a, ...m.b].sort().join("|");
-let failed = 0;
-const check = (ok: boolean, msg: string) => {
-  if (!ok) {
-    failed++;
-    console.error(`✗ ${msg}`);
-  }
-};
 
 let gapWith = 0;
 let gapWithout = 0;
@@ -42,8 +36,4 @@ for (const [n, courts, rounds] of [[8, 2, 7], [10, 2, 6], [12, 3, 6], [16, 4, 5]
   }
 }
 check(gapWith < gapWithout * 0.85, `selisih level tim rata-rata tidak turun cukup: ${gapWithout.toFixed(1)} → ${gapWith.toFixed(1)}`);
-if (failed) {
-  console.error(`${failed} pemeriksaan gagal`);
-  process.exit(1);
-}
-console.log(`✓ acak line-up: level hanya penentu seri (partner/kelompok/jumlah main tidak memburuk), selisih level tim ${(gapWithout / 30).toFixed(2)} → ${(gapWith / 30).toFixed(2)}`);
+done(`✓ acak line-up: level hanya penentu seri (partner/kelompok/jumlah main tidak memburuk), selisih level tim ${(gapWithout / 30).toFixed(2)} → ${(gapWith / 30).toFixed(2)}`);
