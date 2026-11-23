@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { genderOptions, handOptions, playingFormatOptions, playingFrequencyOptions, type MemberProfile } from "@/content/member";
 import { levelFromLabel } from "@/lib/levels";
 import { normalizeKuyId } from "@/lib/auth";
@@ -14,6 +15,7 @@ import { localPhone } from "@/lib/wa-invite";
 import { removePublicImage, uploadPublicImage } from "../storage";
 import { FORMAT, FREQUENCY, GENDER, HAND, toEnum } from "./profile";
 import type { MemberAddress } from "../shop/types";
+import { notifyAdminOrder } from "../shop/notify";
 import { provinceOf } from "@/content/wilayah";
 
 const AVATAR_BUCKET = "avatars";
@@ -377,5 +379,8 @@ export async function redeemReward(rewardId: string, ship: RedeemShip | null): P
   if (error) return { ok: false, error: error.code === "42501" ? "Sesi kamu berakhir — masuk lagi untuk menukar poin." : error.message };
   const result = data as { code: string; order_code: string | null };
   revalidatePath("/akun", "layout");
-  return { ok: true, code: result.code, orderCode: result.order_code };
+  // J&T / Instant → order ongkir baru: email ke admin seperti checkout (ambil di activity tidak membuat order).
+  const orderCode = result.order_code;
+  if (orderCode) after(() => notifyAdminOrder("placed", orderCode));
+  return { ok: true, code: result.code, orderCode };
 }

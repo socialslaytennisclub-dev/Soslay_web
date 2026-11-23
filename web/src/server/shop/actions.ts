@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { estimateRouteKm, instantQuote, jntFee, PROOF_MAX_BYTES, PROOF_TYPES, SHIPPING_LABEL, variantLabel } from "@/lib/checkout";
 import { provinceOf } from "@/content/wilayah";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
@@ -8,6 +9,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { getShopCatalog } from "@/server/public/products";
 import { removePrivateFile, uploadPrivateFile } from "@/server/storage";
 import { demoOrders, demoProofFiles, nextDemoCode } from "./demo-store";
+import { notifyAdminOrder } from "./notify";
 import { getCheckoutContext, PROOF_BUCKET } from "./orders";
 import { getShopBank } from "./settings";
 import type { CheckoutLine, ShipInput, ShopResult } from "./types";
@@ -40,6 +42,8 @@ export async function placeOrder(lines: CheckoutLine[], ship: ShipInput): Promis
   });
   if (error) return { ok: false, error: error.code === "42501" ? "Sesi kamu berakhir — masuk lagi untuk checkout." : error.message };
   refresh();
+  // Email ke admin setelah respons terkirim — tidak memperlambat checkout.
+  after(() => notifyAdminOrder("placed", data as string));
   return { ok: true, data: { code: data as string } };
 }
 
@@ -178,6 +182,7 @@ export async function submitProof(code: string, form: FormData): Promise<ShopRes
     return { ok: false, error: error.message };
   }
   refresh(code);
+  after(() => notifyAdminOrder("proof", code));
   return { ok: true };
 }
 

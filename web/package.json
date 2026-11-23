@@ -4,12 +4,14 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node --import tsx scripts/check-lineup.ts && node --conditions=react-server --import tsx scripts/check-order-email.ts",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
     "images": "node scripts/optimize-images.mjs",
     "db:check": "node scripts/check-migrations.mjs",
     "lineup:check": "node --import tsx scripts/check-lineup.ts",
+    "email:check": "node --conditions=react-server --import tsx scripts/check-order-email.ts",
     "db:seed:generate": "node --conditions=react-server --import tsx scripts/generate-seed.ts",
     "db:seed:check": "node scripts/check-seed.mjs",
     "db:setup": "node scripts/db-setup.mjs",
@@ -23,7 +25,8 @@
     "gsap": "^3.15.0",
     "leaflet": "1.9.4",
     "lucide-react": "^1.61.0",
-    "next": "16.3.8",
+    "next": "16.4.5",
+    "nodemailer": "10.4.1",
     "qrcode": "^1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",
@@ -34,14 +37,18 @@
     "@electric-sql/pglite": "^0.5.8",
     "@types/leaflet": "1.9.12",
     "@types/node": "^20",
+    "@types/nodemailer": "8.0.2",
     "@types/qrcode": "^1.5.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.187.0",
     "eslint": "^9",
-    "eslint-config-next": "16.3.8",
+    "eslint-config-next": "16.4.5",
     "postgres": "^3.4.9",
     "tsx": "^4.23.15",
     "typescript": "^5"
+  },
+  "overrides": {
+    "zod": "^4.6.7"
   }
 }
