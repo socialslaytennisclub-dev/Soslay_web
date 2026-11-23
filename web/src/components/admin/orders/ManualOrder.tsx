@@ -6,6 +6,7 @@ import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { amountDigits, amountDisplay, dateLabel, todayWib } from "@/lib/finance/format";
 import { recordManualOrder, searchOrderMembers, type OrderMemberOption } from "@/server/admin/actions/orders";
+import { withMemberLinkConfirm } from "../activities/confirm-member-link";
 import editor from "../activities/SessionEditor.module.css";
 import picker from "../activities/TripPayments.module.css";
 import { FinanceModal } from "../finance/FinanceModal";
@@ -106,7 +107,7 @@ export function ManualOrderButton({ products, goLive }: { products: ManualOrderP
 
   const save = () =>
     start(async () => {
-      const r = await recordManualOrder({
+      const input = {
         ...(picked ? { memberId: picked.id } : { name: guest.name, phone: guest.phone }),
         paidOn,
         paymentMethod: method,
@@ -114,7 +115,9 @@ export function ManualOrderButton({ products, goLive }: { products: ManualOrderP
         shippingFee: Number(shippingFee || 0),
         courier,
         address,
-      });
+      };
+      // Nomor tamu milik member → admin memastikan dulu orangnya sama (salah ketik nomor bisa menautkan ke member lain).
+      const r = await withMemberLinkConfirm((linkMember) => recordManualOrder({ ...input, linkMember }), "Catat order ini atas akun member itu?");
       toast.result(r);
       if (r.ok) {
         reset();
@@ -182,7 +185,7 @@ export function ManualOrderButton({ products, goLive }: { products: ManualOrderP
             )}
           </ul>
         )}
-        <p className={picker.or}>atau tamu (belum member) — nomor milik member otomatis ditautkan</p>
+        <p className={picker.or}>atau tamu (belum member) — nomor milik member akan ditanyakan untuk ditautkan</p>
         <div className={editor.cols2}>
           <label className={editor.field}>
             <span className={editor.label}>Nama</span>

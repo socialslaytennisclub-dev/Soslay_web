@@ -2616,3 +2616,35 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   await db.exec(`reset role`);
   console.log("✓ Slay Tennis: pemenang member vs member +1 Slay Point bila kedua laporan sama, tanpa poin bila diperdebatkan / < 30 detik, batas 3 per pasangan & 5 per pemenang per hari");
 }
+
+// ── Orders · input order lama (admin_record_manual_order) ────────────────────
+{
+  const one = async (sql, params) => (await db.query(sql, params)).rows[0];
+  const as = (uid) => db.exec(`select set_config('request.jwt.claim.sub', '${uid ?? ""}', false)`);
+  const err = (sql, params) => db.query(sql, params).then(() => null, (e) => e.message);
+  await as(null);
+  const { id: admin } = await one(`insert into auth.users (email) values ('order-lama@soslay.test') returning id`);
+  await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, 'Admin Order', 'order-lama@soslay.test', 'active' from roles where name = 'Super Admin'`, [admin]);
+  await db.query(`update finance_settings set go_live_date = '2026-11-01', auto_shop = true where true`);
+  const item = { product_name: "A Piece of Bali", variant: "S", quantity: 2, unit_price: 220000 };
+  const rec = (p) => db.query(`select admin_record_manual_order($1) r`, [p]).then((x) => x.rows[0].r);
+
+  console.assert((await err(`select admin_record_manual_order($1)`, [{ name: "Tamu", paid_on: "2026-10-15", items: [item] }]))?.includes("izin"), "non-admin bisa input order lama");
+  await as(admin);
+  console.assert((await err(`select admin_record_manual_order($1)`, [{ name: "Tamu", paid_on: "kemarin", items: [item] }])) === "Isi tanggal bayar.", "tanggal salah format → pesan jelas");
+  console.assert((await err(`select admin_record_manual_order($1)`, [{ name: "Tamu", paid_on: "2026-10-15", items: [{ ...item, quantity: "dua" }] }]))?.startsWith("Lengkapi"), "jumlah bukan angka → pesan jelas");
+  console.assert((await err(`select admin_record_manual_order($1)`, [{ name: "Tamu", paid_on: "2999-01-01", items: [item] }]))?.includes("masa depan"), "tanggal masa depan diterima");
+
+  // Sebelum go-live → tersimpan selesai & lunas, tanpa transaksi Keuangan.
+  const before = await rec({ name: "Tamu Lama", phone: "81234567890", paid_on: "2026-10-15", payment_method: "Tunai", shipping_fee: 18000, items: [item] });
+  const o = await one(`select code, status, payment_status, channel, total, member_id, recipient_phone, paid_at::date::text d from orders where id = $1`, [before.id]);
+  console.assert(o.code === before.code && o.status === "completed" && o.payment_status === "paid" && o.channel === "manual" && o.total === 458000 && o.member_id === null && o.d === "2026-10-15", `order lama ${JSON.stringify(o)}`);
+  const finBefore = await one(`select count(*)::int n from finance_transactions where source_ref = $1`, [`ord:${before.id}`]);
+  console.assert(finBefore.n === 0, "order sebelum go-live masuk Keuangan");
+  // Sejak go-live → Pemasukan penjualan merchandise sebesar total.
+  const after = await rec({ name: "Tamu Baru", paid_on: "2026-11-05", items: [item] });
+  const fin = await one(`select coalesce(sum(amount), 0)::int amt from finance_transactions where source_ref = $1 and deleted_at is null`, [`ord:${after.id}`]);
+  console.assert(fin.amt === 440000, `order sejak go-live tidak masuk Keuangan ${JSON.stringify(fin)}`);
+  await as(null);
+  console.log("✓ order lama: hanya admin Orders, format tanggal/jumlah divalidasi, selesai & lunas, Keuangan ikut go-live");
+}

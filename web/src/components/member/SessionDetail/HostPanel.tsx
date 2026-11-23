@@ -64,9 +64,14 @@ function useRoundChangeNotice(d: MemberSessionDetail): string | null {
     if (from === null || d.currentRound === null || d.currentRound <= from || d.phase !== "live") return;
     const complete = d.matches.filter((m) => m.round === from).every((m) => m.scoreA !== null);
     setNotice(`${complete ? `Skor R${from} lengkap ✓ · ` : ""}Ronde ${d.currentRound} dimulai — peserta melihat line-up barunya.`);
+  }, [d.currentRound, d.phase, d.matches]);
+  // Timer terpisah: refresh berkala (LiveRefresh) mengganti d.matches dan menjalankan ulang efek di atas —
+  // timer di sana akan ikut dibatalkan sehingga pemberitahuan tidak pernah hilang.
+  useEffect(() => {
+    if (!notice) return;
     const timer = window.setTimeout(() => setNotice(null), 8000);
     return () => window.clearTimeout(timer);
-  }, [d.currentRound, d.phase, d.matches]);
+  }, [notice]);
   return notice;
 }
 

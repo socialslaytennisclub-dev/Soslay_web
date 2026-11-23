@@ -2,6 +2,7 @@ import "server-only";
 import { products } from "@/content/products";
 import { orderStage, SHIPPING_LABEL } from "@/lib/checkout";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { demoOrders } from "@/server/shop/demo-store";
 import { demoView, ORDER_COLUMNS, toMyOrder, type OrderRow } from "@/server/shop/orders";
@@ -224,4 +225,16 @@ export async function getOrder(code: string): Promise<OrderDetail | null> {
     courier: courier.name,
     trackingNumber: o.status === "shipped" || o.status === "completed" ? `${courier.prefix}${String(seed * 7919).padStart(10, "0")}` : null,
   };
+}
+
+/**
+ * Tanggal go-live & pencatatan otomatis Shop di Keuangan — untuk "Input order lama". Dibaca lewat service role
+ * (finance_settings hanya terbaca anggota Keuangan, RLS); tanpa service role → klien staf (bisa null).
+ * goLive null = tidak terbaca.
+ */
+export async function shopFinanceSettings(): Promise<{ goLive: string | null; autoShop: boolean }> {
+  if (!isSupabaseConfigured) return { goLive: "2026-12-01", autoShop: true };
+  const client = createSupabaseAdminClient() ?? (await createSupabaseServerClient());
+  const { data } = await client.from("finance_settings").select("go_live_date, auto_shop").maybeSingle();
+  return { goLive: (data?.go_live_date as string | undefined) ?? null, autoShop: data?.auto_shop !== false };
 }

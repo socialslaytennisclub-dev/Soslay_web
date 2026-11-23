@@ -48,8 +48,11 @@ export function shuffleFromRound(d: MemberSessionDetail, fromRound: number, plan
   const history: LineupMatch[] = d.matches
     .filter((m) => m.round < fromRound)
     .map((m) => ({ round: m.round, court: m.court, a: [m.playerIds[0], m.playerIds[1]], b: [m.playerIds[2], m.playerIds[3]] }));
-  const generated = generateLineup({ players, courts: d.format.courts, rounds }, { fromRound, history })
-    .filter((m) => !begun(m.round))
+  // Ronde yang sudah dimulai tetap (termasuk court berskornya) & ikut dihitung supaya partner tidak berulang.
+  const fixed: LineupMatch[] = d.matches
+    .filter((m) => begun(m.round))
+    .map((m) => ({ round: m.round, court: m.court, a: [m.playerIds[0], m.playerIds[1]], b: [m.playerIds[2], m.playerIds[3]] }));
+  const generated = generateLineup({ players, courts: d.format.courts, rounds }, { fromRound, history, fixed })
     .map((m) => ({ round_no: m.round, court_no: m.court, a1: m.a[0], a2: m.a[1], b1: m.b[0], b2: m.b[1] }));
   const kept = d.matches
     .filter((m) => begun(m.round) && m.scoreA === null && m.playerIds.length === 4 && m.playerIds.every(Boolean))

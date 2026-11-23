@@ -10,23 +10,14 @@ import overviewStyles from "@/components/admin/overview/Overview.module.css";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { formatRupiahShort, PAYMENT_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
-import { isSupabaseConfigured } from "@/lib/supabase/env";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
-import { listProducts } from "@/server/admin/catalog-repo";
-import { getOrder, listOrders } from "@/server/admin/orders-repo";
+import { productChoices } from "@/server/admin/catalog-repo";
+import { getOrder, listOrders, shopFinanceSettings } from "@/server/admin/orders-repo";
 import { getShopSettings } from "@/server/shop/settings";
 import type { OrdersQuery, OrdersTab, PaymentStatus } from "@/server/admin/types";
 import { one } from "@/server/admin/query";
 import pageStyles from "../page.module.css";
 
 export const metadata: Metadata = { title: "Orders" };
-
-/** Tanggal go-live Keuangan (YYYY-MM-DD) untuk catatan "Input order lama"; null bila tidak terbaca (mode demo / tanpa izin). */
-async function financeGoLive(): Promise<string | null> {
-  if (!isSupabaseConfigured) return "2026-12-01";
-  const { data } = await (await createSupabaseServerClient()).from("finance_settings").select("go_live_date").maybeSingle();
-  return (data?.go_live_date as string | undefined) ?? null;
-}
 
 /** Aturan Shop §1: Semua · Verifikasi · Perlu dikirim · Dikirim · Selesai (+ Menunggu bayar & Dibatalkan). */
 const TABS: { value: OrdersTab; label: string }[] = [
@@ -60,8 +51,7 @@ export default async function AdminOrdersPage({ searchParams }: PageProps<"/admi
     month: month && /^\d{4}-\d{2}$/.test(month) ? month : undefined,
     order: one(raw.order),
   };
-  const [result, products, goLive] = await Promise.all([listOrders(query), listProducts(), financeGoLive()]);
-  const productOptions = products.filter((p) => p.status !== "archived").map((p) => ({ name: p.name, variants: p.variants, price: p.price }));
+  const [result, productOptions, { goLive }] = await Promise.all([listOrders(query), productChoices(), shopFinanceSettings()]);
   // Tanpa ?order= panel menampilkan order teratas, tapi hanya di desktop.
   const selectedCode = query.order ?? result.items[0]?.code;
   const order = selectedCode ? await getOrder(selectedCode) : null;

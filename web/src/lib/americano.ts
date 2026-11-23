@@ -198,12 +198,14 @@ export function lineupCost(matches: LineupMatch[], players: string[], levels?: L
 /**
  * Buat jadwal ronde `fromRound`..`rounds`. `history` = match ronde sebelumnya yang dipertahankan
  * (dipakai saat acak ulang setelah ada yang absen) supaya keseimbangan dihitung dari awal sesi.
+ * `fixed` = match ronde ≥ `fromRound` yang tidak boleh diubah (ronde yang sudah dimulai): ronde itu
+ * dilewati, tapi ikut dihitung riwayatnya. Hasil hanya berisi ronde yang diacak.
  */
 export function generateLineup(
   { players, courts, rounds }: LineupConfig,
-  options: { fromRound?: number; history?: LineupMatch[]; attempts?: number; rand?: () => number; levels?: LevelWeights } = {},
+  options: { fromRound?: number; history?: LineupMatch[]; fixed?: LineupMatch[]; attempts?: number; rand?: () => number; levels?: LevelWeights } = {},
 ): LineupMatch[] {
-  const { fromRound = 1, history = [], attempts = 40, rand = Math.random, levels } = options;
+  const { fromRound = 1, history = [], fixed = [], attempts = 40, rand = Math.random, levels } = options;
   const playable = playableCourts(players.length, courts);
   if (!playable || fromRound > rounds) return [];
 
@@ -226,11 +228,17 @@ export function generateLineup(
     };
     const plan: LineupMatch[] = [];
     for (let r = fromRound; r <= rounds; r++) {
+      // Ronde tetap (sudah dimulai, tidak diacak): dicatat ke riwayat supaya ronde sesudahnya tidak mengulang partner.
+      const pinned = fixed.filter((m) => m.round === r);
+      if (pinned.length) {
+        record(h, pinned, players);
+        continue;
+      }
       const round = planRound(h, players, playable, r, rand, levels);
       record(h, round, players);
       plan.push(...round);
     }
-    const cost = lineupCost([...keep, ...plan], players, levels);
+    const cost = lineupCost([...keep, ...fixed.filter((m) => m.round >= fromRound), ...plan], players, levels);
     if (cost < bestCost) [best, bestCost] = [plan, cost];
   }
   return best;

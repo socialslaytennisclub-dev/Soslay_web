@@ -6,7 +6,8 @@ import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { demoOrders } from "@/server/shop/demo-store";
 import { findMemberByPhone, normalizeIndoPhone, searchMembers, type MemberIdentity } from "../identity";
-import { audit, done, fail, refreshPaths, requireEditor, type ActionResult } from "./common";
+import { shopFinanceSettings } from "../orders-repo";
+import { audit, confirmLinkResult, done, fail, refreshPaths, requireEditor, type ActionResult, type ConfirmLinkResult } from "./common";
 
 /**
  * Proses order Shop (ADM-03): verifikasi bukti transfer, lalu per opsi pengiriman —
@@ -165,14 +166,16 @@ export type ManualOrderInput = {
   shippingFee: number;
   courier: string;
   address: string;
+  /** Nomor tamu milik satu member: id member = tautkan (dikonfirmasi admin), false = tetap tamu. */
+  linkMember?: string | false;
 };
 
 /**
- * Catat pembelian merch lama sebagai order Selesai & Lunas (channel "manual"). Tamu yang nomornya milik tepat satu
- * member otomatis ditautkan ke member itu. Pemasukan Keuangan mengikuti trigger orders_finance: hanya bila tanggal
- * bayar ≥ go-live di Pengaturan Keuangan. Stok & Slay Point tidak berubah.
+ * Catat pembelian merch lama sebagai order Selesai & Lunas (channel "manual"). Nomor tamu milik tepat satu member →
+ * admin diminta konfirmasi dulu (confirmLink, sama seperti tamu activity / paket trip). Pemasukan Keuangan mengikuti
+ * trigger orders_finance: hanya bila tanggal bayar ≥ go-live di Pengaturan Keuangan. Stok & Slay Point tidak berubah.
  */
-export async function recordManualOrder(input: ManualOrderInput): Promise<ActionResult> {
+export async function recordManualOrder(input: ManualOrderInput): Promise<ActionResult | ConfirmLinkResult> {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.paidOn)) return fail("Isi tanggal bayar.");
   const items = input.items.filter((i) => i.productName.trim());
   if (!items.length) return fail("Tambahkan minimal satu produk.");
@@ -186,8 +189,9 @@ export async function recordManualOrder(input: ManualOrderInput): Promise<Action
 
   let memberId = input.memberId ?? null;
   let linked: string | null = null;
-  if (!memberId && phone) {
+  if (!memberId && phone && input.linkMember !== false) {
     const owner = await findMemberByPhone(phone, { unique: true });
+    if (owner && input.linkMember !== owner.id) return confirmLinkResult(owner);
     if (owner) {
       memberId = owner.id;
       linked = owner.fullName;
@@ -195,11 +199,12 @@ export async function recordManualOrder(input: ManualOrderInput): Promise<Action
   }
 
   const supabase = await createSupabaseServerClient();
-  const { data: code, error } = await supabase.rpc("admin_record_manual_order", {
+  const { data, error } = await supabase.rpc("admin_record_manual_order", {
     p: {
       member_id: memberId,
       name: input.name?.trim() ?? "",
-      phone: phone ? `0${phone}` : "",
+      // Format simpan sama dengan profil & peserta: tanpa 0 / 62 di depan.
+      phone: phone ?? "",
       paid_on: input.paidOn,
       payment_method: input.paymentMethod,
       shipping_fee: Math.max(0, Math.round(input.shippingFee || 0)),
@@ -209,16 +214,19 @@ export async function recordManualOrder(input: ManualOrderInput): Promise<Action
     },
   });
   if (error) return fail(`Gagal menyimpan: ${error.message}`);
+  const { id, code } = data as { id: string; code: string };
 
-  const { data: settings } = await supabase.from("finance_settings").select("go_live_date, auto_shop").maybeSingle();
-  const goLive = settings?.go_live_date as string | undefined;
+  // Dibaca lewat service role: staf Orders tanpa akses Keuangan tidak bisa membaca finance_settings (RLS).
+  const settings = await shopFinanceSettings();
   const finance =
-    goLive && input.paidOn < goLive
-      ? "Tanggal bayar sebelum go-live Keuangan — tidak dicatat di Keuangan."
-      : settings?.auto_shop === false
-        ? "Pencatatan otomatis Shop di Keuangan sedang nonaktif."
-        : "Pemasukan tercatat di Keuangan.";
-  await audit(auth.userId, `mencatat order lama #${code}`, "order");
-  refreshOrder(code as string);
+    settings.goLive === null
+      ? "Masuk Keuangan hanya bila tanggal bayar sejak go-live di Pengaturan Keuangan."
+      : input.paidOn < settings.goLive
+        ? "Tanggal bayar sebelum go-live Keuangan — tidak dicatat di Keuangan."
+        : !settings.autoShop
+          ? "Pencatatan otomatis Shop di Keuangan sedang nonaktif."
+          : "Pemasukan tercatat di Keuangan.";
+  await audit(auth.userId, `mencatat order lama #${code}`, "order", id);
+  refreshOrder(code);
   return done(`#${code} tersimpan sebagai order selesai${linked ? ` · ditautkan ke member ${linked}` : ""}. ${finance}`);
 }

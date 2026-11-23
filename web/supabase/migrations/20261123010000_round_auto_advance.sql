@@ -58,6 +58,9 @@ begin
   if v_session is null then raise exception 'Match tidak ditemukan'; end if;
   if not can_run_session(v_session) then raise exception 'Hanya admin atau host sesi ini'; end if;
   if v_ended then raise exception 'Sesi sudah diakhiri — skor terkunci. Admin: pakai "Koreksi hasil".'; end if;
+  -- Kunci sesi: dua court terakhir yang disimpan bersamaan diproses bergantian, jadi yang kedua melihat
+  -- court pertama sudah berskor dan ronde tetap pindah otomatis.
+  perform 1 from sessions where id = v_session for update;
   if p_score_a is null or p_score_b is null or p_score_a < 0 or p_score_b < 0 then
     raise exception 'Skor tidak valid';
   end if;
