@@ -5,7 +5,7 @@ import { useRef, useState, useTransition, type FormEvent } from "react";
 import { Button, Checkbox, TextField } from "@/components/ui";
 import { loginPage } from "@/content/auth";
 import { compact, validateEmail, validatePassword, type FieldErrors } from "@/lib/auth";
-import { signIn } from "@/server/auth/actions";
+import { resendSignupConfirmation, signIn } from "@/server/auth/actions";
 import { PasswordField } from "./PasswordField";
 import styles from "./AuthForms.module.css";
 
@@ -21,12 +21,18 @@ export function LoginForm({ next }: { next?: string }) {
   const [remember, setRemember] = useState(true);
   const [errors, setErrors] = useState<FieldErrors<Field>>({});
   const [formError, setFormError] = useState<string | null>(null);
+  // Email belum diverifikasi → tombol kirim ulang link (tujuan setelah verifikasi = `next`).
+  const [unverified, setUnverified] = useState(false);
+  const [resent, setResent] = useState<{ ok: boolean; text: string } | null>(null);
   const [submitting, startSubmit] = useTransition();
+  const [resending, startResend] = useTransition();
 
   const update = (field: Field, value: string) => {
     setValues((current) => ({ ...current, [field]: value }));
     setErrors((current) => ({ ...current, [field]: undefined }));
     setFormError(null);
+    setUnverified(false);
+    setResent(null);
   };
 
   function submit(event: FormEvent) {
@@ -40,6 +46,7 @@ export function LoginForm({ next }: { next?: string }) {
     startSubmit(async () => {
       const result = await signIn(values.email.trim(), values.password, next);
       if (result?.error) setFormError(result.error);
+      setUnverified(result?.code === "email_not_confirmed");
     });
   }
 
@@ -76,6 +83,28 @@ export function LoginForm({ next }: { next?: string }) {
       {formError && (
         <p className={styles.error} role="alert">
           {formError}
+        </p>
+      )}
+      {unverified && (
+        <p className={styles.row}>
+          <button
+            type="button"
+            className={styles.link}
+            disabled={resending}
+            onClick={() =>
+              startResend(async () => {
+                const r = await resendSignupConfirmation(values.email.trim(), next);
+                setResent(r?.error ? { ok: false, text: r.error } : { ok: true, text: `Verification link sent to ${values.email.trim()}.` });
+              })
+            }
+          >
+            {resending ? "Sending…" : "Resend verification link"}
+          </button>
+          {resent && (
+            <span role={resent.ok ? "status" : "alert"} className={resent.ok ? undefined : styles.error}>
+              {resent.text}
+            </span>
+          )}
         </p>
       )}
 

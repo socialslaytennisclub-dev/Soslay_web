@@ -13,6 +13,7 @@ type Field = "email" | "password";
 const ERRORS = {
   invalid_credentials: "Email atau password salah.",
   failed: "Gagal masuk. Coba lagi sebentar lagi.",
+  email_not_confirmed: "Email belum diverifikasi — buka link verifikasi di email kamu dulu.",
 } as const;
 
 /** Form login tim (bahasa Indonesia, gaya dashboard) → server action `signIn`, lalu ke /admin. */

@@ -29,9 +29,11 @@ type NavbarProps = {
   member?: MemberUser | null;
   /** Logo lebih kecil di header portal member (Figma 1209:957). */
   compactLogo?: boolean;
+  /** Tujuan setelah Sign In (mis. Order Now kembali ke halamannya) — bawaan ke halaman Masuk biasa. */
+  signInNext?: string;
 };
 
-export function Navbar({ variant = "solid", member: initialMember, compactLogo = false }: NavbarProps) {
+export function Navbar({ variant = "solid", member: initialMember, compactLogo = false, signInNext }: NavbarProps) {
   const scrolled = useScrolled();
   const menu = useDisclosure({ lockScroll: true });
   const dropdown = useDisclosure();
@@ -45,6 +47,7 @@ export function Navbar({ variant = "solid", member: initialMember, compactLogo =
 
   const { activity, links } = primaryNav;
   const isSolid = variant === "solid" || scrolled || menu.isOpen;
+  const loginHref = signInNext ? `${authLinks.login.href}?next=${encodeURIComponent(signInNext)}` : authLinks.login.href;
 
   return (
     <header className={cx(styles.header, isSolid && styles.solid)}>
@@ -146,9 +149,11 @@ export function Navbar({ variant = "solid", member: initialMember, compactLogo =
               </ul>
             </div>
           ) : (
-            <Button href={authLinks.login.href} variant="primary" size="sm" className={styles.login}>
-              {authLinks.login.label}
-            </Button>
+            <span className={styles.loginSlot}>
+              <Button href={loginHref} variant="primary" size="sm" className={styles.login}>
+                {authLinks.login.label}
+              </Button>
+            </span>
           )}
           <button
             type="button"
@@ -203,7 +208,7 @@ export function Navbar({ variant = "solid", member: initialMember, compactLogo =
               </form>
             </div>
           ) : (
-            <Button href={authLinks.login.href} variant="primary" onClick={menu.close}>
+            <Button href={loginHref} variant="primary" onClick={menu.close}>
               {authLinks.login.label}
             </Button>
           )}
