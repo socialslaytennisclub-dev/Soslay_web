@@ -32,7 +32,7 @@ export function MemberHeader({ data }: { data?: HeaderData | null }) {
         <div className={styles.profile}>
           <Avatar name={m.name} src={m.photo} size={128} ring className={styles.avatar} />
 
-          <div className={styles.info} data-anim="fade-up">
+          <div className={styles.info}>
             <h1 className={styles.name}>{m.name}</h1>
             <p className={styles.meta}>
               {/* ID Soslay = ID akun member, ditampilkan paling depan; lalu Kuy ID. */}
@@ -54,7 +54,7 @@ export function MemberHeader({ data }: { data?: HeaderData | null }) {
             </p>
           </div>
 
-          <div className={styles.actions} data-anim="fade-up">
+          <div className={styles.actions}>
             <Button href="/akun/profil" variant="outline" scroll={false}>
               Edit Profil
             </Button>

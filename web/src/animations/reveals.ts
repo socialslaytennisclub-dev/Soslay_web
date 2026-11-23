@@ -1,4 +1,4 @@
-import { gsap, SplitText } from "@/lib/gsap";
+import { gsap, ScrollTrigger, SplitText } from "@/lib/gsap";
 
 /**
  * Animasi scroll berbasis atribut. Komponen cukup menandai elemen:
@@ -10,16 +10,21 @@ import { gsap, SplitText } from "@/lib/gsap";
  *   data-anim="draw"     → path SVG "tergambar" dari ujung ke ujung (DrawSVG), mis. swoosh brand
  *   data-parallax="-12"  → geser yPercent saat scroll (scrub). Desktop saja.
  *
- * Elemen [data-anim] disembunyikan via CSS sebelum JS jalan (lihat base.css) dan
- * dimunculkan oleh animasi ini, jadi tidak ada "flash" konten. Dengan reduced motion,
- * gate CSS tidak aktif dan fungsi-fungsi ini tidak dipanggil — konten tampil statis.
+ * Elemen [data-anim] di dalam MotionProvider disembunyikan via CSS sebelum JS jalan dan dimunculkan oleh
+ * animasi ini, jadi tidak ada "flash" konten. Kalau JS terlambat, fallback CSS (base.css) sudah memunculkannya —
+ * elemen itu yang terlihat di layar dibiarkan (lihat byAnim). Dengan reduced motion, gate CSS tidak aktif dan
+ * fungsi-fungsi ini tidak dipanggil — konten tampil statis.
  */
 
 // Mulai sedikit lebih awal supaya konten sudah muncul saat terlihat, tidak "menunggu".
 const IN_VIEW = "top 90%";
 
+/** Sudah dimunculkan fallback CSS dan terlihat di layar → jangan disembunyikan lalu dianimasikan ulang (berkedip). */
+const shownByFallback = (el: HTMLElement) => getComputedStyle(el).visibility === "visible" && ScrollTrigger.isInViewport(el);
+
+/** Elemen [data-anim='name'] yang perlu dianimasikan (elemen di bawah layar tetap dianimasikan saat di-scroll). */
 function byAnim(scope: HTMLElement, name: string) {
-  return gsap.utils.toArray<HTMLElement>(scope.querySelectorAll(`[data-anim='${name}']`));
+  return gsap.utils.toArray<HTMLElement>(scope.querySelectorAll(`[data-anim='${name}']`)).filter((el) => !shownByFallback(el));
 }
 
 export function splitReveal(scope: HTMLElement) {
