@@ -18,7 +18,7 @@ const cityOf = (href: string) => {
  * tidak ada request ke server. Back/Forward dibaca dari popstate.
  *
  * Animasi reveal hanya untuk tampilan awal (dari HTML statis); setelah kota diganti kartu langsung
- * tampil — elemen [data-anim] yang muncul belakangan tidak diproses GSAP dan akan tersembunyi.
+ * tampil — elemen [data-anim] yang muncul belakangan tidak diproses GSAP dan baru tampil setelah fallback CSS.
  */
 export function VenueCityFilter({ venues, initialCity, heading }: { venues: Venue[]; initialCity?: CitySlug; heading: ReactNode }) {
   const [city, setCity] = useState(initialCity);

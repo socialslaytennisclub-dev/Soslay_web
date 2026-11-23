@@ -84,7 +84,7 @@ export function MotionProvider({ children }: MotionProviderProps) {
 
   return (
     <>
-      <div ref={wrapperRef} className={styles.wrapper}>
+      <div ref={wrapperRef} className={styles.wrapper} data-motion>
         <div ref={contentRef}>{children}</div>
       </div>
       <div ref={cursorRef} className={styles.cursor} aria-hidden>
