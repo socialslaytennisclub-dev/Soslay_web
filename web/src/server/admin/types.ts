@@ -70,6 +70,16 @@ export type MemberSpend = {
   incomplete: boolean;
 };
 
+/** Satu baris kartu "Member spent terbanyak" di Overview (Rupiah, aturan = MemberSpend). */
+export type TopSpender = { id: string; fullName: string; memberCode: string; total: number; activities: number; trips: number; shop: number };
+export type TopSpenders = {
+  members: TopSpender[];
+  /** Jumlah member yang pernah membayar sesuatu. */
+  spenders: number;
+  /** Sebagian query gagal (error / izin) → peringkat bisa kurang lengkap. */
+  incomplete: boolean;
+};
+
 /** Review yang pernah diberikan member di satu activity (tab Review detail member). */
 export type MemberReview = {
   sessionId: string;

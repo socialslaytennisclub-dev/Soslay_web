@@ -39,6 +39,13 @@
   align-items: start;
 }
 
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-20);
+  min-width: 0;
+}
+
 /* Figma: kolom kiri lebar (±720) · kanan 424 */
 @media (min-width: 1280px) {
   .content {

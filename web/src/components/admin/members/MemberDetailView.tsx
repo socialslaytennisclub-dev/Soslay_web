@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Avatar } from "@/components/ui";
 import { displayPhone, waNumber } from "@/lib/wa-invite";
-import { LEVEL_LABEL, MEMBER_STATUS_LABEL, formatRupiahPlain, formatRupiahShort, formatShortDate } from "@/lib/admin-labels";
+import { LEVEL_LABEL, MEMBER_STATUS_LABEL, SPEND_KIND_LABEL, formatRupiahPlain, formatRupiahShort, formatShortDate } from "@/lib/admin-labels";
 import { topKudos } from "@/lib/kudos";
 import { instagramUsername } from "@/lib/text";
 import { instagramProfileUrl } from "@/content/social";
@@ -28,9 +28,9 @@ const TIMELINE_ICON: Record<MemberTimelineItem["kind"], AdminIconName> = {
 };
 
 const SPEND_KIND: Record<MemberSpendItem["kind"], { label: string; icon: AdminIconName }> = {
-  activity: { label: "Activity", icon: "calendar-dots" },
-  trip: { label: "Trip", icon: "map-pin" },
-  shop: { label: "Shop", icon: "shopping-bag-open" },
+  activity: { label: SPEND_KIND_LABEL.activity, icon: "calendar-dots" },
+  trip: { label: SPEND_KIND_LABEL.trip, icon: "map-pin" },
+  shop: { label: SPEND_KIND_LABEL.shop, icon: "shopping-bag-open" },
 };
 const SPEND_LIMIT = 10;
 
@@ -78,7 +78,7 @@ function SpendCard({ spend }: { spend: MemberSpend }) {
       ) : (
         <p className={styles.emptyNote}>Belum ada pembayaran lunas.</p>
       )}
-      {spend.incomplete && <p className={styles.emptyNote}>Sebagian data pembayaran gagal dimuat — total bisa kurang dari seharusnya. Muat ulang halaman.</p>}
+      {spend.incomplete && <p className={styles.emptyNote}>Data pembayaran gagal dimuat — total bisa kurang dari seharusnya. Muat ulang halaman.</p>}
       {spend.items.length > SPEND_LIMIT && <p className={styles.emptyNote}>+{spend.items.length - SPEND_LIMIT} pembayaran lebih lama tidak ditampilkan.</p>}
     </Card>
   );

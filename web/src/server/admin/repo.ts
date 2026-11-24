@@ -27,6 +27,7 @@ import type {
   OverviewData,
   Segment,
   TennisLevel,
+  TopSpenders,
 } from "./types";
 
 /**
@@ -192,81 +193,94 @@ export const listSegments = cache(async (): Promise<Segment[]> => {
 
 const spendDate = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
 
-/**
- * Uang yang sudah dibayar member (untuk kartu "Total spent"):
- *  · Activity — per activity satu angka: peserta impor Kuyy / tambahan admin yang lunas (nominal di daftar
- *    peserta) atau booking website yang lunas. Keduanya disamakan trigger, jadi diambil yang terbesar, bukan dijumlah.
- *  · Trip — DP / cicilan / pelunasan paket trip yang tidak dibatalkan (voided), dari pendaftaran yang tidak
- *    dibatalkan — sama dengan Keuangan (trip_payment_target): pendaftaran batal → pembayarannya tidak dihitung.
- *  · Shop — order lunas (sama dengan member_stats.total_spent).
- * Tidak bergantung pada go-live Keuangan: activity lama yang diimpor tetap terhitung di sini.
- */
-async function loadSpend(d: Dataset, memberId: string): Promise<MemberSpend> {
-  const items: MemberSpendItem[] = [];
-  for (const o of d.ordersOf(memberId)) {
-    if (o.payment !== "paid" || !o.total) continue;
-    const name = o.items[0]?.name ?? "Order shop";
-    // Order tukar poin (channel 'reward'): yang dibayar hanya ongkir, bukan barangnya.
-    const title = o.detail?.channel === "reward" ? `Ongkir tukar poin · ${name}` : o.items.length > 1 ? `${name} +${o.items.length - 1} lainnya` : name;
-    items.push({ kind: "shop", title, detail: `Order #${o.code}`, at: o.placedAt.toISOString(), amount: o.total });
-  }
+/** Satu pembayaran dari fungsi database member_spend / member_spend_items (aturan ada di migrasi 20261124010000). */
+type SpendRow = {
+  member_id?: string;
+  kind: MemberSpendItem["kind"];
+  /** activity: id sesi · trip: id pembayaran · shop: kode order. */
+  ref: string;
+  title: string | null;
+  payment_kind: string | null;
+  at: string;
+  amount: number;
+};
+const TRIP_PAYMENT_KIND: Record<string, string> = { dp: "DP", installment: "Cicilan", settlement: "Pelunasan" };
 
-  let tripCount = 0;
-  let failed = false;
-  if (d.live) {
-    const supabase = await createSupabaseServerClient();
-    const [participants, bookings, trips] = await Promise.all([
-      supabase.from("session_participants").select("session_id, amount, payment_status, source, is_kuy_import").eq("member_id", memberId),
-      supabase.from("bookings").select("session_id, amount, payment_status, status").eq("member_id", memberId),
-      supabase
-        .from("trip_bookings")
-        .select("id, trips(title), trip_payments(kind, amount, received_on, voided_at)")
-        .eq("member_id", memberId)
-        // Pendaftaran yang dibatalkan (mis. dobel lalu dihapus di tab Peserta) tidak dihitung, sama dengan Keuangan;
-        // sisanya paling banyak satu per trip (index trip_bookings_member_unique).
-        .is("cancelled_at", null),
-    ]);
-    failed = Boolean(participants.error || bookings.error || trips.error);
-
-    const perSession = new Map<string, number>();
-    const keep = (sessionId: string, amount: number) => perSession.set(sessionId, Math.max(perSession.get(sessionId) ?? 0, amount));
-    for (const p of participants.data ?? []) {
-      if (p.payment_status === "paid" && (p.is_kuy_import || p.source === "admin") && p.amount > 0) keep(p.session_id as string, p.amount as number);
-    }
-    for (const b of bookings.data ?? []) {
-      if (b.payment_status === "paid" && b.status !== "cancelled" && b.amount > 0) keep(b.session_id as string, b.amount as number);
-    }
-    for (const [sessionId, amount] of perSession) {
-      const s = d.sessionById.get(sessionId);
-      // Activity dibatalkan → tiket dianggap dikembalikan, tidak dihitung.
-      if (s?.status === "cancelled") continue;
-      items.push({
-        kind: "activity",
-        title: s?.title ?? "Activity",
-        detail: s ? `${s.venueName} · ${spendDate.format(s.startsAt)}` : "Activity",
-        at: (s?.startsAt ?? new Date(0)).toISOString(),
-        amount,
-      });
-    }
-
-    const KIND: Record<string, string> = { dp: "DP", installment: "Cicilan", settlement: "Pelunasan" };
-    for (const tb of trips.data ?? []) {
-      const title = (tb.trips as unknown as { title: string } | null)?.title ?? "Trip";
-      const pays = ((tb.trip_payments ?? []) as { kind: string; amount: number; received_on: string; voided_at: string | null }[]).filter((p) => !p.voided_at);
-      if (pays.length) tripCount++;
-      for (const p of pays) {
-        items.push({ kind: "trip", title, detail: `${KIND[p.kind] ?? "Pembayaran"} · ${spendDate.format(new Date(`${p.received_on}T12:00:00+07:00`))}`, at: new Date(`${p.received_on}T12:00:00+07:00`).toISOString(), amount: p.amount });
-      }
-    }
-  }
-
-  items.sort((a, b) => b.at.localeCompare(a.at));
-  const sum = (kind: MemberSpendItem["kind"]) => items.filter((i) => i.kind === kind).reduce((n, i) => n + i.amount, 0);
-  const activities = { amount: sum("activity"), count: items.filter((i) => i.kind === "activity").length };
-  const trips = { amount: sum("trip"), count: tripCount };
-  const shop = { amount: sum("shop"), count: items.filter((i) => i.kind === "shop").length };
-  return { total: activities.amount + trips.amount + shop.amount, activities, trips, shop, items, incomplete: failed };
+/** Mode demo (tanpa database): hanya order shop lunas — peserta, booking & trip demo tidak punya nominal. */
+function demoSpendRows(d: Dataset): SpendRow[] {
+  return d.orders
+    .filter((o) => o.memberId && o.payment === "paid" && o.total > 0)
+    .map((o) => ({ member_id: o.memberId, kind: "shop", ref: o.code, title: null, payment_kind: null, at: o.placedAt.toISOString(), amount: o.total }));
 }
+
+/** Baris pembayaran → kartu "Total spent": judul & keterangan dari dataset (sesi, order). */
+function toMemberSpend(d: Dataset, memberId: string, rows: SpendRow[], incomplete: boolean): MemberSpend {
+  const orders = new Map(d.ordersOf(memberId).map((o) => [o.code, o]));
+  const items: MemberSpendItem[] = rows.map((r) => {
+    if (r.kind === "activity") {
+      const s = d.sessionById.get(r.ref);
+      return { kind: r.kind, title: s?.title ?? r.title ?? "Activity", detail: s ? `${s.venueName} · ${spendDate.format(s.startsAt)}` : "Activity", at: r.at, amount: r.amount };
+    }
+    if (r.kind === "trip") {
+      const detail = `${TRIP_PAYMENT_KIND[r.payment_kind ?? ""] ?? "Pembayaran"} · ${spendDate.format(new Date(r.at))}`;
+      return { kind: r.kind, title: r.title ?? "Trip", detail, at: r.at, amount: r.amount };
+    }
+    const o = orders.get(r.ref);
+    const name = o?.items[0]?.name ?? "Order shop";
+    // Order tukar poin (channel 'reward'): yang dibayar hanya ongkir, bukan barangnya.
+    const title = o?.detail?.channel === "reward" ? `Ongkir tukar poin · ${name}` : o && o.items.length > 1 ? `${name} +${o.items.length - 1} lainnya` : name;
+    return { kind: r.kind, title, detail: `Order #${r.ref}`, at: r.at, amount: r.amount };
+  });
+  items.sort((a, b) => b.at.localeCompare(a.at));
+
+  const totals = { activity: { amount: 0, count: 0 }, trip: { amount: 0, count: 0 }, shop: { amount: 0, count: 0 } };
+  for (const i of items) {
+    totals[i.kind].amount += i.amount;
+    totals[i.kind].count++;
+  }
+  // Trip dihitung per paket (satu pendaftaran per trip per member), bukan per DP / cicilan.
+  totals.trip.count = new Set(items.filter((i) => i.kind === "trip").map((i) => i.title)).size;
+  const { activity: activities, trip: trips, shop } = totals;
+  return { total: activities.amount + trips.amount + shop.amount, activities, trips, shop, items, incomplete };
+}
+
+async function loadSpend(d: Dataset, memberId: string): Promise<MemberSpend> {
+  if (!d.live) return toMemberSpend(d, memberId, demoSpendRows(d).filter((r) => r.member_id === memberId), false);
+  const supabase = await createSupabaseServerClient();
+  const { data, error } = await supabase.rpc("member_spend", { p_member: memberId });
+  return toMemberSpend(d, memberId, (data ?? []) as SpendRow[], Boolean(error));
+}
+
+type TopSpendRow = { member_id: string; activities: number; trips: number; shop: number; total: number; spenders: number };
+
+/** Mode demo: peringkat dari order shop lunas (sama dengan member_spend_top di database). */
+function demoTopSpend(d: Dataset): TopSpendRow[] {
+  const byMember = new Map<string, number>();
+  for (const r of demoSpendRows(d)) byMember.set(r.member_id!, (byMember.get(r.member_id!) ?? 0) + r.amount);
+  const name = (id: string) => d.memberById.get(id)?.fullName ?? "";
+  const ranked = [...byMember].filter(([id]) => d.memberById.has(id)).sort(([a, x], [b, y]) => y - x || name(a).localeCompare(name(b), "id"));
+  return ranked.map(([member_id, shop]) => ({ member_id, activities: 0, trips: 0, shop, total: shop, spenders: ranked.length }));
+}
+
+/**
+ * Member dengan total spent terbesar (kartu Overview) — dihitung di database (member_spend_top, aturan yang sama
+ * dengan kartu "Total spent"). Security definer: staf dengan izin Members melihat angka utuh walau tanpa izin
+ * Activities. Ghost member (belum punya akun) belum punya member_id, jadi belum masuk peringkat.
+ */
+export const getTopSpenders = cache(async (limit = 5): Promise<TopSpenders> => {
+  const live = isSupabaseConfigured
+    ? createSupabaseServerClient().then((supabase) => supabase.rpc("member_spend_top", { p_limit: limit }))
+    : null;
+  const [d, result] = await Promise.all([getDataset(), live]);
+  const rows = result ? ((result.data ?? []) as TopSpendRow[]) : demoTopSpend(d).slice(0, limit);
+  const members = rows.flatMap((r) => {
+    const m = d.memberById.get(r.member_id);
+    if (!m) return [];
+    const amounts = { total: Number(r.total), activities: Number(r.activities), trips: Number(r.trips), shop: Number(r.shop) };
+    return [{ id: m.id, fullName: m.fullName, memberCode: m.memberCode, ...amounts }];
+  });
+  return { members, spenders: rows[0]?.spenders ?? 0, incomplete: Boolean(result?.error) };
+});
 
 /**
  * Kudos member untuk admin: agregat yang diterima lewat RPC member_kudos (anonim, sama dengan kartu profil member;

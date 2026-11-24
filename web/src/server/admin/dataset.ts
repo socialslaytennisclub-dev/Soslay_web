@@ -154,7 +154,13 @@ export async function fetchFillCounts(client: SupabaseClient): Promise<Map<strin
   }
 }
 
-async function fetchAll<T>(client: SupabaseClient, table: string, columns: string, order: string, unique = "id"): Promise<T[]> {
+/** Muat semua baris tabel per halaman 1.000. `order` default "id"; `unique` (default "id") menjamin urutan stabil antar halaman. */
+async function fetchAll<T>(
+  client: SupabaseClient,
+  table: string,
+  columns: string,
+  { order = "id", unique = "id" }: { order?: string; unique?: string } = {},
+): Promise<T[]> {
   const PAGE = 1000;
   // Urutan wajib unik supaya halaman paralel tidak dobel / terlewat saat nilai `order` kembar.
   const query = (withCount = false) => {
@@ -221,20 +227,20 @@ async function loadLive(): Promise<Dataset> {
   const client = await createSupabaseServerClient();
   const now = new Date();
   const fetchRows = () => Promise.all([
-    fetchAll<ProfileRow>(client, "profiles", PROFILE_COLUMNS, "joined_at"),
-    fetchAll<StatsRow>(client, "member_stats", "member_id, points_balance, points_earned, total_spent", "member_id", "member_id"),
+    fetchAll<ProfileRow>(client, "profiles", PROFILE_COLUMNS, { order: "joined_at" }),
+    fetchAll<StatsRow>(client, "member_stats", "member_id, points_balance, points_earned, total_spent", { order: "member_id", unique: "member_id" }),
     fetchAll<SessionRow>(
       client,
       "sessions",
       "id, title, type_slug, description, court_label, starts_at, ends_at, capacity, price, points_per_attendance, status, publish_at, visibility, waitlist_enabled, members_only, show_on_homepage, recommended_levels, series_id, kuy_booking_url, visible_until, cover_path, created_at, trip_id, trip_order, sold_single, single_quota, venues(name, courts, city, venue_type, cover_path), session_crew(role, staff_members(full_name))",
-      "starts_at",
+      { order: "starts_at" },
     ),
-    fetchAll<BookingRow>(client, "bookings", "session_id, member_id, status, payment_status, source, guests, checked_in_at, created_at", "created_at"),
+    fetchAll<BookingRow>(client, "bookings", "session_id, member_id, status, payment_status, source, guests, checked_in_at, created_at", { order: "created_at" }),
     fetchAll<OrderRowDb>(
       client,
       "orders",
       "code, member_id, status, payment_status, payment_method, channel, subtotal, shipping_fee, discount, total, shipping_address, courier, tracking_number, recipient_name, recipient_phone, placed_at, shipping_method, proof_rejections, order_items(product_name, options, unit_price, quantity), order_payment_proofs(status, uploaded_at)",
-      "placed_at",
+      { order: "placed_at" },
     ),
     fetchFillCounts(client),
   ]);

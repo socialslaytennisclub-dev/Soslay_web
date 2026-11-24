@@ -5,13 +5,14 @@ import {
   NewestMembers,
   RecentOrders,
   TopProducts,
+  TopSpenders,
   UpcomingSessions,
   WeeklyBookings,
 } from "@/components/admin/overview/Overview";
 import { AdminTopbar } from "@/components/admin/shell/AdminTopbar";
 import { AdminButton } from "@/components/admin/ui/AdminUI";
-import { getOverview } from "@/server/admin/repo";
-import { getAdminSession } from "@/server/admin/session";
+import { getOverview, getTopSpenders } from "@/server/admin/repo";
+import { canAccess, getAdminSession } from "@/server/admin/session";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = { title: "Overview — Admin SOSLAY" };
@@ -22,7 +23,10 @@ const RANGES = [4, 12, 52];
 export default async function AdminOverviewPage({ searchParams }: PageProps<"/admin">) {
   const { range: rawRange } = await searchParams;
   const range = RANGES.includes(Number(rawRange)) ? Number(rawRange) : 12;
-  const [data, admin] = await Promise.all([getOverview(range), getAdminSession()]);
+  const adminSession = getAdminSession();
+  // Peringkat spent memuat data pembayaran member → hanya untuk staf yang boleh melihat Members.
+  const spendersPromise = adminSession.then((a) => (canAccess(a, "members") ? getTopSpenders(5) : null));
+  const [data, admin, topSpenders] = await Promise.all([getOverview(range), adminSession, spendersPromise]);
   // Sapaan memakai nama depan akun admin yang login (staff_members.full_name).
   const firstName = ("name" in admin && admin.name.trim().split(/\s+/)[0]) || "Admin";
 
@@ -62,7 +66,10 @@ export default async function AdminOverviewPage({ searchParams }: PageProps<"/ad
         </div>
         <div className={styles.row}>
           <RecentOrders data={data} />
-          <TopProducts data={data} monthLabel={monthLong} />
+          <div className={styles.side}>
+            <TopProducts data={data} monthLabel={monthLong} />
+            {topSpenders && <TopSpenders data={topSpenders} />}
+          </div>
         </div>
       </div>
     </>

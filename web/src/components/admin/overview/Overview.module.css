@@ -473,7 +473,8 @@
   min-width: 0;
 }
 
-.personText .personMeta {
+.personText .personMeta,
+.spenderLink .personName {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -490,4 +491,18 @@
 
 .orderLink:hover {
   color: var(--color-indigo-600);
+}
+
+/* ── Member spent terbanyak (daftar memakai .products & .productText) ── */
+.spendSplit {
+  display: block;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--color-indigo-muted);
+}
+
+.empty {
+  font-size: 13px;
+  color: var(--color-indigo-muted);
 }
