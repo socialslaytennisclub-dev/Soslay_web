@@ -1,0 +1,72 @@
+import "server-only";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { IMAGE_TYPES, uploadPublicImage } from "../storage";
+import { audit, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor } from "./actions/common";
+import { monthKey } from "./time";
+
+/**
+ * Foto cover activity dari gambar event Kuyy (dipakai MCP Claude): server mengunduh gambar dari CDN Kuyy,
+ * meng-upload-nya ke bucket cover Slay Club (sama dengan upload manual di Activity Editor), lalu URL
+ * hasil upload itu yang disimpan — website tidak pernah memuat gambar langsung dari Kuyy.
+ * Sengaja BUKAN "use server": fungsi yang mengunduh URL tidak boleh jadi server action publik.
+ */
+
+export const SESSION_COVER_BUCKET = "session-covers";
+export const SESSION_COVER_MAX_BYTES = 5 * 1024 * 1024;
+
+/** Hanya CDN gambar Kuyy (https) — bukan URL bebas, supaya server tidak bisa disuruh membuka alamat lain. */
+const KUY_IMAGE_HOSTS = /^(static\.kuyy\.app|static\.kuyy\.id)$/;
+
+export function kuyCoverUrlError(raw: string): string | null {
+  try {
+    const url = new URL(raw.trim());
+    if (url.protocol !== "https:" || !KUY_IMAGE_HOSTS.test(url.hostname)) return "Foto cover harus link gambar dari static.kuyy.app.";
+    return null;
+  } catch {
+    return "Link foto cover tidak valid.";
+  }
+}
+
+/** Unduh gambar event Kuyy lalu upload ke bucket cover. Hasil: URL publik milik Slay Club. */
+export async function uploadKuyCover(raw: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  const auth = await requireEditor("activities");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const invalid = kuyCoverUrlError(raw);
+  if (invalid) return { ok: false, error: invalid };
+
+  let res: Response;
+  try {
+    res = await fetch(raw.trim(), { redirect: "error", signal: AbortSignal.timeout(15_000), cache: "no-store" });
+  } catch (e) {
+    return { ok: false, error: `Gagal mengunduh foto dari Kuyy (${e instanceof Error ? e.message : "jaringan"}).` };
+  }
+  if (!res.ok) return { ok: false, error: `Gagal mengunduh foto dari Kuyy (HTTP ${res.status}).` };
+  const type = (res.headers.get("content-type") ?? "").split(";")[0].trim().toLowerCase();
+  if (!IMAGE_TYPES[type]) return { ok: false, error: `Link itu bukan foto JPG/PNG/WebP (${type || "tipe tidak diketahui"}).` };
+  const declared = Number(res.headers.get("content-length") ?? 0);
+  if (declared > SESSION_COVER_MAX_BYTES) return { ok: false, error: "Foto dari Kuyy lebih dari 5 MB." };
+  const bytes = await res.arrayBuffer();
+
+  const file = new File([bytes], `kuyy-cover.${IMAGE_TYPES[type]}`, { type });
+  const result = await uploadPublicImage({ bucket: SESSION_COVER_BUCKET, file, folder: monthKey(new Date()), maxBytes: SESSION_COVER_MAX_BYTES });
+  if (!result.ok) return result;
+  await audit(auth.userId, "session.cover_upload", "session_cover", result.path);
+  return { ok: true, url: result.url };
+}
+
+/** Pasang foto cover Kuyy ke activity yang sudah ada (cover lama diganti). */
+export async function setSessionCoverFromKuy(sessionId: string, raw: string): Promise<{ ok: true; title: string } | { ok: false; error: string }> {
+  const auth = await requireEditor("activities");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const supabase = await createSupabaseServerClient();
+  const { data: session } = await supabase.from("sessions").select("id, title").eq("id", sessionId).maybeSingle();
+  if (!session) return { ok: false, error: "Activity tidak ditemukan." };
+
+  const uploaded = await uploadKuyCover(raw);
+  if (!uploaded.ok) return uploaded;
+  const { error } = await supabase.from("sessions").update({ cover_path: uploaded.url }).eq("id", sessionId);
+  if (error) return { ok: false, error: `Gagal menyimpan foto cover: ${error.message}` };
+  await audit(auth.userId, `memasang foto cover Kuyy di activity ${session.title}`, "session", sessionId);
+  refreshPaths(...PUBLIC_SESSION_PATHS, `/admin/activities/${sessionId}`);
+  return { ok: true, title: session.title };
+}

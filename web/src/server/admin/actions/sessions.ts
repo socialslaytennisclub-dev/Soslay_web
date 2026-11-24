@@ -7,6 +7,7 @@ import { wibAt } from "@/lib/format";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { normalizeBookingUrl, slugify } from "@/lib/text";
 import { discardUploads, isOwnUpload, uploadPublicImage } from "../../storage";
+import { SESSION_COVER_BUCKET as COVER_BUCKET, SESSION_COVER_MAX_BYTES as COVER_MAX_BYTES } from "../kuy-cover";
 import { monthKey } from "../time";
 import type { MatchFormat, TennisLevel } from "../types";
 import { audit, invalidCrew, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, syncSessionHosts, type ActionResult, type CrewMemberInput } from "./common";
@@ -95,8 +96,6 @@ function validate(input: SessionInput): string | null {
 
 // ── Foto cover ──────────────────────────────────────────────────────────────
 // Bucket publik di Supabase Storage (lihat server/storage — dibuat otomatis saat upload pertama).
-const COVER_BUCKET = "session-covers";
-const COVER_MAX_BYTES = 5 * 1024 * 1024;
 /** Link folder / file Google Drive (https). */
 const isDriveUrl = (raw: string) => {
   try {

@@ -13,7 +13,8 @@ Kode: `web/src/app/api/mcp/route.ts`, `web/src/server/mcp/*`.
 |---|---|
 | `list_venues` | Daftar venue & tipe activity |
 | `preview_activity_import` | Cek tanpa menyimpan: venue yang dipakai, member yang cocok, yang belum daftar (ghost), yang dilewati |
-| `import_activity` | Buat activity + masukkan peserta (setelah admin setuju dengan preview) |
+| `import_activity` | Buat activity + masukkan peserta (setelah admin setuju dengan preview). Opsional `cover_url` = gambar event Kuyy (static.kuyy.app): server mengunduh & meng-upload ke bucket `session-covers`, lalu jadi foto cover. Foto gagal diunduh → activity tetap dibuat tanpa cover |
+| `set_activity_cover` | Pasang / ganti foto cover activity yang sudah ada dengan gambar event Kuyy |
 
 ## Setup (sekali)
 

@@ -30,6 +30,8 @@ export type ImportActivityInput = {
   capacity: number;
   kuyUrl: string;
   status: "published" | "draft";
+  /** URL hasil upload cover (mis. foto event Kuyy lewat MCP); kosong → foto venue. */
+  coverPath?: string | null;
 };
 
 export async function importActivity(input: ImportActivityInput, formData: FormData): Promise<ActionResult & { id?: string }> {
@@ -60,7 +62,7 @@ async function createWithParticipants(input: ImportActivityInput, importParticip
       visibility: "public",
       visibleUntil: "",
       homepage: false,
-      coverPath: null,
+      coverPath: input.coverPath ?? null,
       repeatWeekly: false,
       crew: [],
       crewMembers: [],
