@@ -101,46 +101,88 @@ export function parseKuyExport(data: ArrayBuffer): { eventTitle: string; rows: K
   const paidCol = header.findIndex((h) => PAID_AT_HEADERS.includes(h.trim()));
 
   const eventTitle = sheet.slice(0, headerAt).flat().find(Boolean) ?? "";
-  const seen = new Set<string>();
-  const rows: KuyRow[] = [];
+  const list: KuyRowInput[] = [];
   for (const [i, r] of sheet.slice(headerAt + 1).entries()) {
     if (r[0]?.toLowerCase().startsWith("summary")) break;
     const name = cell(r, "name");
     if (!name && !cell(r, "email")) continue;
-    const status = cell(r, "status").toLowerCase();
-    const levelRaw = cell(r, "level");
-    // Nomor registrasi jadi kunci import ulang; baris tanpa nomor diberi nomor baris.
-    const regNo = cell(r, "regNo") || `ROW${headerAt + i + 2}`;
-    const refunded = Boolean(cell(r, "refund"));
+    list.push({
+      // Nomor registrasi jadi kunci import ulang; baris tanpa nomor diberi nomor baris.
+      regNo: cell(r, "regNo") || `ROW${headerAt + i + 2}`,
+      name,
+      email: cell(r, "email"),
+      phone: cell(r, "phone"),
+      instagram: cell(r, "instagram"),
+      level: cell(r, "level"),
+      username: cell(r, "username"),
+      status: cell(r, "status"),
+      refunded: Boolean(cell(r, "refund")),
+      amount: Number(cell(r, "amount")) || 0,
+      paymentMethod: cell(r, "payment"),
+      ticket: cell(r, "ticket"),
+      ticketPrice: Number(cell(r, "ticketPrice")) || 0,
+      paidAt: paidCol >= 0 ? parseKuyTime(r[paidCol] ?? "") : null,
+    });
+  }
+  return { eventTitle, rows: toKuyRows(list) };
+}
+
+/** Satu peserta Kuyy sebelum dinormalkan — dari file XLSX atau dari Claude lewat MCP (kolom yang sama). */
+export type KuyRowInput = {
+  regNo?: string;
+  name: string;
+  email?: string;
+  phone?: string;
+  instagram?: string;
+  /** Label level Kuyy ("Upper Beginner", …). */
+  level?: string;
+  username?: string;
+  /** "going" = ikut; status lain dilewati. */
+  status?: string;
+  refunded?: boolean;
+  amount?: number;
+  paymentMethod?: string;
+  ticket?: string;
+  ticketPrice?: number;
+  paidAt?: string | null;
+};
+
+/** Normalkan peserta (nomor HP, email, level) & tandai yang dilewati — aturan sama untuk file & MCP. */
+export function toKuyRows(list: KuyRowInput[]): KuyRow[] {
+  const seen = new Set<string>();
+  return list.map((r, i) => {
+    const name = (r.name ?? "").trim();
+    const status = (r.status ?? "").trim().toLowerCase();
+    const regNo = (r.regNo ?? "").trim() || `ROW${i + 1}`;
     const skipReason = !name
       ? "Nama kosong"
-      : refunded
+      : r.refunded
         ? "Sudah refund"
         : status && status !== "going"
-          ? `Status Kuyy "${cell(r, "status")}"`
+          ? `Status Kuyy "${r.status}"`
           : seen.has(regNo)
             ? "Nomor registrasi dobel"
             : null;
     seen.add(regNo);
-    rows.push({
+    const levelRaw = (r.level ?? "").trim();
+    return {
       regNo,
       name,
-      email: cell(r, "email").toLowerCase(),
-      phone: localPhone(cell(r, "phone")),
-      instagram: cell(r, "instagram").replace(/^@/, ""),
+      email: (r.email ?? "").trim().toLowerCase(),
+      phone: localPhone(r.phone ?? ""),
+      instagram: (r.instagram ?? "").trim().replace(/^@/, ""),
       level: parseLevel(levelRaw),
       levelRaw,
-      username: cell(r, "username"),
+      username: (r.username ?? "").trim(),
       status,
-      amount: Math.round(Number(cell(r, "amount")) || 0),
-      paymentMethod: cell(r, "payment"),
-      ticket: cell(r, "ticket"),
-      ticketPrice: Math.round(Number(cell(r, "ticketPrice")) || 0),
-      paidAt: paidCol >= 0 ? parseKuyTime(r[paidCol] ?? "") : null,
+      amount: Math.max(0, Math.round(r.amount ?? 0)),
+      paymentMethod: (r.paymentMethod ?? "").trim(),
+      ticket: (r.ticket ?? "").trim(),
+      ticketPrice: Math.max(0, Math.round(r.ticketPrice ?? 0)),
+      paidAt: r.paidAt ?? null,
       skipReason,
-    });
-  }
-  return { eventTitle, rows };
+    };
+  });
 }
 
 /**

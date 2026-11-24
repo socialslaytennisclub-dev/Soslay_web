@@ -2,6 +2,7 @@ import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies, headers } from "next/headers";
 import { cache } from "react";
+import { currentActor } from "./actor";
 import { supabaseAnonKey, supabaseUrl } from "./env";
 import { cookieOptionsFor, SCOPE_HEADER, type AuthScope } from "./scope";
 
@@ -13,6 +14,13 @@ import { cookieOptionsFor, SCOPE_HEADER, type AuthScope } from "./scope";
  * cookie admin, sisanya cookie member. Scope dibaca dari header yang diisi proxy.
  */
 export const createSupabaseServerClient = cache(async (scopeOverride?: AuthScope) => {
+  const client = await cookieClient(scopeOverride);
+  // Endpoint MCP (Claude) bertindak sebagai akun tim tanpa cookie — lihat ./actor.
+  const actor = currentActor();
+  return actor ? (actor.client as unknown as typeof client) : client;
+});
+
+async function cookieClient(scopeOverride?: AuthScope) {
   const [store, h] = await Promise.all([cookies(), headers()]);
   const scope: AuthScope = scopeOverride ?? (h.get(SCOPE_HEADER) === "admin" ? "admin" : "member");
   return createServerClient(supabaseUrl, supabaseAnonKey, {
@@ -28,4 +36,4 @@ export const createSupabaseServerClient = cache(async (scopeOverride?: AuthScope
       },
     },
   });
-});
+}
