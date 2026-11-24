@@ -5,7 +5,7 @@ import { useRef, useState, useTransition, type FormEvent, type ReactNode } from 
 import { useDialog } from "@/hooks/useDialog";
 import { formatRupiahPlain, LEVEL_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
-import { memberInviteWaLink, phoneFormatError } from "@/lib/wa-invite";
+import { phoneFormatError } from "@/lib/wa-invite";
 import { addParticipantManual, importKuyParticipants, lookupParticipant, previewKuyImport, type ParticipantLookup } from "@/server/admin/actions/play";
 import type { KuyImportPreview } from "@/server/admin/types";
 import { AdminIcon } from "../ui/AdminIcon";
@@ -14,7 +14,7 @@ import { Drawer } from "../ui/Drawer";
 import { toast } from "../ui/Toaster";
 import editor from "./SessionEditor.module.css";
 import styles from "./Play.module.css";
-import { WaInviteLink } from "./WaInviteLink";
+import { KuyPreviewTable, phoneLabel } from "./KuyPreviewTable";
 
 /**
  * Tambah peserta (Figma ADM-10 · 05i/05j): satu drawer kanan dengan dua tab —
@@ -28,7 +28,6 @@ type Tab = "manual" | "import";
 const READ_COLUMNS = ["Nama", "No. WhatsApp", "Email", "Username Kuy", "Level tenis", "Jenis tiket", "Harga tiket", "Total bayar", "Status"];
 
 const kb = (bytes: number) => (bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`);
-const phoneLabel = (phone: string) => (phone ? `0${phone.replace(/^0/, "")}` : "");
 
 export function ParticipantsDrawer({ sessionId, sessionTitle, sessionWhen }: { sessionId: string; sessionTitle: string; sessionWhen: string }) {
   const dialog = useDialog();
@@ -136,13 +135,6 @@ export function ParticipantsDrawer({ sessionId, sessionTitle, sessionWhen }: { s
   const ghosts = rows.filter((r) => !r.member && !r.skipReason).length;
   const totalPaid = rows.filter((r) => picked.has(r.regNo)).reduce((sum, r) => sum + r.amount, 0);
   const existing = rows.filter((r) => r.existing && !r.skipReason);
-  const togglePick = (regNo: string) =>
-    setPicked((prev) => {
-      const next = new Set(prev);
-      if (next.has(regNo)) next.delete(regNo);
-      else next.add(regNo);
-      return next;
-    });
 
   const footer =
     tab === "manual" ? (
@@ -386,95 +378,7 @@ export function ParticipantsDrawer({ sessionId, sessionTitle, sessionWhen }: { s
                 </p>
               )}
 
-              <div className={styles.previewWrap}>
-                <table className={styles.previewTable}>
-                  <thead>
-                    <tr>
-                      <th className={styles.pickCell}>
-                        <input
-                          type="checkbox"
-                          aria-label="Pilih semua peserta"
-                          checked={selectable.length > 0 && selectable.every((r) => picked.has(r.regNo))}
-                          onChange={(e) => setPicked(e.target.checked ? new Set(selectable.map((r) => r.regNo)) : new Set())}
-                        />
-                      </th>
-                      <th>Peserta & kontak</th>
-                      <th>Member Soslay</th>
-                      <th>Tiket & harga</th>
-                      <th>Dibayar</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r) => {
-                      const disabled = Boolean(r.skipReason) || r.existing;
-                      const name = r.member?.name || r.name || "(tanpa nama)";
-                      return (
-                        <tr key={r.regNo} className={cx(disabled && styles.rowMuted)}>
-                          <td className={styles.pickCell}>
-                            <input type="checkbox" aria-label={`Pilih ${name}`} checked={picked.has(r.regNo)} disabled={disabled} onChange={() => togglePick(r.regNo)} />
-                          </td>
-                          <td>
-                            <span className={styles.person}>
-                              <MemberAvatar name={name} size={32} />
-                              <span className={styles.importMeta}>
-                                <strong>{name}</strong>
-                                {r.member && r.name && r.name.trim().toLowerCase() !== r.member.name.trim().toLowerCase() && <span>Nama di Kuyy: {r.name}</span>}
-                                {r.phone && (
-                                  <span className={styles.contact}>
-                                    <AdminIcon name="whatsapp-logo" size={12} />
-                                    {phoneLabel(r.phone)}
-                                  </span>
-                                )}
-                                {r.email && (
-                                  <span className={styles.contact}>
-                                    <AdminIcon name="envelope-simple" size={12} />
-                                    {r.email}
-                                  </span>
-                                )}
-                              </span>
-                            </span>
-                          </td>
-                          <td>
-                            {r.member ? (
-                              <span className={styles.importMeta}>
-                                <span className={cx(styles.username, styles.memberLabel)}>
-                                  <AdminIcon name="verified" size={16} label="Member Soslay terverifikasi" className={styles.verified} />
-                                  Member
-                                </span>
-                                <span>{r.member.code}</span>
-                              </span>
-                            ) : (
-                              <span className={styles.importMeta}>
-                                <span className={cx(styles.username, styles.memberLabel)}>
-                                  <span className={styles.ghostDot} aria-hidden />
-                                  Bukan member
-                                </span>
-                                <span>{r.ghost ? `Ghost · ${r.ghost.activities} aktivitas` : "Ghost baru"}</span>
-                                {r.invite === "whatsapp" && <WaInviteLink href={memberInviteWaLink(r, sessionTitle)} />}
-                              </span>
-                            )}
-                          </td>
-                          <td>
-                            <span className={styles.importMeta}>
-                              <strong>{r.ticket || "—"}</strong>
-                              {r.ticketPrice > 0 && <span>{formatRupiahPlain(r.ticketPrice)}</span>}
-                            </span>
-                          </td>
-                          <td>
-                            {r.skipReason ? (
-                              <Badge tone="pink">{r.skipReason}</Badge>
-                            ) : r.existing ? (
-                              <Badge tone="neutral">Sudah terdaftar</Badge>
-                            ) : (
-                              <strong className={styles.paid}>{r.amount ? formatRupiahPlain(r.amount) : "—"}</strong>
-                            )}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <KuyPreviewTable rows={rows} picked={picked} onPickedChange={setPicked} sessionTitle={sessionTitle} />
             </>
           )}
         </div>

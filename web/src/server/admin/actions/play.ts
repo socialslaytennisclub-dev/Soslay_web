@@ -7,7 +7,7 @@ import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { changedPhoneError, localPhone, phoneFormatError, samePhone } from "@/lib/wa-invite";
 import { getDataset } from "../dataset";
-import { ownContacts, parseKuyExport, type KuyRow } from "../kuy-import";
+import { ownContacts, parseKuyExport, toKuyRows, type KuyRow, type KuyRowInput } from "../kuy-import";
 import { findMemberById, findMemberByIdentifier, findMemberByPhone, type MemberIdentity } from "../identity";
 import { getAdminSession } from "../session";
 import type { KuyImportPreview, KuyImportPreviewRow, SessionMatch } from "../types";
@@ -107,30 +107,93 @@ async function ghostActivityCounts(supabase: Supabase, ids: string[]): Promise<M
   return counts;
 }
 
-/** Baca file & tampilkan preview (siapa yang cocok dengan member) — belum menyimpan apa pun. */
-export async function previewKuyImport(sessionId: string, formData: FormData): Promise<{ ok: true; preview: KuyImportPreview } | { ok: false; error: string }> {
+/**
+ * Baca file & tampilkan preview (siapa yang cocok dengan member) — belum menyimpan apa pun.
+ * `sessionId` null = activity belum dibuat (Import activity): belum ada peserta tercatat.
+ */
+export async function previewKuyImport(sessionId: string | null, formData: FormData): Promise<PreviewResult> {
+  const denied = await previewAccess();
+  if (denied) return denied;
+  const upload = await readUpload(formData);
+  if ("error" in upload) return { ok: false, error: upload.error };
+  return previewRows(sessionId, upload.name, upload.size, upload.parsed.eventTitle, upload.parsed.rows);
+}
+
+/** Preview dari daftar peserta (Claude lewat MCP membaca file Kuyy sendiri) — aturan sama dengan file. */
+export async function previewKuyRows(sessionId: string | null, eventTitle: string, input: KuyRowInput[]): Promise<PreviewResult> {
+  const denied = await previewAccess();
+  if (denied) return denied;
+  const rows = rowsFromInput(input);
+  if ("error" in rows) return { ok: false, error: rows.error };
+  return previewRows(sessionId, "Claude (MCP)", 0, eventTitle, rows);
+}
+
+type PreviewResult = { ok: true; preview: KuyImportPreview } | { ok: false; error: string };
+
+async function previewAccess(): Promise<{ ok: false; error: string } | null> {
   const session = await getAdminSession();
   if (session.mode === "denied") return { ok: false, error: "Tidak punya akses." };
   if (session.mode === "live") {
     const auth = await requireEditor("activities");
     if ("error" in auth) return { ok: false, error: auth.error };
   }
-  const upload = await readUpload(formData);
-  if ("error" in upload) return { ok: false, error: upload.error };
-  const { eventTitle } = upload.parsed;
-  if (!upload.parsed.rows.length) return { ok: false, error: "Tidak ada peserta di file ini." };
+  return null;
+}
 
-  const members = await matchMembers(upload.parsed.rows);
+const MAX_ROWS = 500;
+
+const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+const rupiah = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 1_000_000_000 ? v : undefined);
+
+/**
+ * Daftar peserta dari luar file (MCP / pemanggil aksi langsung): tiap kolom dicek tipenya (yang tidak sesuai
+ * diabaikan), waktu bayar harus tanggal yang valid, lalu dinormalkan dengan aturan yang sama dengan file.
+ */
+function rowsFromInput(input: unknown): KuyRow[] | { error: string } {
+  const invalid = { error: `Daftar peserta tidak valid (1–${MAX_ROWS} peserta, tiap peserta wajib punya nama).` };
+  if (!Array.isArray(input) || !input.length || input.length > MAX_ROWS) return invalid;
+  const list: KuyRowInput[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== "object") return invalid;
+    const r = item as Record<string, unknown>;
+    const name = str(r.name);
+    if (name === undefined) return invalid;
+    const paidMs = Date.parse(str(r.paidAt) ?? "");
+    list.push({
+      regNo: str(r.regNo),
+      name,
+      email: str(r.email),
+      phone: str(r.phone),
+      instagram: str(r.instagram),
+      level: str(r.level),
+      username: str(r.username),
+      status: str(r.status),
+      refunded: r.refunded === true,
+      amount: rupiah(r.amount),
+      paymentMethod: str(r.paymentMethod),
+      ticket: str(r.ticket),
+      ticketPrice: rupiah(r.ticketPrice),
+      paidAt: Number.isFinite(paidMs) ? new Date(paidMs).toISOString() : null,
+    });
+  }
+  return toKuyRows(list);
+}
+
+async function previewRows(sessionId: string | null, fileName: string, fileSize: number, eventTitle: string, parsedRows: KuyRow[]): Promise<PreviewResult> {
+  const session = await getAdminSession();
+  if (!parsedRows.length) return { ok: false, error: "Tidak ada peserta di file ini." };
+
+  const members = await matchMembers(parsedRows);
   let existing: Participants = { regNos: new Set(), memberRegNo: new Map() };
   let ghosts = new Map<string, GhostRow>();
   let ghostCounts = new Map<string, number>();
   const supabase = session.mode === "live" ? await createSupabaseServerClient() : null;
-  if (supabase) {
+  if (supabase && sessionId) {
     const read = await existingParticipants(supabase, sessionId);
     if (!read) return { ok: false, error: "Gagal membaca peserta yang sudah tercatat — coba lagi." };
     existing = read;
   }
-  const rows = skipRepeatMembers(upload.parsed.rows, members, existing);
+  const rows = skipRepeatMembers(parsedRows, members, existing);
   if (supabase) {
     ghosts = await findGhosts(supabase, rows.filter((r) => !members.get(r.regNo)));
     ghostCounts = await ghostActivityCounts(supabase, [...new Set([...ghosts.values()].map((g) => g.id))]);
@@ -138,8 +201,8 @@ export async function previewKuyImport(sessionId: string, formData: FormData): P
   return {
     ok: true,
     preview: {
-      fileName: upload.name,
-      fileSize: upload.size,
+      fileName,
+      fileSize,
       eventTitle,
       rows: rows.map((r) => ({
         regNo: r.regNo,
@@ -173,16 +236,30 @@ export async function previewKuyImport(sessionId: string, formData: FormData): P
 export async function importKuyParticipants(sessionId: string, formData: FormData): Promise<ActionResult> {
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
-  const supabase = await createSupabaseServerClient();
-  const [upload, state, existing] = await Promise.all([readUpload(formData), sessionState(supabase, sessionId), existingParticipants(supabase, sessionId)]);
+  const upload = await readUpload(formData);
   if ("error" in upload) return { ok: false, error: upload.error };
-  if ("error" in state) return { ok: false, error: state.error };
-  if (!existing) return { ok: false, error: "Gagal membaca peserta yang sudah tercatat — coba lagi." };
   // Hanya baris yang dicentang admin di preview (kalau dikirim); baris dilewati tetap diabaikan.
   const selected = parseSelected(formData.get("selected"));
   if (selected === "invalid") return { ok: false, error: "Pilihan peserta tidak terbaca — buka preview lagi." };
-  const members = await matchMembers(upload.parsed.rows);
-  const picked = skipRepeatMembers(upload.parsed.rows, members, existing).filter((r) => !r.skipReason && (!selected || selected.has(r.regNo)));
+  return importRows(auth.userId, sessionId, upload.parsed.rows, selected);
+}
+
+/** Impor dari daftar peserta (Claude lewat MCP) — aturan sama dengan file Kuyy. */
+export async function importKuyRows(sessionId: string, input: KuyRowInput[]): Promise<ActionResult> {
+  const auth = await requireEditor("activities");
+  if ("error" in auth) return { ok: false, error: auth.error };
+  const rows = rowsFromInput(input);
+  if ("error" in rows) return { ok: false, error: rows.error };
+  return importRows(auth.userId, sessionId, rows, null);
+}
+
+async function importRows(userId: string, sessionId: string, parsedRows: KuyRow[], selected: Set<string> | null): Promise<ActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const [state, existing] = await Promise.all([sessionState(supabase, sessionId), existingParticipants(supabase, sessionId)]);
+  if ("error" in state) return { ok: false, error: state.error };
+  if (!existing) return { ok: false, error: "Gagal membaca peserta yang sudah tercatat — coba lagi." };
+  const members = await matchMembers(parsedRows);
+  const picked = skipRepeatMembers(parsedRows, members, existing).filter((r) => !r.skipReason && (!selected || selected.has(r.regNo)));
   // Member yang sudah ada di sesi lewat nomor lain (mis. ditambah manual) tidak dicatat dua kali;
   // sesi selesai → baris lama juga tidak ditimpa.
   const rows = picked.filter((r) => !alreadyInAs(existing, members.get(r.regNo)?.id, r.regNo) && !(state.finished && existing.regNos.has(r.regNo)));
@@ -191,11 +268,17 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
     return { ok: false, error: kept ? "Semua peserta di file ini sudah tercatat di sesi — tidak ada yang diubah." : "Tidak ada peserta yang dipilih untuk diimpor." };
   }
   // Sesi selesai → peserta susulan memang ikut main: langsung tercatat hadir (sama dengan tambah manual).
-  const checkIn = state.finished ? lateCheckIn(auth.userId) : null;
+  const checkIn = state.finished ? lateCheckIn(userId) : null;
 
   // Belum member → ghost member: pakai yang sudah ada (aktivitas sebelumnya) atau buat baru.
   const guests = rows.filter((r) => !members.get(r.regNo));
   const ghostOf = new Map<string, string>();
+  // Ghost baru dari impor ini — dihapus lagi bila impor gagal di tengah (tidak ada ghost yatim tanpa activity).
+  const createdGhosts: string[] = [];
+  const fail = async (error: string): Promise<ActionResult> => {
+    await Promise.all(createdGhosts.map((id) => dropUnusedGhost(supabase, id)));
+    return { ok: false, error };
+  };
   if (guests.length) {
     const known = await findGhosts(supabase, guests);
     const own = ownKuyIds(rows);
@@ -223,7 +306,8 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
       let { data: created, error: ghostError } = await supabase.from("ghost_members").insert(ghostRow).select("id").single();
       // Kuy ID sudah dipakai ghost yang telah diklaim member lain → simpan tanpa Kuy ID.
       if (ghostError?.code === "23505") ({ data: created, error: ghostError } = await supabase.from("ghost_members").insert({ ...ghostRow, kuy_id: null }).select("id").single());
-      if (ghostError || !created) return { ok: false, error: `Gagal mencatat peserta ${r.name}: ${ghostError?.message ?? "coba lagi"}` };
+      if (ghostError || !created) return fail(`Gagal mencatat peserta ${r.name}: ${ghostError?.message ?? "coba lagi"}`);
+      createdGhosts.push(created.id as string);
       ghostOf.set(r.regNo, created.id as string);
       // Baris berikutnya di file yang sama orangnya (nomor registrasi sama, atau kontak miliknya
       // sendiri sama) memakai ghost ini juga — tiket tamu dengan kontak pembeli tidak.
@@ -257,7 +341,7 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
     })),
     { onConflict: "session_id,kuy_reg_no" },
   );
-  if (error) return { ok: false, error: `Gagal mengimpor: ${error.message}` };
+  if (error) return fail(`Gagal mengimpor: ${error.message}`);
 
   // ID Soslay ↔ Kuy ID: member yang cocok lewat email/telepon tapi belum punya Kuy ID di profilnya
   // → username Kuyy miliknya sendiri (bukan pembeli tiket) disambungkan ke profil Soslay-nya.
@@ -275,7 +359,7 @@ export async function importKuyParticipants(sessionId: string, formData: FormDat
   }
 
   const matched = rows.filter((r) => members.get(r.regNo)).length;
-  await audit(auth.userId, `mengimpor ${rows.length} peserta Kuyy`, "session", sessionId);
+  await audit(userId, `mengimpor ${rows.length} peserta Kuyy`, "session", sessionId);
   refreshRoster(sessionId);
   const parts = [`${rows.length} peserta diimpor`, `${matched} cocok dengan member Soslay`];
   if (linked) parts.push(`${linked} Kuy ID disambungkan ke ID Soslay`);

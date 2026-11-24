@@ -128,7 +128,8 @@ export async function discardSessionUploads(urls: string[]): Promise<void> {
   await discardUploads(COVER_BUCKET, urls, { table: "sessions", columns: ["cover_path", "photo_cover_path"] });
 }
 
-export async function saveSession(input: SessionInput): Promise<ActionResult> {
+/** `stay`: sesi baru tidak dialihkan ke halamannya — id-nya dikembalikan (Import activity lanjut mengimpor peserta). */
+export async function saveSession(input: SessionInput, stay = false): Promise<ActionResult & { id?: string }> {
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
   const invalid = validate(input);
@@ -258,8 +259,8 @@ export async function saveSession(input: SessionInput): Promise<ActionResult> {
 
   await audit(auth.userId, input.id ? `mengubah sesi ${input.title}` : `membuat sesi ${input.title}${input.repeatWeekly ? " (8 minggu)" : ""}`, "session", id);
   refresh(id);
-  if (!input.id) redirect(`/admin/activities/${id}?saved=${input.repeatWeekly ? "series" : "new"}`);
-  return { ok: true, message: savedMessage(row) };
+  if (!input.id && !stay) redirect(`/admin/activities/${id}?saved=${input.repeatWeekly ? "series" : "new"}`);
+  return { ok: true, message: savedMessage(row), id };
 }
 
 const VISIBILITY_SUFFIX = { public: "", members: " (khusus member yang login)", link: " (hanya lewat link)" } as const;

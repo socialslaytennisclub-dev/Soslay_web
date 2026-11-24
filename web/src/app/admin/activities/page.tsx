@@ -71,6 +71,9 @@ export default async function AdminActivitiesPage({ searchParams }: PageProps<"/
             ))}
           </nav>
           <div className={styles.actions}>
+            <AdminButton href="/admin/activities/import" icon="upload-simple">
+              Import dari Kuyy
+            </AdminButton>
             <AdminButton href="/admin/activities/new" variant="primary" icon="plus-bold">
               Buat sesi
             </AdminButton>

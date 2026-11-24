@@ -1,5 +1,6 @@
 import "server-only";
 import { cache } from "react";
+import { currentActor } from "@/lib/supabase/actor";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import type { AdminModule, ModuleAccess } from "./types";
@@ -19,6 +20,8 @@ export type AdminSession =
  */
 export const getAdminSession = cache(async (): Promise<AdminSession> => {
   if (!isSupabaseConfigured) return { mode: "demo", name: "Rara Anindya", role: "Super Admin" };
+  const actor = currentActor();
+  if (actor) return { mode: "live", userId: actor.userId, name: actor.name, role: actor.role, access: actor.access as Record<AdminModule, ModuleAccess> };;
 
   const supabase = await createSupabaseServerClient();
   const [{ data: auth }, { data }] = await Promise.all([supabase.auth.getClaims(), supabase.rpc("my_admin_access").maybeSingle()]);
