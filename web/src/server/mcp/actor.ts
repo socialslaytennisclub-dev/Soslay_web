@@ -22,24 +22,26 @@ export function mcpKeyOk(provided: string | null): boolean {
   return timingSafeEqual(digest(provided), digest(expected));
 }
 
-type CachedSession = { accessToken: string; refreshToken: string; expiresAt: number; email: string };
+type CachedSession = { accessToken: string; refreshToken: string; expiresAt: number; email: string; userId: string };
 let cached: CachedSession | null = null;
 
 const anonClient = () => createClient(supabaseUrl, supabaseAnonKey, { auth: { persistSession: false, autoRefreshToken: false } });
 
-function remember(email: string, session: { access_token: string; refresh_token: string; expires_at?: number }): string {
-  cached = { accessToken: session.access_token, refreshToken: session.refresh_token, expiresAt: (session.expires_at ?? 0) * 1000, email };
-  return cached.accessToken;
+type Session = { access_token: string; refresh_token: string; expires_at?: number; user: { id: string } };
+
+function remember(email: string, session: Session): CachedSession {
+  cached = { accessToken: session.access_token, refreshToken: session.refresh_token, expiresAt: (session.expires_at ?? 0) * 1000, email, userId: session.user.id };
+  return cached;
 }
 
 /**
- * Token akses akun MCP. Masih berlaku → dipakai; hampir habis → diperpanjang dengan refresh token (sesi
- * login yang sama, tidak menambah sesi baru). Login baru (magic link) hanya bila belum ada sesi di instance
- * server ini atau refresh gagal.
+ * Sesi akun MCP. Masih berlaku → dipakai; hampir habis → diperpanjang dengan refresh token (sesi login yang
+ * sama, tidak menambah sesi baru). Login baru (magic link) hanya bila belum ada sesi di instance server ini
+ * atau refresh gagal.
  */
-async function actorToken(email: string): Promise<string | { error: string }> {
+async function actorSession(email: string): Promise<CachedSession | { error: string }> {
   if (cached?.email === email) {
-    if (cached.expiresAt - Date.now() > 120_000) return cached.accessToken;
+    if (cached.expiresAt - Date.now() > 120_000) return cached;
     const { data } = await anonClient().auth.refreshSession({ refresh_token: cached.refreshToken });
     if (data.session) return remember(email, data.session);
     cached = null;
@@ -58,14 +60,18 @@ async function actorToken(email: string): Promise<string | { error: string }> {
 export async function mcpActor(): Promise<Actor | { error: string }> {
   const email = process.env.MCP_ACTOR_EMAIL?.trim().toLowerCase();
   if (!email) return { error: "MCP_ACTOR_EMAIL belum diisi di server." };
-  const token = await actorToken(email);
-  if (typeof token !== "string") return token;
-  const client = createClient(supabaseUrl, supabaseAnonKey, {
-    global: { headers: { Authorization: `Bearer ${token}` } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-  const [{ data: user }, { data: access }] = await Promise.all([client.auth.getUser(token), client.rpc("my_admin_access").maybeSingle()]);
+  const session = await actorSession(email);
+  if ("error" in session) return session;
+  // Cara resmi supabase-js memakai token yang sudah ada: setiap query (PostgREST/RPC) membawa token akun ini.
+  const token = session.accessToken;
+  const client = createClient(supabaseUrl, supabaseAnonKey, { accessToken: async () => token });
+  const { data: access, error } = await client.rpc("my_admin_access").maybeSingle();
+  if (error) {
+    // Token ditolak (mis. sesi dicabut) → buang cache supaya permintaan berikutnya login ulang.
+    cached = null;
+    return { error: `Akses akun ${email} gagal dicek: ${error.message}` };
+  }
   const row = access as { full_name: string; role_name: string; permissions: Actor["access"] } | null;
-  if (!user.user || !row) return { error: `${email} bukan anggota tim aktif — tambahkan di Settings & Roles.` };
-  return { client, userId: user.user.id, name: row.full_name, role: row.role_name, access: row.permissions };
+  if (!row) return { error: `${email} bukan anggota tim aktif — cek status & role-nya di Settings & Roles.` };
+  return { client, userId: session.userId, name: row.full_name, role: row.role_name, access: row.permissions };
 }
