@@ -39,9 +39,13 @@ export async function importActivity(input: ImportActivityInput, formData: FormD
   return createWithParticipants(input, (id) => importKuyParticipants(id, formData));
 }
 
-/** Sama dengan importActivity, peserta dari daftar (Claude lewat MCP membaca file Kuyy sendiri). */
+/**
+ * Sama dengan importActivity, peserta dari daftar (Claude lewat MCP membaca file Kuyy sendiri).
+ * Daftar kosong = event Kuyy yang belum ada pendaftar → activity saja; peserta menyusul lewat import XLSX di activity itu.
+ */
 export async function importActivityRows(input: ImportActivityInput, participants: KuyRowInput[]): Promise<ActionResult & { id?: string }> {
-  if (!Array.isArray(participants) || !participants.length) return { ok: false, error: "Daftar peserta kosong." };
+  if (!Array.isArray(participants)) return { ok: false, error: "Daftar peserta tidak valid." };
+  if (!participants.length) return createWithParticipants(input, async () => ({ ok: true, message: "belum ada peserta" }));
   return createWithParticipants(input, (id) => importKuyRows(id, participants));
 }
 
