@@ -4,11 +4,12 @@ import { formatRupiahPlain, PAYMENT_CHANNEL_LABEL, PAYMENT_LABEL } from "@/lib/a
 import { isEmail } from "@/lib/auth";
 import { isSessionEnded, isSessionFinished, participantRemoveLock, participantsLockReason } from "@/lib/session-lock";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { changedPhoneError, localPhone, phoneFormatError, samePhone } from "@/lib/wa-invite";
 import { getDataset } from "../dataset";
 import { ownContacts, parseKuyExport, toKuyRows, type KuyRow, type KuyRowInput } from "../kuy-import";
-import { findMemberById, findMemberByIdentifier, findMemberByPhone, type MemberIdentity } from "../identity";
+import { findMemberById, findMemberByIdentifier, findMemberByPhone, findMembersForImport, type MemberIdentity } from "../identity";
 import { getAdminSession } from "../session";
 import type { KuyImportPreview, KuyImportPreviewRow, SessionMatch } from "../types";
 import { audit, confirmLinkResult, refreshPaths, refreshRoster, requireEditor, type ActionResult, type ConfirmLinkResult } from "./common";
@@ -40,13 +41,21 @@ async function readUpload(formData: FormData): Promise<{ name: string; size: num
 }
 
 async function matchMembers(rows: KuyRow[]): Promise<Map<string, KuyImportPreviewRow["member"]>> {
-  const d = await getDataset();
   const contact = ownContacts(rows);
-  const byEmail = new Map(d.members.map((m) => [m.email.toLowerCase(), m]));
-  const byPhone = new Map(d.members.filter((m) => m.phone).map((m) => [localPhone(m.phone), m]));
-  const byKuy = new Map(d.members.filter((m) => m.kuyId).map((m) => [m.kuyId.toLowerCase(), m]));
   const usernameCount = new Map<string, number>();
   for (const r of rows) usernameCount.set(r.username.toLowerCase(), (usernameCount.get(r.username.toLowerCase()) ?? 0) + 1);
+  // Kandidat member: live → hanya yang cocok dengan kontak di file, lewat service role (lihat findMembersForImport);
+  // demo → data demo. Tidak memakai getDataset di live: RLS menyembunyikan member dari staf tanpa izin Members.
+  const candidates: { id: string; fullName: string; memberCode: string; kuyId: string; email: string; phone: string }[] = isSupabaseConfigured
+    ? await findMembersForImport({
+        emails: [...contact.values()].map((c) => c.email),
+        phones: [...contact.values()].map((c) => c.phone),
+        kuyIds: rows.filter((r) => r.username && usernameCount.get(r.username.toLowerCase()) === 1).map((r) => r.username.toLowerCase()),
+      })
+    : (await getDataset()).members;
+  const byEmail = new Map(candidates.filter((m) => m.email).map((m) => [m.email.toLowerCase(), m]));
+  const byPhone = new Map(candidates.filter((m) => m.phone).map((m) => [localPhone(m.phone), m]));
+  const byKuy = new Map(candidates.filter((m) => m.kuyId).map((m) => [m.kuyId.toLowerCase(), m]));
 
   const result = new Map<string, KuyImportPreviewRow["member"]>();
   for (const r of rows) {

@@ -124,3 +124,22 @@ export async function membersByIds(ids: string[]): Promise<Map<string, MemberIde
 export async function findMemberById(id: string): Promise<MemberIdentity | null> {
   return (await membersByIds([id])).get(id) ?? null;
 }
+
+/**
+ * Member yang mungkin cocok dengan peserta impor Kuyy (email, nomor HP lokal, Kuy ID) — dibaca lewat service
+ * role, jadi pencocokan tidak bergantung pada izin modul Members milik staf yang mengimpor (staf Activities /
+ * akun Claude tetap mencocokkan member, tanpa bisa membuka daftar member). Hanya data member yang cocok.
+ */
+export async function findMembersForImport(keys: { emails: string[]; phones: string[]; kuyIds: string[] }): Promise<MemberIdentity[]> {
+  const emails = [...new Set(keys.emails.filter(Boolean))];
+  const phones = [...new Set(keys.phones.filter((p) => p.length >= 9))];
+  const kuyIds = [...new Set(keys.kuyIds.filter(Boolean))];
+  // profiles.phone tanpa awalan (812…); varian 0812… / 62812… ikut dicari untuk data lama.
+  const phoneForms = phones.flatMap((p) => [p, `0${p}`, `62${p}`]);
+  const quoted = (list: string[]) => list.map((v) => `"${v.replace(/"/g, "")}"`).join(",");
+  const filters = [emails.length && `email.in.(${quoted(emails)})`, phoneForms.length && `phone.in.(${quoted(phoneForms)})`, kuyIds.length && `kuy_id.in.(${quoted(kuyIds)})`].filter(Boolean);
+  if (!filters.length) return [];
+  const db = await readClient();
+  const { data } = await db.from("profiles").select(PROFILE_FIELDS).or(filters.join(",")).limit(1000);
+  return ((data ?? []) as ProfileRow[]).map((p) => toIdentity(p, "nomor HP"));
+}
