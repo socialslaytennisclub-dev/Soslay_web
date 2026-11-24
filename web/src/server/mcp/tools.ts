@@ -49,6 +49,13 @@ const activityInput = z.object({
   description: z.string().max(500).optional().describe("Deskripsi event, maks. 500 karakter (ringkas bila lebih panjang)"),
   kuy_url: z.string().optional().describe("Link event Kuyy"),
   status: z.enum(["published", "draft"]).optional().describe("Default published"),
+  points: z
+    .number()
+    .int()
+    .min(0)
+    .max(10_000)
+    .optional()
+    .describe("Slay Point per kehadiran; kosong = default tipe activity. 0 = peserta tidak dapat poin (mis. event yang sudah lewat lalu baru diimpor)"),
   cover_url: z.string().optional().describe(`${COVER_URL_HINT}. Dipakai sebagai foto cover activity; kosong = foto venue`),
   participants: z
     .array(participant)
@@ -107,6 +114,7 @@ async function toInput(args: ActivityArgs): Promise<{ input: ImportActivityInput
       capacity: Math.max(args.capacity ?? 0, going, 1),
       kuyUrl: args.kuy_url?.trim() ?? "",
       status: args.status ?? "published",
+      points: args.points,
     },
   };
 }
@@ -142,6 +150,7 @@ export const TOOLS = [
         [
           `Activity: ${input.title}`,
           `Venue: ${prepared.venueNote} · ${input.date} ${input.start}–${input.end} WIB · Rp${input.price.toLocaleString("id-ID")} · kapasitas ${input.capacity} · ${input.status}`,
+          `Slay Point per kehadiran: ${input.points ?? "default tipe activity"}`,
           `Foto cover: ${!args.cover_url?.trim() ? "tidak ada (pakai foto venue)" : (kuyCoverUrlError(args.cover_url) ?? "dari Kuyy (diunduh & di-upload saat import)")}`,
           !rows.length ? "Peserta: belum ada — activity dibuat tanpa peserta (tambahkan nanti lewat import XLSX di activity itu)" : `Peserta: ${rows.filter((r) => r.member && !r.skipReason).length} member, ${rows.filter((r) => !r.member && !r.skipReason).length} belum daftar, ${rows.filter((r) => r.skipReason).length} dilewati`,
           ...rows.map(line),
