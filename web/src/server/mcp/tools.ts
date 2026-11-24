@@ -17,7 +17,7 @@ import { venueOptions } from "@/server/admin/sessions-repo";
 const TYPE_SLUGS = activityTypes.map((t) => t.slug) as [string, ...string[]];
 
 const participant = z.object({
-  reg_no: z.string().optional().describe('Kolom "Registration Number" (mis. "G8") — kunci impor ulang'),
+  reg_no: z.string().trim().min(1).describe('Kolom "Registration Number" (mis. "G8") — wajib, kunci impor ulang'),
   name: z.string().describe('Kolom "Name"'),
   email: z.string().optional(),
   phone: z.string().optional().describe("Nomor HP apa adanya (+62…, 08…)"),

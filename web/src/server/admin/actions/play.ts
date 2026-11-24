@@ -142,12 +142,41 @@ async function previewAccess(): Promise<{ ok: false; error: string } | null> {
 
 const MAX_ROWS = 500;
 
-/** Daftar peserta dari luar file (MCP): bentuk dicek, lalu dinormalkan dengan aturan yang sama. */
-function rowsFromInput(input: KuyRowInput[]): KuyRow[] | { error: string } {
-  if (!Array.isArray(input) || input.length > MAX_ROWS || input.some((r) => !r || typeof r !== "object" || typeof r.name !== "string")) {
-    return { error: `Daftar peserta tidak valid (maks. ${MAX_ROWS}, tiap peserta wajib punya nama).` };
+const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+const rupiah = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 && v <= 1_000_000_000 ? v : undefined);
+
+/**
+ * Daftar peserta dari luar file (MCP / pemanggil aksi langsung): tiap kolom dicek tipenya (yang tidak sesuai
+ * diabaikan), waktu bayar harus tanggal yang valid, lalu dinormalkan dengan aturan yang sama dengan file.
+ */
+function rowsFromInput(input: unknown): KuyRow[] | { error: string } {
+  const invalid = { error: `Daftar peserta tidak valid (1–${MAX_ROWS} peserta, tiap peserta wajib punya nama).` };
+  if (!Array.isArray(input) || !input.length || input.length > MAX_ROWS) return invalid;
+  const list: KuyRowInput[] = [];
+  for (const item of input) {
+    if (!item || typeof item !== "object") return invalid;
+    const r = item as Record<string, unknown>;
+    const name = str(r.name);
+    if (name === undefined) return invalid;
+    const paidMs = Date.parse(str(r.paidAt) ?? "");
+    list.push({
+      regNo: str(r.regNo),
+      name,
+      email: str(r.email),
+      phone: str(r.phone),
+      instagram: str(r.instagram),
+      level: str(r.level),
+      username: str(r.username),
+      status: str(r.status),
+      refunded: r.refunded === true,
+      amount: rupiah(r.amount),
+      paymentMethod: str(r.paymentMethod),
+      ticket: str(r.ticket),
+      ticketPrice: rupiah(r.ticketPrice),
+      paidAt: Number.isFinite(paidMs) ? new Date(paidMs).toISOString() : null,
+    });
   }
-  return toKuyRows(input);
+  return toKuyRows(list);
 }
 
 async function previewRows(sessionId: string | null, fileName: string, fileSize: number, eventTitle: string, parsedRows: KuyRow[]): Promise<PreviewResult> {
@@ -244,6 +273,12 @@ async function importRows(userId: string, sessionId: string, parsedRows: KuyRow[
   // Belum member → ghost member: pakai yang sudah ada (aktivitas sebelumnya) atau buat baru.
   const guests = rows.filter((r) => !members.get(r.regNo));
   const ghostOf = new Map<string, string>();
+  // Ghost baru dari impor ini — dihapus lagi bila impor gagal di tengah (tidak ada ghost yatim tanpa activity).
+  const createdGhosts: string[] = [];
+  const fail = async (error: string): Promise<ActionResult> => {
+    await Promise.all(createdGhosts.map((id) => dropUnusedGhost(supabase, id)));
+    return { ok: false, error };
+  };
   if (guests.length) {
     const known = await findGhosts(supabase, guests);
     const own = ownKuyIds(rows);
@@ -271,7 +306,8 @@ async function importRows(userId: string, sessionId: string, parsedRows: KuyRow[
       let { data: created, error: ghostError } = await supabase.from("ghost_members").insert(ghostRow).select("id").single();
       // Kuy ID sudah dipakai ghost yang telah diklaim member lain → simpan tanpa Kuy ID.
       if (ghostError?.code === "23505") ({ data: created, error: ghostError } = await supabase.from("ghost_members").insert({ ...ghostRow, kuy_id: null }).select("id").single());
-      if (ghostError || !created) return { ok: false, error: `Gagal mencatat peserta ${r.name}: ${ghostError?.message ?? "coba lagi"}` };
+      if (ghostError || !created) return fail(`Gagal mencatat peserta ${r.name}: ${ghostError?.message ?? "coba lagi"}`);
+      createdGhosts.push(created.id as string);
       ghostOf.set(r.regNo, created.id as string);
       // Baris berikutnya di file yang sama orangnya (nomor registrasi sama, atau kontak miliknya
       // sendiri sama) memakai ghost ini juga — tiket tamu dengan kontak pembeli tidak.
@@ -305,7 +341,7 @@ async function importRows(userId: string, sessionId: string, parsedRows: KuyRow[
     })),
     { onConflict: "session_id,kuy_reg_no" },
   );
-  if (error) return { ok: false, error: `Gagal mengimpor: ${error.message}` };
+  if (error) return fail(`Gagal mengimpor: ${error.message}`);
 
   // ID Soslay ↔ Kuy ID: member yang cocok lewat email/telepon tapi belum punya Kuy ID di profilnya
   // → username Kuyy miliknya sendiri (bukan pembeli tiket) disambungkan ke profil Soslay-nya.

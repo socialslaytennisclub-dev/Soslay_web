@@ -4,7 +4,7 @@ Admin cukup chat ke Claude: kirim link event Kuyy + file export peserta (.xlsx).
 menunjukkan preview, lalu membuat activity + peserta di Slay Club. Aturannya sama persis dengan
 **Activities → Import dari Kuyy** di admin.
 
-Endpoint: `https://slayclub.id/api/mcp` (MCP Streamable HTTP, tanpa sesi).
+Endpoint: `https://www.slayclub.id/api/mcp` (MCP Streamable HTTP, tanpa sesi).
 Kode: `web/src/app/api/mcp/route.ts`, `web/src/server/mcp/*`.
 
 ## Alat (tools)
@@ -46,7 +46,7 @@ izin role akun itu — akun itu wajib punya izin **edit Activities**. Kosongkan 
 claude.ai (atau aplikasi Claude desktop) → **Settings → Connectors → Add custom connector**:
 
 - Name: `Slay Club`
-- URL: `https://slayclub.id/api/mcp?key=<MCP_TOKEN>`
+- URL: `https://www.slayclub.id/api/mcp?key=<MCP_TOKEN>`
 
 Connector yang dipasang di claude.ai ikut muncul di aplikasi desktop dengan akun yang sama.
 
@@ -69,4 +69,10 @@ tempel teks halaman event ke chat.
 
 - Kunci salah → ditolak (401). Kunci dibandingkan waktu-konstan; minimal 24 karakter.
 - Ganti kunci: buat baru (langkah 1), ganti di Vercel + di URL connector, Redeploy.
-- Kunci ada di URL connector → jangan screenshot / bagikan URL itu.
+- Kunci ada di URL connector (custom connector Claude tidak bisa mengirim header sendiri) → kunci ikut
+  tercatat di log request Vercel. Batasi siapa yang bisa melihat log Vercel, jangan screenshot / bagikan URL
+  itu, dan ganti kunci bila ada yang tidak berhak melihatnya. Klien yang bisa mengirim header (mis. Claude Code)
+  sebaiknya memakai `Authorization: Bearer <MCP_TOKEN>` dengan URL tanpa `?key=`.
+- Sebaiknya `MCP_ACTOR_EMAIL` = akun tim khusus untuk Claude (role dengan izin edit Activities saja), bukan
+  akun pribadi Super Admin — sesi login & Log aktivitasnya jadi terpisah, dan kunci yang bocor hanya bisa
+  menyentuh Activities.

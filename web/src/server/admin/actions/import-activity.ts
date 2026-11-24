@@ -3,7 +3,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { DEFAULT_PLAY } from "../play-repo";
 import { attendancePointDefaults } from "../points-repo";
-import { requireEditor, type ActionResult } from "./common";
+import { audit, PUBLIC_SESSION_PATHS, refreshPaths, requireEditor, type ActionResult } from "./common";
 import type { KuyRowInput } from "../kuy-import";
 import { importKuyParticipants, importKuyRows } from "./play";
 import { saveSession } from "./sessions";
@@ -75,6 +75,8 @@ async function createWithParticipants(input: ImportActivityInput, importParticip
   if (!imported.ok) {
     const supabase = await createSupabaseServerClient();
     await supabase.from("sessions").delete().eq("id", saved.id);
+    await audit(auth.userId, `membatalkan import activity ${input.title} (peserta gagal diimpor)`, "session", saved.id);
+    refreshPaths(...PUBLIC_SESSION_PATHS);
     return { ok: false, error: `Activity tidak jadi dibuat — ${imported.error}` };
   }
   return { ok: true, message: `Activity dibuat · ${imported.message}`, id: saved.id };

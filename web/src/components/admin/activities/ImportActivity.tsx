@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { formatRupiahPlain } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
 import { dateFromFileName, kuyBookmarklet, matchVenue, readKuyEventHash, typeFromTitle, usualPrice, venueFromTitle, wibParts, type KuyEvent } from "@/lib/kuy-activity";
@@ -28,11 +28,6 @@ type Fields = Omit<ImportActivityInput, "price" | "capacity"> & { price: string;
 
 const EMPTY: Fields = { title: "", typeSlug: "weekly-mabar", description: "", venueName: "", date: "", start: "", end: "", price: "", capacity: "", kuyUrl: "", status: "published" };
 const DESCRIPTION_MAX = 500;
-
-const noopSubscribe = () => () => {};
-// Hash dibaca sekali saat halaman dibuka (lalu dihapus dari URL) — disimpan supaya render berikutnya tetap dapat.
-let openedHash: string | null = null;
-const readHash = () => (openedHash ??= window.location.hash);
 
 /** Isian dari data event Kuyy (menimpa tebakan dari file); kapasitas minimal jumlah peserta di file. */
 function eventFields(ev: KuyEvent, venues: string[], participants: number): Partial<Fields> {
@@ -68,12 +63,16 @@ export function ImportActivity({ types, venues }: { types: { slug: string; label
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [fields, setFields] = useState<Fields>(EMPTY);
   const [guessedVenue, setGuessedVenue] = useState(false);
-  const hash = useSyncExternalStore(noopSubscribe, readHash, () => "");
-  const kuyEvent = hash ? readKuyEventHash(hash) : null;
+  // Data event dari bookmark (#kuy=…) milik kunjungan ini saja — dibaca saat halaman dipasang, bukan disimpan
+  // di modul (kunjungan berikutnya lewat navigasi biasa tidak boleh memakai event lama).
+  const [kuyEvent, setKuyEvent] = useState<KuyEvent | null>(null);
   const bookmarkRef = useRef<HTMLAnchorElement>(null);
   useEffect(() => {
+    const event = readKuyEventHash(window.location.hash);
     // Data event sudah terbaca → hapus dari URL (refresh / bagikan link tidak membawa data lama).
     if (window.location.hash) history.replaceState(null, "", window.location.pathname + window.location.search);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hash URL hanya ada di browser, dibaca sekali saat dipasang
+    if (event) setKuyEvent(event);
     // React menolak href "javascript:" → tombol bookmark dipasang langsung ke elemennya.
     bookmarkRef.current?.setAttribute("href", kuyBookmarklet(window.location.origin));
   }, []);

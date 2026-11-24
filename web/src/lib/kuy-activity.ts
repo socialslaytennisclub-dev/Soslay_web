@@ -12,24 +12,31 @@ export function dateFromFileName(name: string): string {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === iso ? iso : "";
 }
 
-/** Kata umum di nama venue ("Tennis Court", "Club") tidak dipakai untuk mencocokkan. */
-const GENERIC = new Set(["the", "tennis", "court", "courts", "club", "lapangan", "di", "and"]);
+/** Kata umum di nama venue ("Tennis Court", "Hotel", nama kota) tidak dipakai untuk mencocokkan. */
+const GENERIC = new Set([
+  ...["the", "and", "di", "of", "tennis", "court", "courts", "club", "lapangan", "hotel", "resort", "sport", "sports", "center", "centre", "arena", "indoor", "outdoor"],
+  ...["jakarta", "jkt", "bali", "tangerang", "bandung", "surabaya", "jogja", "yogyakarta", "bekasi", "depok", "bogor"],
+]);
 const words = (s: string) =>
   s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter((w) => w.length > 1 && !GENERIC.has(w));
 
 /**
- * Venue yang paling banyak berbagi kata khas dengan `text` — minimal separuh kata dari yang lebih pendek
- * ("The Raquette Temple (TRT) Sunter" ↔ "Racquette Temple Sunter"). null = tidak ada yang cukup mirip.
+ * Venue yang cocok dengan nama dari Kuyy: semua kata khas venue ada di teks ("Vale Racquet Club" ↔ "Vale Court"),
+ * atau minimal 2 kata khas sama & mencakup separuh nama venue ("The Raquette Temple (TRT) Sunter" ↔
+ * "Racquette Temple Sunter"). Satu kata yang kebetulan sama ("Rana Grounds" ↔ "Common Grounds Menteng")
+ * tidak cukup. null = tidak ada yang cukup mirip — admin memilih sendiri.
  */
 export function matchVenue(text: string, venues: string[]): string | null {
   const want = new Set(words(text));
   if (!want.size) return null;
-  let best: { name: string; score: number } | null = null;
+  let best: { name: string; shared: number; cover: number } | null = null;
   for (const name of venues) {
-    const own = words(name);
+    const own = [...new Set(words(name))];
     if (!own.length) continue;
-    const score = own.filter((w) => want.has(w)).length / Math.min(own.length, want.size);
-    if (score >= 0.5 && (!best || score > best.score)) best = { name, score };
+    const shared = own.filter((w) => want.has(w)).length;
+    const cover = shared / own.length;
+    const ok = shared === own.length || (shared >= 2 && cover >= 0.5);
+    if (ok && (!best || cover > best.cover || (cover === best.cover && shared > best.shared))) best = { name, shared, cover };
   }
   return best?.name ?? null;
 }
