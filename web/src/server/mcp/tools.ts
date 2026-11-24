@@ -45,12 +45,16 @@ const activityInput = z.object({
   start: z.string().regex(/^\d{2}:\d{2}$/).describe("Jam mulai WIB, HH:MM"),
   end: z.string().regex(/^\d{2}:\d{2}$/).describe("Jam selesai WIB, HH:MM"),
   price: z.number().int().min(0).describe("Harga tiket per orang (Rupiah)"),
-  capacity: z.number().int().min(1).optional().describe("Kuota peserta; kosong = jumlah peserta yang ikut"),
+  capacity: z.number().int().min(1).optional().describe("Kuota peserta; kosong = jumlah peserta yang ikut (wajib diisi bila belum ada peserta)"),
   description: z.string().max(500).optional().describe("Deskripsi event, maks. 500 karakter (ringkas bila lebih panjang)"),
   kuy_url: z.string().optional().describe("Link event Kuyy"),
   status: z.enum(["published", "draft"]).optional().describe("Default published"),
   cover_url: z.string().optional().describe(`${COVER_URL_HINT}. Dipakai sebagai foto cover activity; kosong = foto venue`),
-  participants: z.array(participant).min(1).max(500).describe("Semua baris peserta dari file export Kuyy (.xlsx)"),
+  participants: z
+    .array(participant)
+    .max(500)
+    .default([])
+    .describe("Semua baris peserta dari file export Kuyy (.xlsx); kosong / tidak diisi = event belum ada pendaftar → activity dibuat tanpa peserta"),
 });
 
 type ActivityArgs = z.infer<typeof activityInput>;
@@ -83,6 +87,7 @@ async function resolveVenue(name: string): Promise<string | { error: string }> {
 }
 
 async function toInput(args: ActivityArgs): Promise<{ input: ImportActivityInput; rows: KuyRowInput[]; venueNote: string } | { error: string }> {
+  if (!args.participants.length && !args.capacity) return { error: "Belum ada peserta — isi kuota (capacity) dari halaman Kuyy." };
   const venue = await resolveVenue(args.venue);
   if (typeof venue !== "string") return venue;
   const rows = args.participants.map(toRowInput);
@@ -126,9 +131,10 @@ export const TOOLS = [
     run: async (args: ActivityArgs): Promise<ToolResult> => {
       const prepared = await toInput(args);
       if ("error" in prepared) return text(prepared.error, true);
-      const res = await previewKuyRows(null, prepared.input.title, prepared.rows);
-      if (!res.ok) return text(res.error, true);
-      const rows = res.preview.rows;
+      // Tanpa peserta → tidak ada yang dicocokkan; cek akses tetap lewat previewKuyRows bila ada baris.
+      const res = prepared.rows.length ? await previewKuyRows(null, prepared.input.title, prepared.rows) : null;
+      if (res && !res.ok) return text(res.error, true);
+      const rows = res?.ok ? res.preview.rows : [];
       const line = (r: (typeof rows)[number]) =>
         `- ${r.member?.name ?? r.name}: ${r.skipReason ? `DILEWATI (${r.skipReason})` : r.member ? `member ${r.member.code} (cocok via ${r.member.by})` : r.ghost ? `belum daftar, ghost lama (${r.ghost.activities} aktivitas)` : "belum daftar, ghost baru"}`;
       const { input } = prepared;
@@ -137,7 +143,7 @@ export const TOOLS = [
           `Activity: ${input.title}`,
           `Venue: ${prepared.venueNote} · ${input.date} ${input.start}–${input.end} WIB · Rp${input.price.toLocaleString("id-ID")} · kapasitas ${input.capacity} · ${input.status}`,
           `Foto cover: ${!args.cover_url?.trim() ? "tidak ada (pakai foto venue)" : (kuyCoverUrlError(args.cover_url) ?? "dari Kuyy (diunduh & di-upload saat import)")}`,
-          `Peserta: ${rows.filter((r) => r.member && !r.skipReason).length} member, ${rows.filter((r) => !r.member && !r.skipReason).length} belum daftar, ${rows.filter((r) => r.skipReason).length} dilewati`,
+          !rows.length ? "Peserta: belum ada — activity dibuat tanpa peserta (tambahkan nanti lewat import XLSX di activity itu)" : `Peserta: ${rows.filter((r) => r.member && !r.skipReason).length} member, ${rows.filter((r) => !r.member && !r.skipReason).length} belum daftar, ${rows.filter((r) => r.skipReason).length} dilewati`,
           ...rows.map(line),
           "",
           "Belum disimpan. Panggil import_activity dengan data yang sama untuk membuat activity.",
@@ -189,7 +195,8 @@ export const TOOLS = [
   },
 ] as const;
 
-export const toolList = () => TOOLS.map((t) => ({ name: t.name, description: t.description, inputSchema: z.toJSONSchema(t.schema) }));
+// io "input": field ber-default (participants) tidak ditandai wajib untuk Claude.
+export const toolList = () => TOOLS.map((t) => ({ name: t.name, description: t.description, inputSchema: z.toJSONSchema(t.schema, { io: "input" }) }));
 
 export async function callTool(name: string, rawArgs: unknown): Promise<ToolResult> {
   const tool = TOOLS.find((t) => t.name === name);
