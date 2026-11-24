@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 
 const PROTOCOL = "2025-06-18";
 const INSTRUCTIONS =
-  "Slay Club: import activity dari event Kuyy. Alur: (1) baca halaman event Kuyy (judul, tanggal, jam, venue, harga, kuota, deskripsi, link gambar event dari og:image untuk cover_url) dan file export peserta Kuyy (.xlsx) dari admin; (2) panggil preview_activity_import dan tunjukkan ringkasannya; (3) setelah admin setuju, panggil import_activity dengan data yang sama. Event yang belum ada pendaftarnya → participants kosong dan isi capacity (activity dibuat tanpa peserta). Activity yang sudah ada belum punya cover → set_activity_cover. Jam & tanggal dalam WIB. Jangan menebak data yang tidak ada — tanyakan ke admin.";
+  "Slay Club: import activity dari event Kuyy. Alur: (1) baca halaman event Kuyy (judul, tanggal, jam, venue, harga, kuota, deskripsi, link gambar event dari og:image untuk cover_url) dan file export peserta Kuyy (.xlsx) dari admin; (2) panggil preview_activity_import dan tunjukkan ringkasannya; (3) setelah admin setuju, panggil import_activity dengan data yang sama. Event yang belum ada pendaftarnya → participants kosong dan isi capacity (activity dibuat tanpa peserta). Activity yang sudah ada belum punya cover → set_activity_cover. Event yang sudah lewat lalu baru diimpor: admin biasanya memakai points 0 (tanpa Slay Point) — tanyakan bila belum jelas. Jam & tanggal dalam WIB. Jangan menebak data yang tidak ada — tanyakan ke admin.";
 
 type RpcRequest = { jsonrpc?: string; id?: string | number | null; method?: string; params?: Record<string, unknown> };
 

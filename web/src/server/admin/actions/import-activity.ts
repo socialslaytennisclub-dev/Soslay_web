@@ -32,6 +32,8 @@ export type ImportActivityInput = {
   status: "published" | "draft";
   /** URL hasil upload cover (mis. foto event Kuyy lewat MCP); kosong → foto venue. */
   coverPath?: string | null;
+  /** Slay Point per kehadiran; kosong → default tipe activity. 0 = tanpa poin (mis. event lama yang baru diimpor). */
+  points?: number;
 };
 
 export async function importActivity(input: ImportActivityInput, formData: FormData): Promise<ActionResult & { id?: string }> {
@@ -53,7 +55,8 @@ async function createWithParticipants(input: ImportActivityInput, importParticip
   const auth = await requireEditor("activities");
   if ("error" in auth) return { ok: false, error: auth.error };
 
-  const points = (await attendancePointDefaults())[input.typeSlug] ?? 50;
+  // Diset sebelum peserta diimpor: activity lampau langsung menandai hadir, dan trigger poin membaca nilai ini.
+  const points = input.points ?? (await attendancePointDefaults())[input.typeSlug] ?? 50;
   const { matchFormat, courtCount, roundCount, targetPoints, leaderboardMode, showLeaderboard, podiumBonus } = DEFAULT_PLAY;
   const saved = await saveSession(
     {
