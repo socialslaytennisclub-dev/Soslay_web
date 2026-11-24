@@ -1,9 +1,9 @@
 import Image from "next/image";
 import Link from "next/link";
-import type { CSSProperties } from "react";
-import { formatRupiahPlain, formatRupiahShort, formatShortDate, LEVEL_LABEL, TIER_LABEL } from "@/lib/admin-labels";
+import type { CSSProperties, ReactNode } from "react";
+import { formatRupiahPlain, formatRupiahShort, formatShortDate, LEVEL_LABEL, SPEND_KIND_LABEL, TIER_LABEL } from "@/lib/admin-labels";
 import { cx } from "@/lib/cx";
-import type { OverviewData } from "@/server/admin/types";
+import type { OverviewData, TopSpenders as TopSpendersData } from "@/server/admin/types";
 import { StatusBadge } from "../activities/ActivityCells";
 import { AdminIcon, type AdminIconName } from "../ui/AdminIcon";
 import {
@@ -23,13 +23,14 @@ import styles from "./Overview.module.css";
 
 const num = (n: number) => n.toLocaleString("id-ID");
 
-function PersonCell({ name, meta }: { name: string; meta: string }) {
+function PersonCell({ name, meta, avatarSize = 40, children }: { name: string; meta: string; avatarSize?: number; children?: ReactNode }) {
   return (
     <span className={styles.person}>
-      <MemberAvatar name={name} size={40} />
+      <MemberAvatar name={name} size={avatarSize} />
       <span className={styles.personText}>
         <span className={styles.personName}>{name}</span>
         <span className={styles.personMeta}>{meta}</span>
+        {children}
       </span>
     </span>
   );
@@ -347,6 +348,52 @@ export function TopProducts({ data, monthLabel }: { data: OverviewData; monthLab
           </li>
         ))}
       </ol>
+    </Card>
+  );
+}
+
+// ── Member spent terbanyak ──────────────────────────────────────────────────
+/** Rincian per jenis (nominal persis), hanya jenis yang ada nominalnya. */
+function spendBreakdown(m: TopSpendersData["members"][number]) {
+  const parts: [string, number][] = [
+    [SPEND_KIND_LABEL.activity, m.activities],
+    [SPEND_KIND_LABEL.trip, m.trips],
+    [SPEND_KIND_LABEL.shop, m.shop],
+  ];
+  return parts
+    .filter(([, amount]) => amount > 0)
+    .map(([label, amount]) => `${label} ${formatRupiahPlain(amount)}`)
+    .join(" · ");
+}
+
+export function TopSpenders({ data }: { data: TopSpendersData }) {
+  return (
+    <Card
+      title="Member spent terbanyak"
+      subtitle={
+        data.incomplete
+          ? "Data pembayaran gagal dimuat — muat ulang halaman"
+          : `${num(data.spenders)} member pernah bayar · activity, trip & shop lunas`
+      }
+      action={<CardLink href="/admin/members">Semua</CardLink>}
+    >
+      {data.members.length === 0 ? (
+        <p className={styles.empty}>Belum ada member yang membayar.</p>
+      ) : (
+        <ol className={styles.products}>
+          {data.members.map((m, i) => (
+            <li key={m.id}>
+              <span className={styles.rank}>{i + 1}</span>
+              <Link href={`/admin/members/${m.id}`} className={cx(styles.productText, styles.spenderLink)}>
+                <PersonCell name={m.fullName} meta={m.memberCode} avatarSize={36}>
+                  <span className={styles.spendSplit}>{spendBreakdown(m)}</span>
+                </PersonCell>
+              </Link>
+              <span className={styles.strong}>{formatRupiahPlain(m.total)}</span>
+            </li>
+          ))}
+        </ol>
+      )}
     </Card>
   );
 }

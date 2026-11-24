@@ -33,6 +33,8 @@ export const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = {
   no_show: "No-show",
 };
 
+/** Jenis pengeluaran member (Total spent & Member spent terbanyak). */
+export const SPEND_KIND_LABEL = { activity: "Activity", trip: "Trip", shop: "Shop" } as const;
 export const PAYMENT_LABEL: Record<PaymentStatus, string> = { pending: "Menunggu", paid: "Lunas", failed: "Gagal", refunded: "Refund" };
 
 export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {

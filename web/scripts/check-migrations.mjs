@@ -2910,3 +2910,89 @@ console.log(`✓ uji perilaku: member_code ${code}, poin & tier otomatis, protek
   console.assert((await stockNow()) === s1 + n0 - 1, `stok setelah ganti pesanan ${await stockNow()} vs ${s1 + n0 - 1}`);
   console.log("✓ Order Now: order atas nama akun baru hanya lewat service role, wrapper member tetap sama, uji pesanan tanpa menyimpan, belum verifikasi 1 jam → batal & stok kembali, kirim ulang mengganti pesanan lama");
 }
+
+// Total spent member (member_spend / member_spend_top): activity = nominal terbesar peserta vs booking per sesi
+// (tidak dobel), belum bayar / batal / activity batal tidak dihitung, trip lewat trip_payment_target, shop order lunas.
+// Kasir Shop (Members tanpa Activities) tetap melihat angka utuh; tanpa izin Members → kosong.
+{
+  await as(null);
+  const venueId = (await one(`select id from venues limit 1`)).id;
+  const mkSession = async (slug, status = "published") => (await one(
+    `insert into sessions (slug, title, type_slug, venue_id, starts_at, ends_at, capacity, status, points_per_attendance)
+     values ($1, $1, 'weekly-mabar', $2, now() + interval '5 days', now() + interval '5 days 2 hours', 16, $3, 10) returning id`,
+    [slug, venueId, status],
+  )).id;
+  const mkUser = async (name) => {
+    const id = (await one(`insert into auth.users default values returning id`)).id;
+    await db.query(`insert into profiles (id, full_name, email) values ($1, $2, $3)`, [id, name, `${name.replace(/\W/g, "")}@spend.test`]);
+    return id;
+  };
+  const big = await mkUser("Spend Besar");
+  const small = await mkUser("Spend Kecil");
+  const [kuy, web, cancelledBooking, unpaid, cancelledSession] = await Promise.all([
+    mkSession("spend-kuy"), mkSession("spend-web"), mkSession("spend-cb"), mkSession("spend-up"), mkSession("spend-cs"),
+  ]);
+  // Impor Kuyy lunas 150rb → trigger membuat booking 'kuy' bernominal sama: dihitung sekali.
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, member_id, amount) values ($1, 'Spend Besar', 'U1', 'spendbesar', $2, 150000)`, [kuy, big]);
+  await db.query(`insert into bookings (session_id, member_id, status, payment_status, source, amount) values ($1, $2, 'registered', 'paid', 'website', 100000)`, [web, big]);
+  await db.query(`insert into bookings (session_id, member_id, status, payment_status, source, amount) values ($1, $2, 'cancelled', 'paid', 'website', 90000)`, [cancelledBooking, big]);
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, member_id, amount, payment_status) values ($1, 'Spend Besar', 'U2', 'spendbesar', $2, 80000, 'pending')`, [unpaid, big]);
+  await db.query(`insert into session_participants (session_id, full_name, kuy_reg_no, kuy_username, member_id, amount) values ($1, 'Spend Besar', 'U3', 'spendbesar', $2, 70000)`, [cancelledSession, big]);
+  await db.query(`update sessions set status = 'cancelled' where id = $1`, [cancelledSession]);
+  // Trip: DP 1jt dihitung, cicilan yang dibatalkan (voided) tidak.
+  const trip = (await one(`insert into trips (slug, title, starts_on, ends_on, status, price_normal, package_quota) values ('spend-trip', 'Spend Trip', current_date + 20, current_date + 21, 'published', 2000000, 4) returning id`)).id;
+  const tb = (await one(`insert into trip_bookings (trip_id, member_id, full_name) values ($1, $2, 'Spend Besar') returning id`, [trip, big])).id;
+  const bank = (await one(`select id from finance_accounts where system_key = 'bank_main'`)).id;
+  await db.query(`insert into trip_payments (booking_id, kind, amount, received_on, account_id) values ($1, 'dp', 1000000, current_date, $2)`, [tb, bank]);
+  await db.query(`insert into trip_payments (booking_id, kind, amount, received_on, account_id, voided_at) values ($1, 'installment', 500000, current_date, $2, now())`, [tb, bank]);
+  // Shop: lunas dihitung, belum bayar tidak.
+  const shopOrder = (member, total, pay) => db.query(
+    `insert into orders (member_id, subtotal, total, recipient_name, recipient_phone, shipping_address, payment_status) values ($1, $2, $2, 'x', '81200000000', 'Jl. Uji', $3)`,
+    [member, total, pay],
+  );
+  await shopOrder(big, 220000, "paid");
+  await shopOrder(big, 999000, "pending");
+  await shopOrder(small, 70000, "paid");
+
+  const staff = async (role) => {
+    const id = (await one(`insert into auth.users default values returning id`)).id;
+    await db.query(`insert into staff_members (user_id, role_id, full_name, email, status) select $1, id, $2, $3, 'active' from roles where name = $2`, [id, role, `${role.replace(/\W/g, "")}@spend.test`]);
+    return id;
+  };
+  const kasir = await staff("Kasir Shop");
+  const foto = await staff("Fotografer");
+
+  await as(kasir);
+  const top = (await db.query(`select * from member_spend_top(100000)`)).rows;
+  const rowOf = (id) => top.find((r) => r.member_id === id);
+  const b = rowOf(big);
+  console.assert(
+    b && Number(b.activities) === 250000 && Number(b.trips) === 1000000 && Number(b.shop) === 220000 && Number(b.total) === 1470000,
+    `member_spend_top besar ${JSON.stringify(b)}`,
+  );
+  console.assert(Number(rowOf(small)?.total) === 70000, `member_spend_top kecil ${JSON.stringify(rowOf(small))}`);
+  console.assert(top.findIndex((r) => r.member_id === big) < top.findIndex((r) => r.member_id === small), "urutan total spent");
+  console.assert(top.every((r, i) => i === 0 || Number(top[i - 1].total) >= Number(r.total)) && top[0].spenders === top.length, "urutan & jumlah spenders");
+  const items = (await db.query(`select * from member_spend($1)`, [big])).rows;
+  console.assert(items.length === 4 && items.reduce((n, i) => n + Number(i.amount), 0) === 1470000, `member_spend rincian ${JSON.stringify(items)}`);
+  console.assert(items.find((i) => i.kind === "trip")?.payment_kind === "dp" && items.find((i) => i.kind === "trip")?.title === "Spend Trip", "rincian trip");
+  console.assert((await db.query(`select * from member_spend_top(2)`)).rows.length === 2, "limit peringkat");
+
+  await as(foto);
+  console.assert((await db.query(`select * from member_spend_top(10)`)).rows.length === 0, "tanpa izin Members melihat peringkat");
+  console.assert((await db.query(`select * from member_spend($1)`, [big])).rows.length === 0, "tanpa izin Members melihat rincian");
+  await as(big);
+  console.assert((await db.query(`select * from member_spend($1)`, [big])).rows.length === 0, "member biasa melihat rincian");
+
+  await db.exec(`set role authenticated`);
+  let denied = null;
+  try {
+    await db.query(`select * from member_spend_items()`);
+  } catch (e) {
+    denied = e.message;
+  }
+  await db.exec(`reset role`);
+  await as(null);
+  console.assert(/permission denied/i.test(denied ?? ""), `member_spend_items terbuka untuk authenticated: ${denied}`);
+  console.log("✓ Total spent: activity tidak dobel (Kuyy vs booking), belum bayar/batal tidak dihitung, trip voided tidak, Kasir Shop melihat angka utuh, tanpa izin Members kosong");
+}
