@@ -4,6 +4,7 @@ import { activityTypes } from "@/content/activity";
 import { matchVenue } from "@/lib/kuy-activity";
 import { PUBLIC_SITE_URL } from "@/lib/wa-invite";
 import { importActivityRows, type ImportActivityInput } from "@/server/admin/actions/import-activity";
+import { discardSessionCover, kuyCoverUrlError, setSessionCoverFromKuy, uploadKuyCover } from "@/server/admin/kuy-cover";
 import { previewKuyRows } from "@/server/admin/actions/play";
 import { toKuyRows, type KuyRowInput } from "@/server/admin/kuy-import";
 import { venueOptions } from "@/server/admin/sessions-repo";
@@ -12,7 +13,11 @@ import { venueOptions } from "@/server/admin/sessions-repo";
  * Alat MCP Slay Club untuk Claude: lihat venue, preview, lalu import activity dari event Kuyy.
  * Claude membaca halaman event Kuyy & file peserta (.xlsx) sendiri, lalu mengirim isinya ke sini — aturan
  * impor sama persis dengan form Activities → Import dari Kuyy (lihat import-activity.ts).
+ * Foto cover: Claude mengirim link gambar event dari halaman Kuyy, server mengunduh & meng-upload-nya (kuy-cover.ts).
  */
+
+const COVER_URL_HINT =
+  'Link gambar event dari halaman Kuyy (static.kuyy.app) — ambil dari <meta property="og:image"> (versi tanpa akhiran "_640" = resolusi penuh)';
 
 const TYPE_SLUGS = activityTypes.map((t) => t.slug) as [string, ...string[]];
 
@@ -44,6 +49,7 @@ const activityInput = z.object({
   description: z.string().max(500).optional().describe("Deskripsi event, maks. 500 karakter (ringkas bila lebih panjang)"),
   kuy_url: z.string().optional().describe("Link event Kuyy"),
   status: z.enum(["published", "draft"]).optional().describe("Default published"),
+  cover_url: z.string().optional().describe(`${COVER_URL_HINT}. Dipakai sebagai foto cover activity; kosong = foto venue`),
   participants: z.array(participant).min(1).max(500).describe("Semua baris peserta dari file export Kuyy (.xlsx)"),
 });
 
@@ -130,6 +136,7 @@ export const TOOLS = [
         [
           `Activity: ${input.title}`,
           `Venue: ${prepared.venueNote} · ${input.date} ${input.start}–${input.end} WIB · Rp${input.price.toLocaleString("id-ID")} · kapasitas ${input.capacity} · ${input.status}`,
+          `Foto cover: ${!args.cover_url?.trim() ? "tidak ada (pakai foto venue)" : (kuyCoverUrlError(args.cover_url) ?? "dari Kuyy (diunduh & di-upload saat import)")}`,
           `Peserta: ${rows.filter((r) => r.member && !r.skipReason).length} member, ${rows.filter((r) => !r.member && !r.skipReason).length} belum daftar, ${rows.filter((r) => r.skipReason).length} dilewati`,
           ...rows.map(line),
           "",
@@ -146,9 +153,38 @@ export const TOOLS = [
     run: async (args: ActivityArgs): Promise<ToolResult> => {
       const prepared = await toInput(args);
       if ("error" in prepared) return text(prepared.error, true);
-      const res = await importActivityRows(prepared.input, prepared.rows);
+      // Foto cover diunduh dulu; gagal → activity tetap dibuat tanpa cover (bisa dipasang lagi lewat set_activity_cover).
+      const cover = args.cover_url?.trim() ? await uploadKuyCover(args.cover_url) : null;
+      const coverPath = cover?.ok ? cover.url : null;
+      // Import gagal (hasil gagal ATAU exception) → cover yang sudah di-upload dibuang lagi.
+      let res: Awaited<ReturnType<typeof importActivityRows>>;
+      try {
+        res = await importActivityRows({ ...prepared.input, coverPath }, prepared.rows);
+      } catch (e) {
+        await discardSessionCover(coverPath);
+        throw e;
+      }
+      if (!res.ok) {
+        await discardSessionCover(coverPath);
+        return text(res.error, true);
+      }
+      const coverNote = !cover ? "Foto cover: tidak ada (pakai foto venue)" : cover.ok ? "Foto cover: dipasang dari Kuyy" : `Foto cover GAGAL: ${cover.error} — activity tetap dibuat; coba lagi dengan set_activity_cover`;
+      return text(`${res.message}\nVenue: ${prepared.venueNote}\n${coverNote}\nBuka di admin: ${PUBLIC_SITE_URL}/admin/activities/${res.id}`);
+    },
+  },
+  {
+    name: "set_activity_cover",
+    description: "Pasang / ganti foto cover activity yang sudah ada di Slay Club dengan gambar event Kuyy (server mengunduh lalu meng-upload ke storage Slay Club).",
+    schema: z.object({
+      activity: z.string().min(1).describe("ID activity Slay Club, atau link admin-nya (…/admin/activities/<id>)"),
+      cover_url: z.string().min(1).describe(COVER_URL_HINT),
+    }),
+    run: async (args: { activity: string; cover_url: string }): Promise<ToolResult> => {
+      const id = args.activity.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)?.[0];
+      if (!id) return text("ID activity tidak dikenali — kirim ID atau link admin activity-nya.", true);
+      const res = await setSessionCoverFromKuy(id, args.cover_url);
       if (!res.ok) return text(res.error, true);
-      return text(`${res.message}\nVenue: ${prepared.venueNote}\nBuka di admin: ${PUBLIC_SITE_URL}/admin/activities/${res.id}`);
+      return text(`Foto cover dipasang di "${res.title}".\nBuka di admin: ${PUBLIC_SITE_URL}/admin/activities/${id}`);
     },
   },
 ] as const;
