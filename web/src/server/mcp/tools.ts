@@ -49,11 +49,10 @@ const activityInput = z.object({
   description: z.string().max(500).optional().describe("Deskripsi event, maks. 500 karakter (ringkas bila lebih panjang)"),
   kuy_url: z.string().optional().describe("Link event Kuyy"),
   status: z.enum(["published", "draft"]).optional().describe("Default published"),
+  // Sesi Claude dengan daftar tool lama mengirim parameter baru sebagai teks ("0") → diubah ke angka.
+  // Teks kosong / bukan angka tetap ditolak (tidak diam-diam jadi 0 poin).
   points: z
-    .number()
-    .int()
-    .min(0)
-    .max(10_000)
+    .preprocess((v) => (typeof v === "string" && v.trim() !== "" ? Number(v) : v), z.number().int().min(0).max(10_000))
     .optional()
     .describe("Slay Point per kehadiran; kosong = default tipe activity. 0 = peserta tidak dapat poin (mis. event yang sudah lewat lalu baru diimpor)"),
   cover_url: z.string().optional().describe(`${COVER_URL_HINT}. Dipakai sebagai foto cover activity; kosong = foto venue`),
