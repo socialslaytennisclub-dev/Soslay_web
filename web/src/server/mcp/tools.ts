@@ -4,11 +4,10 @@ import { activityTypes } from "@/content/activity";
 import { matchVenue } from "@/lib/kuy-activity";
 import { PUBLIC_SITE_URL } from "@/lib/wa-invite";
 import { importActivityRows, type ImportActivityInput } from "@/server/admin/actions/import-activity";
-import { kuyCoverUrlError, SESSION_COVER_BUCKET, setSessionCoverFromKuy, uploadKuyCover } from "@/server/admin/kuy-cover";
+import { discardSessionCover, kuyCoverUrlError, setSessionCoverFromKuy, uploadKuyCover } from "@/server/admin/kuy-cover";
 import { previewKuyRows } from "@/server/admin/actions/play";
 import { toKuyRows, type KuyRowInput } from "@/server/admin/kuy-import";
 import { venueOptions } from "@/server/admin/sessions-repo";
-import { discardUploads } from "@/server/storage";
 
 /**
  * Alat MCP Slay Club untuk Claude: lihat venue, preview, lalu import activity dari event Kuyy.
@@ -157,9 +156,16 @@ export const TOOLS = [
       // Foto cover diunduh dulu; gagal → activity tetap dibuat tanpa cover (bisa dipasang lagi lewat set_activity_cover).
       const cover = args.cover_url?.trim() ? await uploadKuyCover(args.cover_url) : null;
       const coverPath = cover?.ok ? cover.url : null;
-      const res = await importActivityRows({ ...prepared.input, coverPath }, prepared.rows);
+      // Import gagal (hasil gagal ATAU exception) → cover yang sudah di-upload dibuang lagi.
+      let res: Awaited<ReturnType<typeof importActivityRows>>;
+      try {
+        res = await importActivityRows({ ...prepared.input, coverPath }, prepared.rows);
+      } catch (e) {
+        await discardSessionCover(coverPath);
+        throw e;
+      }
       if (!res.ok) {
-        if (coverPath) await discardUploads(SESSION_COVER_BUCKET, [coverPath], { table: "sessions", columns: ["cover_path", "photo_cover_path"] });
+        await discardSessionCover(coverPath);
         return text(res.error, true);
       }
       const coverNote = !cover ? "Foto cover: tidak ada (pakai foto venue)" : cover.ok ? "Foto cover: dipasang dari Kuyy" : `Foto cover GAGAL: ${cover.error} — activity tetap dibuat; coba lagi dengan set_activity_cover`;
