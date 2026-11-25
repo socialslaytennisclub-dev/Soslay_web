@@ -4,7 +4,7 @@ App rekam video tenis + skor live, satu database Supabase dengan www.slayclub.id
 
 **v1 berisi:** login/daftar (otomatis jadi member Social Slay, tier + Slay Point di Beranda), tab Activity dengan skor live, Rekam video (tersimpan di galeri HP saja, tidak diunggah), dan mengaitkan video ke activity.
 
-Data activity, skor, dan tautan video di v1 masih tersimpan di HP. Sinkron ke akun menyusul (rancangan tabel di `supabase-draft.sql`, **belum** dijalankan).
+Data activity, skor, dan tautan video di v1 masih tersimpan di HP. Sinkron ke akun menyusul (tabel ada di schema `app`, file `web/supabase/migrations/20261125010000_app_schema.sql`, **belum** dijalankan di production).
 
 ## Menjalankan di Mac + iPhone
 

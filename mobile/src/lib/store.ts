@@ -5,7 +5,7 @@ import type { MatchFormat, Side } from "./scoring";
 /**
  * Data v1 yang disimpan DI HP saja (localStorage dari expo-sqlite): activity buatan sendiri,
  * match + poinnya, dan tautan video → activity. Video-nya sendiri ada di galeri HP.
- * Sinkron ke Supabase menyusul setelah tabelnya disetujui (lihat mobile/supabase-draft.sql).
+ * Sinkron ke Supabase menyusul setelah tabelnya disetujui (schema "app": web/supabase/migrations/20261125010000_app_schema.sql).
  */
 export type ActivityKind = "mabar" | "sparring" | "match";
 export type Activity = { id: string; title: string; kind: ActivityKind; venue: string; date: string; createdAt: string };

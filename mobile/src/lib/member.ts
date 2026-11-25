@@ -1,5 +1,8 @@
 import { supabase } from "./supabase";
 
+/** App hanya membaca schema "app" (view ke data bersama), bukan tabel public milik web. */
+const app = () => supabase.schema("app");
+
 /** Data member dari Supabase yang sama dengan web: tier, Slay Point, dan activity Social Slay. */
 export type Tier = "basic" | "silver" | "gold" | "platinum";
 export const TIER_LABEL: Record<Tier, string> = { basic: "Basic", silver: "Silver", gold: "Gold", platinum: "Platinum" };
@@ -18,11 +21,11 @@ export type SocialSlaySession = { id: string; title: string; startsAt: string; v
 const initialsOf = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "S";
 
-export async function fetchMember(userId: string): Promise<MemberSummary> {
+export async function fetchMember(_userId: string): Promise<MemberSummary> {
   const [{ data: profile }, { data: stats }, { data: tiers }] = await Promise.all([
-    supabase.from("profiles").select("full_name, display_name, tier").eq("id", userId).maybeSingle(),
-    supabase.from("member_stats").select("points_balance, points_earned").eq("member_id", userId).maybeSingle(),
-    supabase.from("membership_tiers").select("tier, label, min_points").order("min_points"),
+    app().from("my_profile").select("full_name, display_name, tier").maybeSingle(),
+    app().from("my_points").select("points_balance, points_earned").maybeSingle(),
+    app().from("tiers").select("tier, label, min_points").order("min_points"),
   ]);
   const name = (profile?.display_name || profile?.full_name || "Member") as string;
   const earned = Number(stats?.points_earned ?? 0);
@@ -37,17 +40,12 @@ export async function fetchMember(userId: string): Promise<MemberSummary> {
   };
 }
 
-type BookingRow = { status: string; sessions: { id: string; title: string; starts_at: string; venues: { name: string } | null } | null };
+type SessionRow = { session_id: string; title: string; starts_at: string; venue: string | null; status: string };
 
-export async function fetchSocialSlaySessions(userId: string): Promise<SocialSlaySession[]> {
-  const { data } = await supabase
-    .from("bookings")
-    .select("status, sessions(id, title, starts_at, venues(name))")
-    .eq("member_id", userId)
-    .neq("status", "cancelled");
-  return ((data ?? []) as unknown as BookingRow[])
-    .flatMap((b) => (b.sessions ? [{ id: b.sessions.id, title: b.sessions.title, startsAt: b.sessions.starts_at, venue: b.sessions.venues?.name ?? "", status: b.status }] : []))
-    .sort((a, b) => b.startsAt.localeCompare(a.startsAt));
+// userId tetap diterima agar pemanggil tidak berubah; view my_sessions sudah memfilter ke auth.uid().
+export async function fetchSocialSlaySessions(_userId: string): Promise<SocialSlaySession[]> {
+  const { data } = await app().from("my_sessions").select("session_id, title, starts_at, venue, status").order("starts_at", { ascending: false });
+  return ((data ?? []) as SessionRow[]).map((r) => ({ id: r.session_id, title: r.title, startsAt: r.starts_at, venue: r.venue ?? "", status: r.status }));
 }
 
 export const formatDate = (iso: string) =>
