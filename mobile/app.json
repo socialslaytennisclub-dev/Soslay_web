@@ -1,0 +1,60 @@
+{
+  "expo": {
+    "name": "SOSLAY",
+    "slug": "soslay",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "id.slayclub.soslay"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#E6F4FE",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "package": "id.slayclub.soslay"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0a084a",
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 160
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "SOSLAY memakai kamera untuk merekam match tenis kamu.",
+          "microphonePermission": "SOSLAY merekam suara supaya video match lengkap dengan audio.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "SOSLAY menampilkan video match yang kamu rekam dari galeri.",
+          "savePhotosPermission": "SOSLAY menyimpan video match ke galeri HP kamu."
+        }
+      ],
+      "expo-video"
+    ],
+    "scheme": "soslay",
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
