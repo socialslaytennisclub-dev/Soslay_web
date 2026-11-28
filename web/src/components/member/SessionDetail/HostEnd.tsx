@@ -48,7 +48,7 @@ export function EndActivityDialog({
   const { present, earning, total } = sessionPoints(d);
   // Ronde berurutan: yang bisa dimulai = ronde "Dilewati" lama (sebelum aturan berurutan) lebih dulu, lalu
   // ronde tepat setelah ronde live.
-  const nextRound = d.currentRound !== null ? (plan.rounds.find((r) => r > d.currentRound!) ?? null) : null;
+  const nextRound = plan.after;
   const startable = plan.skipped[0] ?? (nextRound !== null && unstarted.includes(nextRound) ? nextRound : null);
 
   const confirm = () =>
