@@ -1567,10 +1567,12 @@ button.link {
 }
 
 .hostPanel {
+  /* Dipakai juga oleh .roundBar (bar menempel selebar panel). */
+  --host-pad: var(--space-24);
   display: flex;
   flex-direction: column;
   gap: var(--space-16);
-  padding: var(--space-24);
+  padding: var(--host-pad);
   border: 1px solid var(--color-indigo-border);
   border-radius: var(--radius-xl);
   background: #fff;
@@ -3166,14 +3168,21 @@ button.link {
   margin-left: auto;
 }
 
-/* Panel Host · bar status ronde yang dilihat (Figma Soslay Development 1284:6086). */
+/* Figma 1284:6086: bar ronde menempel di bawah layar (selebar Panel Host) selama panel terlihat, supaya
+   Mulai Ronde / Sedang berlangsung / Ronde selesai selalu terjangkau. Di HP scroll native → sticky; di desktop
+   ScrollSmoother (transform) membuatnya tampil di tempat, cukup karena layar tinggi. */
 .roundBar {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   display: flex;
   flex-direction: column;
   gap: var(--space-8);
-  padding: var(--space-12) var(--space-16);
-  border-radius: var(--radius-lg);
-  background: #f4f5ff;
+  margin: 0 calc(-1 * var(--host-pad));
+  padding: var(--space-12) var(--host-pad) calc(var(--space-12) + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--color-indigo-border);
+  background: var(--color-white);
+  box-shadow: 0 -6px 16px rgb(12 8 72 / 0.06);
 }
 
 .roundBarMain {

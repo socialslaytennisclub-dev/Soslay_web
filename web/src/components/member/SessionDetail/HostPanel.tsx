@@ -114,7 +114,7 @@ function HostPanel({
   const live = canScore && d.phase === "live";
   const viewingUnstarted = isUnstarted(plan.statusOf(selected));
   // Ronde berurutan: satu-satunya ronde yang bisa dimulai = ronde tepat setelah ronde live.
-  const nextRound = currentRound !== null ? (plan.rounds.find((r) => r > currentRound) ?? null) : null;
+  const nextRound = plan.after;
   const courts = matches.filter((m) => m.round === selected);
   const liveCourts = matches.filter((m) => m.round === currentRound);
   const liveUnscored = liveCourts.filter((m) => m.scoreA === null);
@@ -209,11 +209,8 @@ function HostPanel({
           </button>
         </p>
       )}
-      {error && !editing && (
-        <p className={styles.formError} role="alert">
-          {error}
-        </p>
-      )}
+      {/* Saat live, error tampil di bar ronde yang menempel di bawah (dekat tombol yang ditekan). */}
+      {!editing && !live && <FormError message={error} />}
 
       <ul className={styles.hostCourts}>
         {courts.map((m) => {
@@ -262,6 +259,7 @@ function HostPanel({
           isLive={selected === currentRound}
           nextRound={nextRound}
           busy={busy}
+          error={error}
           onContinue={() => (liveUnscored.length ? openNext() : nextRound !== null && startRound(nextRound))}
         />
       )}
@@ -295,11 +293,7 @@ function HostPanel({
             <p className={styles.small}>
               Ronde {currentRound} jadi &quot;belum lengkap&quot; (chip oranye). Skornya masih bisa diisi nanti lewat chip R{currentRound} selama activity belum diakhiri.
             </p>
-            {error && (
-              <p className={styles.formError} role="alert">
-                {error}
-              </p>
-            )}
+            <FormError message={error} />
             <div className={styles.qrActions}>
               <button type="button" className={styles.btnOutline} onClick={closeNext}>
                 Batal
@@ -358,11 +352,7 @@ function HostPanel({
                 Skor ini langsung masuk leaderboard. Pastikan sesuai hasil di lapangan.
               </span>
             </div>
-            {error && (
-              <p className={styles.formError} role="alert">
-                {error}
-              </p>
-            )}
+            <FormError message={error} />
             <div className={styles.qrActions}>
               <button type="button" className={styles.btnOutline} onClick={closeScore}>
                 Batal
@@ -413,10 +403,20 @@ function ChipLegend() {
   );
 }
 
+/** Pesan error form (role alert); kosong → tidak dirender. */
+function FormError({ message }: { message: string | null }) {
+  return message ? (
+    <p className={styles.formError} role="alert">
+      {message}
+    </p>
+  ) : null;
+}
+
 /**
- * Bar status ronde yang sedang dilihat (Figma 1284:6086): ringkasan court + status / aksi. Ronde berjalan
- * berurutan dan pindah otomatis saat skor court terakhir masuk; "Lanjut ke Ronde N" hanya untuk ronde live
- * yang macet (ada court tanpa skor). Ronde terakhir lengkap → diakhiri lewat tombol Akhiri Activity.
+ * Bar status ronde yang sedang dilihat (Figma 1284:6086), menempel di bawah layar: ringkasan court + status /
+ * aksi. Ronde berjalan berurutan (RoundPlan.after) dan pindah otomatis saat skor court terakhir masuk. Ronde
+ * berikutnya dimulai dari bar ronde live ("Lanjut ke Ronde N", juga "Court macet?" bila ada court tanpa skor)
+ * atau dari chip ronde itu sendiri ("Mulai Ronde N"). Ronde terakhir lengkap → Akhiri Activity.
  */
 function RoundBar({
   plan,
@@ -425,6 +425,7 @@ function RoundBar({
   isLive,
   nextRound,
   busy,
+  error,
   onContinue,
 }: {
   plan: RoundPlan;
@@ -433,29 +434,40 @@ function RoundBar({
   isLive: boolean;
   nextRound: number | null;
   busy: boolean;
+  error: string | null;
   onContinue: () => void;
 }) {
   const status = plan.statusOf(round);
   const unscored = courts.filter((m) => m.scoreA === null).length;
+  const stuck = isLive && unscored > 0;
+  const allDone = isLive && !unscored && nextRound === null;
   const summary = isUnstarted(status)
     ? `${courts.length} court belum dimulai`
     : unscored
       ? `${unscored} court belum ada skor`
       : `${courts.length} court selesai`;
+  // Satu tombol mulai: dari ronde live yang lengkap, atau dari chip ronde berikutnya (skor yang kurang ditanyakan dulu).
+  const startLabel =
+    isLive && !unscored && nextRound !== null
+      ? `Lanjut ke Ronde ${nextRound}`
+      : !isLive && round === nextRound && isUnstarted(status)
+        ? `Mulai Ronde ${round}`
+        : null;
 
   let state: React.ReactNode;
-  if (isLive && !unscored) {
-    state =
-      nextRound !== null ? (
-        <button type="button" className={styles.btnStart} onClick={onContinue} disabled={busy}>
-          <Play size={14} aria-hidden fill="currentColor" />
-          {busy ? "Memulai…" : `Lanjut ke Ronde ${nextRound}`}
-        </button>
-      ) : (
-        <span className={cx(styles.roundBarState, styles.roundBarDone)}>
-          <Lock size={14} aria-hidden /> Semua ronde selesai
-        </span>
-      );
+  if (startLabel) {
+    state = (
+      <button type="button" className={styles.btnStart} onClick={onContinue} disabled={busy}>
+        <Play size={14} aria-hidden fill="currentColor" />
+        {busy ? "Memulai…" : startLabel}
+      </button>
+    );
+  } else if (allDone) {
+    state = (
+      <span className={cx(styles.roundBarState, styles.roundBarDone)}>
+        <Lock size={14} aria-hidden /> Semua ronde selesai
+      </span>
+    );
   } else if (isLive) {
     state = (
       <span className={cx(styles.roundBarState, styles.roundBarLive)}>
@@ -483,12 +495,13 @@ function RoundBar({
         </span>
         {state}
       </div>
-      {isLive && unscored > 0 && nextRound !== null && (
+      {stuck && nextRound !== null && (
         <button type="button" className={cx(styles.linkBtn, styles.roundBarLink)} onClick={onContinue} disabled={busy}>
           Court macet? Lanjut ke Ronde {nextRound} tanpa menunggu skor →
         </button>
       )}
-      {isLive && !unscored && nextRound === null && <small className={styles.roundBarHint}>Tekan &quot;Akhiri Activity&quot; di bawah untuk menutup sesi &amp; melihat hasil.</small>}
+      <FormError message={error} />
+      {allDone && <small className={styles.roundBarHint}>Tekan &quot;Akhiri Activity&quot; di bawah untuk menutup sesi &amp; melihat hasil.</small>}
     </div>
   );
 }

@@ -33,6 +33,8 @@ export type RoundPlan = {
   statusOf: (round: number) => RoundStatus;
   /** Pilihan default "Mulai Ronde": nomor terkecil yang belum dimulai (termasuk yang dilewati). */
   next: number | null;
+  /** Ronde tepat setelah ronde live (`current`) — ronde berurutan: satu-satunya yang bisa dimulai berikutnya. */
+  after: number | null;
   skipped: number[];
 };
 
@@ -64,6 +66,7 @@ export function planRounds(matches: RoundMatch[], current: number | null, starte
     rounds,
     statusOf: (r) => status.get(r) ?? "later",
     next,
+    after: current !== null ? (rounds.find((r) => r > current) ?? null) : null,
     skipped: rounds.filter((r) => status.get(r) === "skipped"),
   };
 }
